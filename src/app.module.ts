@@ -4,6 +4,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { ProviderModule } from './providers/provider.module';
 import { ServiceModule } from './service/service.module';
+import { BookingModule } from './booking/booking.module';
+
 
 
 
@@ -30,6 +32,7 @@ import { ServiceModule } from './service/service.module';
     AuthModule,
     ProviderModule,
     ServiceModule,
+    BookingModule,
   ],
 })
 export class AppModule {}

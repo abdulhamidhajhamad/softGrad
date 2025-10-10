@@ -16,10 +16,12 @@ import {
 import { ProviderService } from './provider.service';
 import { CreateProviderDto, UpdateProviderDto, SearchProviderDto, ProviderResponseDto } from './provider.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ServiceProvider } from './provider.entity';
 
 @Controller('providers')
 export class ProviderController {
   constructor(private readonly providerService: ProviderService) {}
+
   // Create provider profile (requires authentication)
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -29,7 +31,8 @@ export class ProviderController {
     @Body() createProviderDto: CreateProviderDto,
   ): Promise<ProviderResponseDto> {
     const userId = req.user.userId;
-    return await this.providerService.createProvider(userId, createProviderDto);
+    const provider = await this.providerService.createProvider(userId, createProviderDto);
+    return this.mapToResponseDto(provider);
   }
 
   // Update provider profile (requires authentication)
@@ -40,7 +43,8 @@ export class ProviderController {
     @Body() updateProviderDto: UpdateProviderDto,
   ): Promise<ProviderResponseDto> {
     const userId = req.user.userId;
-    return await this.providerService.updateProvider(userId, updateProviderDto);
+    const provider = await this.providerService.updateProvider(userId, updateProviderDto);
+    return this.mapToResponseDto(provider);
   }
 
   // Get my provider profile (requires authentication)
@@ -48,7 +52,8 @@ export class ProviderController {
   @UseGuards(JwtAuthGuard)
   async getMyProfile(@Request() req): Promise<ProviderResponseDto> {
     const userId = req.user.userId;
-    return await this.providerService.getProviderByUserId(userId);
+    const provider = await this.providerService.getProviderByUserId(userId);
+    return this.mapToResponseDto(provider);
   }
 
   // Search providers (public)
@@ -61,13 +66,20 @@ export class ProviderController {
     page: number;
     totalPages: number;
   }> {
-    return await this.providerService.searchProviders(searchDto);
+    const result = await this.providerService.searchProviders(searchDto);
+    return {
+      providers: result.providers.map(provider => this.mapToResponseDto(provider)),
+      total: result.total,
+      page: result.page,
+      totalPages: result.totalPages,
+    };
   }
 
   // Get all providers (public)
   @Get()
   async getAllProviders(): Promise<ProviderResponseDto[]> {
-    return await this.providerService.getAllProviders();
+    const providers = await this.providerService.getAllProviders();
+    return providers.map(provider => this.mapToResponseDto(provider));
   }
 
   // Get providers by location (public)
@@ -75,7 +87,8 @@ export class ProviderController {
   async getProvidersByLocation(
     @Param('location') location: string,
   ): Promise<ProviderResponseDto[]> {
-    return await this.providerService.getProvidersByLocation(location);
+    const providers = await this.providerService.getProvidersByLocation(location);
+    return providers.map(provider => this.mapToResponseDto(provider));
   }
 
   // Get specific provider by ID (public)
@@ -83,7 +96,8 @@ export class ProviderController {
   async getProviderById(
     @Param('id', ParseIntPipe) providerId: number,
   ): Promise<ProviderResponseDto> {
-    return await this.providerService.getProviderById(providerId);
+    const provider = await this.providerService.getProviderById(providerId);
+    return this.mapToResponseDto(provider);
   }
 
   @Delete()
@@ -92,5 +106,17 @@ export class ProviderController {
   async deleteProvider(@Request() req): Promise<void> {
     const userId = req.user.userId;
     await this.providerService.deleteProvider(userId);
+  }
+
+  private mapToResponseDto(provider: ServiceProvider): ProviderResponseDto {
+    return {
+      providerId: provider.providerId,
+      userId: provider.userId,
+      companyName: provider.companyName,
+      description: provider.description,
+      location: provider.location,
+      imageUrls: provider.imageUrls || [],
+      customerType: provider.customerType,
+    };
   }
 }

@@ -10,41 +10,94 @@ export class ProviderService {
     @InjectRepository(ServiceProvider)
     private readonly providerRepository: Repository<ServiceProvider>,
   ) {}
-  async createProvider(userId: number, createProviderDto: CreateProviderDto): Promise<ServiceProvider> {
-    const existingProvider = await this.providerRepository.findOne({
-      where: { userId }
-    });
-    if (existingProvider) {
-      throw new ConflictException('User already has a provider profile');
-    }
-    const provider = this.providerRepository.create({
-      userId,
-      companyName: createProviderDto.companyName,
-      description: createProviderDto.description,
-      location: createProviderDto.location,
-    });
-    return await this.providerRepository.save(provider);
+async createProvider(userId: number, createProviderDto: CreateProviderDto): Promise<ServiceProvider> {
+  const existingProvider = await this.providerRepository.findOne({
+    where: { userId }
+  });
+  if (existingProvider) {
+    throw new ConflictException('User already has a provider profile');
   }
-  async updateProvider(userId: number, updateProviderDto: UpdateProviderDto): Promise<ServiceProvider> {
-    const provider = await this.providerRepository.findOne({
-      where: { userId }
-    });
+  const provider = this.providerRepository.create({
+    userId,
+    companyName: createProviderDto.companyName,
+    description: createProviderDto.description,
+    location: createProviderDto.location,
+    imageUrls: createProviderDto.imageUrls || [], // ← Add this
+    customerType: createProviderDto.customerType, // ← Add this
+  });
+  return await this.providerRepository.save(provider);
+}
 
-    if (!provider) {
-      throw new NotFoundException('Provider profile not found');
-    }
-    if (updateProviderDto.companyName !== undefined) {
-      provider.companyName = updateProviderDto.companyName;
-    }
-    if (updateProviderDto.description !== undefined) {
-      provider.description = updateProviderDto.description;
-    }
-    if (updateProviderDto.location !== undefined) {
-      provider.location = updateProviderDto.location;
-    }
+async updateProvider(userId: number, updateProviderDto: UpdateProviderDto): Promise<ServiceProvider> {
+  const provider = await this.providerRepository.findOne({
+    where: { userId }
+  });
 
-    return await this.providerRepository.save(provider);
+  if (!provider) {
+    throw new NotFoundException('Provider profile not found');
   }
+  if (updateProviderDto.companyName !== undefined) {
+    provider.companyName = updateProviderDto.companyName;
+  }
+  if (updateProviderDto.description !== undefined) {
+    provider.description = updateProviderDto.description;
+  }
+  if (updateProviderDto.location !== undefined) {
+    provider.location = updateProviderDto.location;
+  }
+  if (updateProviderDto.imageUrls !== undefined) {
+    provider.imageUrls = updateProviderDto.imageUrls; // ← Add this
+  }
+  if (updateProviderDto.customerType !== undefined) {
+    provider.customerType = updateProviderDto.customerType; // ← Add this
+  }
+
+  return await this.providerRepository.save(provider);
+}
+
+async searchProviders(searchDto: SearchProviderDto): Promise<{ 
+  providers: ServiceProvider[], 
+  total: number, 
+  page: number, 
+  totalPages: number 
+}> {
+  const { page = 1, limit = 10, location, searchTerm, customerType } = searchDto;
+  
+  const queryBuilder = this.providerRepository.createQueryBuilder('provider');
+
+  if (location) {
+    queryBuilder.andWhere('provider.location LIKE :location', { 
+      location: `%${location}%` 
+    });
+  }
+
+  if (searchTerm) {
+    queryBuilder.andWhere(
+      '(provider.company_name LIKE :searchTerm OR provider.description LIKE :searchTerm)',
+      { searchTerm: `%${searchTerm}%` }
+    );
+  }
+
+  if (customerType) {
+    queryBuilder.andWhere('provider.customer_type = :customerType', { 
+      customerType 
+    });
+  }
+
+  const total = await queryBuilder.getCount();
+  const providers = await queryBuilder
+    .orderBy('provider.provider_id', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getMany();
+
+  return {
+    providers,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit)
+  };
+}
 
   async getProviderById(providerId: number): Promise<ServiceProvider> {
     const provider = await this.providerRepository.findOne({
@@ -68,44 +121,6 @@ export class ProviderService {
     }
 
     return provider;
-  }
-
-  async searchProviders(searchDto: SearchProviderDto): Promise<{ 
-    providers: ServiceProvider[], 
-    total: number, 
-    page: number, 
-    totalPages: number 
-  }> {
-    const { page = 1, limit = 10, location, searchTerm } = searchDto;
-    
-    const queryBuilder = this.providerRepository.createQueryBuilder('provider');
-
-    if (location) {
-      queryBuilder.andWhere('provider.location LIKE :location', { 
-        location: `%${location}%` 
-      });
-    }
-
-    if (searchTerm) {
-      queryBuilder.andWhere(
-        '(provider.company_name LIKE :searchTerm OR provider.description LIKE :searchTerm)',
-        { searchTerm: `%${searchTerm}%` }
-      );
-    }
-
-    const total = await queryBuilder.getCount();
-    const providers = await queryBuilder
-      .orderBy('provider.provider_id', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getMany();
-
-    return {
-      providers,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit)
-    };
   }
 
   async getAllProviders(): Promise<ServiceProvider[]> {

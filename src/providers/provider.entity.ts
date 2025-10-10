@@ -1,6 +1,12 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from '../auth/user.entity';
 
+export enum CustomerType {
+  REGULAR = 'regular',
+  MID = 'mid',
+  HIGH = 'high'
+}
+
 @Entity('service_providers')
 export class ServiceProvider {
   @PrimaryGeneratedColumn({ name: 'provider_id' })
@@ -21,4 +27,15 @@ export class ServiceProvider {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   location: string;
+
+  @Column({ type: 'jsonb', nullable: true, default: null })
+  imageUrls: string[];
+
+  @Column({ 
+    name: 'customer_type', 
+    type: 'varchar', 
+    length: 20, 
+    default: 'regular' 
+  })
+  customerType: CustomerType;
 }

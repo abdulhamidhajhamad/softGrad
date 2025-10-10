@@ -1,5 +1,6 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, Max } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, Max, IsArray, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
+import { CustomerType } from './provider.entity'; // ← Import from entity
 
 export class CreateProviderDto {
   @IsString()
@@ -13,6 +14,15 @@ export class CreateProviderDto {
   @IsString()
   @IsOptional()
   location?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  imageUrls?: string[];
+
+  @IsEnum(CustomerType)
+  @IsOptional()
+  customerType?: CustomerType;
 }
 
 export class UpdateProviderDto {
@@ -27,6 +37,15 @@ export class UpdateProviderDto {
   @IsString()
   @IsOptional()
   location?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  imageUrls?: string[];
+
+  @IsEnum(CustomerType)
+  @IsOptional()
+  customerType?: CustomerType;
 }
 
 export class SearchProviderDto {
@@ -37,6 +56,10 @@ export class SearchProviderDto {
   @IsOptional()
   @IsString()
   searchTerm?: string;
+
+  @IsOptional()
+  @IsEnum(CustomerType)
+  customerType?: CustomerType;
 
   @IsOptional()
   @IsNumber()
@@ -58,4 +81,6 @@ export class ProviderResponseDto {
   companyName: string;
   description: string;
   location: string;
+  imageUrls: string[];
+  customerType: CustomerType;
 }

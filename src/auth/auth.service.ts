@@ -23,7 +23,7 @@ export class AuthService {
     private mailService: MailService,
   ) {}
 
-  async signUp(signUpDto: SignUpDto): Promise<{ token: string; user: any }> {
+async signUp(signUpDto: SignUpDto): Promise<{ token: string; user: any }> {
   const { userName, email, password, phone, city, role } = signUpDto;
   const allowedRoles = ['client', 'vendor', 'admin'];
   if (!allowedRoles.includes(role)) {
@@ -45,35 +45,37 @@ export class AuthService {
   });
   await this.userRepository.save(user);
 
-  const token = this.jwtService.sign({ id: user.id, email: user.email });
+  // ✅ CHANGE: Use userId instead of id
+  const token = this.jwtService.sign({ userId: user.id, email: user.email });
   const { password: _, ...userWithoutPassword } = user;
   return {
     token,
     user: userWithoutPassword,
   };
-  }
+}
 
-  async login(loginDto: LoginDto): Promise<{ token: string; user: any }> {
-    const { email, password } = loginDto;
-    // Find user by email
-    const user = await this.userRepository.findOne({ where: { email } });
-    if (!user) {
-      throw new UnauthorizedException('Invalid Email/Pass');
-    }
-    // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid Email/Pass');
-    }
-    // Generate JWT token
-    const token = this.jwtService.sign({ id: user.id, email: user.email });
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
-    return {
-      token,
-      user: userWithoutPassword,
-     };
-    }
+async login(loginDto: LoginDto): Promise<{ token: string; user: any }> {
+  const { email, password } = loginDto;
+  
+  const user = await this.userRepository.findOne({ where: { email } });
+  if (!user) {
+    throw new UnauthorizedException('Invalid Email/Pass');
+  }
+  
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) {
+    throw new UnauthorizedException('Invalid Email/Pass');
+  }
+  
+  // ✅ CHANGE: Use userId instead of id
+  const token = this.jwtService.sign({ userId: user.id, email: user.email });
+  
+  const { password: _, ...userWithoutPassword } = user;
+  return {
+    token,
+    user: userWithoutPassword,
+  };
+}
 /*
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
     const { email } = forgotPasswordDto;

@@ -13,12 +13,17 @@ import { MailService } from './mail.service';
     TypeOrmModule.forFeature([User]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+      secret:'your-secret-key-change-in-production',
       signOptions: { expiresIn: '24h' },
     }),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, MailService],
-  exports: [JwtStrategy, PassportModule],
+  exports: [
+    JwtStrategy, 
+    PassportModule, 
+    JwtModule,
+    TypeOrmModule, // ← Add this so other modules can access User repository
+  ],
 })
 export class AuthModule {}

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsEnum, IsOptional, IsNumber, IsPositive, Min, Max } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsOptional, IsNumber, IsPositive, Min, Max, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum ServiceCategory {
@@ -35,6 +35,11 @@ export class CreateServiceDto {
   @IsOptional()
   @Type(() => Number)
   rating?: number;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  imageUrls?: string[];
 }
 
 export class UpdateServiceDto {
@@ -66,4 +71,9 @@ export class UpdateServiceDto {
   @IsOptional()
   @Type(() => Number)
   rating?: number;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  imageUrls?: string[];
 }

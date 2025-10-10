@@ -32,4 +32,7 @@ export class Service {
     nullable: true,
   })
   rating: number;
+  
+  @Column({ type: 'jsonb', nullable: true, default: null })
+  imageUrls: string[];
 }

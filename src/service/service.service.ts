@@ -11,31 +11,39 @@ export class ServiceService {
     private readonly serviceRepository: Repository<Service>,
   ) {}
 
-  async create(createServiceDto: CreateServiceDto): Promise<Service> {
-    try {
-      const service = this.serviceRepository.create(createServiceDto);
-      return await this.serviceRepository.save(service);
-    } catch (error) {
-      throw new BadRequestException('Failed to create service. Please check provider_id exists.');
-    }
-  }
-
-  async update(serviceId: number, updateServiceDto: UpdateServiceDto): Promise<Service> {
-    const service = await this.serviceRepository.findOne({
-      where: { serviceId },
+async create(createServiceDto: CreateServiceDto): Promise<Service> {
+  try {
+    const service = this.serviceRepository.create({
+      ...createServiceDto,
+      imageUrls: createServiceDto.imageUrls || [], // ← Set default empty array
     });
-
-    if (!service) {
-      throw new NotFoundException(`Service with ID ${serviceId} not found`);
-    }
-
-    try {
-      Object.assign(service, updateServiceDto);
-      return await this.serviceRepository.save(service);
-    } catch (error) {
-      throw new BadRequestException('Failed to update service');
-    }
+    return await this.serviceRepository.save(service);
+  } catch (error) {
+    throw new BadRequestException('Failed to create service. Please check provider_id exists.');
   }
+}
+
+async update(serviceId: number, updateServiceDto: UpdateServiceDto): Promise<Service> {
+  const service = await this.serviceRepository.findOne({
+    where: { serviceId },
+  });
+
+  if (!service) {
+    throw new NotFoundException(`Service with ID ${serviceId} not found`);
+  }
+
+  try {
+    // Only update imageUrls if provided, otherwise keep existing
+    if (updateServiceDto.imageUrls !== undefined) {
+      service.imageUrls = updateServiceDto.imageUrls;
+    }
+    
+    Object.assign(service, updateServiceDto);
+    return await this.serviceRepository.save(service);
+  } catch (error) {
+    throw new BadRequestException('Failed to update service');
+  }
+}
 
   async delete(serviceName: string): Promise<{ message: string }> {
     const trimmedName = serviceName.trim();

@@ -10,7 +10,6 @@ export class ProviderService {
     @InjectRepository(ServiceProvider)
     private readonly providerRepository: Repository<ServiceProvider>,
   ) {}
-
   async createProvider(userId: number, createProviderDto: CreateProviderDto): Promise<ServiceProvider> {
     const existingProvider = await this.providerRepository.findOne({
       where: { userId }
@@ -24,10 +23,8 @@ export class ProviderService {
       description: createProviderDto.description,
       location: createProviderDto.location,
     });
-
     return await this.providerRepository.save(provider);
   }
-
   async updateProvider(userId: number, updateProviderDto: UpdateProviderDto): Promise<ServiceProvider> {
     const provider = await this.providerRepository.findOne({
       where: { userId }

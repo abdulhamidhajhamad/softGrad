@@ -14,28 +14,31 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:'your-secret-key-change-in-production',
+      secretOrKey: 'your-secret-key-change-in-production',
     });
-    console.log('✅ JwtStrategy initialized'); // ← Add this
+    console.log('✅ JwtStrategy initialized');
   }
 
   async validate(payload: any) {
     console.log('🔍 JWT Payload:', payload);
-    
-    const user = await this.userRepository.findOne({ 
-      where: { id: payload.userId } 
+
+    const user = await this.userRepository.findOne({
+      where: { id: payload.userId },
     });
-    
+
     console.log('👤 Found User:', user);
-    
+
     if (!user) {
       console.log('❌ User not found!');
       throw new UnauthorizedException('User not found');
     }
-    
-    return { 
+
+    // ✅ IMPORTANT: Include role in the returned object
+    return {
+      id: user.id,
       userId: user.id,
-      email: user.email 
+      email: user.email,
+      role: user.role, // <-- Add this
     };
   }
 }

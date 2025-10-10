@@ -5,6 +5,8 @@ import { AuthModule } from './auth/auth.module';
 import { ProviderModule } from './providers/provider.module';
 import { ServiceModule } from './service/service.module';
 import { BookingModule } from './booking/booking.module';
+import { AdminModule } from './/admin/admin.module';
+
 
 
 
@@ -33,6 +35,7 @@ import { BookingModule } from './booking/booking.module';
     ProviderModule,
     ServiceModule,
     BookingModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

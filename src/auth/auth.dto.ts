@@ -22,6 +22,10 @@ export class SignUpDto {
   @IsString()
   @IsIn(['client', 'vendor', 'admin'])
   role: 'client' | 'vendor' | 'admin';
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string; // ← Add this line
 }
 
 export class LoginDto {

@@ -22,4 +22,7 @@ export class User {
 
   @Column()
   role: 'client' | 'vendor' | 'admin';
+
+  @Column({ name: 'image_url', nullable: true, default: null })
+  imageUrl?: string;
 }

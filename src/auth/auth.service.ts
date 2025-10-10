@@ -24,7 +24,7 @@ export class AuthService {
   ) {}
 
 async signUp(signUpDto: SignUpDto): Promise<{ token: string; user: any }> {
-  const { userName, email, password, phone, city, role } = signUpDto;
+  const { userName, email, password, phone, city, role, imageUrl } = signUpDto;
   const allowedRoles = ['client', 'vendor', 'admin'];
   if (!allowedRoles.includes(role)) {
     throw new ForbiddenException(`Role must be one of: ${allowedRoles.join(', ')}`);
@@ -42,6 +42,7 @@ async signUp(signUpDto: SignUpDto): Promise<{ token: string; user: any }> {
     phone,
     city,
     role,
+    imageUrl, // ← Add this
   });
   await this.userRepository.save(user);
 
@@ -53,7 +54,6 @@ async signUp(signUpDto: SignUpDto): Promise<{ token: string; user: any }> {
     user: userWithoutPassword,
   };
 }
-
 async login(loginDto: LoginDto): Promise<{ token: string; user: any }> {
   const { email, password } = loginDto;
   

@@ -25,7 +25,7 @@ export class SignUpDto {
 
   @IsOptional()
   @IsString()
-  imageUrl?: string; // ← Add this line
+  imageUrl?: string;
 }
 
 export class LoginDto {
@@ -48,4 +48,21 @@ export class ResetPasswordDto {
   @IsString()
   @MinLength(6)
   newPassword: string;
+}
+
+// ✅ NEW: DTO for verifying email with code
+export class VerifyEmailDto {
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(6)
+  @MinLength(6)
+  verificationCode: string;
+}
+
+// ✅ NEW: DTO for resending verification code
+export class ResendVerificationDto {
+  @IsEmail()
+  email: string;
 }

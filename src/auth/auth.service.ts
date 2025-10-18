@@ -4,15 +4,22 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { User } from './user.entity';
-import { SignUpDto, LoginDto, ForgotPasswordDto, ResetPasswordDto } from './auth.dto';
+import { 
+  SignUpDto, 
+  LoginDto, 
+  ForgotPasswordDto, 
+  ResetPasswordDto,
+  VerifyEmailDto,
+  ResendVerificationDto 
+} from './auth.dto';
 import { MailService } from './mail.service';
-import { ForbiddenException} from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
@@ -23,123 +30,175 @@ export class AuthService {
     private mailService: MailService,
   ) {}
 
-async signUp(signUpDto: SignUpDto): Promise<{ token: string; user: any }> {
-  const { userName, email, password, phone, city, role, imageUrl } = signUpDto;
-  const allowedRoles = ['client', 'vendor', 'admin'];
-  if (!allowedRoles.includes(role)) {
-    throw new ForbiddenException(`Role must be one of: ${allowedRoles.join(', ')}`);
+  // ✅ Helper: Generate 6-digit random code
+  private generateVerificationCode(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
   }
-  const existingUser = await this.userRepository.findOne({ where: { email } });
-  if (existingUser) {
-    throw new ConflictException('Email already exists');
-  }
-  const hashedPassword = await bcrypt.hash(password, 10);
 
-  const user = this.userRepository.create({
-    userName,
-    email,
-    password: hashedPassword,
-    phone,
-    city,
-    role,
-    imageUrl, // ← Add this
-  });
-  await this.userRepository.save(user);
+  async signUp(signUpDto: SignUpDto): Promise<{ message: string; email: string }> {
+    const { userName, email, password, phone, city, role, imageUrl } = signUpDto;
+    
+    // Validate role
+    const allowedRoles = ['client', 'vendor', 'admin'];
+    if (!allowedRoles.includes(role)) {
+      throw new ForbiddenException(`Role must be one of: ${allowedRoles.join(', ')}`);
+    }
 
-  // ✅ CHANGE: Use userId instead of id
-  const token = this.jwtService.sign({ userId: user.id, email: user.email });
-  const { password: _, ...userWithoutPassword } = user;
-  return {
-    token,
-    user: userWithoutPassword,
-  };
-}
-async login(loginDto: LoginDto): Promise<{ token: string; user: any }> {
-  const { email, password } = loginDto;
-  
-  const user = await this.userRepository.findOne({ where: { email } });
-  if (!user) {
-    throw new UnauthorizedException('Invalid Email/Pass');
+    // Check if user already exists
+    const existingUser = await this.userRepository.findOne({ where: { email } });
+    if (existingUser) {
+      throw new ConflictException('Email already exists');
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Generate verification code and expiration (15 minutes from now)
+    const verificationCode = this.generateVerificationCode();
+    const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    // Create user
+    const user = this.userRepository.create({
+      userName,
+      email,
+      password: hashedPassword,
+      phone,
+      city,
+      role,
+      imageUrl,
+      isVerified: false,
+      verificationCode,
+      verificationCodeExpires,
+    });
+
+    await this.userRepository.save(user);
+
+    // Send verification email
+    try {
+      await this.mailService.sendVerificationEmail(email, verificationCode);
+    } catch (error) {
+      console.error('Failed to send verification email:', error);
+      // Don't fail registration if email fails, but log it
+    }
+
+    return {
+      message: 'User registered successfully. Please check your email for verification code.',
+      email: user.email,
+    };
   }
-  
-  const isPasswordValid = await bcrypt.compare(password, user.password);
-  if (!isPasswordValid) {
-    throw new UnauthorizedException('Invalid Email/Pass');
-  }
-  
-  // ✅ CHANGE: Use userId instead of id
-  const token = this.jwtService.sign({ userId: user.id, email: user.email });
-  
-  const { password: _, ...userWithoutPassword } = user;
-  return {
-    token,
-    user: userWithoutPassword,
-  };
-}
-/*
-  async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
-    const { email } = forgotPasswordDto;
+
+  // ✅ NEW: Verify email with code
+  async verifyEmail(verifyEmailDto: VerifyEmailDto): Promise<{ token: string; user: any }> {
+    const { email, verificationCode } = verifyEmailDto;
 
     // Find user by email
     const user = await this.userRepository.findOne({ where: { email } });
+    
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if already verified
+    if (user.isVerified) {
+      throw new BadRequestException('Email is already verified');
+    }
+
+    // Check if verification code exists
+    if (!user.verificationCode || !user.verificationCodeExpires) {
+      throw new BadRequestException('No verification code found. Please request a new one.');
+    }
+
+    // Check if code has expired
+    if (new Date() > user.verificationCodeExpires) {
+      throw new BadRequestException('Verification code has expired. Please request a new one.');
+    }
+
+    // Verify code matches
+    if (user.verificationCode !== verificationCode) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    // Mark user as verified and clear verification fields
+    user.isVerified = true;
+    user.verificationCode = null;
+    user.verificationCodeExpires = null;
+    await this.userRepository.save(user);
+
+    // Generate JWT token
+    const token = this.jwtService.sign({ userId: user.id, email: user.email });
+    
+    // Return user without sensitive data
+    const { password, verificationCode: _, verificationCodeExpires: __, ...userWithoutPassword } = user;
+    
+    return {
+      token,
+      user: userWithoutPassword,
+    };
+  }
+
+  // ✅ NEW: Resend verification code
+  async resendVerificationCode(resendVerificationDto: ResendVerificationDto): Promise<{ message: string }> {
+    const { email } = resendVerificationDto;
+
+    // Find user by email
+    const user = await this.userRepository.findOne({ where: { email } });
+    
     if (!user) {
       // Don't reveal if email exists or not for security
-      return { message: 'If the email exists, a reset link has been sent' };
+      return { message: 'If the email exists and is not verified, a new code has been sent.' };
     }
 
-    // Generate reset token
-    const resetToken = randomBytes(32).toString('hex');
-    const hashedToken = await bcrypt.hash(resetToken, 10);
+    // Check if already verified
+    if (user.isVerified) {
+      throw new BadRequestException('Email is already verified');
+    }
 
-    // Set token and expiration (1 hour)
-    user.resetPasswordToken = hashedToken;
-    user.resetPasswordExpires = new Date(Date.now() + 3600000); // 1 hour
+    // Generate new verification code and expiration
+    const verificationCode = this.generateVerificationCode();
+    const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    // Update user with new code
+    user.verificationCode = verificationCode;
+    user.verificationCodeExpires = verificationCodeExpires;
     await this.userRepository.save(user);
 
-    // Send reset email
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
-    await this.mailService.sendPasswordResetEmail(user.email, resetUrl);
-
-    return { message: 'If the email exists, a reset link has been sent' };
-  }
-  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    const { token, newPassword } = resetPasswordDto;
-
-    // Find user with valid reset token
-    const user = await this.userRepository.findOne({
-      where: {
-        resetPasswordToken: { $ne: null } as any,
-        resetPasswordExpires: { $gt: new Date() } as any,
-      },
-    });
-
-    if (!user || !user.resetPasswordToken) {
-      throw new BadRequestException('Invalid or expired reset token');
+    // Send verification email
+    try {
+      await this.mailService.sendVerificationEmail(email, verificationCode);
+    } catch (error) {
+      console.error('Failed to send verification email:', error);
+      throw new BadRequestException('Failed to send verification email. Please try again.');
     }
 
-    // Verify token
-    const isTokenValid = await bcrypt.compare(token, user.resetPasswordToken);
-    if (!isTokenValid) {
-      throw new BadRequestException('Invalid or expired reset token');
-    }
-
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    // Update password and clear reset token
-    user.password = hashedPassword;
-    //user.resetPasswordToken = null;
-    //user.resetPasswordExpires = null;
-    await this.userRepository.save(user);
-
-    return { message: 'Password reset successfully' };
+    return {
+      message: 'A new verification code has been sent to your email.',
+    };
   }
-  async validateUser(userId: string): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+  async login(loginDto: LoginDto): Promise<{ token: string; user: any }> {
+    const { email, password } = loginDto;
+    
+    const user = await this.userRepository.findOne({ where: { email } });
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException('Invalid Email/Pass');
     }
-    return user;
+
+    // ✅ NEW: Check if email is verified
+    if (!user.isVerified) {
+      throw new UnauthorizedException('Please verify your email before logging in');
+    }
+    
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid Email/Pass');
+    }
+    
+    const token = this.jwtService.sign({ userId: user.id, email: user.email });
+    
+    const { password: _, verificationCode, verificationCodeExpires, ...userWithoutPassword } = user;
+    return {
+      token,
+      user: userWithoutPassword,
+    };
   }
-  */
 }

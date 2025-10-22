@@ -1,5 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
-import { User } from '../auth/user.entity';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Schema as MongooseSchema, Types } from 'mongoose';
 
 export enum CustomerType {
   REGULAR = 'regular',
@@ -7,35 +7,38 @@ export enum CustomerType {
   HIGH = 'high'
 }
 
-@Entity('service_providers')
-export class ServiceProvider {
-  @PrimaryGeneratedColumn({ name: 'provider_id' })
-  providerId: number;
+@Schema({ collection: 'service_providers', timestamps: true })
+export class ServiceProvider extends Document {
+  @Prop({ required: true, type: MongooseSchema.Types.ObjectId, ref: 'User' })
+  userId: Types.ObjectId;
 
-  @Column({ name: 'user_id', type: 'int' })
-  userId: number;
-
-  @ManyToOne(() => User, { onDelete: 'CASCADE', onUpdate: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
-  user: User;
-
-  @Column({ name: 'company_name', type: 'varchar', length: 100 })
+  @Prop({ required: true })
   companyName: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Prop({ default: '' })
   description: string;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Prop({ default: '' })
   location: string;
 
-  @Column({ type: 'jsonb', nullable: true, default: null })
+  @Prop({ type: [String], default: [] })
   imageUrls: string[];
 
-  @Column({ 
-    name: 'customer_type', 
-    type: 'varchar', 
-    length: 20, 
-    default: 'regular' 
+  @Prop({ 
+    type: String, 
+    enum: Object.values(CustomerType), 
+    default: CustomerType.REGULAR 
   })
   customerType: CustomerType;
+
+  @Prop({ type: MongooseSchema.Types.Mixed, default: {} })
+  details: Record<string, any>;
 }
+
+export const ServiceProviderSchema = SchemaFactory.createForClass(ServiceProvider);
+
+// Create indexes
+ServiceProviderSchema.index({ userId: 1 }, { unique: true });
+ServiceProviderSchema.index({ location: 1 });
+ServiceProviderSchema.index({ companyName: 'text', description: 'text' });
+ServiceProviderSchema.index({ customerType: 1 });

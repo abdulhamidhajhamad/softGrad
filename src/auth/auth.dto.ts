@@ -57,8 +57,7 @@ export class VerifyEmailDto {
 
   @IsString()
   @MinLength(6)
-  @MinLength(6)
-  verificationCode: string;
+  verificationCode: string; // إزالة @MinLength المكرر
 }
 
 // ✅ NEW: DTO for resending verification code

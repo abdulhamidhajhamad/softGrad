@@ -1,17 +1,32 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
-import { Admin } from './admin.entity';
-import { User } from '../auth/user.entity';
-import { ServiceProvider } from '../providers/provider.entity';
-import { Service } from '../service/service.entity';
-import { Booking } from '../booking/booking.entity';
+import { Admin, AdminSchema } from './admin.entity';
+import { User, UserSchema } from '../auth/user.entity';
+import { ServiceProvider, ServiceProviderSchema } from '../providers/provider.entity';
+// TODO: قم باستيراد Service و Booking عندما تنشئهم
+// import { Service, ServiceSchema } from '../service/service.entity';
+// import { Booking, BookingSchema } from '../booking/booking.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Admin, User, ServiceProvider, Service, Booking])],
+  imports: [
+    MongooseModule.forFeature([
+      // 👥 نموذج المسؤولين
+      { name: Admin.name, schema: AdminSchema },
+      // 👤 نموذج المستخدمين
+      { name: User.name, schema: UserSchema },
+      // 🏢 نموذج مقدمي الخدمة
+      { name: ServiceProvider.name, schema: ServiceProviderSchema },
+      // TODO: أضف هذه النماذج عندما تنشئها:
+      // 🔧 نموذج الخدمات
+      // { name: Service.name, schema: ServiceSchema },
+      // 📅 نموذج الحجوزات
+      // { name: Booking.name, schema: BookingSchema },
+    ]),
+  ],
   controllers: [AdminController],
   providers: [AdminService],
-  exports: [AdminService],
+  exports: [AdminService, MongooseModule],
 })
 export class AdminModule {}

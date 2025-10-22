@@ -1,17 +1,19 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { ProviderController } from './provider.controller';
 import { ProviderService } from './provider.service';
-import { ServiceProvider } from './provider.entity';
-import { AuthModule } from '../auth/auth.module'; // ← Import AuthModule
+import { ServiceProvider, ServiceProviderSchema } from './provider.entity';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ServiceProvider]),
+    MongooseModule.forFeature([
+      { name: ServiceProvider.name, schema: ServiceProviderSchema }
+    ]),
     AuthModule, // ← Add this to share JWT authentication
   ],
   controllers: [ProviderController],
   providers: [ProviderService],
-  exports: [ProviderService],
+  exports: [ProviderService, MongooseModule],
 })
 export class ProviderModule {}

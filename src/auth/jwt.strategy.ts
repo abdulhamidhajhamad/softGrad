@@ -1,15 +1,15 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
 import { User } from './user.entity';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
+    @InjectModel(User.name)
+    private userModel: Model<User>,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -22,9 +22,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     console.log('🔍 JWT Payload:', payload);
 
-    const user = await this.userRepository.findOne({
-      where: { id: payload.userId },
-    });
+    const user = await this.userModel.findById(payload.userId).exec();
 
     console.log('👤 Found User:', user);
 
@@ -35,10 +33,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     // ✅ IMPORTANT: Include role in the returned object
     return {
-      id: user.id,
-      userId: user.id,
+      id: (user._id as Types.ObjectId).toString(),
+      userId: (user._id as Types.ObjectId).toString(),
       email: user.email,
-      role: user.role, // <-- Add this
+      role: user.role,
     };
   }
 }

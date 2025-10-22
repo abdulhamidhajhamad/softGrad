@@ -1,19 +1,19 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { User } from './user.entity';
+import { User, UserSchema } from './user.entity';
 import { JwtStrategy } from './jwt.strategy';
 import { MailService } from './mail.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret:'your-secret-key-change-in-production',
+      secret: 'your-secret-key-change-in-production',
       signOptions: { expiresIn: '24h' },
     }),
   ],
@@ -23,7 +23,7 @@ import { MailService } from './mail.service';
     JwtStrategy, 
     PassportModule, 
     JwtModule,
-    TypeOrmModule, // ← Add this so other modules can access User repository
+    MongooseModule, // ← Export MongooseModule so other modules can access User model
   ],
 })
 export class AuthModule {}

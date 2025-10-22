@@ -1,37 +1,40 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Types } from 'mongoose';
 
-@Entity('users')
-export class User {
-  @PrimaryGeneratedColumn({ name: 'user_id' })
-  id: number;
-
-  @Column({ name: 'user_name', type: 'varchar' })
+@Schema({ collection: 'users', timestamps: true })
+export class User extends Document {
+  @Prop({ required: true })
   userName: string;
 
-  @Column({ unique: true, type: 'varchar' })
+  @Prop({ required: true, unique: true })
   email: string;
 
-  @Column({ name: 'password_hash', type: 'varchar' })
+  @Prop({ required: true })
   password: string;
 
-  @Column({ nullable: true, type: 'varchar' })
-  phone?: string | null;
+  @Prop({ default: null })
+  phone?: string;
 
-  @Column({ nullable: true, type: 'varchar' })
-  city: string | null;
+  @Prop({ default: null })
+  city?: string;
 
-  @Column({ type: 'varchar' })
+  @Prop({ required: true, enum: ['client', 'vendor', 'admin'] })
   role: 'client' | 'vendor' | 'admin';
 
-  @Column({ name: 'image_url', nullable: true, type: 'varchar', default: null })
-  imageUrl: string | null;
+  @Prop({ default: null })
+  imageUrl?: string;
 
-  @Column({ name: 'is_verified', type: 'boolean', default: false })
+  @Prop({ default: false })
   isVerified: boolean;
 
-  @Column({ name: 'verification_code', nullable: true, type: 'varchar', length: 6 })
-  verificationCode: string | null;
+  @Prop({ default: null })
+  verificationCode?: string;
 
-  @Column({ name: 'verification_code_expires', nullable: true, type: 'timestamp' })
-  verificationCodeExpires: Date | null;
+  @Prop({ default: null })
+  verificationCodeExpires?: Date;
 }
+
+export const UserSchema = SchemaFactory.createForClass(User);
+
+// Create indexes
+UserSchema.index({ email: 1 });

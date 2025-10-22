@@ -6,8 +6,8 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { User } from './user.entity';
@@ -24,8 +24,8 @@ import { MailService } from './mail.service';
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
+    @InjectModel(User.name)
+    private userModel: Model<User>,
     private jwtService: JwtService,
     private mailService: MailService,
   ) {}
@@ -45,7 +45,7 @@ export class AuthService {
     }
 
     // Check if user already exists
-    const existingUser = await this.userRepository.findOne({ where: { email } });
+    const existingUser = await this.userModel.findOne({ email }).exec();
     if (existingUser) {
       throw new ConflictException('Email already exists');
     }
@@ -58,7 +58,7 @@ export class AuthService {
     const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     // Create user
-    const user = this.userRepository.create({
+    const user = new this.userModel({
       userName,
       email,
       password: hashedPassword,
@@ -71,7 +71,7 @@ export class AuthService {
       verificationCodeExpires,
     });
 
-    await this.userRepository.save(user);
+    await user.save();
 
     // Send verification email
     try {
@@ -92,7 +92,7 @@ export class AuthService {
     const { email, verificationCode } = verifyEmailDto;
 
     // Find user by email
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.userModel.findOne({ email }).exec();
     
     if (!user) {
       throw new NotFoundException('User not found');
@@ -120,15 +120,19 @@ export class AuthService {
 
     // Mark user as verified and clear verification fields
     user.isVerified = true;
-    user.verificationCode = null;
-    user.verificationCodeExpires = null;
-    await this.userRepository.save(user);
+    user.verificationCode = undefined;
+    user.verificationCodeExpires = undefined;
+    await user.save();
 
     // Generate JWT token
-    const token = this.jwtService.sign({ userId: user.id, email: user.email });
+    const token = this.jwtService.sign({ 
+      userId: (user._id as Types.ObjectId).toString(), 
+      email: user.email 
+    });
     
     // Return user without sensitive data
-    const { password, verificationCode: _, verificationCodeExpires: __, ...userWithoutPassword } = user;
+    const userObject = user.toObject();
+    const { password, verificationCode: _, verificationCodeExpires: __, ...userWithoutPassword } = userObject;
     
     return {
       token,
@@ -141,7 +145,7 @@ export class AuthService {
     const { email } = resendVerificationDto;
 
     // Find user by email
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.userModel.findOne({ email }).exec();
     
     if (!user) {
       // Don't reveal if email exists or not for security
@@ -160,7 +164,7 @@ export class AuthService {
     // Update user with new code
     user.verificationCode = verificationCode;
     user.verificationCodeExpires = verificationCodeExpires;
-    await this.userRepository.save(user);
+    await user.save();
 
     // Send verification email
     try {
@@ -178,7 +182,7 @@ export class AuthService {
   async login(loginDto: LoginDto): Promise<{ token: string; user: any }> {
     const { email, password } = loginDto;
     
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.userModel.findOne({ email }).exec();
     if (!user) {
       throw new UnauthorizedException('Invalid Email/Pass');
     }
@@ -193,9 +197,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid Email/Pass');
     }
     
-    const token = this.jwtService.sign({ userId: user.id, email: user.email });
+    const token = this.jwtService.sign({ 
+      userId: (user._id as Types.ObjectId).toString(), 
+      email: user.email 
+    });
     
-    const { password: _, verificationCode, verificationCodeExpires, ...userWithoutPassword } = user;
+    const userObject = user.toObject();
+    const { password: _, verificationCode, verificationCodeExpires, ...userWithoutPassword } = userObject;
     return {
       token,
       user: userWithoutPassword,

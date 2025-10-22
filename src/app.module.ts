@@ -1,40 +1,34 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { ProviderModule } from './providers/provider.module';
 import { ServiceModule } from './service/service.module';
 import { BookingModule } from './booking/booking.module';
-import { AdminModule } from './/admin/admin.module';
-
-
-
+import { AdminModule } from './admin/admin.module';
 
 
 @Module({
   imports: [
+    // ✅ تفعيل قراءة ملف .env بشكل عام
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    TypeOrmModule.forRootAsync({
+
+    // ✅ الاتصال بـ MongoDB
+    MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST') || 'localhost',
-        port: configService.get<number>('DB_PORT') || 5432,
-        username: configService.get<string>('DB_USERNAME') || 'postgres',
-        password: configService.get<string>('DB_PASSWORD') || '123',
-        database: configService.get<string>('DB_DATABASE') || 'WeddingPlanner',
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: true,
-        logging: false,
+      useFactory: async (configService: ConfigService) => ({
+        uri: configService.get<string>('MONGO_URI') || 'mongodb://localhost:27017/WeddingPlanner',
       }),
       inject: [ConfigService],
     }),
+
+    // باقي الموديولات
     AuthModule,
     ProviderModule,
-    ServiceModule,
-    BookingModule,
+    //ServiceModule,
+    //BookingModule,
     AdminModule,
   ],
 })

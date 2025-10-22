@@ -1,120 +1,128 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
 import { ServiceProvider } from './provider.entity';
 import { CreateProviderDto, UpdateProviderDto, SearchProviderDto } from './provider.dto';
 
 @Injectable()
 export class ProviderService {
   constructor(
-    @InjectRepository(ServiceProvider)
-    private readonly providerRepository: Repository<ServiceProvider>,
+    @InjectModel(ServiceProvider.name)
+    private readonly providerModel: Model<ServiceProvider>,
   ) {}
-async createProvider(userId: number, createProviderDto: CreateProviderDto): Promise<ServiceProvider> {
-  const existingProvider = await this.providerRepository.findOne({
-    where: { userId }
-  });
-  if (existingProvider) {
-    throw new ConflictException('User already has a provider profile');
-  }
-  const provider = this.providerRepository.create({
-    userId,
-    companyName: createProviderDto.companyName,
-    description: createProviderDto.description,
-    location: createProviderDto.location,
-    imageUrls: createProviderDto.imageUrls || [], // ← Add this
-    customerType: createProviderDto.customerType, // ← Add this
-  });
-  return await this.providerRepository.save(provider);
-}
 
-async updateProvider(userId: number, updateProviderDto: UpdateProviderDto): Promise<ServiceProvider> {
-  const provider = await this.providerRepository.findOne({
-    where: { userId }
-  });
+  async createProvider(userId: string, createProviderDto: CreateProviderDto): Promise<ServiceProvider> {
+    const existingProvider = await this.providerModel.findOne({ 
+      userId: new Types.ObjectId(userId) 
+    }).exec();
+    
+    if (existingProvider) {
+      throw new ConflictException('User already has a provider profile');
+    }
 
-  if (!provider) {
-    throw new NotFoundException('Provider profile not found');
-  }
-  if (updateProviderDto.companyName !== undefined) {
-    provider.companyName = updateProviderDto.companyName;
-  }
-  if (updateProviderDto.description !== undefined) {
-    provider.description = updateProviderDto.description;
-  }
-  if (updateProviderDto.location !== undefined) {
-    provider.location = updateProviderDto.location;
-  }
-  if (updateProviderDto.imageUrls !== undefined) {
-    provider.imageUrls = updateProviderDto.imageUrls; // ← Add this
-  }
-  if (updateProviderDto.customerType !== undefined) {
-    provider.customerType = updateProviderDto.customerType; // ← Add this
-  }
-
-  return await this.providerRepository.save(provider);
-}
-
-async searchProviders(searchDto: SearchProviderDto): Promise<{ 
-  providers: ServiceProvider[], 
-  total: number, 
-  page: number, 
-  totalPages: number 
-}> {
-  const { page = 1, limit = 10, location, searchTerm, customerType } = searchDto;
-  
-  const queryBuilder = this.providerRepository.createQueryBuilder('provider');
-
-  if (location) {
-    queryBuilder.andWhere('provider.location LIKE :location', { 
-      location: `%${location}%` 
+    const provider = new this.providerModel({
+      userId: new Types.ObjectId(userId),
+      companyName: createProviderDto.companyName,
+      description: createProviderDto.description || '',
+      location: createProviderDto.location || '',
+      imageUrls: createProviderDto.imageUrls || [],
+      customerType: createProviderDto.customerType,
+      details: createProviderDto.details || {},
     });
+
+    return await provider.save();
   }
 
-  if (searchTerm) {
-    queryBuilder.andWhere(
-      '(provider.company_name LIKE :searchTerm OR provider.description LIKE :searchTerm)',
-      { searchTerm: `%${searchTerm}%` }
-    );
+  async updateProvider(userId: string, updateProviderDto: UpdateProviderDto): Promise<ServiceProvider> {
+    const provider = await this.providerModel.findOne({ 
+      userId: new Types.ObjectId(userId) 
+    }).exec();
+
+    if (!provider) {
+      throw new NotFoundException('Provider profile not found');
+    }
+
+    if (updateProviderDto.companyName !== undefined) {
+      provider.companyName = updateProviderDto.companyName;
+    }
+    if (updateProviderDto.description !== undefined) {
+      provider.description = updateProviderDto.description;
+    }
+    if (updateProviderDto.location !== undefined) {
+      provider.location = updateProviderDto.location;
+    }
+    if (updateProviderDto.imageUrls !== undefined) {
+      provider.imageUrls = updateProviderDto.imageUrls;
+    }
+    if (updateProviderDto.customerType !== undefined) {
+      provider.customerType = updateProviderDto.customerType;
+    }
+    if (updateProviderDto.details !== undefined) {
+      // Merge details instead of replacing
+      provider.details = { ...provider.details, ...updateProviderDto.details };
+    }
+
+    return await provider.save();
   }
 
-  if (customerType) {
-    queryBuilder.andWhere('provider.customer_type = :customerType', { 
-      customerType 
-    });
+  async searchProviders(searchDto: SearchProviderDto): Promise<{ 
+    providers: ServiceProvider[], 
+    total: number, 
+    page: number, 
+    totalPages: number 
+  }> {
+    const { page = 1, limit = 10, location, searchTerm, customerType } = searchDto;
+    
+    const query: any = {};
+
+    if (location) {
+      query.location = { $regex: location, $options: 'i' };
+    }
+
+    if (searchTerm) {
+      query.$or = [
+        { companyName: { $regex: searchTerm, $options: 'i' } },
+        { description: { $regex: searchTerm, $options: 'i' } }
+      ];
+    }
+
+    if (customerType) {
+      query.customerType = customerType;
+    }
+
+    const total = await this.providerModel.countDocuments(query).exec();
+    const providers = await this.providerModel
+      .find(query)
+      .sort({ _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .exec();
+
+    return {
+      providers,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
-  const total = await queryBuilder.getCount();
-  const providers = await queryBuilder
-    .orderBy('provider.provider_id', 'DESC')
-    .skip((page - 1) * limit)
-    .take(limit)
-    .getMany();
-
-  return {
-    providers,
-    total,
-    page,
-    totalPages: Math.ceil(total / limit)
-  };
-}
-
-  async getProviderById(providerId: number): Promise<ServiceProvider> {
-    const provider = await this.providerRepository.findOne({
-      where: { providerId },
-      relations: ['user']
-    });
+  async getProviderById(providerId: string): Promise<ServiceProvider> {
+    const provider = await this.providerModel
+      .findById(providerId)
+      .populate('userId')
+      .exec();
 
     if (!provider) {
       throw new NotFoundException('Provider not found');
     }
     return provider;
   }
-  async getProviderByUserId(userId: number): Promise<ServiceProvider> {
-    const provider = await this.providerRepository.findOne({
-      where: { userId },
-      relations: ['user']
-    });
+
+  async getProviderByUserId(userId: string): Promise<ServiceProvider> {
+    const provider = await this.providerModel
+      .findOne({ userId: new Types.ObjectId(userId) })
+      .populate('userId')
+      .exec();
 
     if (!provider) {
       throw new NotFoundException('Provider profile not found');
@@ -124,30 +132,26 @@ async searchProviders(searchDto: SearchProviderDto): Promise<{
   }
 
   async getAllProviders(): Promise<ServiceProvider[]> {
-    return await this.providerRepository.find({
-      relations: ['user'],
-      order: {
-        providerId: 'DESC'
-      }
-    });
+    return await this.providerModel
+      .find()
+      .populate('userId')
+      .sort({ _id: -1 })
+      .exec();
   }
 
-  async deleteProvider(userId: number): Promise<void> {
-    const provider = await this.providerRepository.findOne({
-      where: { userId }
-    });
+  async deleteProvider(userId: string): Promise<void> {
+    const result = await this.providerModel.deleteOne({ 
+      userId: new Types.ObjectId(userId) 
+    }).exec();
 
-    if (!provider) {
+    if (result.deletedCount === 0) {
       throw new NotFoundException('Provider profile not found');
     }
-
-    await this.providerRepository.remove(provider);
   }
 
   async getProvidersByLocation(location: string): Promise<ServiceProvider[]> {
-    return await this.providerRepository
-      .createQueryBuilder('provider')
-      .where('provider.location LIKE :location', { location: `%${location}%` })
-      .getMany();
+    return await this.providerModel
+      .find({ location: { $regex: location, $options: 'i' } })
+      .exec();
   }
 }

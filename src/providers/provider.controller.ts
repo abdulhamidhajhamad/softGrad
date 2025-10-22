@@ -9,7 +9,6 @@ import {
   Query,
   UseGuards,
   Request,
-  ParseIntPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -17,6 +16,7 @@ import { ProviderService } from './provider.service';
 import { CreateProviderDto, UpdateProviderDto, SearchProviderDto, ProviderResponseDto } from './provider.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ServiceProvider } from './provider.entity';
+import { Types } from 'mongoose';
 
 @Controller('providers')
 export class ProviderController {
@@ -94,7 +94,7 @@ export class ProviderController {
   // Get specific provider by ID (public)
   @Get(':id')
   async getProviderById(
-    @Param('id', ParseIntPipe) providerId: number,
+    @Param('id') providerId: string,
   ): Promise<ProviderResponseDto> {
     const provider = await this.providerService.getProviderById(providerId);
     return this.mapToResponseDto(provider);
@@ -110,13 +110,14 @@ export class ProviderController {
 
   private mapToResponseDto(provider: ServiceProvider): ProviderResponseDto {
     return {
-      providerId: provider.providerId,
-      userId: provider.userId,
+      providerId: (provider._id as Types.ObjectId).toString(),
+      userId: (provider.userId as Types.ObjectId).toString(),
       companyName: provider.companyName,
-      description: provider.description,
-      location: provider.location,
+      description: provider.description || '',
+      location: provider.location || '',
       imageUrls: provider.imageUrls || [],
       customerType: provider.customerType,
+      details: provider.details || {},
     };
   }
 }

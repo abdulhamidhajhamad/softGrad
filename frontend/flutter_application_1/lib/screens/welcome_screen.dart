@@ -248,7 +248,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 style: GoogleFonts.poppins(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
-                                  color: const Color.fromARGB(255, 116, 40, 40),
+                                  color: const Color.fromARGB(255, 145, 49, 49),
                                   letterSpacing: 0.5,
                                 ),
                               ),

@@ -1,3 +1,4 @@
+// user.entity.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
@@ -32,6 +33,10 @@ export class User extends Document {
 
   @Prop({ default: null })
   verificationCodeExpires?: Date;
+
+  // 🔄 أضف هذا الحقل الجديد للـ vendors
+  @Prop({ default: null })
+  companyName?: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

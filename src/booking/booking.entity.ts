@@ -1,8 +1,13 @@
 // src/booking/booking.entity.ts
 
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { User } from '../auth/user.entity'; // <-- Import User entity
-import { Service } from '../service/service.entity'; // <-- Import Service entity
+import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+import { User } from '../auth/user.entity'; 
+import { Service } from '../service/service.entity'; 
+
+// FIX: Export the User and Service Document types here
+export type UserDocument = User & Document;
+export type ServiceDocument = Service & Document;
 
 export enum BookingStatus {
   PENDING = 'pending',
@@ -11,38 +16,51 @@ export enum BookingStatus {
   COMPLETED = 'completed',
 }
 
-@Entity('bookings')
-export class Booking {
-  @PrimaryGeneratedColumn({ name: 'booking_id' })
-  bookingId: number;
-  
-  // Define relationships
-  @ManyToOne(() => User, { eager: true }) // eager: true automatically loads the user
-  @JoinColumn({ name: 'user_id' })
-  user: User;
+@Schema({ 
+  collection: 'bookings', 
+  timestamps: true,
+  toJSON: { virtuals: true }, 
+  toObject: { virtuals: true } 
+})
+export class Booking extends Document {
 
-  @ManyToOne(() => Service, { eager: true }) // eager: true automatically loads the service
-  @JoinColumn({ name: 'service_id' })
-  service: Service;
+  @Prop({ required: true, ref: 'User' })
+  userId: number; 
 
-  // You can keep the ID columns if you need direct access, 
-  // but they are implicitly handled by the @JoinColumn.
-  @Column({ name: 'user_id' })
-  userId: number;
+  @Prop({ required: true, ref: 'Service' })
+  serviceId: number; 
 
-  @Column({ name: 'service_id' })
-  serviceId: number;
-
-  @Column({ name: 'booking_date', type: 'date', nullable: false })
+  @Prop({ type: Date, required: true })
   bookingDate: Date;
 
-  @Column({
-    type: 'enum',
-    enum: BookingStatus,
+  @Prop({
+    type: String,
+    enum: Object.values(BookingStatus),
     default: BookingStatus.PENDING,
   })
   status: BookingStatus;
 
-  @Column({ name: 'total_price', type: 'decimal', precision: 10, scale: 2, nullable: false })
+  @Prop({ type: Number, required: true })
   totalPrice: number;
+
+  user?: User;
+  service?: Service;
 }
+
+export const BookingSchema = SchemaFactory.createForClass(Booking);
+
+BookingSchema.virtual('user', {
+  ref: 'User',
+  localField: 'userId',
+  foreignField: 'id', 
+  justOne: true,
+});
+
+BookingSchema.virtual('service', {
+  ref: 'Service',
+  localField: 'serviceId',
+  foreignField: 'serviceId', 
+  justOne: true,
+});
+
+export type BookingDocument = Booking & Document;

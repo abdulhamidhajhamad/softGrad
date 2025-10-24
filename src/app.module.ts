@@ -27,8 +27,8 @@ import { AdminModule } from './admin/admin.module';
     // باقي الموديولات
     AuthModule,
     ProviderModule,
-    //ServiceModule,
-    //BookingModule,
+    ServiceModule,
+    BookingModule,
     AdminModule,
   ],
 })

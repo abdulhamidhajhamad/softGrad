@@ -1,79 +1,92 @@
-import { IsString, IsNotEmpty, IsEnum, IsOptional, IsNumber, IsPositive, Min, Max, IsArray } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsNumber, IsArray, IsOptional, IsObject, IsNotEmpty, Min } from 'class-validator';
 
-export enum ServiceCategory {
-  VENUE = 'venue',
-  BUFFET = 'buffet',
-  PHOTOGRAPHY = 'photography',
+export class LocationDto {
+  @IsNumber()
+  @IsNotEmpty()
+  latitude: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  longitude: number;
+
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  country?: string;
 }
 
 export class CreateServiceDto {
-  @IsNumber()
-  @IsNotEmpty()
-  providerId: number;
-
   @IsString()
   @IsNotEmpty()
-  name: string;
-
-  @IsEnum(ServiceCategory)
-  @IsOptional()
-  category?: ServiceCategory;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
-
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @IsPositive()
-  @Type(() => Number)
-  price: number;
-
-  @IsNumber({ maxDecimalPlaces: 1 })
-  @Min(0)
-  @Max(5)
-  @IsOptional()
-  @Type(() => Number)
-  rating?: number;
+  serviceName: string;
 
   @IsArray()
-  @IsString({ each: true })
   @IsOptional()
-  imageUrls?: string[];
+  images?: string[];
+
+  @IsObject()
+  @IsNotEmpty()
+  location: LocationDto;
+
+  @IsNumber()
+  @Min(0)
+  price: number;
+
+  @IsOptional()
+  additionalInfo?: any;
+
+  // 🔄 أضف هذا الحقل الجديد
+  @IsString()
+  @IsOptional()
+  companyName?: string;
 }
 
 export class UpdateServiceDto {
-  @IsNumber()
-  @IsOptional()
-  providerId?: number;
-
   @IsString()
   @IsOptional()
-  name?: string;
-
-  @IsEnum(ServiceCategory)
-  @IsOptional()
-  category?: ServiceCategory;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
-
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @IsPositive()
-  @IsOptional()
-  @Type(() => Number)
-  price?: number;
-
-  @IsNumber({ maxDecimalPlaces: 1 })
-  @Min(0)
-  @Max(5)
-  @IsOptional()
-  @Type(() => Number)
-  rating?: number;
+  serviceName?: string;
 
   @IsArray()
-  @IsString({ each: true })
   @IsOptional()
-  imageUrls?: string[];
+  images?: string[];
+
+  @IsObject()
+  @IsOptional()
+  location?: LocationDto;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  price?: number;
+
+  @IsOptional()
+  additionalInfo?: any;
+
+  // 🔄 أضف هذا الحقل الجديد
+  @IsString()
+  @IsOptional()
+  companyName?: string;
+}
+
+export class ServiceResponseDto {
+  _id: string;
+  providerId: string;
+  serviceName: string;
+  images: string[];
+  reviews: any[];
+  location: any;
+  price: number;
+  additionalInfo?: any;
+  createdAt: Date;
+  updatedAt: Date;
+  
+  // 🔄 أضف هذا الحقل الجديد
+  companyName?: string;
 }

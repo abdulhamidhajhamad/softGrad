@@ -47,7 +47,7 @@ class WelcomeScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Image.asset(
-                    'assets/flowers/heartIcon.png',
+                    '../assets/flowers/heartIcon.png',
                     width: 30,
                     height: 30,
                     fit: BoxFit.contain,

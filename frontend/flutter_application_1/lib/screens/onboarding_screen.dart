@@ -21,19 +21,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // Onboarding page data
   final List<_OnboardingPageData> _pages = [
     _OnboardingPageData(
-      image: 'assets/flowers/pic1.png',
+      image: '../assets/flowers/pic1.png',
       title: 'Plan your Wedding!',
       body:
           'Plan your wedding according to your ease.\nContinue as a Groom or Bride.',
     ),
     _OnboardingPageData(
-      image: 'assets/flowers/pic2.png',
+      image: '../assets/flowers/pic2.png',
       title: 'Invite all Guests!',
       body:
           'Plan your wedding according to your ease.\nContinue as a Groom or Bride.',
     ),
     _OnboardingPageData(
-      image: 'assets/flowers/pic3.png',
+      image: '../assets/flowers/pic3.png',
       title: 'Select your Venue!',
       body:
           'Plan your wedding according to your ease.\nContinue as a Groom or Bride.',

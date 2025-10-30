@@ -11,7 +11,6 @@ class WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final cardWidth = size.width * 0.88;
-    const cardPadding = 24.0;
 
     return Scaffold(
       body: Container(
@@ -27,126 +26,160 @@ class WelcomeScreen extends StatelessWidget {
         child: Center(
           child: Container(
             width: cardWidth,
-            height: size.height * 0.50,
-            padding: const EdgeInsets.symmetric(horizontal: cardPadding),
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
+            constraints: BoxConstraints(maxHeight: size.height * 0.55),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(38),
+              borderRadius: BorderRadius.circular(32),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12),
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 28,
+                  offset: const Offset(0, 14),
                 ),
               ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.only(top: 30),
-              child: Column(
-                mainAxisSize: MainAxisSize.max,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    '../assets/flowers/heartIcon.png',
-                    width: 30,
-                    height: 30,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(height: 11),
-                  Text(
-                    'PlanMyWedding',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.cookie(
-                      fontSize: 56,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFFB14E56),
-                      letterSpacing: 1.2,
+            child: Stack(
+              children: [
+                // Decorative elements
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Opacity(
+                    opacity: 0.08,
+                    child: Image.asset(
+                      'assets/flowers/top_right.png',
+                      width: 85,
+                      fit: BoxFit.contain,
                     ),
                   ),
-                  const SizedBox(height: 15),
-                  Text(
-                    'Wedding Planner',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.emilysCandy(
-                      fontSize: 27,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFB14E56).withOpacity(0.7),
-                      letterSpacing: 1.0,
+                ),
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  child: Opacity(
+                    opacity: 0.08,
+                    child: Image.asset(
+                      'assets/flowers/bottom_left.png',
+                      width: 100,
+                      fit: BoxFit.contain,
                     ),
                   ),
-                  const SizedBox(height: 90),
-
-                  // Sign Up
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFFB14E56),
-                        elevation: 4,
-                        shadowColor: Colors.black.withOpacity(0.10),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(28),
-                          side: const BorderSide(
-                            color: Color(0xFFB14E56),
-                            width: 1.2,
+                ),
+                // Main content
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Heart icon with circle background
+                    Container(
+                      width: 65,
+                      height: 65,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFB14E56).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.favorite,
+                        color: Color(0xFFB14E56),
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // App name
+                    Text(
+                      'PlanMyWedding',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.playfairDisplay(
+                        fontSize: 38,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFFB14E56),
+                        letterSpacing: 0.5,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Subtitle
+                    Text(
+                      'Wedding Planner',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.montserrat(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFFB14E56).withOpacity(0.7),
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 48),
+                    // Sign Up button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFFB14E56),
+                          elevation: 0,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: const BorderSide(
+                              color: Color(0xFFB14E56),
+                              width: 2,
+                            ),
                           ),
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const SignUpScreen(),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const SignUpScreen(),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          'Sign Up',
+                          style: GoogleFonts.montserrat(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
                           ),
-                        );
-                      },
-                      child: Text(
-                        'Sign Up',
-                        style: GoogleFonts.montserrat(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFFB14E56),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Log In
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFA64951),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(28),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const LoginScreen(),
+                    const SizedBox(height: 16),
+                    // Log In button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFA64951),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                        );
-                      },
-                      child: Text(
-                        'Log In',
-                        style: GoogleFonts.montserrat(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const LoginScreen(),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          'Log In',
+                          style: GoogleFonts.montserrat(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(height: 12),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),

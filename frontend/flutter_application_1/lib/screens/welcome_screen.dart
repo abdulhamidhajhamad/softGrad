@@ -71,7 +71,7 @@ class WelcomeScreen extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Heart icon with circle background
+                    // Heart image with circle background
                     Container(
                       width: 65,
                       height: 65,
@@ -79,10 +79,13 @@ class WelcomeScreen extends StatelessWidget {
                         color: const Color(0xFFB14E56).withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.favorite,
-                        color: Color(0xFFB14E56),
-                        size: 32,
+                      child: Center(
+                        child: Image.asset(
+                          'assets/flowers/heartIcon.png',
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -90,8 +93,8 @@ class WelcomeScreen extends StatelessWidget {
                     Text(
                       'PlanMyWedding',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.playfairDisplay(
-                        fontSize: 38,
+                      style: GoogleFonts.cookie(
+                        fontSize: 50,
                         fontWeight: FontWeight.bold,
                         color: const Color(0xFFB14E56),
                         letterSpacing: 0.5,
@@ -103,9 +106,9 @@ class WelcomeScreen extends StatelessWidget {
                     Text(
                       'Wedding Planner',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.montserrat(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                      style: GoogleFonts.unicaOne(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
                         color: const Color(0xFFB14E56).withOpacity(0.7),
                         letterSpacing: 1.5,
                       ),

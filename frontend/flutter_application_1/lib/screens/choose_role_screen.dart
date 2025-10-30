@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:flutter_application_1/screens/welcome_screen.dart';
+import 'package:flutter_application_1/screens/enter_details_screen.dart';
+
 enum UserRole { groom, bride, guest }
 
 class ChooseRoleScreen extends StatefulWidget {
@@ -20,10 +23,10 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please choose a role',
+            'Please choose a role!',
             style: GoogleFonts.montserrat(fontWeight: FontWeight.w500),
           ),
-          backgroundColor: kBrand,
+          backgroundColor: const Color.fromARGB(255, 195, 13, 29),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -32,7 +35,19 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
       );
       return;
     }
-    Navigator.pushNamed(context, '/welcome');
+
+    if (_selected == UserRole.guest) {
+      // ضيف → Welcome
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const WelcomeScreen()));
+    } else {
+      // عريس/عروس → صفحة التفاصيل مع تمرير role بشكل صريح
+      final roleStr = _selected == UserRole.bride ? 'bride' : 'groom';
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => EnterDetailsScreen(role: roleStr)),
+      );
+    }
   }
 
   Widget _roleCard({
@@ -68,14 +83,13 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Avatar circle
             Container(
               width: 64,
               height: 64,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: selected
-                    ? Colors.white.withOpacity(0.95)
+                    ? Colors.white.withValues(alpha: 0.95)
                     : const Color(0xFFF8F8F8),
                 border: Border.all(
                   color: selected ? Colors.white : const Color(0xFFE0E0E0),
@@ -86,7 +100,6 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
               child: Image.asset(asset, fit: BoxFit.contain),
             ),
             const SizedBox(height: 12),
-            // Title
             Text(
               title,
               style: GoogleFonts.montserrat(
@@ -122,7 +135,6 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
         child: SafeArea(
           child: Stack(
             children: [
-              // Decorative flowers
               Positioned(
                 top: 0,
                 right: 0,
@@ -145,7 +157,6 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
                   ),
                 ),
               ),
-              // Main content
               Center(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(vertical: 20),
@@ -169,7 +180,6 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Title
                         Text(
                           'Choose Your Role',
                           textAlign: TextAlign.center,
@@ -181,7 +191,6 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        // Role cards - all vertical
                         _roleCard(
                           title: 'Groom',
                           asset: 'assets/flowers/groom.png',
@@ -200,7 +209,6 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
                           role: UserRole.guest,
                         ),
                         const SizedBox(height: 28),
-                        // Continue button
                         SizedBox(
                           width: double.infinity,
                           height: 54,

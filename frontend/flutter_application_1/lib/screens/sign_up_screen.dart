@@ -260,7 +260,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             Text(
                               'Already have an account? ',
                               style: GoogleFonts.poppins(
-                                fontSize: 13,
+                                fontSize: 14,
                                 color: Colors.white,
                               ),
                             ),
@@ -272,7 +272,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               child: Text(
                                 'Log In',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
                                   shadows: const [

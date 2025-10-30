@@ -108,26 +108,26 @@ class _SplashScreenState extends State<SplashScreen> {
                             'PlanMyWedding',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.cookie(
-                              fontSize: 50,
+                              fontSize: 53,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 0.5,
                               color: Colors.white,
-                              height: 1.2,
+                              height: 1.9,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           // Tagline
                           Text(
-                            'YOUR PERFECT DAY AWAITS',
+                            'YOUR PERFECT DAY AWAITS!',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.montserrat(
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 2.0,
                               color: Colors.white.withOpacity(0.9),
                             ),
                           ),
-                          const SizedBox(height: 40),
+                          const SizedBox(height: 60),
                           // START button
                           SizedBox(
                             width: 160,

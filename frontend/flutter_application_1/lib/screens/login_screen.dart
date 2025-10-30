@@ -179,7 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         : null,
                                   ),
 
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 5),
 
                                   // Forgot password
                                   Align(
@@ -191,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       child: Text(
                                         'Forgot Password?',
                                         style: GoogleFonts.poppins(
-                                          fontSize: 12,
+                                          fontSize: 13,
                                           fontWeight: FontWeight.w600,
                                           color: kBrand,
                                         ),
@@ -242,7 +242,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             Text(
                               "Don't have an account? ",
                               style: GoogleFonts.poppins(
-                                fontSize: 13,
+                                fontSize: 14,
                                 color: Colors.white,
                               ),
                             ),
@@ -257,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               child: Text(
                                 'Sign Up',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
                                   shadows: const [

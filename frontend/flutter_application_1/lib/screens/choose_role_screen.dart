@@ -173,27 +173,27 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
                         Text(
                           'Choose Your Role',
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.acme(
-                            fontSize: 26,
+                          style: GoogleFonts.cookie(
+                            fontSize: 33,
                             fontWeight: FontWeight.bold,
                             color: kBrand,
-                            letterSpacing: 0.5,
+                            letterSpacing: 0.3,
                           ),
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24),
                         // Role cards - all vertical
                         _roleCard(
                           title: 'Groom',
                           asset: 'assets/flowers/groom.png',
                           role: UserRole.groom,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         _roleCard(
                           title: 'Bride',
                           asset: 'assets/flowers/bride.png',
                           role: UserRole.bride,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         _roleCard(
                           title: 'Guest',
                           asset: 'assets/flowers/guest.png',
@@ -211,7 +211,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
                               foregroundColor: Colors.white,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                                borderRadius: BorderRadius.circular(90),
                               ),
                             ),
                             child: Text(

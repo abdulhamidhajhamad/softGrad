@@ -173,7 +173,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
                         Text(
                           'Choose Your Role',
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.playfairDisplay(
+                          style: GoogleFonts.acme(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
                             color: kBrand,

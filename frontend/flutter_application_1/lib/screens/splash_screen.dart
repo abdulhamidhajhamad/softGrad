@@ -14,13 +14,11 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  // no auto-delay; navigation happens on button press
-
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final cardWidth = size.width * 0.82;
-    final cardHeight = size.height * 0.38;
+    final cardWidth = size.width * 0.85;
+    final cardHeight = size.height * 0.42;
 
     return Scaffold(
       body: SafeArea(
@@ -28,7 +26,11 @@ class _SplashScreenState extends State<SplashScreen> {
           width: double.infinity,
           height: double.infinity,
           decoration: const BoxDecoration(
-            color: Color.fromARGB(255, 206, 182, 184),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFCEB6B8), Color(0xFFD4C1C3)],
+            ),
           ),
           child: Center(
             child: Container(
@@ -38,76 +40,151 @@ class _SplashScreenState extends State<SplashScreen> {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFFBF5961), Color(0xFFA64951)],
+                  colors: [Color(0xFFC55B63), Color(0xFFB14E56)],
                 ),
-                borderRadius: BorderRadius.circular(35),
+                borderRadius: BorderRadius.circular(32),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
-                    blurRadius: 24,
-                    offset: const Offset(0, 12),
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 28,
+                    offset: const Offset(0, 14),
                   ),
                 ],
               ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'PlanMyWedding',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.cookie(
-                        fontSize: 53,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      'YOUR PERFECT DAY AWAITS',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.3,
-                        color: const Color.fromARGB(
-                          255,
-                          212,
-                          204,
-                          204,
-                        ).withOpacity(0.85),
-                      ),
-                    ),
-                    const SizedBox(height: 36),
-
-                    // START button instead of loading spinner
-                    SizedBox(
-                      width: 180,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(
-                          context,
-                        ).pushReplacementNamed('/onboarding'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: const Color(0xFFB14E56),
-                          elevation: 3,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28),
-                          ),
+              child: Stack(
+                children: [
+                  // Decorative corner elements
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topRight,
+                          end: Alignment.bottomLeft,
+                          colors: [
+                            Colors.white.withOpacity(0.1),
+                            Colors.transparent,
+                          ],
                         ),
-                        child: Text(
-                          'START',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(32),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomLeft,
+                          end: Alignment.topRight,
+                          colors: [
+                            Colors.black.withOpacity(0.08),
+                            Colors.transparent,
+                          ],
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(32),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Main content
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Heart icon
+                          Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.favorite,
+                              color: Colors.white,
+                              size: 38,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          // App name
+                          Text(
+                            'PlanMyWedding',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.playfairDisplay(
+                              fontSize: 42,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                              color: Colors.white,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Tagline
+                          Text(
+                            'YOUR PERFECT DAY AWAITS',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.montserrat(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 2.0,
+                              color: Colors.white.withOpacity(0.9),
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+                          // START button
+                          SizedBox(
+                            width: 200,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: () => Navigator.of(
+                                context,
+                              ).pushReplacementNamed('/onboarding'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFFB14E56),
+                                elevation: 4,
+                                shadowColor: Colors.black.withOpacity(0.3),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'START',
+                                    style: GoogleFonts.montserrat(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Icon(
+                                    Icons.arrow_forward_rounded,
+                                    size: 22,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

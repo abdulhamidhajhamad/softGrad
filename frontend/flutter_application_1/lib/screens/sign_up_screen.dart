@@ -1,4 +1,3 @@
-// lib/screens/sign_up_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -34,7 +33,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Account created')));
-      Navigator.pop(context);
+      // انتقل مباشرةً لاختيار الدور
+      Navigator.pushReplacementNamed(context, '/choose_role');
     }
   }
 
@@ -77,9 +77,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const SizedBox(
-                          height: 40,
-                        ), // pushes text away from flower
+                        const SizedBox(height: 40),
                         Text(
                           'PlanMyWedding',
                           textAlign: TextAlign.center,
@@ -267,7 +265,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               ),
                             ),
                             TextButton(
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: () => Navigator.pushReplacementNamed(
+                                context,
+                                '/login',
+                              ),
                               child: Text(
                                 'Log In',
                                 style: GoogleFonts.poppins(

@@ -1,15 +1,9 @@
 // lib/screens/onboarding_screen.dart
-//
-// 3-page animated onboarding for PlanMyWedding app.
-// Uses PageView, animated dots, skip, and continue logic.
-// Cleaned up and fixed widget tree for correct vertical spacing.
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
-
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
@@ -18,42 +12,40 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _controller = PageController();
   int _currentPage = 0;
 
-  // Onboarding page data
-  final List<_OnboardingPageData> _pages = [
+  // ---- data ----
+  final List<_OnboardingPageData> _pages = const [
     _OnboardingPageData(
-      image: '../assets/flowers/pic1.png',
+      image: 'assets/flowers/pic1.png',
       title: 'Plan your Wedding!',
       body:
-          'Plan your wedding according to your ease.\nContinue as a Groom or Bride.',
+          'Plan your wedding according to your ease.\nContinue as a guest, Groom or Bride.',
     ),
     _OnboardingPageData(
-      image: '../assets/flowers/pic2.png',
+      image: 'assets/flowers/pic2.png',
       title: 'Invite all Guests!',
       body:
-          'Plan your wedding according to your ease.\nContinue as a Groom or Bride.',
+          'Plan your wedding according to your ease.\nContinue as guest, Groom or Bride.',
     ),
     _OnboardingPageData(
-      image: '../assets/flowers/pic3.png',
+      image: 'assets/flowers/pic3.png',
       title: 'Select your Venue!',
       body:
-          'Plan your wedding according to your ease.\nContinue as a Groom or Bride.',
+          'Plan your wedding according to your ease.\nContinue as a guest, Groom or Bride.',
     ),
   ];
 
-  void _onContinue() {
+  void _goNext() {
     if (_currentPage < _pages.length - 1) {
       _controller.animateToPage(
         _currentPage + 1,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
-    } else {
-      Navigator.of(context).pushReplacementNamed('/choose_role');
     }
   }
 
-  void _onSkip() {
-    Navigator.of(context).pushReplacementNamed('/choose_role');
+  void _finish() {
+    Navigator.of(context).pushReplacementNamed('/welcome');
   }
 
   @override
@@ -76,12 +68,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           child: Stack(
             children: [
-              // Skip button (top-right)
+              // Skip
               Positioned(
                 top: 18,
                 right: 18,
                 child: GestureDetector(
-                  onTap: _onSkip,
+                  onTap: _finish,
                   child: Text(
                     'Skip',
                     style: GoogleFonts.montserrat(
@@ -93,7 +85,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
               ),
-              // Centered card with PageView
+              // Card
               Center(
                 child: Container(
                   width: cardWidth,
@@ -118,7 +110,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   child: Stack(
                     children: [
-                      // Faint floral overlays (watermark)
+                      // floral watermark
                       Positioned(
                         top: 0,
                         right: 0,
@@ -127,7 +119,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           child: Image.asset(
                             'assets/flowers/top_right.png',
                             width: 90,
-                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
@@ -139,20 +130,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           child: Image.asset(
                             'assets/flowers/bottom_left.png',
                             width: 110,
-                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
-                      // PageView with animated content
+                      // pages
                       PageView.builder(
                         controller: _controller,
                         itemCount: _pages.length,
                         physics: const BouncingScrollPhysics(),
-                        onPageChanged: (i) {
-                          setState(() => _currentPage = i);
-                        },
+                        onPageChanged: (i) => setState(() => _currentPage = i),
                         itemBuilder: (context, i) {
                           final page = _pages[i];
+                          final last = i == _pages.length - 1;
+
                           return SingleChildScrollView(
                             padding: EdgeInsets.zero,
                             child: Column(
@@ -188,13 +178,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                     height: 1.4,
                                   ),
                                 ),
-                                // زيادة المسافة قبل النقاط
                                 const SizedBox(height: 70),
-                                // Pagination dots
+                                // dots
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: List.generate(_pages.length, (j) {
-                                    final isActive = j == _currentPage;
+                                    final active = j == _currentPage;
                                     return AnimatedContainer(
                                       duration: const Duration(
                                         milliseconds: 250,
@@ -202,10 +191,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                       margin: const EdgeInsets.symmetric(
                                         horizontal: 5,
                                       ),
-                                      width: isActive ? 22 : 10,
+                                      width: active ? 22 : 10,
                                       height: 10,
                                       decoration: BoxDecoration(
-                                        color: isActive
+                                        color: active
                                             ? const Color(0xFFB14E56)
                                             : const Color(0xFFE6D6D8),
                                         borderRadius: BorderRadius.circular(8),
@@ -213,9 +202,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                     );
                                   }),
                                 ),
-                                // زيادة المسافة بين النقاط والزر
                                 const SizedBox(height: 28),
-                                // Continue button
+                                // button
                                 SizedBox(
                                   width: double.infinity,
                                   height: 52,
@@ -228,17 +216,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                       ),
                                       elevation: 0,
                                     ),
-                                    onPressed: () {
-                                      if (_currentPage == _pages.length - 1) {
-                                        Navigator.of(
-                                          context,
-                                        ).pushReplacementNamed('/welcome');
-                                      } else {
-                                        _onContinue();
-                                      }
-                                    },
+                                    onPressed: last ? _finish : _goNext,
                                     child: Text(
-                                      'Continue',
+                                      last ? 'Continue' : 'Next',
                                       style: GoogleFonts.montserrat(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
@@ -265,9 +245,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-// Data class for onboarding pages
+// data class
 class _OnboardingPageData {
-  final String image;
+  final String image; // asset path
   final String title;
   final String body;
   const _OnboardingPageData({

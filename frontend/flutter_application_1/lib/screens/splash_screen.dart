@@ -103,27 +103,12 @@ class _SplashScreenState extends State<SplashScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Heart icon
-                          Container(
-                            width: 70,
-                            height: 70,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.favorite,
-                              color: Colors.white,
-                              size: 38,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
                           // App name
                           Text(
                             'PlanMyWedding',
                             textAlign: TextAlign.center,
-                            style: GoogleFonts.playfairDisplay(
-                              fontSize: 42,
+                            style: GoogleFonts.cookie(
+                              fontSize: 50,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 0.5,
                               color: Colors.white,
@@ -145,8 +130,8 @@ class _SplashScreenState extends State<SplashScreen> {
                           const SizedBox(height: 40),
                           // START button
                           SizedBox(
-                            width: 200,
-                            height: 56,
+                            width: 160,
+                            height: 48,
                             child: ElevatedButton(
                               onPressed: () => Navigator.of(
                                 context,
@@ -157,7 +142,7 @@ class _SplashScreenState extends State<SplashScreen> {
                                 elevation: 4,
                                 shadowColor: Colors.black.withOpacity(0.3),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(28),
+                                  borderRadius: BorderRadius.circular(24),
                                 ),
                               ),
                               child: Row(
@@ -166,15 +151,15 @@ class _SplashScreenState extends State<SplashScreen> {
                                   Text(
                                     'START',
                                     style: GoogleFonts.montserrat(
-                                      fontSize: 17,
+                                      fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: 1.5,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 6),
                                   const Icon(
                                     Icons.arrow_forward_rounded,
-                                    size: 22,
+                                    size: 20,
                                   ),
                                 ],
                               ),

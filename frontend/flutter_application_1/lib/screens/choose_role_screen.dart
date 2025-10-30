@@ -96,19 +96,6 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
                 letterSpacing: 0.3,
               ),
             ),
-            // Checkmark (small)
-            if (selected) ...[
-              const SizedBox(height: 4),
-              Container(
-                width: 22,
-                height: 22,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_rounded, color: kBrand, size: 15),
-              ),
-            ],
           ],
         ),
       ),
@@ -182,21 +169,6 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Icon
-                        Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: kBrand.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.people_rounded,
-                            color: kBrand,
-                            size: 30,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
                         // Title
                         Text(
                           'Choose Your Role',

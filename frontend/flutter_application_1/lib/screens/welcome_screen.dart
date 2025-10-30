@@ -88,7 +88,7 @@ class WelcomeScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 13),
                     // App name
                     Text(
                       'PlanMyWedding',
@@ -96,18 +96,18 @@ class WelcomeScreen extends StatelessWidget {
                       style: GoogleFonts.cookie(
                         fontSize: 50,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFFB14E56),
+                        color: const Color.fromARGB(255, 137, 23, 32),
                         letterSpacing: 0.5,
-                        height: 1.2,
+                        height: 1.4,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
                     // Subtitle
                     Text(
                       'Wedding Planner',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.unicaOne(
-                        fontSize: 20,
+                        fontSize: 21,
                         fontWeight: FontWeight.w600,
                         color: const Color(0xFFB14E56).withOpacity(0.7),
                         letterSpacing: 1.5,

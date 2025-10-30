@@ -80,7 +80,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       color: Colors.white.withOpacity(0.9),
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
-                      decoration: TextDecoration.underline,
+                      //  decoration: TextDecoration.underline,
                     ),
                   ),
                 ),
@@ -115,10 +115,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         top: 0,
                         right: 0,
                         child: Opacity(
-                          opacity: 0.13,
+                          opacity: 0.9,
                           child: Image.asset(
                             'assets/flowers/top_right.png',
-                            width: 90,
+                            width: 150,
                           ),
                         ),
                       ),
@@ -126,10 +126,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         bottom: 0,
                         left: 0,
                         child: Opacity(
-                          opacity: 0.13,
+                          opacity: 0.9,
                           child: Image.asset(
                             'assets/flowers/bottom_left.png',
-                            width: 110,
+                            width: 150,
                           ),
                         ),
                       ),
@@ -159,13 +159,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 Text(
                                   page.title,
                                   textAlign: TextAlign.center,
-                                  style: GoogleFonts.playfairDisplay(
-                                    fontSize: 22,
+                                  style: GoogleFonts.cookie(
+                                    fontSize: 30,
                                     fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF2B2B2B),
+                                    color: const Color.fromARGB(
+                                      255,
+                                      122,
+                                      24,
+                                      24,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 35),
                                 Text(
                                   page.body,
                                   textAlign: TextAlign.center,
@@ -178,7 +183,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                     height: 1.4,
                                   ),
                                 ),
-                                const SizedBox(height: 70),
+                                const SizedBox(height: 40),
                                 // dots
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,

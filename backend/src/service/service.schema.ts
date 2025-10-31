@@ -40,7 +40,7 @@ export class Service extends Document {
   @Prop({ type: [{ type: Object }], default: [] })
   reviews: any[];
 
-  // 🔄 أضف هذا الحقل الجديد
+
   @Prop({ required: true })
   companyName: string;
 }

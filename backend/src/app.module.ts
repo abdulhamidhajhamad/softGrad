@@ -10,12 +10,10 @@ import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
-    // ✅ تفعيل قراءة ملف .env بشكل عام
     ConfigModule.forRoot({
       isGlobal: true,
     }),
 
-    // ✅ الاتصال بـ MongoDB
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

@@ -5,7 +5,7 @@ import { Document, Types } from 'mongoose';
 @Schema({ timestamps: { createdAt: true, updatedAt: false }, collection: 'service_providers' })
 export class ServiceProvider extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  userId: Types.ObjectId; // غير من providerId إلى userId
+  userId: Types.ObjectId; 
 
   @Prop({ required: true, trim: true })
   companyName: string;

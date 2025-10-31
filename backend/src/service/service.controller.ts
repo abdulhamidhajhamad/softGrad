@@ -10,7 +10,18 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
 
-  // 1. Add Service (Only Vendors) - محمي بالـ JWT
+  // 4. Get All Services - مفتوح للجميع
+  @Get()
+  async getAllServices() {
+    try {
+      return await this.serviceService.getAllServices();
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch services',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
   @Post()
   @UseGuards(JwtAuthGuard)
   async addService(@Body() createServiceDto: CreateServiceDto, @Request() req: any) {
@@ -35,7 +46,7 @@ export class ServiceController {
   }
 
   // 2. Delete Service - محمي بالـ JWT
-  @Delete('name/:serviceName')
+  @Delete('/:serviceName')
   @UseGuards(JwtAuthGuard)
   async deleteServiceByName(@Param('serviceName') serviceName: string, @Request() req: any) {
     try {
@@ -59,7 +70,7 @@ export class ServiceController {
   }
 
   // 3. Update Service - محمي بالـ JWT
-  @Put('name/:serviceName')
+  @Put('/:serviceName')
   @UseGuards(JwtAuthGuard)
   async updateServiceByName(
     @Param('serviceName') serviceName: string,
@@ -90,34 +101,8 @@ export class ServiceController {
     }
   }
 
-  // 4. Get All Services - مفتوح للجميع
-  @Get()
-  async getAllServices() {
-    try {
-      return await this.serviceService.getAllServices();
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to fetch services',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  // 5. Get Service by ID - مفتوح للجميع
-  @Get(':id')
-  async getServiceById(@Param('id') id: string) {
-    try {
-      return await this.serviceService.getServiceById(id);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Service not found',
-        error.status || HttpStatus.NOT_FOUND
-      );
-    }
-  }
-
   // 6. Get Services by Vendor Name - مفتوح للجميع
-  @Get('vendor/:companyName')
+    @Get('vendor/:companyName')
   async getServicesByVendor(@Param('companyName') companyName: string) {
     try {
       return await this.serviceService.getServicesByVendorName(companyName);
@@ -142,43 +127,79 @@ export class ServiceController {
     }
   }
 
-  // 8. Search services by location - مفتوح للجميع
-  @Get('search/location')
-  async searchServicesByLocation(
+  // 8. Search services with multiple filters - مفتوح للجميع
+  @Get('search')
+  async searchServices(
+    @Query('city') city: string,
+    @Query('minPrice') minPrice: string,
+    @Query('maxPrice') maxPrice: string,
+    @Query('category') category: string,
+    @Query('serviceName') serviceName: string,
+    @Query('companyName') companyName: string,
     @Query('lat') lat: string,
     @Query('lng') lng: string,
     @Query('radius') radius: string
   ) {
     try {
-      const latitude = parseFloat(lat);
-      const longitude = parseFloat(lng);
-      const radiusInKm = radius ? parseFloat(radius) : 50;
+      const filters: any = {};
 
-      if (isNaN(latitude) || isNaN(longitude)) {
+      // فلترة بالمدينة
+      if (city && city.trim() !== '') {
+        filters.city = city.trim();
+      }
+
+      // فلترة برينج السعر
+      if (minPrice || maxPrice) {
+        filters.priceRange = {
+          min: minPrice ? parseFloat(minPrice) : 0,
+          max: maxPrice ? parseFloat(maxPrice) : Number.MAX_SAFE_INTEGER
+        };
+      }
+
+      // فلترة بالتصنيف
+      if (category && category.trim() !== '') {
+        filters.category = category.trim();
+      }
+
+      // فلترة باسم السيرفس
+      if (serviceName && serviceName.trim() !== '') {
+        filters.serviceName = serviceName.trim();
+      }
+
+      // فلترة باسم الشركة
+      if (companyName && companyName.trim() !== '') {
+        filters.companyName = companyName.trim();
+      }
+
+      // فلترة بالموقع (إحداثيات)
+      if (lat && lng) {
+        const latitude = parseFloat(lat);
+        const longitude = parseFloat(lng);
+        const radiusInKm = radius ? parseFloat(radius) : 50;
+
+        if (isNaN(latitude) || isNaN(longitude)) {
+          throw new HttpException(
+            'Invalid latitude or longitude',
+            HttpStatus.BAD_REQUEST
+          );
+        }
+
+        filters.location = {
+          lat: latitude,
+          lng: longitude,
+          radius: radiusInKm
+        };
+      }
+
+      // إذا ما في أي filters
+      if (Object.keys(filters).length === 0) {
         throw new HttpException(
-          'Invalid latitude or longitude',
+          'At least one search filter is required',
           HttpStatus.BAD_REQUEST
         );
       }
 
-      return await this.serviceService.searchServicesByLocation(
-        latitude,
-        longitude,
-        radiusInKm
-      );
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to search services by location',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  // 9. Search services by name - مفتوح للجميع
-  @Get('search/name/:serviceName')
-  async searchServicesByName(@Param('serviceName') serviceName: string) {
-    try {
-      return await this.serviceService.searchServicesByName(serviceName);
+      return await this.serviceService.searchServices(filters);
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to search services',
@@ -186,6 +207,7 @@ export class ServiceController {
       );
     }
   }
+
 
   // 10. Get services by category - مفتوح للجميع
   @Get('category/:category')

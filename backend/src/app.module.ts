@@ -6,6 +6,7 @@ import { ProviderModule } from './providers/provider.module';
 import { ServiceModule } from './service/service.module';
 import { BookingModule } from './booking/booking.module';
 import { AdminModule } from './admin/admin.module';
+import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
 
 
 @Module({
@@ -28,6 +29,7 @@ import { AdminModule } from './admin/admin.module';
     ServiceModule,
     BookingModule,
     AdminModule,
+    ShoppingCartModule,
   ],
 })
 export class AppModule {}

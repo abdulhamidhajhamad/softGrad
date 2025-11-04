@@ -6,12 +6,16 @@ export class Service {
   reviews: Review[];
   location: Location;
   price: number;
+  category: string;
   additionalInfo?: any;
   createdAt: Date;
   updatedAt: Date;
+  bookedDates: Date[];
 
   constructor(data: Partial<Service>) {
     Object.assign(this, data);
+    // تأكيد أن bookedDates دائماً تكون مصفوفة
+    this.bookedDates = data?.bookedDates || [];
   }
 }
 

@@ -30,10 +30,8 @@ export class ServiceService {
         );
       }
 
-      // 🔄 تحديد companyName
       let companyName = createServiceDto.companyName;
       
-      // إذا لم يرسل companyName، استخدم الافتراضي
       if (!companyName) {
         companyName = `Vendor-${providerId.substring(0, 8)}`;
         console.log('🏢 Using default company name:', companyName);
@@ -158,7 +156,7 @@ export class ServiceService {
     }
   }
 
-  // 5. G et Services by Vendor Name (Company)
+  // 5. Get Services by Vendor Name (Company)
   async getServicesByVendorName(companyName: string): Promise<Service[]> {
     try {
       const services = await this.serviceModel.find({ companyName }).exec();
@@ -222,44 +220,44 @@ export class ServiceService {
   }
 
   // 8. Search services by location (within radius)
- async searchServicesByLocation(
-  latitude: number,
-  longitude: number,
-  radiusInKm: number = 50
-): Promise<Service[]> {
-  try {
-    // Calculate rough bounding box for faster filtering
-    const latDelta = radiusInKm / 111; // 1 degree latitude ≈ 111km
-    const lonDelta = radiusInKm / (111 * Math.cos(latitude * Math.PI / 180));
+  async searchServicesByLocation(
+    latitude: number,
+    longitude: number,
+    radiusInKm: number = 50
+  ): Promise<Service[]> {
+    try {
+      // Calculate rough bounding box for faster filtering
+      const latDelta = radiusInKm / 111; // 1 degree latitude ≈ 111km
+      const lonDelta = radiusInKm / (111 * Math.cos(latitude * Math.PI / 180));
 
-    const services = await this.serviceModel.find({
-      'location.latitude': {
-        $gte: latitude - latDelta,
-        $lte: latitude + latDelta
-      },
-      'location.longitude': {
-        $gte: longitude - lonDelta,
-        $lte: longitude + lonDelta
-      }
-    }).exec();
+      const services = await this.serviceModel.find({
+        'location.latitude': {
+          $gte: latitude - latDelta,
+          $lte: latitude + latDelta
+        },
+        'location.longitude': {
+          $gte: longitude - lonDelta,
+          $lte: longitude + lonDelta
+        }
+      }).exec();
 
-    // Filter by exact distance using Haversine formula
-    return services.filter(service => {
-      const distance = this.calculateDistance(
-        latitude,
-        longitude,
-        service.location.latitude,
-        service.location.longitude
+      // Filter by exact distance using Haversine formula
+      return services.filter(service => {
+        const distance = this.calculateDistance(
+          latitude,
+          longitude,
+          service.location.latitude,
+          service.location.longitude
+        );
+        return distance <= radiusInKm;
+      });
+    } catch (error) {
+      throw new HttpException(
+        'Failed to search services by location',
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
-      return distance <= radiusInKm;
-    });
-  } catch (error) {
-    throw new HttpException(
-      'Failed to search services by location',
-      HttpStatus.INTERNAL_SERVER_ERROR
-    );
+    }
   }
-}
 
   // 9. Search services by name
   async searchServicesByName(serviceName: string): Promise<Service[]> {
@@ -288,7 +286,7 @@ export class ServiceService {
   async getServicesByCategory(category: string): Promise<Service[]> {
     try {
       const services = await this.serviceModel.find({
-        'additionalInfo.category': { $regex: category, $options: 'i' }
+        category: { $regex: category, $options: 'i' }
       }).exec();
 
       if (!services || services.length === 0) {
@@ -319,110 +317,108 @@ export class ServiceService {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
+
   // 11. Search services by city
-// البحث بالمدينة
-async searchServicesByCity(city: string): Promise<Service[]> {
-  try {
-    const services = await this.serviceModel.find({
-      'location.city': { $regex: city, $options: 'i' }
-    }).exec();
+  async searchServicesByCity(city: string): Promise<Service[]> {
+    try {
+      const services = await this.serviceModel.find({
+        'location.city': { $regex: city, $options: 'i' }
+      }).exec();
 
-    if (!services || services.length === 0) {
-      throw new HttpException(
-        `No services found in city '${city}'`,
-        HttpStatus.NOT_FOUND
-      );
-    }
-
-    return services;
-  } catch (error) {
-    throw new HttpException(
-      error.message || 'Failed to search services by city',
-      error.status || HttpStatus.INTERNAL_SERVER_ERROR
-    );
-  }
-}
-// البحث المتعدد بالفلترة
-async searchServices(filters: any): Promise<Service[]> {
-  try {
-    let query: any = {};
-
-    // فلترة بالمدينة
-    if (filters.city) {
-      query['location.city'] = { $regex: filters.city, $options: 'i' };
-    }
-
-    // فلترة برينج السعر
-    if (filters.priceRange) {
-      query.price = {
-        $gte: filters.priceRange.min,
-        $lte: filters.priceRange.max
-      };
-    }
-
-    // فلترة بالتصنيف
-    if (filters.category) {
-      query['additionalInfo.category'] = { $regex: filters.category, $options: 'i' };
-    }
-
-    // فلترة باسم السيرفس
-    if (filters.serviceName) {
-      query.serviceName = { $regex: filters.serviceName, $options: 'i' };
-    }
-
-    // فلترة باسم الشركة
-    if (filters.companyName) {
-      query.companyName = { $regex: filters.companyName, $options: 'i' };
-    }
-
-    // فلترة بالموقع (إذا كان بالإحداثيات)
-    if (filters.location) {
-      const { lat, lng, radius } = filters.location;
-      
-      // Calculate rough bounding box for faster filtering
-      const latDelta = radius / 111;
-      const lonDelta = radius / (111 * Math.cos(lat * Math.PI / 180));
-
-      query['location.latitude'] = {
-        $gte: lat - latDelta,
-        $lte: lat + latDelta
-      };
-      query['location.longitude'] = {
-        $gte: lng - lonDelta,
-        $lte: lng + lonDelta
-      };
-
-      const services = await this.serviceModel.find(query).exec();
-      
-      // Filter by exact distance using Haversine formula
-      return services.filter(service => {
-        const distance = this.calculateDistance(
-          lat,
-          lng,
-          service.location.latitude,
-          service.location.longitude
+      if (!services || services.length === 0) {
+        throw new HttpException(
+          `No services found in city '${city}'`,
+          HttpStatus.NOT_FOUND
         );
-        return distance <= radius;
-      });
-    }
+      }
 
-    // إذا ما في فلترة موقع، استخدم البحث العادي
-    const services = await this.serviceModel.find(query).exec();
-
-    if (!services || services.length === 0) {
+      return services;
+    } catch (error) {
       throw new HttpException(
-        'No services found matching your criteria',
-        HttpStatus.NOT_FOUND
+        error.message || 'Failed to search services by city',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
-
-    return services;
-  } catch (error) {
-    throw new HttpException(
-      error.message || 'Failed to search services',
-      error.status || HttpStatus.INTERNAL_SERVER_ERROR
-    );
   }
-}
 
+  // البحث المتعدد بالفلترة
+  async searchServices(filters: any): Promise<Service[]> {
+    try {
+      let query: any = {};
+
+      // فلترة بالمدينة
+      if (filters.city) {
+        query['location.city'] = { $regex: filters.city, $options: 'i' };
+      }
+
+      // فلترة برينج السعر
+      if (filters.priceRange) {
+        query.price = {
+          $gte: filters.priceRange.min,
+          $lte: filters.priceRange.max
+        };
+      }
+
+      // فلترة بالتصنيف
+      if (filters.category) {
+        query.category = { $regex: filters.category, $options: 'i' };
+      }
+
+      // فلترة باسم السيرفس
+      if (filters.serviceName) {
+        query.serviceName = { $regex: filters.serviceName, $options: 'i' };
+      }
+
+      // فلترة باسم الشركة
+      if (filters.companyName) {
+        query.companyName = { $regex: filters.companyName, $options: 'i' };
+      }
+
+      // فلترة بالموقع (إذا كان بالإحداثيات)
+      if (filters.location) {
+        const { lat, lng, radius } = filters.location;
+        
+        // Calculate rough bounding box for faster filtering
+        const latDelta = radius / 111;
+        const lonDelta = radius / (111 * Math.cos(lat * Math.PI / 180));
+
+        query['location.latitude'] = {
+          $gte: lat - latDelta,
+          $lte: lat + latDelta
+        };
+        query['location.longitude'] = {
+          $gte: lng - lonDelta,
+          $lte: lng + lonDelta
+        };
+
+        const services = await this.serviceModel.find(query).exec();
+        // Filter by exact distance using Haversine formula
+        return services.filter(service => {
+          const distance = this.calculateDistance(
+            lat,
+            lng,
+            service.location.latitude,
+            service.location.longitude
+          );
+          return distance <= radius;
+        });
+      }
+      // إذا ما في فلترة موقع، استخدم البحث العادي
+      const services = await this.serviceModel.find(query).exec();
+
+      if (!services || services.length === 0) {
+        throw new HttpException(
+          'No services found matching your criteria',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      return services;
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to search services',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 }

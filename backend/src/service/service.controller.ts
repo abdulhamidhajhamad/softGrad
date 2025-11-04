@@ -22,6 +22,7 @@ export class ServiceController {
       );
     }
   }
+
   @Post()
   @UseGuards(JwtAuthGuard)
   async addService(@Body() createServiceDto: CreateServiceDto, @Request() req: any) {
@@ -102,7 +103,7 @@ export class ServiceController {
   }
 
   // 6. Get Services by Vendor Name - مفتوح للجميع
-    @Get('vendor/:companyName')
+  @Get('vendor/:companyName')
   async getServicesByVendor(@Param('companyName') companyName: string) {
     try {
       return await this.serviceService.getServicesByVendorName(companyName);
@@ -207,7 +208,6 @@ export class ServiceController {
       );
     }
   }
-
 
   // 10. Get services by category - مفتوح للجميع
   @Get('category/:category')

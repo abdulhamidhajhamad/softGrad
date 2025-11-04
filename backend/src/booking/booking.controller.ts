@@ -16,7 +16,6 @@ import { Booking } from './booking.entity';
 @Controller('bookings')
 export class BookingController {
   constructor(private readonly bookingService: BookingService) {}
-
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() dto: CreateBookingDto): Promise<Booking> {

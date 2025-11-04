@@ -1,4 +1,3 @@
-// service.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
@@ -34,15 +33,20 @@ export class Service extends Document {
   @Prop({ required: true, min: 0 })
   price: number;
 
+  @Prop({ required: true })
+  category: string;
+
   @Prop({ type: Object, default: {} })
   additionalInfo: any;
 
   @Prop({ type: [{ type: Object }], default: [] })
   reviews: any[];
 
-
   @Prop({ required: true })
   companyName: string;
+
+  @Prop({ type: [Date], default: [] })
+  bookedDates: Date[];
 }
 
 export const ServiceSchema = SchemaFactory.createForClass(Service);

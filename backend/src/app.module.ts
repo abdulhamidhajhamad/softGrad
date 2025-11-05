@@ -23,7 +23,6 @@ import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
       inject: [ConfigService],
     }),
 
-    // باقي الموديولات
     AuthModule,
     ProviderModule,
     ServiceModule,

@@ -14,7 +14,6 @@ export class Service {
 
   constructor(data: Partial<Service>) {
     Object.assign(this, data);
-    // تأكيد أن bookedDates دائماً تكون مصفوفة
     this.bookedDates = data?.bookedDates || [];
   }
 }

@@ -24,6 +24,7 @@ class _SignInScreenState extends State<SignInScreen> {
     super.dispose();
   }
 
+  // TODO: Connect to backend - Sign In API call
   void _signIn() {
     if (_formKey.currentState!.validate()) {
       // Navigate to home screen

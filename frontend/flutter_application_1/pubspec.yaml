@@ -24,7 +24,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/flowers/
+    - assets/images/
 
   fonts:
     - family: Montserrat

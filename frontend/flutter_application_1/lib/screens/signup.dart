@@ -30,6 +30,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
+  // TODO: Connect to backend - Sign Up API call
   void _signUp() {
     if (_formKey.currentState!.validate()) {
       // Navigate to verification screen

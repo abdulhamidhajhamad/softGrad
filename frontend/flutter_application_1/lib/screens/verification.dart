@@ -28,6 +28,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
     super.dispose();
   }
 
+  // TODO: Connect to backend - Verify OTP API call
+
   void _verifyEmail() {
     String code = _controllers.map((c) => c.text).join();
     if (code.length == 6) {
@@ -45,6 +47,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
       );
     }
   }
+
+  // TODO: Connect to backend - Resend OTP API call
 
   void _resendCode() {
     // Logic to resend code

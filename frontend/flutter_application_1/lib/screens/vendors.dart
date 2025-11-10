@@ -15,7 +15,7 @@ class VendorsListPage extends StatefulWidget {
     },
     {
       'type': 'Photo and Video Coverage',
-      'name': 'Photographers & Videographers',
+      'name': 'Photographers',
       'icon': Icons.camera_alt,
     },
     {
@@ -78,7 +78,7 @@ class _VendorsListPageState extends State<VendorsListPage> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
-  Color get brandBlue => const Color(0xFF2B7DE9);
+  Color get brandBlue => const Color.fromARGB(185, 255, 106, 0);
 
   @override
   void dispose() {
@@ -183,7 +183,7 @@ class _VendorsListPageState extends State<VendorsListPage> {
                     ? 'Showing ${filteredVendors.length} categories'
                     : 'Found ${filteredVendors.length} for "$query"',
                 style: GoogleFonts.poppins(
-                  fontSize: 12.5,
+                  fontSize: 13,
                   color: Colors.grey[600],
                 ),
               ),

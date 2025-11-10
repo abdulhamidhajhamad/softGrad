@@ -57,7 +57,6 @@ class _HomePageState extends State<HomePage> {
       const ProfilePage(),
       const CartPage(),
       const FavoritesPage(),
-      // لا تضع SearchPage هنا
     ];
   }
 
@@ -90,7 +89,6 @@ class _HomePageState extends State<HomePage> {
             selectedIcon: Icon(Icons.favorite),
             label: 'Favorites',
           ),
-          // لا يوجد Search هنا
         ],
       ),
     );
@@ -198,35 +196,38 @@ class _HomeTab extends StatelessWidget {
         ),
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 19),
+            // قلّلنا الـ bottom قليلاً لتصغير الفراغ العام
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Icon(Icons.auto_awesome, color: brand),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 9),
                     Text(
                       'Quick Actions',
                       style: GoogleFonts.poppins(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1A1A2E),
+                        color: Color(0xFF1A1A2E),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                // كان 8 -> 6 لتقليل المسافة فوق الشبكة
+                const SizedBox(height: 6),
                 GridView.count(
                   crossAxisCount: 2,
                   childAspectRatio: 2.6,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
+                  // يمكن تقليل المسافات قليلاً إن رغبت
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
                   children: [
                     _QuickActionCard(
-                      label: 'Search Vendors',
+                      label: 'Search',
                       icon: Icons.search,
                       tint: brand.withOpacity(0.12),
                       iconColor: brand,
@@ -255,28 +256,29 @@ class _HomeTab extends StatelessWidget {
                     ),
                   ],
                 ),
+                // كان 20 -> 10 لتقليل المسافة تحت الـ Quick Actions
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Trending Vendors',
+                      'TRENDING VENDORS',
                       style: GoogleFonts.poppins(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF1A1A2E),
+                        color: Color(0xFF1A1A2E),
                       ),
                     ),
                     TextButton(
                       onPressed: onOpenVendors,
                       child: Text(
-                        'See all',
+                        'See All',
                         style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 9),
                 const _VendorCard(
                   tag: 'Venue',
                   title: 'Sunset Garden Venue',
@@ -286,7 +288,7 @@ class _HomeTab extends StatelessWidget {
                   priceLevel: 3,
                   image: 'assets/images/table.png',
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 const _VendorCard(
                   tag: 'Photography',
                   title: 'Moments Photography',
@@ -305,6 +307,9 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
+/// بطاقة Quick Action مقاومة للـ overflow:
+/// - تقليل padding والـ avatar
+/// - استخدام Expanded + ellipsis للنص
 class _QuickActionCard extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -330,21 +335,26 @@ class _QuickActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          // كان 16 -> 14
+          padding: const EdgeInsets.all(19),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 20,
+                radius: 22, // كان 20
                 backgroundColor: Colors.white,
-                child: Icon(icon, color: iconColor),
+                child: Icon(icon, color: iconColor, size: 24),
               ),
-              const SizedBox(width: 12),
-              Text(
-                label,
-                style: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1A1A2E),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF1A1A2E),
+                  ),
                 ),
               ),
             ],

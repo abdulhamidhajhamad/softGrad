@@ -32,11 +32,11 @@ class _TemplateEditorPageState extends State<TemplateEditorPage> {
   final _nameA = TextEditingController(text: 'Aya');
   final _nameB = TextEditingController(text: 'Qais');
   final _day = TextEditingController(text: 'Saturday');
-  final _date = TextEditingController(text: 'Oct 26, 2026');
+  final _date = TextEditingController(text: 'Feb 26, 2026');
   final _loc = TextEditingController(text: 'Ceremony');
   final _customCaption = TextEditingController();
 
-  TimeOfDay _from = const TimeOfDay(hour: 17, minute: 0);
+  TimeOfDay _from = const TimeOfDay(hour: 19, minute: 0);
   TimeOfDay _to = const TimeOfDay(hour: 21, minute: 0);
 
   final List<String> _captions = const [

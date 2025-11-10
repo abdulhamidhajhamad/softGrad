@@ -2,8 +2,20 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'search.dart';
+import 'favorites.dart'; // أبقِ هذه
+// import 'ai_assistant.dart'; // احذفه هنا لتفادي تعارض FavoritesPage
+import 'cart.dart';
+import 'profile.dart';
+import 'notifications.dart';
+import 'offers.dart';
+import 'packages.dart';
+import 'templates.dart';
+import 'vendors.dart';
+import 'vendor_profile.dart';
+
 class HomePage extends StatefulWidget {
-  final String userName; // مرّر الاسم بعد التسجيل/الدخول إن توفر
+  final String userName;
   const HomePage({Key? key, this.userName = "Guest"}) : super(key: key);
 
   @override
@@ -11,32 +23,43 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // ترتيب النافبار: Home, Profile, Cart, Favorites, Search
   int _index = 0;
+  late final List<Widget> _tabs;
 
-  // صفحات النافبار
-  late final List<Widget> _tabs = [
-    _HomeTab(
-      userName: widget.userName,
-      onOpenSearch: () => setState(() => _index = 4),
-      onOpenOffers: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const OffersPage()),
+  @override
+  void initState() {
+    super.initState();
+    _tabs = [
+      _HomeTab(
+        userName: widget.userName,
+        // افتح صفحة البحث بدفع route بدل تغيير التبويب
+        onOpenSearch: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SearchPage()),
+        ),
+        onOpenOffers: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const OffersPage()),
+        ),
+        onOpenPackages: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PackagesPage()),
+        ),
+        onOpenTemplates: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TemplatesPage()),
+        ),
+        onOpenVendors: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const VendorsListPage()),
+        ),
       ),
-      onOpenPackages: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const PackagesPage()),
-      ),
-      onOpenTemplates: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const TemplatesPage()),
-      ),
-    ),
-    const ProfilePage(),
-    const CartPage(),
-    const FavoritesPage(),
-    const SearchPage(),
-  ];
+      const ProfilePage(),
+      const CartPage(),
+      const FavoritesPage(),
+      // لا تضع SearchPage هنا
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +69,6 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
-        height: 64,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -68,24 +90,20 @@ class _HomePageState extends State<HomePage> {
             selectedIcon: Icon(Icons.favorite),
             label: 'Favorites',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.search),
-            selectedIcon: Icon(Icons.search),
-            label: 'Search',
-          ),
+          // لا يوجد Search هنا
         ],
       ),
     );
   }
 }
 
-/// تبويب الهوم
 class _HomeTab extends StatelessWidget {
   final String userName;
   final VoidCallback onOpenSearch;
   final VoidCallback onOpenPackages;
   final VoidCallback onOpenOffers;
   final VoidCallback onOpenTemplates;
+  final VoidCallback onOpenVendors;
 
   const _HomeTab({
     Key? key,
@@ -94,18 +112,19 @@ class _HomeTab extends StatelessWidget {
     required this.onOpenPackages,
     required this.onOpenOffers,
     required this.onOpenTemplates,
+    required this.onOpenVendors,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final brand = const Color(0xFF2B7DE9);
+    const brand = Color(0xFF2B7DE9);
+
     return CustomScrollView(
       slivers: [
         SliverAppBar(
           pinned: false,
           floating: true,
           backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
           elevation: 0,
           expandedHeight: 220,
           leading: Builder(
@@ -133,9 +152,7 @@ class _HomeTab extends StatelessWidget {
             background: Stack(
               fit: StackFit.expand,
               children: [
-                // صورة الغلاف
                 Image.asset('assets/images/table.png', fit: BoxFit.cover),
-                // تدرّج للقراءة
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -148,7 +165,6 @@ class _HomeTab extends StatelessWidget {
                     ),
                   ),
                 ),
-                // التحية
                 Positioned(
                   left: 16,
                   bottom: 16,
@@ -180,15 +196,12 @@ class _HomeTab extends StatelessWidget {
             ),
           ),
         ),
-
-        // محتوى الصفحة
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 19),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Quick Actions
                 Row(
                   children: [
                     Icon(Icons.auto_awesome, color: brand),
@@ -203,7 +216,7 @@ class _HomeTab extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 1),
+                const SizedBox(height: 8),
                 GridView.count(
                   crossAxisCount: 2,
                   childAspectRatio: 2.6,
@@ -213,7 +226,7 @@ class _HomeTab extends StatelessWidget {
                   crossAxisSpacing: 12,
                   children: [
                     _QuickActionCard(
-                      label: 'Search',
+                      label: 'Search Vendors',
                       icon: Icons.search,
                       tint: brand.withOpacity(0.12),
                       iconColor: brand,
@@ -242,78 +255,7 @@ class _HomeTab extends StatelessWidget {
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 23),
-
-                // AI Wedding Assistant
-                Container(
-                  decoration: BoxDecoration(
-                    color: brand.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  padding: const EdgeInsets.all(23),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.auto_awesome, color: brand),
-                          const SizedBox(width: 8),
-                          Text(
-                            'AI Wedding Assistant!',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: const Color.fromARGB(255, 39, 32, 139),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-                      Text(
-                        'Get personalized recommendations based on your wedding timeline and preferences.',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13.5,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 44,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const AiAssistantPage(),
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: brand,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: Text(
-                            'Get Smart Suggestions',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
                 const SizedBox(height: 20),
-
-                // Trending Vendors
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -326,12 +268,7 @@ class _HomeTab extends StatelessWidget {
                       ),
                     ),
                     TextButton(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const VendorsListPage(),
-                        ),
-                      ),
+                      onPressed: onOpenVendors,
                       child: Text(
                         'See all',
                         style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
@@ -340,9 +277,7 @@ class _HomeTab extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-
-                // بطاقات مزودين مثال
-                _VendorCard(
+                const _VendorCard(
                   tag: 'Venue',
                   title: 'Sunset Garden Venue',
                   location: 'Nablus',
@@ -352,7 +287,7 @@ class _HomeTab extends StatelessWidget {
                   image: 'assets/images/table.png',
                 ),
                 const SizedBox(height: 12),
-                _VendorCard(
+                const _VendorCard(
                   tag: 'Photography',
                   title: 'Moments Photography',
                   location: 'Nablus',
@@ -361,7 +296,6 @@ class _HomeTab extends StatelessWidget {
                   priceLevel: 2,
                   image: 'assets/images/table.png',
                 ),
-                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -371,7 +305,6 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
-/// بطاقة إجراء سريع
 class _QuickActionCard extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -396,12 +329,8 @@ class _QuickActionCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.black12),
-          ),
           child: Row(
             children: [
               CircleAvatar(
@@ -426,14 +355,13 @@ class _QuickActionCard extends StatelessWidget {
   }
 }
 
-/// بطاقة مزوّد
 class _VendorCard extends StatelessWidget {
   final String tag;
   final String title;
   final String location;
   final double rating;
   final int reviews;
-  final int priceLevel; // 1..4
+  final int priceLevel;
   final String image;
 
   const _VendorCard({
@@ -462,158 +390,54 @@ class _VendorCard extends StatelessWidget {
           );
         },
         borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.black12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // صورة
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
-                ),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Image.asset(image, fit: BoxFit.cover),
-                ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Image.asset(image, fit: BoxFit.cover),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // الوسم + زر عرض
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEAF4FF),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            tag,
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF2B7DE9),
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => VendorProfilePage(title: title),
-                              ),
-                            );
-                          },
-                          child: Text(
-                            'View Profile',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      title,
-                      style: GoogleFonts.poppins(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.location_on_outlined,
-                          size: 16,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          location,
-                          style: GoogleFonts.poppins(
-                            fontSize: 13.5,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(
-                          Icons.star,
-                          size: 16,
-                          color: Color(0xFFFFC107),
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          '$rating',
-                          style: GoogleFonts.poppins(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          '  ($reviews)',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12.5,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          _priceText,
-                          style: GoogleFonts.poppins(fontSize: 13.5),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                  Text(_priceText),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Drawer بسيط لزر القائمة
 class _AppDrawer extends StatelessWidget {
-  const _AppDrawer({Key? key}) : super(key: key);
+  const _AppDrawer({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
       child: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
             ListTile(
               leading: const Icon(Icons.home_outlined),
               title: const Text('Home'),
               onTap: () => Navigator.pop(context),
             ),
-            ListTile(
-              leading: const Icon(Icons.settings_outlined),
-              title: const Text('Settings'),
-              onTap: () {},
-            ),
-            ListTile(
-              leading: const Icon(Icons.help_outline),
-              title: const Text('Help & Support'),
-              onTap: () {},
-            ),
-            const Divider(),
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Sign Out'),
@@ -624,150 +448,6 @@ class _AppDrawer extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/* ===================== صفحات ثانوية بسيطة ===================== */
-
-class SearchPage extends StatelessWidget {
-  const SearchPage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return _ScaffoldTab(title: 'Search', icon: Icons.search);
-  }
-}
-
-class FavoritesPage extends StatelessWidget {
-  const FavoritesPage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return _ScaffoldTab(title: 'Favorites', icon: Icons.favorite);
-  }
-}
-
-class CartPage extends StatelessWidget {
-  const CartPage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return _ScaffoldTab(title: 'Cart', icon: Icons.shopping_cart);
-  }
-}
-
-class ProfilePage extends StatelessWidget {
-  const ProfilePage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return _ScaffoldTab(title: 'Profile', icon: Icons.person);
-  }
-}
-
-class OffersPage extends StatelessWidget {
-  const OffersPage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return _ListStub(title: 'Offers');
-  }
-}
-
-class PackagesPage extends StatelessWidget {
-  const PackagesPage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return _ListStub(title: 'Packages');
-  }
-}
-
-class TemplatesPage extends StatelessWidget {
-  const TemplatesPage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return _ListStub(title: 'Templates');
-  }
-}
-
-class VendorsListPage extends StatelessWidget {
-  const VendorsListPage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return _ListStub(title: 'All Vendors');
-  }
-}
-
-class VendorProfilePage extends StatelessWidget {
-  final String title;
-  const VendorProfilePage({Key? key, required this.title}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(child: Text('Vendor profile for $title')),
-    );
-  }
-}
-
-class AiAssistantPage extends StatelessWidget {
-  const AiAssistantPage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return _ScaffoldTab(
-      title: 'AI Wedding Assistant',
-      icon: Icons.auto_awesome,
-    );
-  }
-}
-
-class NotificationsPage extends StatelessWidget {
-  const NotificationsPage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return _ListStub(title: 'Notifications');
-  }
-}
-
-/* ===================== Widgets مساعدة ===================== */
-
-class _ScaffoldTab extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  const _ScaffoldTab({Key? key, required this.title, required this.icon})
-    : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 64),
-            const SizedBox(height: 12),
-            Text('This is $title page'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ListStub extends StatelessWidget {
-  final String title;
-  const _ListStub({Key? key, required this.title}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemBuilder: (_, i) => ListTile(
-          leading: const Icon(Icons.local_offer_outlined),
-          title: Text('$title Item ${i + 1}'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {},
-        ),
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemCount: 12,
       ),
     );
   }

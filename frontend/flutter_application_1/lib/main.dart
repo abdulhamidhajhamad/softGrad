@@ -7,7 +7,8 @@ import 'package:flutter_application_1/screens/onboarding.dart';
 import 'package:flutter_application_1/screens/signup.dart';
 import 'package:flutter_application_1/screens/signin.dart';
 import 'package:flutter_application_1/screens/verification.dart';
-import 'package:flutter_application_1/screens/home.dart'; // يستخدم HomePage الحقيقية
+import 'package:flutter_application_1/screens/home.dart';
+import 'package:flutter_application_1/screens/vendors.dart';
 
 void main() {
   runApp(const MyApp());
@@ -32,17 +33,15 @@ class MyApp extends StatelessWidget {
           secondary: const Color(0xFF1414D7),
         ),
       ),
-
       home: const SplashScreen(),
-
       routes: {
-        '/onboarding': (context) => const OnboardingScreen(),
-        '/signup': (context) => const SignUpScreen(),
-        '/signin': (context) => const SignInScreen(),
-        '/verification': (context) => const VerificationScreen(),
-        '/home': (context) => const HomePage(), // من home.dart
+        '/onboarding': (_) => const OnboardingScreen(),
+        '/signup': (_) => const SignUpScreen(),
+        '/signin': (_) => const SignInScreen(),
+        '/verification': (_) => const VerificationScreen(),
+        '/home': (_) => HomePage(),
+        '/vendors': (_) => const VendorsListPage(),
       },
-
       onGenerateRoute: (settings) {
         if (settings.name == '/verification') {
           return MaterialPageRoute(

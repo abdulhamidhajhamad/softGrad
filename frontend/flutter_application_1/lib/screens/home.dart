@@ -124,7 +124,7 @@ class _HomeTab extends StatelessWidget {
           floating: true,
           backgroundColor: Colors.transparent,
           elevation: 0,
-          expandedHeight: 220,
+          expandedHeight: 250,
           leading: Builder(
             builder: (ctx) => IconButton(
               icon: const Icon(Icons.menu, color: Colors.white),
@@ -180,7 +180,7 @@ class _HomeTab extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        "Let's continue planning your perfect day",
+                        "Let's plan your perfect day together ♡",
                         style: GoogleFonts.poppins(
                           color: Colors.white.withOpacity(0.9),
                           fontSize: 14,
@@ -197,7 +197,7 @@ class _HomeTab extends StatelessWidget {
         SliverToBoxAdapter(
           child: Padding(
             // قلّلنا الـ bottom قليلاً لتصغير الفراغ العام
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            padding: const EdgeInsets.fromLTRB(18, 20, 20, 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -215,15 +215,36 @@ class _HomeTab extends StatelessWidget {
                     ),
                   ],
                 ),
-                // كان 8 -> 6 لتقليل المسافة فوق الشبكة
                 const SizedBox(height: 6),
+
+                // السطر الرمادي المضغوط بدون فراغ سفلي زائد
+                Text(
+                  'Here is your Shortcuts to plan faster',
+                  strutStyle: const StrutStyle(
+                    height: 1.3,
+                    leading: 0.0,
+                    forceStrutHeight: true,
+                  ),
+                  textHeightBehavior: const TextHeightBehavior(
+                    applyHeightToFirstAscent: false,
+                    applyHeightToLastDescent: false,
+                  ),
+                  style: GoogleFonts.poppins(
+                    fontSize: 13.2,
+                    fontWeight: FontWeight.w400,
+                    color: const Color(0xFF8E8EA0),
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 19),
+
                 GridView.count(
+                  padding: EdgeInsets.zero, // يمنع أي padding علوي
                   crossAxisCount: 2,
-                  childAspectRatio: 2.6,
+                  childAspectRatio: 3.1, // خلايا أنحف
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  // يمكن تقليل المسافات قليلاً إن رغبت
-                  mainAxisSpacing: 10,
+                  mainAxisSpacing: 8, // كان 10
                   crossAxisSpacing: 10,
                   children: [
                     _QuickActionCard(
@@ -256,13 +277,17 @@ class _HomeTab extends StatelessWidget {
                     ),
                   ],
                 ),
-                // كان 20 -> 10 لتقليل المسافة تحت الـ Quick Actions
+
                 const SizedBox(height: 20),
+                _AiAssistantCard(onTap: onOpenSearch),
+                const SizedBox(height: 5),
+
+                const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'TRENDING VENDORS',
+                      '⋆˙⟡ TRENDING VENDORS ⋆˙⟡',
                       style: GoogleFonts.poppins(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
@@ -335,14 +360,14 @@ class _QuickActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          // كان 16 -> 14
+          // يمكن تركها كما هي. لو أردت مزيد ضغط: استخدم EdgeInsets.symmetric(horizontal: 12, vertical: 10)
           padding: const EdgeInsets.all(19),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 22, // كان 20
+                radius: 18,
                 backgroundColor: Colors.white,
-                child: Icon(icon, color: iconColor, size: 24),
+                child: Icon(icon, color: iconColor, size: 22),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -360,6 +385,77 @@ class _QuickActionCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AiAssistantCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AiAssistantCard({Key? key, required this.onTap}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    const brand = Color(0xFF2B7DE9);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F6FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE3ECFF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome, color: brand),
+              const SizedBox(width: 8),
+              Text(
+                'AI Wedding Assistant!',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1A1A2E),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Get personalized recommendations based on your wedding timeline and preferences',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
+              color: const Color(0xFF4A4A68),
+            ),
+          ),
+          const SizedBox(height: 19),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: onTap, // حالياً يفتح صفحة البحث كحل افتراضي
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color.fromARGB(185, 255, 106, 0),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                minimumSize: const Size.fromHeight(44),
+              ),
+              child: Text(
+                'Get Smart Suggestions',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -9,6 +9,8 @@ import 'package:flutter_application_1/screens/signin.dart';
 import 'package:flutter_application_1/screens/verification.dart';
 import 'package:flutter_application_1/screens/home.dart';
 import 'package:flutter_application_1/screens/vendors.dart';
+import 'package:flutter_application_1/screens/templates.dart';
+import 'package:flutter_application_1/screens/template_editor.dart'; // optional route support
 
 void main() {
   runApp(const MyApp());
@@ -39,16 +41,36 @@ class MyApp extends StatelessWidget {
         '/signup': (_) => const SignUpScreen(),
         '/signin': (_) => const SignInScreen(),
         '/verification': (_) => const VerificationScreen(),
-        '/home': (_) => HomePage(),
+        '/home': (_) => const HomePage(),
         '/vendors': (_) => const VendorsListPage(),
+        '/templates': (_) => const TemplatesPage(),
       },
       onGenerateRoute: (settings) {
+        // keep explicit case for verification if you prefer
         if (settings.name == '/verification') {
           return MaterialPageRoute(
             builder: (_) => const VerificationScreen(),
             settings: settings,
           );
         }
+
+        // Optional named route for TemplateEditorPage:
+        if (settings.name == '/template_editor') {
+          final args = settings.arguments as Map<String, dynamic>?;
+
+          final templateName = args?['templateName'] as String? ?? 'Template';
+          final imagePath =
+              args?['imagePath'] as String? ?? 'assets/images/minimal.png';
+
+          return MaterialPageRoute(
+            builder: (_) => TemplateEditorPage(
+              templateName: templateName,
+              imagePath: imagePath,
+            ),
+            settings: settings,
+          );
+        }
+
         return null;
       },
     );

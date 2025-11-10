@@ -252,7 +252,8 @@ class _HomeTab extends StatelessWidget {
                       icon: Icons.search,
                       tint: brand.withOpacity(0.12),
                       iconColor: brand,
-                      onTap: onOpenSearch,
+                      onTap:
+                          onOpenVendors, // ← بدل onOpenSearch ليفتح All Vendors
                     ),
                     _QuickActionCard(
                       label: 'Packages',

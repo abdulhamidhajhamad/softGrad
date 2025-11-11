@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/screens/home.dart'; // Import HomePage
+import 'package:flutter_application_1/screens/auth_service.dart'; // Import AuthService
 
 /// Sign In screen for existing users
 class SignInScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   bool _isPasswordVisible = false;
   bool _rememberMe = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -24,26 +26,95 @@ class _SignInScreenState extends State<SignInScreen> {
     _passwordController.dispose();
     super.dispose();
   }
+    @override
+  void initState() {
+    super.initState();
+    _testConnection();
+  }
 
-  // TODO(API): Connect to backend - Sign In API call and get real user profile
-  void _signIn() {
+  Future<void> _testConnection() async {
+    print('🔗 Testing connection to server...');
+    await AuthService.testConnection();
+  }
+
+  Future<void> _signIn() async {
     if (_formKey.currentState!.validate()) {
-      final email = _emailController.text.trim();
+      setState(() {
+        _isLoading = true;
+      });
 
-      // Temporary user name derived from email (before backend integration)
-      String userName = 'Guest';
-      if (email.isNotEmpty && email.contains('@')) {
-        userName = email.split('@').first;
+      try {
+        final email = _emailController.text.trim();
+        final password = _passwordController.text;
+
+        // استدعاء API الـ login
+        final response = await AuthService.login(email, password);
+
+        // إذا كان الرد يحتوي على token و user، يعني Login ناجح
+        if (response.containsKey('token') && response.containsKey('user')) {
+          final userData = response['user'];
+          final userName = userData['userName'] ?? 'Guest';
+
+          // Navigate to home screen and replace the current route
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => HomePage(userName: userName),
+            ),
+          );
+        } else {
+          // إذا لم يكن هناك token أو user
+          _showErrorDialog('Login failed. Please try again.');
+        }
+      } catch (e) {
+        // معالجة الأخطاء من API
+        String errorMessage = 'An error occurred. Please try again.';
+        
+        if (e.toString().contains('Invalid Email/Pass')) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        } else if (e.toString().contains('verify your email')) {
+          errorMessage = 'Please verify your email before logging in.';
+        } else if (e.toString().contains('Network error')) {
+          errorMessage = 'Network error. Please check your connection.';
+        }
+        
+        _showErrorDialog(errorMessage);
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
       }
-
-      // Navigate to home screen and replace the current route
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => HomePage(userName: userName),
-        ),
-      );
     }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Login Failed',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          message,
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'OK',
+              style: GoogleFonts.poppins(
+                color: const Color.fromARGB(215, 20, 20, 215),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -82,7 +153,6 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
 
                 const SizedBox(height: 48),
-
                 // Email Field
                 Text(
                   'Email',
@@ -250,7 +320,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _signIn,
+                    onPressed: _isLoading ? null : _signIn,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color.fromARGB(215, 20, 20, 215),
                       foregroundColor: Colors.white,
@@ -259,13 +329,22 @@ class _SignInScreenState extends State<SignInScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
-                      'Sign In',
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: _isLoading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Text(
+                            'Sign In',
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
 
@@ -283,15 +362,19 @@ class _SignInScreenState extends State<SignInScreen> {
                       ),
                     ),
                     GestureDetector(
-                      onTap: () {
-                        Navigator.pushReplacementNamed(context, '/signup');
-                      },
+                      onTap: _isLoading
+                          ? null
+                          : () {
+                              Navigator.pushReplacementNamed(context, '/signup');
+                            },
                       child: Text(
                         'Sign Up',
                         style: GoogleFonts.poppins(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: const Color.fromARGB(215, 20, 20, 215),
+                          color: _isLoading
+                              ? Colors.grey.shade400
+                              : const Color.fromARGB(215, 20, 20, 215),
                         ),
                       ),
                     ),

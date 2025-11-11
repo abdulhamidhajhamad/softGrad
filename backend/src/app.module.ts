@@ -7,6 +7,7 @@ import { ServiceModule } from './service/service.module';
 import { BookingModule } from './booking/booking.module';
 import { AdminModule } from './admin/admin.module';
 import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
+import { FirebaseModule } from './firebase/firebase.module';
 
 
 @Module({
@@ -29,6 +30,7 @@ import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
     BookingModule,
     AdminModule,
     ShoppingCartModule,
+    FirebaseModule,
   ],
 })
 export class AppModule {}

@@ -1,4 +1,5 @@
-import { IsEmail, IsString, MinLength, IsOptional, IsIn } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SignUpDto {
   @IsString()
@@ -18,14 +19,12 @@ export class SignUpDto {
   @IsOptional()
   @IsString()
   city?: string;
-
-  @IsString()
-  @IsIn(['client', 'vendor', 'admin'])
-  role: 'client' | 'vendor' | 'admin';
-
+  
+  @ApiPropertyOptional({ description: 'Optional profile image URL' })
   @IsOptional()
   @IsString()
   imageUrl?: string;
+
 }
 
 export class LoginDto {
@@ -56,8 +55,7 @@ export class VerifyEmailDto {
   email: string;
 
   @IsString()
-  @MinLength(6)
-  verificationCode: string; // إزالة @MinLength المكرر
+  verificationCode: string;
 }
 
 // ✅ NEW: DTO for resending verification code

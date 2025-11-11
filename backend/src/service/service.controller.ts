@@ -143,36 +143,27 @@ export class ServiceController {
   ) {
     try {
       const filters: any = {};
-
-      // فلترة بالمدينة
       if (city && city.trim() !== '') {
         filters.city = city.trim();
       }
-
-      // فلترة برينج السعر
       if (minPrice || maxPrice) {
         filters.priceRange = {
           min: minPrice ? parseFloat(minPrice) : 0,
           max: maxPrice ? parseFloat(maxPrice) : Number.MAX_SAFE_INTEGER
         };
       }
-
-      // فلترة بالتصنيف
       if (category && category.trim() !== '') {
         filters.category = category.trim();
       }
 
-      // فلترة باسم السيرفس
       if (serviceName && serviceName.trim() !== '') {
         filters.serviceName = serviceName.trim();
       }
 
-      // فلترة باسم الشركة
       if (companyName && companyName.trim() !== '') {
         filters.companyName = companyName.trim();
       }
 
-      // فلترة بالموقع (إحداثيات)
       if (lat && lng) {
         const latitude = parseFloat(lat);
         const longitude = parseFloat(lng);
@@ -192,7 +183,6 @@ export class ServiceController {
         };
       }
 
-      // إذا ما في أي filters
       if (Object.keys(filters).length === 0) {
         throw new HttpException(
           'At least one search filter is required',
@@ -208,7 +198,6 @@ export class ServiceController {
       );
     }
   }
-
   // 10. Get services by category - مفتوح للجميع
   @Get('category/:category')
   async getServicesByCategory(@Param('category') category: string) {

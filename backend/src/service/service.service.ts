@@ -11,77 +11,79 @@ export class ServiceService {
   ) {}
 
   // 1. Create Service (Only Vendors)
-  async createService(providerId: string, createServiceDto: CreateServiceDto): Promise<Service> {
-    try {
-      console.log('📦 Received createServiceDto:', JSON.stringify(createServiceDto, null, 2));
-      console.log('👤 Provider ID:', providerId);
+// في دالة createService، تأكد من تعيين الرايتنج الافتراضي
+async createService(providerId: string, createServiceDto: CreateServiceDto): Promise<Service> {
+  try {
+    console.log('📦 Received createServiceDto:', JSON.stringify(createServiceDto, null, 2));
+    console.log('👤 Provider ID:', providerId);
 
-      // تحقق إذا كان في خدمة بنفس الاسم لنفس المزود
-      const existingService = await this.serviceModel.findOne({ 
-        serviceName: createServiceDto.serviceName,
-        providerId 
-      });
+    // تحقق إذا كان في خدمة بنفس الاسم لنفس المزود
+    const existingService = await this.serviceModel.findOne({ 
+      serviceName: createServiceDto.serviceName,
+      providerId 
+    });
 
-      if (existingService) {
-        console.log('❌ Service already exists:', createServiceDto.serviceName);
-        throw new HttpException(
-          'Service with this name already exists',
-          HttpStatus.CONFLICT
-        );
-      }
-
-      let companyName = createServiceDto.companyName;
-      
-      if (!companyName) {
-        companyName = `Vendor-${providerId.substring(0, 8)}`;
-        console.log('🏢 Using default company name:', companyName);
-      }
-
-      console.log('🏢 Final company name:', companyName);
-
-      const newServiceData = {
-        providerId,
-        companyName,
-        ...createServiceDto,
-        reviews: []
-      };
-
-      console.log('🔄 Creating service with data:', JSON.stringify(newServiceData, null, 2));
-
-      const newService = new this.serviceModel(newServiceData);
-      const savedService = await newService.save();
-      
-      console.log('✅ Service created successfully:', savedService._id);
-      return savedService;
-
-    } catch (error) {
-      console.error('💥 ERROR in createService:', error);
-      
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      
-      if (error.name === 'ValidationError') {
-        console.log('MongoDB Validation Error:', error.errors);
-        throw new HttpException(
-          `Validation error: ${Object.values(error.errors).map((e: any) => e.message).join(', ')}`,
-          HttpStatus.BAD_REQUEST
-        );
-      }
-
-      if (error.code === 11000) {
-        throw new HttpException(
-          'Service with this name already exists',
-          HttpStatus.CONFLICT
-        );
-      }
-
+    if (existingService) {
+      console.log('❌ Service already exists:', createServiceDto.serviceName);
       throw new HttpException(
-        error.message || 'Failed to create service',
-        HttpStatus.INTERNAL_SERVER_ERROR
+        'Service with this name already exists',
+        HttpStatus.CONFLICT
       );
     }
+
+    let companyName = createServiceDto.companyName;
+    
+    if (!companyName) {
+      companyName = `Vendor-${providerId.substring(0, 8)}`;
+      console.log('🏢 Using default company name:', companyName);
+    }
+
+    console.log('🏢 Final company name:', companyName);
+
+    const newServiceData = {
+      providerId,
+      companyName,
+      ...createServiceDto,
+      reviews: [],
+      rating: createServiceDto.rating || 0 // ✅ تعيين الرايتنج الافتراضي
+    };
+
+    console.log('🔄 Creating service with data:', JSON.stringify(newServiceData, null, 2));
+
+    const newService = new this.serviceModel(newServiceData);
+    const savedService = await newService.save();
+    
+    console.log('✅ Service created successfully:', savedService._id);
+    return savedService;
+
+  } catch (error) {
+    console.error('💥 ERROR in createService:', error);
+    
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    
+    if (error.name === 'ValidationError') {
+      console.log('MongoDB Validation Error:', error.errors);
+      throw new HttpException(
+        `Validation error: ${Object.values(error.errors).map((e: any) => e.message).join(', ')}`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (error.code === 11000) {
+      throw new HttpException(
+        'Service with this name already exists',
+        HttpStatus.CONFLICT
+      );
+    }
+
+    throw new HttpException(
+      error.message || 'Failed to create service',
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
   }
+}
 
   // 2. Delete Service by Name
   async deleteServiceByName(serviceName: string, providerId: string): Promise<{ message: string }> {

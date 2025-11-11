@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsArray, IsOptional, IsObject, IsNotEmpty, Min, IsDate } from 'class-validator';
+import { IsString, IsNumber, IsArray, IsOptional, IsObject, IsNotEmpty, Min, IsDate, MinLength, Max } from 'class-validator';
 
 export class LocationDto {
   @IsNumber()
@@ -54,6 +54,13 @@ export class CreateServiceDto {
   @IsOptional()
   @IsDate({ each: true })
   bookedDates?: Date[];
+
+  // ✅ إضافة الرايتنج الافتراضي
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  @IsOptional()
+  rating?: number;
 }
 
 export class UpdateServiceDto {
@@ -89,6 +96,13 @@ export class UpdateServiceDto {
   @IsOptional()
   @IsDate({ each: true })
   bookedDates?: Date[];
+
+  // ✅ إضافة الرايتنج للتحديث
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  @IsOptional()
+  rating?: number;
 }
 
 export class ServiceResponseDto {
@@ -105,4 +119,5 @@ export class ServiceResponseDto {
   updatedAt: Date;
   companyName?: string;
   bookedDates: Date[];
+  rating: number; // ✅ إضافة الرايتنج للاستجابة
 }

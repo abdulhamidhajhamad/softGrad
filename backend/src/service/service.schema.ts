@@ -47,6 +47,9 @@ export class Service extends Document {
 
   @Prop({ type: [Date], default: [] })
   bookedDates: Date[];
+
+  @Prop({ type: Number, default: 0, min: 0, max: 5 })
+  rating: number;
 }
 
 export const ServiceSchema = SchemaFactory.createForClass(Service);

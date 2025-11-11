@@ -59,6 +59,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   static const int _maxUserChars = 300;
   static const int _maxAiChars = 400;
 
+  // Tracks if the user has already started the conversation (first user message sent)
+  bool _hasStartedChat = false;
+
+  // Controls whether the full suggestions list is visible
+  bool _showFullSuggestions = true;
+
   @override
   void initState() {
     super.initState();
@@ -111,6 +117,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     setState(() {
       _messages.add(_ChatMessage(text: userText, isUser: true));
       _isSending = true;
+
+      // On first user message collapse the suggestions to raise the chat card
+      if (!_hasStartedChat) {
+        _hasStartedChat = true;
+        _showFullSuggestions = false;
+      }
     });
 
     _scrollToBottom();
@@ -174,13 +186,52 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                 const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: _AssistantHeaderCard(),
           ),
+
+          // Dropdown header is always visible
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: _QuickSuggestionsRow(
-              onTapSuggestion: _handleQuickSuggestion,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _showFullSuggestions = !_showFullSuggestions;
+                });
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Suggestions",
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF8A8A9E),
+                    ),
+                  ),
+                  Icon(
+                    _showFullSuggestions
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 16,
+                    color: const Color(0xFF8A8A9E),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 8),
+
+          // Only the list itself collapses/expands
+          if (_showFullSuggestions) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _QuickSuggestionsRow(
+                onTapSuggestion: _handleQuickSuggestion,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ] else
+            const SizedBox(height: 4),
+
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 32),
@@ -285,8 +336,11 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                                     ),
                                   ],
                                 ),
-                                child: const Icon(Icons.send,
-                                    size: 20, color: Colors.white),
+                                child: const Icon(
+                                  Icons.send,
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ],
@@ -459,28 +513,14 @@ class _QuickSuggestionsRow extends StatelessWidget {
     ];
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Try one of these questions",
-          style: GoogleFonts.poppins(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF1A1A2E),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Column(
-          children: suggestions
-              .map(
-                (s) => _SuggestionTile(
-                  text: s,
-                  onTap: () => onTapSuggestion(s),
-                ),
-              )
-              .toList(),
-        ),
-      ],
+      children: suggestions
+          .map(
+            (s) => _SuggestionTile(
+              text: s,
+              onTap: () => onTapSuggestion(s),
+            ),
+          )
+          .toList(),
     );
   }
 }
@@ -500,7 +540,7 @@ class _SuggestionTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Material(
-        color: Colors.white, // أفتح من الخلفية
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         elevation: 1.5,
         shadowColor: const Color(0x11000000),

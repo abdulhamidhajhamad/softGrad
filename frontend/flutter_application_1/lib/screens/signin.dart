@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_application_1/screens/home.dart'; // Import HomePage
 
 /// Sign In screen for existing users
 class SignInScreen extends StatefulWidget {
@@ -24,11 +25,24 @@ class _SignInScreenState extends State<SignInScreen> {
     super.dispose();
   }
 
-  // TODO: Connect to backend - Sign In API call
+  // TODO(API): Connect to backend - Sign In API call and get real user profile
   void _signIn() {
     if (_formKey.currentState!.validate()) {
-      // Navigate to home screen
-      Navigator.pushReplacementNamed(context, '/home');
+      final email = _emailController.text.trim();
+
+      // Temporary user name derived from email (before backend integration)
+      String userName = 'Guest';
+      if (email.isNotEmpty && email.contains('@')) {
+        userName = email.split('@').first;
+      }
+
+      // Navigate to home screen and replace the current route
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HomePage(userName: userName),
+        ),
+      );
     }
   }
 
@@ -215,7 +229,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                     GestureDetector(
                       onTap: () {
-                        // Navigate to forgot password
+                        // TODO(Auth): Navigate to Forgot Password screen
                       },
                       child: Text(
                         'Forgot Password?',

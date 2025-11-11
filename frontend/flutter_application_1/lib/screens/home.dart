@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'search.dart';
-import 'favorites.dart'; // أبقِ هذه
-// import 'ai_assistant.dart'; // احذفه هنا لتفادي تعارض FavoritesPage
+import 'favorites.dart'; // Keep this
+// import 'ai_assistant.dart'; // Remove here to avoid FavoritesPage conflict
 import 'cart.dart';
-import 'profile.dart';
+import 'profile.dart'; // Contains User and ProfileScreen
 import 'notifications.dart';
 import 'offers.dart';
 import 'packages.dart';
@@ -29,10 +29,12 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+
+    // Connect bottom navigation tabs, including the Profile tab
     _tabs = [
       _HomeTab(
         userName: widget.userName,
-        // افتح صفحة البحث بدفع route بدل تغيير التبويب
+        // Open search screen via route instead of changing bottom tab
         onOpenSearch: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const SearchPage()),
@@ -54,7 +56,21 @@ class _HomePageState extends State<HomePage> {
           MaterialPageRoute(builder: (_) => const VendorsListPage()),
         ),
       ),
-      const ProfilePage(),
+
+      // Profile tab using the new ProfileScreen
+      ProfileScreen(
+        currentUser: User(
+          fullName: widget.userName,
+          // TODO(API): Replace with real email from sign up / auth
+          email: 'you@example.com',
+          // TODO(API): Replace with real phone number from user data
+          phone: '+970000000000',
+          // TODO(API): Replace with real user location
+          location: 'Nablus, Palestine',
+          // avatarUrl: 'https://...', // Optional
+        ),
+      ),
+
       const CartPage(),
       const FavoritesPage(),
     ];
@@ -196,7 +212,7 @@ class _HomeTab extends StatelessWidget {
         ),
         SliverToBoxAdapter(
           child: Padding(
-            // قلّلنا الـ bottom قليلاً لتصغير الفراغ العام
+            // Slightly reduced bottom padding to tighten vertical spacing
             padding: const EdgeInsets.fromLTRB(18, 20, 20, 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,8 +232,6 @@ class _HomeTab extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 6),
-
-                // السطر الرمادي المضغوط بدون فراغ سفلي زائد
                 Text(
                   'Here is your Shortcuts to plan faster',
                   strutStyle: const StrutStyle(
@@ -237,14 +251,13 @@ class _HomeTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 19),
-
                 GridView.count(
-                  padding: EdgeInsets.zero, // يمنع أي padding علوي
+                  padding: EdgeInsets.zero,
                   crossAxisCount: 2,
-                  childAspectRatio: 3.1, // خلايا أنحف
+                  childAspectRatio: 3.1,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 8, // كان 10
+                  mainAxisSpacing: 8,
                   crossAxisSpacing: 10,
                   children: [
                     _QuickActionCard(
@@ -252,8 +265,8 @@ class _HomeTab extends StatelessWidget {
                       icon: Icons.search,
                       tint: brand.withOpacity(0.12),
                       iconColor: brand,
-                      onTap:
-                          onOpenVendors, // ← بدل onOpenSearch ليفتح All Vendors
+                      // Open Vendors list when tapping "Search" shortcut
+                      onTap: onOpenVendors,
                     ),
                     _QuickActionCard(
                       label: 'Packages',
@@ -278,11 +291,9 @@ class _HomeTab extends StatelessWidget {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 20),
                 _AiAssistantCard(onTap: onOpenSearch),
                 const SizedBox(height: 5),
-
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -333,9 +344,7 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
-/// بطاقة Quick Action مقاومة للـ overflow:
-/// - تقليل padding والـ avatar
-/// - استخدام Expanded + ellipsis للنص
+/// Quick Action card with compact layout and ellipsis text handling
 class _QuickActionCard extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -361,7 +370,7 @@ class _QuickActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          // يمكن تركها كما هي. لو أردت مزيد ضغط: استخدم EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+          // You can tweak padding if you want more compact cards
           padding: const EdgeInsets.all(19),
           child: Row(
             children: [
@@ -437,7 +446,7 @@ class _AiAssistantCard extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: onTap, 
+              onPressed: onTap,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color.fromARGB(185, 255, 106, 0),
                 foregroundColor: Colors.white,
@@ -550,6 +559,7 @@ class _AppDrawer extends StatelessWidget {
               title: const Text('Sign Out'),
               onTap: () {
                 Navigator.pop(context);
+                // TODO(Auth): Implement real sign-out logic before navigation
                 Navigator.pushReplacementNamed(context, '/signin');
               },
             ),

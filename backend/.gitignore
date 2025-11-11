@@ -54,3 +54,7 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+# تجاهل جميع ملفات Firebase JSON
+backend/src/firebase/*.json
+# تجاهل ملفات البيئة
+.env

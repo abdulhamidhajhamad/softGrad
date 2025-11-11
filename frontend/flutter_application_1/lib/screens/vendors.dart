@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'vendor_profile.dart';
+import 'favorites.dart'; // for FavoritesStore & FavoriteVendor
 
 class VendorsListPage extends StatefulWidget {
   const VendorsListPage({Key? key}) : super(key: key);
@@ -207,11 +208,32 @@ class _VendorsListPageState extends State<VendorsListPage> {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       itemBuilder: (context, index) {
                         final vendor = filteredVendors[index];
+                        final String name = vendor['name'] as String;
+                        final String type = vendor['type'] as String;
+
+                        final bool isFav =
+                            FavoritesStore.isVendorFavorite(name);
+
                         return _AnimatedVendorTile(
                           delay: Duration(milliseconds: 30 * (index % 10)),
                           child: _VendorTile(
                             vendor: vendor,
                             brandBlue: brandBlue,
+                            isFavorite: isFav,
+                            onToggleFavorite: () {
+                              setState(() {
+                                if (isFav) {
+                                  FavoritesStore.removeVendorByName(name);
+                                } else {
+                                  FavoritesStore.addVendor(
+                                    FavoriteVendor(
+                                      name: name,
+                                      type: type,
+                                    ),
+                                  );
+                                }
+                              });
+                            },
                           ),
                         );
                       },
@@ -242,7 +264,6 @@ class _AnimatedVendorTile extends StatelessWidget {
       tween: Tween(begin: 0.0, end: 1.0),
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
-      // Add a small delayed start for cascading effect.
       onEnd: () {},
       builder: (context, value, _) {
         return Opacity(
@@ -253,11 +274,9 @@ class _AnimatedVendorTile extends StatelessWidget {
           ),
         );
       },
-      // Wrap with a delayed FutureBuilder for the stagger effect
       child: FutureBuilder<void>(
         future: Future<void>.delayed(delay),
         builder: (context, snap) {
-          // Once delay completes, return the actual tile to animate
           return child;
         },
       ),
@@ -265,19 +284,26 @@ class _AnimatedVendorTile extends StatelessWidget {
   }
 }
 
-/// The existing tile layout and navigation behavior kept as-is.
+/// The existing tile layout and navigation behavior kept as-is + favorite icon.
 class _VendorTile extends StatelessWidget {
   final Map<String, dynamic> vendor;
   final Color brandBlue;
+  final bool isFavorite;
+  final VoidCallback onToggleFavorite;
 
   const _VendorTile({
     Key? key,
     required this.vendor,
     required this.brandBlue,
+    required this.isFavorite,
+    required this.onToggleFavorite,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final String name = vendor['name'] as String;
+    final String type = vendor['type'] as String;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
@@ -289,8 +315,7 @@ class _VendorTile extends StatelessWidget {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    VendorProfilePage(title: vendor['name'] as String),
+                builder: (_) => VendorProfilePage(title: name),
               ),
             );
           },
@@ -307,7 +332,7 @@ class _VendorTile extends StatelessWidget {
                   vendor['icon'] as IconData,
                   size: 28,
                   color: brandBlue,
-                  semanticLabel: '${vendor['name']} icon',
+                  semanticLabel: '$name icon',
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -315,7 +340,7 @@ class _VendorTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        vendor['name'] as String,
+                        name,
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -323,7 +348,7 @@ class _VendorTile extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        vendor['type'] as String,
+                        type,
                         style: GoogleFonts.poppins(
                           fontSize: 13.5,
                           color: Colors.grey.shade600,
@@ -332,7 +357,14 @@ class _VendorTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: Colors.grey),
+                IconButton(
+                  icon: Icon(
+                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                    color: isFavorite ? brandBlue : Colors.grey,
+                    size: 22,
+                  ),
+                  onPressed: onToggleFavorite,
+                ),
               ],
             ),
           ),
@@ -368,8 +400,11 @@ class _EmptyStateMessage extends StatelessWidget {
           children: [
             const Icon(Icons.search_off, size: 48, color: Colors.grey),
             const SizedBox(height: 12),
-            Text('No vendors found for your search.',
-                style: styleTitle, textAlign: TextAlign.center),
+            Text(
+              'No vendors found for your search.',
+              style: styleTitle,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
             Text(
               'Try a different keyword or clear the search.',

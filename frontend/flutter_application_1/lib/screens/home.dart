@@ -437,7 +437,7 @@ class _AiAssistantCard extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: onTap, // حالياً يفتح صفحة البحث كحل افتراضي
+              onPressed: onTap, 
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color.fromARGB(185, 255, 106, 0),
                 foregroundColor: Colors.white,

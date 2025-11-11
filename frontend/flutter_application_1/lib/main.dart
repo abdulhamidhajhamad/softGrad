@@ -1,22 +1,23 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-import 'package:flutter_application_1/screens/splash_screen.dart';
-import 'package:flutter_application_1/screens/onboarding_screen.dart';
-import 'package:flutter_application_1/screens/welcome_screen.dart';
-import 'package:flutter_application_1/screens/choose_role_screen.dart';
-import 'package:flutter_application_1/screens/sign_up_screen.dart';
-import 'package:flutter_application_1/screens/login_screen.dart';
-import 'package:flutter_application_1/screens/enter_details_screen.dart';
-import 'package:flutter_application_1/screens/schedule_wedding_screen.dart'; // NEW
+// Screens
+import 'package:flutter_application_1/screens/splash.dart';
+import 'package:flutter_application_1/screens/onboarding.dart';
+import 'package:flutter_application_1/screens/signup.dart';
+import 'package:flutter_application_1/screens/signin.dart';
+import 'package:flutter_application_1/screens/verification.dart';
+import 'package:flutter_application_1/screens/home.dart';
+import 'package:flutter_application_1/screens/vendors.dart';
+import 'package:flutter_application_1/screens/templates.dart';
+import 'package:flutter_application_1/screens/template_editor.dart'; // optional route support
 
 void main() {
-  runApp(const PlanMyWeddingApp());
+  runApp(const MyApp());
 }
 
-class PlanMyWeddingApp extends StatelessWidget {
-  const PlanMyWeddingApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -24,33 +25,54 @@ class PlanMyWeddingApp extends StatelessWidget {
       title: 'PlanMyWedding',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        scaffoldBackgroundColor: Colors.transparent,
-        textTheme: GoogleFonts.montserratTextTheme(),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB14E56)),
+        primaryColor: const Color(0xFF2B7DE9),
+        scaffoldBackgroundColor: Colors.white,
         useMaterial3: false,
+        fontFamily: 'Arial',
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF2B7DE9),
+          primary: const Color(0xFF2B7DE9),
+          secondary: const Color(0xFF1414D7),
+        ),
       ),
       home: const SplashScreen(),
       routes: {
         '/onboarding': (_) => const OnboardingScreen(),
-        '/welcome': (_) => const WelcomeScreen(),
-        '/choose_role': (_) => const ChooseRoleScreen(),
         '/signup': (_) => const SignUpScreen(),
-        '/login': (_) => const LoginScreen(),
-        '/schedule_wedding': (_) => const ScheduleWeddingScreen(), // NEW
+        '/signin': (_) => const SignInScreen(),
+        '/verification': (_) => const VerificationScreen(),
+        '/home': (_) => const HomePage(),
+        '/vendors': (_) => const VendorsListPage(),
+        '/templates': (_) => const TemplatesPage(),
       },
       onGenerateRoute: (settings) {
-        if (settings.name == '/enter_details') {
-          final role = settings.arguments is String
-              ? settings.arguments as String
-              : 'groom';
+        // keep explicit case for verification if you prefer
+        if (settings.name == '/verification') {
           return MaterialPageRoute(
-            builder: (_) => EnterDetailsScreen(role: role),
+            builder: (_) => const VerificationScreen(),
+            settings: settings,
           );
         }
+
+        // Optional named route for TemplateEditorPage:
+        if (settings.name == '/template_editor') {
+          final args = settings.arguments as Map<String, dynamic>?;
+
+          final templateName = args?['templateName'] as String? ?? 'Template';
+          final imagePath =
+              args?['imagePath'] as String? ?? 'assets/images/minimal.png';
+
+          return MaterialPageRoute(
+            builder: (_) => TemplateEditorPage(
+              templateName: templateName,
+              imagePath: imagePath,
+            ),
+            settings: settings,
+          );
+        }
+
         return null;
       },
-      onUnknownRoute: (_) =>
-          MaterialPageRoute(builder: (_) => const SplashScreen()),
     );
   }
 }

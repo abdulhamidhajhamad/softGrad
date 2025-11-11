@@ -1,35 +1,43 @@
 name: flutter_application_1
-description: A new Flutter project.
+description: 'PlanMyWedding App'
 publish_to: 'none'
 
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.9.2
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
-  image_picker: ^1.1.2
-  intl: ^0.19.0
+  path_provider: ^2.1.2
+  share_plus: ^7.2.1
+  pdf: ^3.10.7
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
 
   assets:
-    - assets/flowers/
+    - assets/images/
+    - assets/images/classic.png
+    - assets/images/classic1.png
+    - assets/images/classic2.png
+    - assets/images/minimal.png
+    - assets/images/minimal1.png
+    - assets/images/botanical.png
+    - assets/images/botanical1.png
+    - assets/images/romantic.png
+    - assets/images/romantic1.png
+    - assets/images/romantic2.png
+    - assets/images/table.png
 
   fonts:
     - family: Montserrat
       fonts:
         - asset: assets/fonts/Montserrat-Regular.ttf
           weight: 400
-        - asset: assets/fonts/Montserrat-Bold.ttf
-          weight: 700

@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'search.dart';
-import 'favorites.dart'; // Keep this
-// import 'ai_assistant.dart'; // Remove here to avoid FavoritesPage conflict
+import 'favorites.dart';
+import 'ai_assistant.dart'; // <-- NEW
 import 'cart.dart';
-import 'profile.dart'; // Contains User and ProfileScreen
+import 'profile.dart';
 import 'notifications.dart';
 import 'offers.dart';
 import 'packages.dart';
@@ -30,11 +30,9 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
 
-    // Connect bottom navigation tabs, including the Profile tab
     _tabs = [
       _HomeTab(
         userName: widget.userName,
-        // Open search screen via route instead of changing bottom tab
         onOpenSearch: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const SearchPage()),
@@ -55,22 +53,19 @@ class _HomePageState extends State<HomePage> {
           context,
           MaterialPageRoute(builder: (_) => const VendorsListPage()),
         ),
+        onOpenAiAssistant: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
+        ),
       ),
-
-      // Profile tab using the new ProfileScreen
       ProfileScreen(
         currentUser: User(
           fullName: widget.userName,
-          // TODO(API): Replace with real email from sign up / auth
           email: 'you@example.com',
-          // TODO(API): Replace with real phone number from user data
           phone: '+970000000000',
-          // TODO(API): Replace with real user location
           location: 'Nablus, Palestine',
-          // avatarUrl: 'https://...', // Optional
         ),
       ),
-
       const CartPage(),
       const FavoritesPage(),
     ];
@@ -118,6 +113,7 @@ class _HomeTab extends StatelessWidget {
   final VoidCallback onOpenOffers;
   final VoidCallback onOpenTemplates;
   final VoidCallback onOpenVendors;
+  final VoidCallback onOpenAiAssistant; // <-- NEW
 
   const _HomeTab({
     Key? key,
@@ -127,6 +123,7 @@ class _HomeTab extends StatelessWidget {
     required this.onOpenOffers,
     required this.onOpenTemplates,
     required this.onOpenVendors,
+    required this.onOpenAiAssistant, // <-- NEW
   }) : super(key: key);
 
   @override
@@ -212,7 +209,6 @@ class _HomeTab extends StatelessWidget {
         ),
         SliverToBoxAdapter(
           child: Padding(
-            // Slightly reduced bottom padding to tighten vertical spacing
             padding: const EdgeInsets.fromLTRB(18, 20, 20, 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,7 +261,7 @@ class _HomeTab extends StatelessWidget {
                       icon: Icons.search,
                       tint: brand.withOpacity(0.12),
                       iconColor: brand,
-                      // Open Vendors list when tapping "Search" shortcut
+                      // حاليا يفتح قائمة الـ Vendors
                       onTap: onOpenVendors,
                     ),
                     _QuickActionCard(
@@ -292,8 +288,10 @@ class _HomeTab extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 20),
-                _AiAssistantCard(onTap: onOpenSearch),
-                const SizedBox(height: 5),
+
+                // AI assistant card -> opens AiAssistantScreen
+                _AiAssistantCard(onTap: onOpenAiAssistant),
+
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -344,7 +342,7 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
-/// Quick Action card with compact layout and ellipsis text handling
+/// Quick Action card
 class _QuickActionCard extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -370,7 +368,6 @@ class _QuickActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          // You can tweak padding if you want more compact cards
           padding: const EdgeInsets.all(19),
           child: Row(
             children: [
@@ -559,7 +556,6 @@ class _AppDrawer extends StatelessWidget {
               title: const Text('Sign Out'),
               onTap: () {
                 Navigator.pop(context);
-                // TODO(Auth): Implement real sign-out logic before navigation
                 Navigator.pushReplacementNamed(context, '/signin');
               },
             ),

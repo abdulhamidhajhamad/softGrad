@@ -38,6 +38,7 @@ class _SecurityPasswordScreenState extends State<SecurityPasswordScreen> {
     super.dispose();
   }
 
+  // Check password strength as user types
   void _checkStrength(String v) {
     setState(() {
       if (v.length < 6) {
@@ -50,6 +51,7 @@ class _SecurityPasswordScreenState extends State<SecurityPasswordScreen> {
     });
   }
 
+  // Input decoration style (kept unchanged)
   InputDecoration _input(String label, IconData icon,
       {bool obscure = false, VoidCallback? toggle}) {
     return InputDecoration(
@@ -148,7 +150,7 @@ class _SecurityPasswordScreenState extends State<SecurityPasswordScreen> {
                 ),
                 const SizedBox(height: 28),
 
-                // Current Password
+                // --- Current Password Field ---
                 TextFormField(
                   controller: _oldCtrl,
                   obscureText: !_showOld,
@@ -156,10 +158,17 @@ class _SecurityPasswordScreenState extends State<SecurityPasswordScreen> {
                       obscure: true,
                       toggle: () => setState(() => _showOld = !_showOld)),
                   style: TextStyle(color: textColor),
+                  // Validator added
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return "Please enter your current password";
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
 
-                // New Password
+                // --- New Password Field ---
                 TextFormField(
                   controller: _newCtrl,
                   obscureText: !_showNew,
@@ -168,9 +177,19 @@ class _SecurityPasswordScreenState extends State<SecurityPasswordScreen> {
                       obscure: true,
                       toggle: () => setState(() => _showNew = !_showNew)),
                   style: TextStyle(color: textColor),
+                  // Validator added
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return "Please enter a new password";
+                    } else if (v.length < 6) {
+                      return "Password must be at least 6 characters";
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 8),
 
+                // Password Strength Indicator
                 if (_passwordStrength.isNotEmpty)
                   Text(
                     "Strength: $_passwordStrength",
@@ -184,7 +203,7 @@ class _SecurityPasswordScreenState extends State<SecurityPasswordScreen> {
                   ),
                 const SizedBox(height: 16),
 
-                // Confirm Password
+                // --- Confirm Password Field ---
                 TextFormField(
                   controller: _confirmCtrl,
                   obscureText: !_showConfirm,
@@ -194,18 +213,30 @@ class _SecurityPasswordScreenState extends State<SecurityPasswordScreen> {
                       toggle: () =>
                           setState(() => _showConfirm = !_showConfirm)),
                   style: TextStyle(color: textColor),
+                  // Validator added
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return "Please confirm your new password";
+                    } else if (v != _newCtrl.text) {
+                      return "Passwords do not match";
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 32),
 
-                // Button
+                // --- Update Button ---
                 ElevatedButton(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Password updated successfully!"),
-                      ),
-                    );
-                    Navigator.pop(context);
+                    // Validate form before proceeding
+                    if (_formKey.currentState!.validate()) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Password updated successfully!"),
+                        ),
+                      );
+                      Navigator.pop(context);
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kAccentColor,

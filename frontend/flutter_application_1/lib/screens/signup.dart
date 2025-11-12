@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Create Account screen — full-width, vertically centered hints, responsive, accessible.
+/// Create Account screen — responsive, clean, with password strength indicator.
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);
 
@@ -10,7 +10,7 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  // Controllers
+  // Form controllers
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
@@ -18,20 +18,24 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
 
-  // Location
+  // Location dropdown
   final List<String> _locations = const [
     'Nablus',
     'Ramallah (Coming Soon)',
   ];
   String _selectedLocation = 'Nablus';
 
-  // Visibility
+  // Visibility toggles
   bool _showPass = false;
   bool _showConfirm = false;
 
+  // Password strength tracking
+  String _passwordStrengthLabel = '';
+  Color _passwordStrengthColor = Colors.transparent;
+
   // Design tokens
   static const double kFieldMinHeight = 52;
-  static const kBrand = Color(0xFF1434E7); // modern blue
+  static const kBrand = Color(0xFF1434E7);
   static const kTextColor = Color(0xFF1A1A2E);
 
   @override
@@ -44,6 +48,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
+  // Password validation and navigation
   void _submit() {
     if (_formKey.currentState!.validate()) {
       Navigator.pushReplacementNamed(
@@ -54,7 +59,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
-  // Unified field decoration: rounded, centered hint, consistent height.
+  // Shared input decoration style
   InputDecoration _decor({
     required String hint,
     required IconData icon,
@@ -84,7 +89,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  // Label text style
+  // Label style
   Text _label(String text) => Text(
         text,
         style: GoogleFonts.poppins(
@@ -93,6 +98,49 @@ class _SignUpScreenState extends State<SignUpScreen> {
           color: kTextColor,
         ),
       );
+
+  /// Evaluate password strength based on length and character diversity.
+  void _evaluatePasswordStrength(String password) {
+    String label;
+    Color color;
+
+    if (password.isEmpty) {
+      // No input → no label and transparent color
+      label = '';
+      color = Colors.transparent;
+    } else if (password.length < 6) {
+      // 0–5 chars → Weak
+      label = 'Weak';
+      color = Colors.red;
+    } else if (password.length < 16) {
+      // 6–15 chars → Medium
+      label = 'Medium';
+      color = Colors.orange;
+    } else {
+      // 16+ chars → Strong
+      label = 'Strong';
+      color = Colors.green;
+    }
+
+    setState(() {
+      _passwordStrengthLabel = label;
+      _passwordStrengthColor = color;
+    });
+  }
+
+  // map label to progress value
+  double _strengthValue() {
+    switch (_passwordStrengthLabel) {
+      case 'Weak':
+        return 0.33;
+      case 'Medium':
+        return 0.66;
+      case 'Strong':
+        return 1.0;
+      default:
+        return 0.0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -109,8 +157,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.stretch, // full-width children
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Header
                 Text(
@@ -131,22 +178,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 28),
 
-                // Full Name
+                // Name field
                 _label('Full Name'),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _nameCtrl,
                   textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.name],
-                  keyboardType: TextInputType.name,
-                  style: GoogleFonts.poppins(fontSize: 14),
-                  textAlignVertical: TextAlignVertical.center,
                   decoration: _decor(
                     hint: 'Enter your full name',
                     icon: Icons.person_outline,
                   ),
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Please enter your name'
+                      ? 'Enter your name'
                       : null,
                 ),
 
@@ -158,22 +201,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 TextFormField(
                   controller: _emailCtrl,
                   textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.email],
                   keyboardType: TextInputType.emailAddress,
-                  style: GoogleFonts.poppins(fontSize: 14),
-                  textAlignVertical: TextAlignVertical.center,
                   decoration: _decor(
                     hint: 'you@example.com',
                     icon: Icons.email_outlined,
                   ),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) {
-                      return 'Please enter your email';
+                      return 'Enter your email';
                     }
                     final email = v.trim();
                     final ok =
                         RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email);
-                    return ok ? null : 'Please enter a valid email';
+                    return ok ? null : 'Enter a valid email';
                   },
                 ),
 
@@ -185,22 +225,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 TextFormField(
                   controller: _phoneCtrl,
                   textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.telephoneNumber],
                   keyboardType: TextInputType.phone,
-                  style: GoogleFonts.poppins(fontSize: 14),
-                  textAlignVertical: TextAlignVertical.center,
                   decoration: _decor(
                     hint: 'Enter your phone number',
                     icon: Icons.phone_outlined,
                   ),
                   validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Please enter your phone number'
+                      ? 'Enter phone number'
                       : null,
                 ),
 
                 const SizedBox(height: 16),
 
-                // Location (new)
+                // Location
                 _label('Location'),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
@@ -226,7 +263,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   }).toList(),
                   onChanged: (value) {
                     if (value == null) return;
-                    // Only change when the item is enabled (Nablus)
                     if (!value.contains('Coming Soon')) {
                       setState(() => _selectedLocation = value);
                     }
@@ -235,16 +271,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 16),
 
-                // Password
+                // Password field + live strength indicator
                 _label('Password'),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _passCtrl,
                   textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.newPassword],
                   obscureText: !_showPass,
-                  style: GoogleFonts.poppins(fontSize: 14),
-                  textAlignVertical: TextAlignVertical.center,
+                  onChanged: _evaluatePasswordStrength,
                   decoration: _decor(
                     hint: '••••••••',
                     icon: Icons.lock_outline,
@@ -262,7 +296,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) {
-                      return 'Please enter a password';
+                      return 'Enter a password';
                     }
                     if (v.length < 6) {
                       return 'Password must be at least 6 characters';
@@ -271,18 +305,46 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   },
                 ),
 
+                // Password strength bar + text below field
+                if (_passwordStrengthLabel.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      minHeight: 6,
+                      value: _strengthValue(),
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(_passwordStrengthColor),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.bolt_rounded,
+                          size: 16, color: _passwordStrengthColor),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Password strength: $_passwordStrengthLabel',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: _passwordStrengthColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
                 const SizedBox(height: 16),
 
-                // Confirm Password
+                // Confirm password
                 _label('Confirm Password'),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _confirmCtrl,
                   textInputAction: TextInputAction.done,
-                  autofillHints: const [AutofillHints.newPassword],
                   obscureText: !_showConfirm,
-                  style: GoogleFonts.poppins(fontSize: 14),
-                  textAlignVertical: TextAlignVertical.center,
                   decoration: _decor(
                     hint: '••••••••',
                     icon: Icons.lock_outline,
@@ -301,7 +363,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) {
-                      return 'Please confirm your password';
+                      return 'Confirm your password';
                     }
                     if (v != _passCtrl.text) {
                       return 'Passwords do not match';
@@ -313,7 +375,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 24),
 
-                // Sign Up button — full width
+                // Sign Up button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -354,9 +416,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       borderRadius: BorderRadius.circular(4),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 2,
-                          vertical: 4,
-                        ),
+                            horizontal: 2, vertical: 4),
                         child: Text(
                           'Sign In',
                           style: GoogleFonts.poppins(

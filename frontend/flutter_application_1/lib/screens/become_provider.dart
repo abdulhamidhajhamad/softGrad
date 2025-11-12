@@ -51,8 +51,10 @@ class _BecomeProviderScreenState extends State<BecomeProviderScreen> {
     final bool isDarkMode = widget.isDarkMode;
 
     // Background color
-    final Color pageBg =
-        isDarkMode ? const Color(0xFF121212) : const Color(0xFFFFFBE6);
+    final Color pageBg = isDarkMode
+        ? const Color(0xFF121212)
+        : const Color.fromARGB(255, 234, 241, 251);
+    ;
 
     final Color textColor = isDarkMode ? Colors.white : Colors.black;
     final Color subText = isDarkMode ? Colors.white70 : Colors.black54;
@@ -94,7 +96,7 @@ class _BecomeProviderScreenState extends State<BecomeProviderScreen> {
 
             // Title text
             Text(
-              'Join Our Network of Wedding Service Providers',
+              'Join Our Network of\n Wedding Service Providers',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 fontSize: 18,
@@ -213,11 +215,12 @@ class _BecomeProviderScreenState extends State<BecomeProviderScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
+                    : Text(
                         'Become a Provider',
-                        style: TextStyle(
-                          fontSize: 15,
+                        style: GoogleFonts.poppins(
+                          fontSize: 15.8,
                           fontWeight: FontWeight.w600,
+                          color: Colors.white,
                         ),
                       ),
               ),

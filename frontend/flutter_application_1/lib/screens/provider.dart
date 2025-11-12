@@ -17,8 +17,9 @@ class _ProviderScreenState extends State<ProviderScreen> {
     final bool isDarkMode = widget.isDarkMode;
 
     // Page background (outside the card)
-    final Color pageBg =
-        isDarkMode ? const Color(0xFF121212) : const Color(0xFFFFFBE6);
+    final Color pageBg = isDarkMode
+        ? const Color(0xFF121212)
+        : const Color.fromARGB(255, 234, 241, 251);
 
     final Color text = isDarkMode ? Colors.white : Colors.black;
     const Color kAccentColor = Color.fromARGB(215, 20, 20, 215);
@@ -71,12 +72,12 @@ class _ProviderScreenState extends State<ProviderScreen> {
                     children: [
                       // Multiline centered headline
                       Text(
-                        'Let’s share your talent\nReach more couples\nAnd grow your brand!',
+                        'Let’s share your talent\nReach more couples\nAnd grow your BRAND',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
-                          fontSize: 14,
+                          fontSize: 15.3,
                           color: isDarkMode ? Colors.white70 : Colors.black87,
-                          height: 1.8,
+                          height: 2.0,
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -110,7 +111,7 @@ class _ProviderScreenState extends State<ProviderScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 27),
+                      const SizedBox(height: 17),
 
                       // CTA
                       SizedBox(

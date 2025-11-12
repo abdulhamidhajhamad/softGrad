@@ -35,6 +35,7 @@ flutter:
     - assets/images/romantic1.png
     - assets/images/romantic2.png
     - assets/images/table.png
+    - assets/images/become_provider.png
 
   fonts:
     - family: Montserrat

@@ -1,184 +1,288 @@
-// src/booking/booking.service.ts
-
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-// FIX: Import all required document types from booking.entity
-import { Booking, BookingStatus, BookingDocument, UserDocument, ServiceDocument } from './booking.entity'; 
-import { CreateBookingDto, UpdateBookingDto } from './booking.dto';
-import { User } from '../auth/user.entity';
+import { Model, Types } from 'mongoose';
+import { Booking, BookingDocument, PaymentStatus } from './booking.entity';
+import { CreateBookingDto } from './booking.dto';
 import { Service } from '../service/service.entity';
+import { ShoppingCart } from '../shoppingCart/shoppingCart.schema';
 
+interface PreparedService {
+  serviceId: string;
+  bookingDate: Date;
+}
 
 @Injectable()
 export class BookingService {
   constructor(
     @InjectModel(Booking.name)
     private readonly bookingModel: Model<BookingDocument>,
-    @InjectModel(User.name)
-    private readonly userModel: Model<UserDocument>,
     @InjectModel(Service.name)
-    private readonly serviceModel: Model<ServiceDocument>,
+    private readonly serviceModel: Model<Service & Document>,
+    @InjectModel(ShoppingCart.name)
+    private readonly shoppingCartModel: Model<ShoppingCart & Document>,
   ) {}
 
-  // --- Private Helper to map Mongoose results to the expected return type (with populated fields) ---
-  private async populateBooking(query: any): Promise<Booking | null> {
-    const booking = await query
-      .populate('user')
-      .populate('service')
-      .exec();
+  private extractServiceId(serviceId: any): string {
+    if (!serviceId) {
+      throw new BadRequestException('Invalid service ID');
+    }
+
+    if (typeof serviceId === 'string') {
+      if (serviceId.includes('bookedDates') || serviceId.includes('_id: new ObjectId')) {
+        try {
+          const cleanedString = serviceId
+            .replace(/new ObjectId\(['"]([^'"]+)['"]\)/g, '"$1"')
+            .replace(/(\w+):/g, '"$1":') // إضافة quotes للمفاتيح
+            .replace(/'/g, '"'); // استبدال single quotes بdouble quotes
+          
+          const serviceObj = JSON.parse(cleanedString);
+          return serviceObj._id;
+        } catch (error) {
+          const idMatch = serviceId.match(/_id: new ObjectId\('([^']+)'\)/);
+          if (idMatch && idMatch[1]) {
+            return idMatch[1];
+          }
+          const objectIdMatch = serviceId.match(/'([0-9a-fA-F]{24})'/);
+          if (objectIdMatch && objectIdMatch[1]) {
+            return objectIdMatch[1];
+          }
+          throw new BadRequestException('Invalid service ID format');
+        }
+      }
+      return serviceId;
+    }
     
-    if (booking) return booking.toObject() as Booking;
-    return null;
-  }
-  
-  private async populateBookings(query: any): Promise<Booking[]> {
-    const bookings = await query
-      .populate('user')
-      .populate('service')
-      .exec();
+    if (typeof serviceId === 'object') {
+      return serviceId._id?.toString() || serviceId.toString();
+    }
     
-    return bookings.map(b => b.toObject() as Booking);
+    return serviceId.toString();
   }
 
-  // ✅ Create Booking
-  async create(createBookingDto: CreateBookingDto): Promise<Booking> {
-    const { userName, serviceName, bookingDate, status, totalPrice } = createBookingDto;
+  async findByUser(userId: string): Promise<any[]> {
+    const bookings = await this.bookingModel.find({ userId }).exec();
+    
+    return bookings.map(booking => this.formatBookingResponse(booking));
+  }
 
-    // Find User (Mongoose)
-    const user = await this.userModel.findOne({ userName }).exec();
-    if (!user) throw new NotFoundException(`User '${userName}' not found`);
+  async createFromCart(userId: string): Promise<any> {
+    const shoppingCart = await this.shoppingCartModel
+      .findOne({ userId: new Types.ObjectId(userId) })
+      .exec();
 
-    // Find Service (Mongoose)
-    const service = await this.serviceModel.findOne({ serviceName: serviceName }).exec();
-    if (!service) throw new NotFoundException(`Service '${serviceName}' not found`);
+    if (!shoppingCart || shoppingCart.services.length === 0) {
+      throw new BadRequestException('Shopping cart is empty');
+    }
 
-    // Create Booking (in Mongoose)
+    const preparedServices: PreparedService[] = [];
+    
+    for (const cartService of shoppingCart.services) {
+      const serviceId = this.extractServiceId(cartService.serviceId);
+      
+      const service = await this.serviceModel.findById(serviceId).exec();
+      if (!service) {
+        throw new NotFoundException(`Service with ID '${serviceId}' not found`);
+      }
+
+      const serviceDoc = service as any;
+      if (serviceDoc.bookedDates && serviceDoc.bookedDates.includes(cartService.bookingDate)) {
+        throw new BadRequestException(
+          `Date ${cartService.bookingDate} is already booked for service ${serviceDoc.name}`
+        );
+      }
+
+      preparedServices.push({
+        serviceId: serviceId, // تخزين الـ ID فقط
+        bookingDate: cartService.bookingDate,
+      });
+    }
+
+    let totalAmount = 0;
+    for (const service of preparedServices) {
+      const serviceDoc = await this.serviceModel.findById(service.serviceId).exec();
+      if (serviceDoc) {
+        totalAmount += (serviceDoc as any).price || 0;
+      }
+    }
+
     const newBooking = new this.bookingModel({
-      userId: user.id, 
-      serviceId: service.serviceId, 
-      bookingDate: new Date(bookingDate),
-      totalPrice,
-      status: status ?? BookingStatus.PENDING,
+      userId,
+      services: preparedServices, // بيانات مرتبة
+      totalAmount,
+      paymentStatus: PaymentStatus.SUCCESSFUL,
     });
 
     try {
       const savedBooking = await newBooking.save();
-      
-      // FIX TS2322: Check for null after population lookup to ensure a Booking is returned
-      const populatedBooking = await this.populateBooking(this.bookingModel.findById(savedBooking._id));
-      
-      if (!populatedBooking) {
-         // This is highly unlikely after a save, but ensures the return type is Booking
-         throw new BadRequestException('Failed to retrieve and populate the newly created booking.');
+
+      for (const service of preparedServices) {
+        await this.serviceModel.findByIdAndUpdate(
+          service.serviceId,
+          { 
+            $push: { 
+              bookedDates: service.bookingDate 
+            } 
+          }
+        ).exec();
       }
-      return populatedBooking;
+
+      await this.shoppingCartModel.findOneAndUpdate(
+        { userId: new Types.ObjectId(userId) },
+        { 
+          $set: { 
+            services: [],
+            totalPrice: 0 
+          } 
+        }
+      ).exec();
+
+      return this.formatBookingResponse(savedBooking);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create booking';
       throw new BadRequestException(errorMessage);
     }
   }
 
-  // ✅ Find One Booking by user + service
-  async findOneByNames(userName: string, serviceName: string): Promise<Booking> {
-    const user = await this.userModel.findOne({ userName }).exec();
-    if (!user) throw new NotFoundException(`User '${userName}' not found`);
+  async create(userId: string, createBookingDto: CreateBookingDto): Promise<any> {
+    const { services, totalAmount } = createBookingDto;
 
-    const service = await this.serviceModel.findOne({ serviceName: serviceName }).exec();
-    if (!service) throw new NotFoundException(`Service '${serviceName}' not found`);
+    const preparedServices: PreparedService[] = services.map(service => ({
+      serviceId: service.serviceId, // التأكد من أن الـ ID صحيح
+      bookingDate: new Date(service.bookingDate),
+    }));
 
-    const booking = await this.populateBooking(
-      this.bookingModel.findOne({
-        userId: user.id,
-        serviceId: service.serviceId,
-      })
-    );
-    
-    if (!booking)
-      throw new NotFoundException(`No booking found for '${userName}' and '${serviceName}'`);
-
-    return booking;
-  }
-
-  // ✅ Update Booking
-  async updateByNames(userName: string, serviceName: string, dto: UpdateBookingDto): Promise<Booking> {
-    const user = await this.userModel.findOne({ userName }).exec();
-    if (!user) throw new NotFoundException(`User '${userName}' not found`);
-
-    const service = await this.serviceModel.findOne({ serviceName: serviceName }).exec();
-    if (!service) throw new NotFoundException(`Service '${serviceName}' not found`);
-    
-    const booking = await this.bookingModel.findOne({
-      userId: user.id,
-      serviceId: service.serviceId,
+    const serviceIds = preparedServices.map(s => s.serviceId);
+    const foundServices = await this.serviceModel.find({ 
+      _id: { $in: serviceIds } 
     }).exec();
 
-    if (!booking)
-      throw new NotFoundException(`No booking found for '${userName}' and '${serviceName}'`);
-
-    if (dto.userName) {
-      const newUser = await this.userModel.findOne({ userName: dto.userName }).exec();
-      if (!newUser) throw new NotFoundException(`User '${dto.userName}' not found`);
-      booking.userId = newUser.id;
+    if (foundServices.length !== serviceIds.length) {
+      throw new NotFoundException('One or more services not found');
     }
 
-    if (dto.serviceName) {
-      const newService = await this.serviceModel.findOne({ serviceName: dto.serviceName }).exec();
-      if (!newService) throw new NotFoundException(`Service '${dto.serviceName}' not found`);
-      booking.serviceId = newService.serviceId;
-    }
-
-    if (dto.bookingDate) booking.bookingDate = new Date(dto.bookingDate);
-    if (dto.status) booking.status = dto.status;
-    if (dto.totalPrice) booking.totalPrice = dto.totalPrice;
+    const newBooking = new this.bookingModel({
+      userId,
+      services: preparedServices,
+      totalAmount,
+      paymentStatus: PaymentStatus.SUCCESSFUL,
+    });
 
     try {
-      const updatedBooking = await booking.save();
-      
-      // FIX TS2322: Check for null after population lookup
-      const populatedBooking = await this.populateBooking(this.bookingModel.findById(updatedBooking._id));
-       if (!populatedBooking) {
-         throw new BadRequestException('Failed to retrieve and populate the updated booking.');
+      const savedBooking = await newBooking.save();
+
+      for (const service of preparedServices) {
+        await this.serviceModel.findByIdAndUpdate(
+          service.serviceId,
+          { 
+            $push: { 
+              bookedDates: service.bookingDate 
+            } 
+          }
+        ).exec();
       }
-      return populatedBooking;
+
+      return this.formatBookingResponse(savedBooking);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update booking';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create booking';
       throw new BadRequestException(errorMessage);
     }
   }
 
-  // ✅ Delete Booking
-  async deleteByNames(userName: string, serviceName: string): Promise<{ message: string }> {
-    const user = await this.userModel.findOne({ userName }).exec();
-    if (!user) throw new NotFoundException(`User '${userName}' not found`);
-
-    const service = await this.serviceModel.findOne({ serviceName: serviceName }).exec();
-    if (!service) throw new NotFoundException(`Service '${serviceName}' not found`);
-
-    const result = await this.bookingModel.deleteOne({
-      userId: user.id,
-      serviceId: service.serviceId,
-    }).exec();
-
-    if (result.deletedCount === 0) {
-       throw new NotFoundException(`No booking found for '${userName}' and '${serviceName}'`);
+  async cancelBooking(userId: string, bookingId: string): Promise<{ message: string }> {
+    const booking = await this.bookingModel.findById(bookingId).exec();
+    
+    if (!booking) {
+      throw new NotFoundException(`Booking with ID '${bookingId}' not found`);
     }
 
-    return { message: `Booking for '${userName}' & '${serviceName}' deleted successfully` };
+    if (booking.userId !== userId) {
+      throw new ForbiddenException('You can only cancel your own bookings');
+    }
+
+    for (const serviceItem of booking.services) {
+      const serviceId = this.extractServiceId(serviceItem.serviceId);
+      
+      if (serviceId && Types.ObjectId.isValid(serviceId)) {
+        await this.serviceModel.findByIdAndUpdate(
+          serviceId,
+          { 
+            $pull: { 
+              bookedDates: serviceItem.bookingDate 
+            } 
+          }
+        ).exec();
+      }
+    }
+
+    booking.paymentStatus = PaymentStatus.CANCELLED;
+    await booking.save();
+
+    return { 
+      message: `Booking ${bookingId} cancelled successfully and dates removed from services` 
+    };
   }
 
-  // ✅ Find all bookings for user
-  async findByUser(userName: string): Promise<Booking[]> {
-    const user = await this.userModel.findOne({ userName }).exec();
-    if (!user) throw new NotFoundException(`User '${userName}' not found`);
-
-    return await this.populateBookings(
-      this.bookingModel.find({ userId: user.id })
-    );
+  async findAll(): Promise<any[]> {
+    const bookings = await this.bookingModel.find().exec();
+    return bookings.map(booking => this.formatBookingResponse(booking));
   }
 
-  // ✅ Find all bookings
-  async findAll(): Promise<Booking[]> {
-    return await this.populateBookings(this.bookingModel.find());
+  private formatBookingResponse(booking: any): any {
+    const formattedBooking = booking.toObject ? booking.toObject() : { ...booking };
+    
+    if (formattedBooking.services && Array.isArray(formattedBooking.services)) {
+      formattedBooking.services = formattedBooking.services.map(service => ({
+        serviceId: this.extractServiceId(service.serviceId),
+        bookingDate: service.bookingDate
+      }));
+    }
+
+    delete formattedBooking.__v;
+    
+    return formattedBooking;
+  }
+
+  async fixExistingBookings(): Promise<{ message: string; fixedCount: number }> {
+    const bookings = await this.bookingModel.find().exec();
+    let fixedCount = 0;
+
+    for (const booking of bookings) {
+      let needsUpdate = false;
+      const fixedServices: PreparedService[] = [];
+
+      for (const serviceItem of booking.services) {
+        const originalServiceId = serviceItem.serviceId;
+        const fixedServiceId = this.extractServiceId(originalServiceId);
+
+        if (originalServiceId !== fixedServiceId) {
+          needsUpdate = true;
+        }
+
+        fixedServices.push({
+          serviceId: fixedServiceId,
+          bookingDate: serviceItem.bookingDate
+        });
+      }
+
+      if (needsUpdate) {
+        await this.bookingModel.findByIdAndUpdate(booking._id, {
+          services: fixedServices
+        }).exec();
+        fixedCount++;
+      }
+    }
+
+    return { 
+      message: `Fixed ${fixedCount} bookings with invalid service IDs`,
+      fixedCount 
+    };
+  }
+
+  async debugServiceId(serviceId: any): Promise<{ original: any; extracted: string; type: string }> {
+    return {
+      original: serviceId,
+      extracted: this.extractServiceId(serviceId),
+      type: typeof serviceId
+    };
   }
 }

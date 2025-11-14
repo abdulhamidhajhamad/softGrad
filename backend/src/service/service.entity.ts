@@ -6,12 +6,17 @@ export class Service {
   reviews: Review[];
   location: Location;
   price: number;
+  category: string;
   additionalInfo?: any;
   createdAt: Date;
   updatedAt: Date;
+  bookedDates: Date[];
+  rating: number; // ✅ إضافة حقل الرايتنج
 
   constructor(data: Partial<Service>) {
     Object.assign(this, data);
+    this.bookedDates = data?.bookedDates || [];
+    this.rating = data?.rating || 0; // ✅ تعيين قيمة افتراضية
   }
 }
 

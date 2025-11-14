@@ -6,16 +6,16 @@ import { ProviderModule } from './providers/provider.module';
 import { ServiceModule } from './service/service.module';
 import { BookingModule } from './booking/booking.module';
 import { AdminModule } from './admin/admin.module';
+import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
+import { FirebaseModule } from './firebase/firebase.module';
 
 
 @Module({
   imports: [
-    // ✅ تفعيل قراءة ملف .env بشكل عام
     ConfigModule.forRoot({
       isGlobal: true,
     }),
 
-    // ✅ الاتصال بـ MongoDB
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -24,12 +24,13 @@ import { AdminModule } from './admin/admin.module';
       inject: [ConfigService],
     }),
 
-    // باقي الموديولات
     AuthModule,
     ProviderModule,
     ServiceModule,
     BookingModule,
     AdminModule,
+    ShoppingCartModule,
+    FirebaseModule,
   ],
 })
 export class AppModule {}

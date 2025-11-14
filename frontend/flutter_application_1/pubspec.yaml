@@ -27,6 +27,21 @@ flutter:
   assets:
     - assets/images/
     - assets/images/categories/
+    # category images
+    - assets/images/categories/accessories.png
+    - assets/images/categories/cake.png
+    - assets/images/categories/car_rental.png
+    - assets/images/categories/card_printing.png
+    - assets/images/categories/catering.png
+    - assets/images/categories/decor_lighting.png
+    - assets/images/categories/flower_shops.png
+    - assets/images/categories/gifts.png
+    - assets/images/categories/music.png
+    - assets/images/categories/photographers.png
+    - assets/images/categories/venues.png
+    - assets/images/categories/wedding_planner.png
+
+    # existing images
     - assets/images/classic.png
     - assets/images/classic1.png
     - assets/images/classic2.png

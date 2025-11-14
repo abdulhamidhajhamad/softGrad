@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'home.dart';
+import 'home_customer.dart';
 import 'home_provider.dart';
 
 class VerificationScreen extends StatefulWidget {

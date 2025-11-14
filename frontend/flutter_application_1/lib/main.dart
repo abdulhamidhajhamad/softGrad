@@ -10,7 +10,8 @@ import 'package:flutter_application_1/screens/verification.dart';
 import 'package:flutter_application_1/screens/home.dart';
 import 'package:flutter_application_1/screens/vendors.dart';
 import 'package:flutter_application_1/screens/templates.dart';
-import 'package:flutter_application_1/screens/template_editor.dart'; // optional route support
+import 'package:flutter_application_1/screens/template_editor.dart';
+import 'package:flutter_application_1/screens/choose_role.dart'; // NEW SCREEN
 
 void main() {
   runApp(const MyApp());
@@ -35,9 +36,13 @@ class MyApp extends StatelessWidget {
           secondary: const Color(0xFF1414D7),
         ),
       ),
+
       home: const SplashScreen(),
+
+      // Static Routes
       routes: {
         '/onboarding': (_) => const OnboardingScreen(),
+        '/choose_role': (_) => const ChooseRoleScreen(), // ADDED
         '/signup': (_) => const SignUpScreen(),
         '/signin': (_) => const SignInScreen(),
         '/verification': (_) => const VerificationScreen(),
@@ -45,8 +50,10 @@ class MyApp extends StatelessWidget {
         '/vendors': (_) => const VendorsListPage(),
         '/templates': (_) => const TemplatesPage(),
       },
+
+      // Dynamic Routes
       onGenerateRoute: (settings) {
-        // keep explicit case for verification if you prefer
+        // Keep explicit case for verification
         if (settings.name == '/verification') {
           return MaterialPageRoute(
             builder: (_) => const VerificationScreen(),
@@ -54,7 +61,7 @@ class MyApp extends StatelessWidget {
           );
         }
 
-        // Optional named route for TemplateEditorPage:
+        // Template Editor Route
         if (settings.name == '/template_editor') {
           final args = settings.arguments as Map<String, dynamic>?;
 

@@ -74,9 +74,9 @@ class _SignInScreenState extends State<SignInScreen> {
 
                 // Subtitle
                 Text(
-                  'Sign in to continue planning your wedding',
+                  'Sign in to access your account',
                   style: GoogleFonts.poppins(
-                    fontSize: 16,
+                    fontSize: 14.5,
                     color: Colors.grey.shade600,
                   ),
                 ),
@@ -284,7 +284,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                     GestureDetector(
                       onTap: () {
-                        Navigator.pushReplacementNamed(context, '/signup');
+                        Navigator.pushReplacementNamed(context, '/choose_role');
                       },
                       child: Text(
                         'Sign Up',

@@ -1,3 +1,4 @@
+// lib/screens/signup_provider.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -68,7 +69,6 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
   // Password strength
   String _passwordStrengthLabel = "";
   Color _passwordStrengthColor = Colors.transparent;
-
   bool _showPass = false;
   bool _showConfirm = false;
 
@@ -126,13 +126,22 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
         ),
       );
 
-  // Submit
+  // ======================================================
+  // Submit → Send provider data + role to Verification
+  // ======================================================
   void _submit() {
     if (_formKey.currentState!.validate()) {
       Navigator.pushReplacementNamed(
         context,
         '/verification',
-        arguments: _emailCtrl.text,
+        arguments: {
+          "email": _emailCtrl.text.trim(),
+          "role": "provider",
+          "name": _brandCtrl.text.trim(),
+          "category": _selectedCategory,
+          "description": _descCtrl.text.trim(),
+          "city": _selectedCity,
+        },
       );
     }
   }
@@ -215,9 +224,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                     height: 0.8,
                   ),
                 ),
-
                 const SizedBox(height: 6),
-
                 Text(
                   'Join our wedding community in a few steps',
                   style: GoogleFonts.poppins(
@@ -225,7 +232,6 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                     color: Colors.grey.shade600,
                   ),
                 ),
-
                 const SizedBox(height: 24),
 
                 // BRAND NAME
@@ -241,7 +247,6 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                   validator: (v) =>
                       v == null || v.trim().isEmpty ? 'Enter brand name' : null,
                 ),
-
                 const SizedBox(height: 16),
 
                 // EMAIL
@@ -262,7 +267,6 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                     return ok ? null : 'Enter a valid email';
                   },
                 ),
-
                 const SizedBox(height: 16),
 
                 // PHONE
@@ -280,7 +284,6 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                       ? 'Enter phone number'
                       : null,
                 ),
-
                 const SizedBox(height: 16),
 
                 // CATEGORY
@@ -297,7 +300,10 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                         children: [
                           Icon(iconData, size: 18, color: kPrimaryButtonColor),
                           const SizedBox(width: 8),
-                          Text(cat, style: GoogleFonts.poppins(fontSize: 14)),
+                          Text(
+                            cat,
+                            style: GoogleFonts.poppins(fontSize: 14),
+                          ),
                         ],
                       ),
                     );
@@ -309,7 +315,6 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                   onChanged: (v) => setState(() => _selectedCategory = v),
                   validator: (v) => v == null ? 'Select a category' : null,
                 ),
-
                 const SizedBox(height: 16),
 
                 // DESCRIPTION
@@ -333,7 +338,6 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                     return null;
                   },
                 ),
-
                 const SizedBox(height: 16),
 
                 // CITY
@@ -343,16 +347,19 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                   autovalidateMode: AutovalidateMode.onUserInteraction,
                   value: _selectedCity,
                   items: _cities
-                      .map((city) => DropdownMenuItem(
-                            value: city,
-                            child: Text(city,
-                                style: GoogleFonts.poppins(fontSize: 14)),
-                          ))
+                      .map(
+                        (city) => DropdownMenuItem(
+                          value: city,
+                          child: Text(
+                            city,
+                            style: GoogleFonts.poppins(fontSize: 14),
+                          ),
+                        ),
+                      )
                       .toList(),
                   decoration: _decor(
-                    hint: "Select your city",
-                    icon: Icons.location_city_outlined,
-                  ),
+                      hint: "Select your city",
+                      icon: Icons.location_city_outlined),
                   onChanged: (v) => setState(() => _selectedCity = v),
                   validator: (v) => v == null ? 'Select your city' : null,
                 ),
@@ -410,15 +417,19 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                       minHeight: 6,
                       value: _strengthValue(),
                       backgroundColor: Colors.grey.shade200,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(_passwordStrengthColor),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        _passwordStrengthColor,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.bolt_rounded,
-                          size: 16, color: _passwordStrengthColor),
+                      Icon(
+                        Icons.bolt_rounded,
+                        size: 16,
+                        color: _passwordStrengthColor,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'Password strength: $_passwordStrengthLabel',
@@ -455,7 +466,9 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Confirm your password';
+                    if (v == null || v.isEmpty) {
+                      return 'Confirm your password';
+                    }
                     if (v != _passCtrl.text) return 'Passwords do not match';
                     return null;
                   },
@@ -502,7 +515,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                       onTap: () =>
                           Navigator.pushReplacementNamed(context, '/signin'),
                       child: Text(
-                        '  Sign In',
+                        ' Sign In',
                         style: GoogleFonts.poppins(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,

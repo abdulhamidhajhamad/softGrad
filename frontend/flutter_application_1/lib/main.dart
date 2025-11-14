@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 // Screens
 import 'package:flutter_application_1/screens/splash.dart';
 import 'package:flutter_application_1/screens/onboarding.dart';
-import 'package:flutter_application_1/screens/signup.dart';
+import 'package:flutter_application_1/screens/signup_provider.dart';
+import 'package:flutter_application_1/screens/signup_customer.dart';
 import 'package:flutter_application_1/screens/signin.dart';
 import 'package:flutter_application_1/screens/verification.dart';
 import 'package:flutter_application_1/screens/home.dart';

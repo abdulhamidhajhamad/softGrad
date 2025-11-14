@@ -92,17 +92,24 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
       );
 
+  // ===============================================
+  // SUBMIT (Send arguments to Verification Screen)
+  // ===============================================
   void _submit() {
     if (_formKey.currentState!.validate()) {
       Navigator.pushReplacementNamed(
         context,
         '/verification',
-        arguments: _emailCtrl.text,
+        arguments: {
+          "email": _emailCtrl.text.trim(),
+          "role": "customer",
+          "name": _nameCtrl.text.trim(),
+        },
       );
     }
   }
 
-  // ===== Password Strength Logic =====
+  // Password Strength Logic (Simple)
   void _evaluatePasswordStrength(String password) {
     String label;
     Color color;
@@ -185,6 +192,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
+
                 Text(
                   'Join our wedding community in a few steps',
                   style: GoogleFonts.poppins(

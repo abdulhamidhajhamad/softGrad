@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // Import your signup screens
-import 'signup.dart';
+import 'signup_customer.dart';
 import 'signup_provider.dart';
 
 enum UserRole { customer, provider }

@@ -10,7 +10,7 @@ import { AuthModule } from '../auth/auth.module';
     MongooseModule.forFeature([
       { name: ServiceProvider.name, schema: ServiceProviderSchema }
     ]),
-    AuthModule, // ← Add this to share JWT authentication
+    AuthModule, 
   ],
   controllers: [ProviderController],
   providers: [ProviderService],

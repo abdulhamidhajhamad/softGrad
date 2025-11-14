@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Onboarding screen that guides users through the core benefits of PlanMyWedding
-/// Uses a PageView carousel with three steps and dot indicators for progress tracking
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
 
@@ -11,13 +9,9 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  // Controller for managing PageView navigation
   final PageController _pageController = PageController();
-
-  // Current page index for tracking progress
   int _currentPage = 0;
 
-  // Onboarding data model for each page
   final List<OnboardingData> _pages = [
     OnboardingData(
       title: 'Plan Together',
@@ -48,21 +42,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
-  /// Navigate to the next page or complete onboarding
+  /// Navigate forward or finish onboarding
   void _onContinue() {
     if (_currentPage < _pages.length - 1) {
-      // Move to next page with smooth animation
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     } else {
-      // Navigate to sign up screen on last page
-      Navigator.pushReplacementNamed(context, '/signup');
+      // LAST PAGE → GO TO CHOOSE ROLE
+      Navigator.pushReplacementNamed(context, '/choose_role');
     }
   }
 
-  /// Build a single dot indicator for page progress
   Widget _buildDotIndicator(int index) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -85,14 +77,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Skip button at top right
+            // SKIP BUTTON → GO TO CHOOSE ROLE
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Align(
                 alignment: Alignment.topRight,
                 child: TextButton(
                   onPressed: () {
-                    Navigator.pushReplacementNamed(context, '/signup');
+                    Navigator.pushReplacementNamed(context, '/choose_role');
                   },
                   child: Text(
                     'Skip',
@@ -106,7 +98,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // PageView carousel for onboarding pages
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -122,7 +113,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // Dot indicators for page progress
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16.0),
               child: Row(
@@ -134,7 +124,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // Continue button
+            // CONTINUE → NEXT OR CHOOSE ROLE
             Padding(
               padding: const EdgeInsets.fromLTRB(40.0, 8.0, 40.0, 80.0),
               child: SizedBox(
@@ -170,7 +160,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-/// Individual onboarding page widget
 class _OnboardingPage extends StatelessWidget {
   final OnboardingData data;
 
@@ -183,7 +172,6 @@ class _OnboardingPage extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Icon or Image placeholder
           Container(
             width: 280,
             height: 280,
@@ -197,7 +185,7 @@ class _OnboardingPage extends StatelessWidget {
                 width: 240,
                 height: 240,
                 fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
+                errorBuilder: (_, __, ___) {
                   return Icon(
                     data.icon,
                     size: 120,
@@ -207,10 +195,7 @@ class _OnboardingPage extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(height: 48),
-
-          // Title
           Text(
             data.title,
             textAlign: TextAlign.center,
@@ -221,21 +206,16 @@ class _OnboardingPage extends StatelessWidget {
               height: 1.2,
             ),
           ),
-
           const SizedBox(height: 16),
-
-          // Description
           Text(
             data.description,
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 16,
-              fontWeight: FontWeight.w400,
               color: Colors.grey.shade600,
               height: 1.5,
             ),
           ),
-
           const SizedBox(height: 32),
         ],
       ),
@@ -243,7 +223,6 @@ class _OnboardingPage extends StatelessWidget {
   }
 }
 
-/// Data model for onboarding page content
 class OnboardingData {
   final String title;
   final String description;

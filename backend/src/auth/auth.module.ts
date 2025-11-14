@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { User, UserSchema } from './user.entity';
 import { JwtStrategy } from './jwt.strategy';
 import { MailService } from './mail.service';
+import { SupabaseStorageModule } from '../subbase/supabaseStorage.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { MailService } from './mail.service';
       secret: 'your-secret-key-change-in-production',
       signOptions: { expiresIn: '24h' },
     }),
+    SupabaseStorageModule, 
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, MailService],
@@ -23,7 +25,7 @@ import { MailService } from './mail.service';
     JwtStrategy, 
     PassportModule, 
     JwtModule,
-    MongooseModule, // ← Export MongooseModule so other modules can access User model
+    MongooseModule,
   ],
 })
 export class AuthModule {}

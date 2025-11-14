@@ -7,7 +7,11 @@ import {
   Get,
   UseGuards,
   Req,
+  UseInterceptors,
+  UploadedFile,
+  Put,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { 
   SignUpDto, 
@@ -18,24 +22,32 @@ import {
   ResendVerificationDto 
 } from './auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { ApiConsumes, ApiBody } from '@nestjs/swagger';
 
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('signup')
-  async signUp(@Body() signUpDto: SignUpDto) {
-    return this.authService.signUp(signUpDto);
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'User registration data with optional image',
+    type: SignUpDto,
+  })
+  @UseInterceptors(FileInterceptor('image'))
+  async signUp(
+    @Body() signUpDto: SignUpDto,
+    @UploadedFile() file?: Express.Multer.File 
+  ) {
+    return this.authService.signUp(signUpDto, file);
   }
 
-  // ✅ NEW: Verify email with code
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
     return this.authService.verifyEmail(verifyEmailDto);
   }
 
-  // ✅ NEW: Resend verification code
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
   async resendVerification(@Body() resendVerificationDto: ResendVerificationDto) {
@@ -46,6 +58,22 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Put('profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('image'))
+  async updateProfile(
+    @Req() req,
+    @Body() updateData: {
+      userName?: string;
+      phone?: string;
+      city?: string;
+    },
+    @UploadedFile() file?: Express.Multer.File
+  ) {
+    return this.authService.updateProfile(req.user.userId, updateData, file);
   }
 
   /*

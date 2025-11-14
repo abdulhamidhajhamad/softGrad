@@ -1,10 +1,9 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-  NotFoundException,
-  BadRequestException,
-  ForbiddenException,
+import { 
+  Injectable, 
+  ConflictException, 
+  UnauthorizedException, 
+  NotFoundException, 
+  BadRequestException 
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -14,90 +13,112 @@ import { User } from './user.entity';
 import { 
   SignUpDto, 
   LoginDto, 
-  ForgotPasswordDto, 
-  ResetPasswordDto,
   VerifyEmailDto,
   ResendVerificationDto 
 } from './auth.dto';
 import { MailService } from './mail.service';
+import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
 
 @Injectable()
 export class AuthService {
+  // In-memory storage for verification codes (use Redis in production)
+  private verificationCodes = new Map<string, { code: string; expires: Date }>();
+
   constructor(
     @InjectModel(User.name)
     private userModel: Model<User>,
     private jwtService: JwtService,
     private mailService: MailService,
+    private supabaseStorage: SupabaseStorageService,
   ) {}
 
-  // ✅ Helper: Generate 6-digit random code
   private generateVerificationCode(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-
   private generateDefaultAvatar(userName: string): string {
-  const initials = this.getUserInitials(userName);
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=0D8ABC&color=fff&size=128`;
-}
+    const initials = this.getUserInitials(userName);
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=0D8ABC&color=fff&size=128`;
+  }
+
   private getUserInitials(userName: string): string {
-  if (!userName) return 'U';
-  
-  const names = userName.trim().split(/\s+/);
-  
-  if (names.length === 1) {
-    return userName.substring(0, 2).toUpperCase();
-  } else {
-    return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
-  }
-}
-  async signUp(signUpDto: SignUpDto): Promise<{ message: string; email: string }> {
-  const { userName, email, password, phone, city, imageUrl } = signUpDto;
-  // Set default role to 'user'
-  const role = 'user';
-  // Check if user already exists
-  const existingUser = await this.userModel.findOne({ email }).exec();
-  if (existingUser) {
-    throw new ConflictException('Email already exists');
-  }
-  // Hash password
-  const hashedPassword = await bcrypt.hash(password, 10);
-  // Generate verification code and expiration (15 minutes from now)
-  const verificationCode = this.generateVerificationCode();
-  const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-  const finalImageUrl = imageUrl || this.generateDefaultAvatar(userName);
-  // Create user
-  const user = new this.userModel({
-    userName,
-    email,
-    password: hashedPassword,
-    phone,
-    city,
-    role,
-    imageUrl: finalImageUrl,
-    isVerified: false,
-    verificationCode,
-    verificationCodeExpires,
-  });
-
-  await user.save();
-
-  // Send verification email
-  try {
-    await this.mailService.sendVerificationEmail(email, verificationCode);
-  } catch (error) {
-    console.error('Failed to send verification email:', error);
-    // Don't fail registration if email fails, but log it
+    if (!userName) return 'U';
+    const names = userName.trim().split(/\s+/);
+    if (names.length === 1) {
+      return userName.substring(0, 2).toUpperCase();
+    } else {
+      return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
+    }
   }
 
-  return {
-    message: 'User registered successfully. Please check your email for verification code.',
-    email: user.email,
-  };
-}
+  async signUp(
+    signUpDto: SignUpDto, 
+    file?: Express.Multer.File
+  ): Promise<{ message: string; email: string; imageUrl?: string }> {
+    const { userName, email, password, phone, city, role  } = signUpDto;
+    
+    const existingUser = await this.userModel.findOne({ email }).exec();
+    if (existingUser) {
+      throw new ConflictException('Email already exists');
+    }
+    
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    const verificationCode = this.generateVerificationCode();
+    const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000);
+    
+    let imageUrl: string;
 
+    if (file) {
+      try {
+        console.log('📤 Uploading image to Supabase...');
+        imageUrl = await this.supabaseStorage.uploadImage(file, 'users', true);
+        console.log('✅ Image uploaded successfully:', imageUrl);
+      } catch (error) {
+        console.error('❌ Supabase upload failed, using default avatar:', error);
+        imageUrl = this.generateDefaultAvatar(userName);
+      }
+    } else {
+      imageUrl = this.generateDefaultAvatar(userName);
+      console.log('🖼️ Using default avatar');
+    }
 
-  // ✅ NEW: Verify email with code
+    // Store verification code in memory
+    this.verificationCodes.set(email, {
+      code: verificationCode,
+      expires: verificationCodeExpires
+    });
+
+    const user = new this.userModel({
+      userName,
+      email,
+      password: hashedPassword,
+      phone,
+      city,
+      role,
+      imageUrl,
+      isVerified: false,
+      // ❌ REMOVED: verificationCode and verificationCodeExpires from user document
+    });
+
+    await user.save();
+    console.log('👤 User created with image:', imageUrl);
+
+    // إرسال email التحقق
+    try {
+      await this.mailService.sendVerificationEmail(email, verificationCode);
+    } catch (error) {
+      console.error('Failed to send verification email:', error);
+    }
+
+    return {
+      message: 'User registered successfully. Please check your email for verification code.',
+      email: user.email,
+      imageUrl: imageUrl,
+    };
+  }
+
+  // ✅ Verify email with code (using in-memory storage)
   async verifyEmail(verifyEmailDto: VerifyEmailDto): Promise<{ token: string; user: any }> {
     const { email, verificationCode } = verifyEmailDto;
 
@@ -113,26 +134,29 @@ export class AuthService {
       throw new BadRequestException('Email is already verified');
     }
 
-    // Check if verification code exists
-    if (!user.verificationCode || !user.verificationCodeExpires) {
+    // Check if verification code exists in memory
+    const storedCode = this.verificationCodes.get(email);
+    if (!storedCode) {
       throw new BadRequestException('No verification code found. Please request a new one.');
     }
 
     // Check if code has expired
-    if (new Date() > user.verificationCodeExpires) {
+    if (new Date() > storedCode.expires) {
+      this.verificationCodes.delete(email); // Clean up expired code
       throw new BadRequestException('Verification code has expired. Please request a new one.');
     }
 
     // Verify code matches
-    if (user.verificationCode !== verificationCode) {
+    if (storedCode.code !== verificationCode) {
       throw new BadRequestException('Invalid verification code');
     }
 
-    // Mark user as verified and clear verification fields
+    // Mark user as verified
     user.isVerified = true;
-    user.verificationCode = undefined;
-    user.verificationCodeExpires = undefined;
     await user.save();
+
+    // Remove used verification code
+    this.verificationCodes.delete(email);
 
     // Generate JWT token
     const token = this.jwtService.sign({ 
@@ -142,7 +166,7 @@ export class AuthService {
     
     // Return user without sensitive data
     const userObject = user.toObject();
-    const { password, verificationCode: _, verificationCodeExpires: __, ...userWithoutPassword } = userObject;
+    const { password, ...userWithoutPassword } = userObject;
     
     return {
       token,
@@ -150,7 +174,7 @@ export class AuthService {
     };
   }
 
-  // ✅ NEW: Resend verification code
+  // ✅ Resend verification code
   async resendVerificationCode(resendVerificationDto: ResendVerificationDto): Promise<{ message: string }> {
     const { email } = resendVerificationDto;
 
@@ -171,10 +195,11 @@ export class AuthService {
     const verificationCode = this.generateVerificationCode();
     const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    // Update user with new code
-    user.verificationCode = verificationCode;
-    user.verificationCodeExpires = verificationCodeExpires;
-    await user.save();
+    // Store new code in memory
+    this.verificationCodes.set(email, {
+      code: verificationCode,
+      expires: verificationCodeExpires
+    });
 
     // Send verification email
     try {
@@ -197,7 +222,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid Email/Pass');
     }
 
-    // ✅ NEW: Check if email is verified
+    // ✅ Check if email is verified
     if (!user.isVerified) {
       throw new UnauthorizedException('Please verify your email before logging in');
     }
@@ -213,10 +238,71 @@ export class AuthService {
     });
     
     const userObject = user.toObject();
-    const { password: _, verificationCode, verificationCodeExpires, ...userWithoutPassword } = userObject;
+    const { password: _, ...userWithoutPassword } = userObject;
     return {
       token,
       user: userWithoutPassword,
     };
+  }
+
+  // ✅ Update user profile with image handling
+  async updateProfile(
+    userId: string,
+    updateData: Partial<{
+      userName: string;
+      phone: string;
+      city: string;
+    }>,
+    file?: Express.Multer.File
+  ): Promise<{ message: string; user: any }> {
+    const user = await this.userModel.findById(userId).exec();
+    
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    let imageUrl = user.imageUrl;
+
+    if (file) {
+      try {
+        console.log('📤 Uploading new image to Supabase...');
+        
+        if (user.imageUrl && !user.imageUrl.includes('ui-avatars.com')) {
+          console.log('🗑️ Deleting old image:', user.imageUrl);
+          await this.supabaseStorage.deleteImage(user.imageUrl);
+        }
+        
+        imageUrl = await this.supabaseStorage.uploadImage(file, 'users', true);
+        console.log('✅ New image uploaded successfully:', imageUrl);
+      } catch (error) {
+        console.error('❌ Supabase upload failed:', error);
+        throw new BadRequestException('Failed to upload image');
+      }
+    }
+
+    if (updateData.userName) user.userName = updateData.userName;
+    if (updateData.phone) user.phone = updateData.phone;
+    if (updateData.city) user.city = updateData.city;
+    user.imageUrl = imageUrl;
+
+    await user.save();
+
+    const userObject = user.toObject();
+    const { password, ...userWithoutPassword } = userObject;
+
+    return {
+      message: 'Profile updated successfully',
+      user: userWithoutPassword,
+    };
+  }
+
+  // Clean up expired verification codes (call this periodically)
+  cleanupExpiredVerificationCodes(): void {
+    const now = new Date();
+    for (const [email, data] of this.verificationCodes.entries()) {
+      if (now > data.expires) {
+        this.verificationCodes.delete(email);
+      }
+    }
   }
 }

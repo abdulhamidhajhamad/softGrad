@@ -19,8 +19,12 @@ export class User extends Document {
   @Prop({ default: null })
   city?: string;
 
-  @Prop({ required: true, enum: ['client', 'vendor', 'admin'] })
-  role: 'client' | 'vendor' | 'admin';
+  @Prop({ 
+    required: true, 
+    enum: ['user', 'vendor', 'admin'],
+    default: 'user'
+  })
+  role: 'user' | 'vendor' | 'admin';
 
   @Prop({ default: null })
   imageUrl?: string;
@@ -28,15 +32,6 @@ export class User extends Document {
   @Prop({ default: false })
   isVerified: boolean;
 
-  @Prop({ default: null })
-  verificationCode?: string;
-
-  @Prop({ default: null })
-  verificationCodeExpires?: Date;
-
-  // 🔄 أضف هذا الحقل الجديد للـ vendors
-  @Prop({ default: null })
-  companyName?: string;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

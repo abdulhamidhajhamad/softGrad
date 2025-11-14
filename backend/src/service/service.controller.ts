@@ -1,7 +1,10 @@
 import { 
   Controller, Get, Post, Put, Delete, Body, Param, 
-  UseGuards, Request, HttpException, HttpStatus, Query 
+  UseGuards, Request, HttpException, HttpStatus, Query,
+  UseInterceptors,
+  UploadedFiles
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { ServiceService } from './service.service';
 import { CreateServiceDto, UpdateServiceDto } from './service.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -10,7 +13,67 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
 
-  // 4. Get All Services - مفتوح للجميع
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FilesInterceptor('images', 10)) 
+  async addService(
+    @Body() createServiceDto: CreateServiceDto, 
+    @Request() req: any,
+    @UploadedFiles() files?: Express.Multer.File[] 
+  ) {
+    try {
+      const userId = req.user.userId;
+      const userRole = req.user.role;
+
+      if (userRole !== 'vendor') {
+        throw new HttpException(
+          'Only vendors can add services',
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      return await this.serviceService.createService(userId, createServiceDto, files);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to create service',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+  @Put('/:serviceName')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FilesInterceptor('images', 10)) 
+  async updateServiceByName(
+    @Param('serviceName') serviceName: string,
+    @Body() updateServiceDto: UpdateServiceDto,
+    @Request() req: any,
+    @UploadedFiles() files?: Express.Multer.File[] // ✅ ملفات الصور الجديدة
+  ) {
+    try {
+      const userId = req.user.userId;
+      const userRole = req.user.role;
+
+      if (userRole !== 'vendor') {
+        throw new HttpException(
+          'Only vendors can update services',
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      return await this.serviceService.updateServiceByName(
+        serviceName,
+        userId,
+        updateServiceDto,
+        files
+      );
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to update service',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+  
   @Get()
   async getAllServices() {
     try {
@@ -23,28 +86,6 @@ export class ServiceController {
     }
   }
 
-  @Post()
-  @UseGuards(JwtAuthGuard)
-  async addService(@Body() createServiceDto: CreateServiceDto, @Request() req: any) {
-    try {
-      const userId = req.user.userId;
-      const userRole = req.user.role;
-
-      if (userRole !== 'vendor') {
-        throw new HttpException(
-          'Only vendors can add services',
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      return await this.serviceService.createService(userId, createServiceDto);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to create service',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
 
   // 2. Delete Service - محمي بالـ JWT
   @Delete('/:serviceName')
@@ -65,38 +106,6 @@ export class ServiceController {
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to delete service',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  // 3. Update Service - محمي بالـ JWT
-  @Put('/:serviceName')
-  @UseGuards(JwtAuthGuard)
-  async updateServiceByName(
-    @Param('serviceName') serviceName: string,
-    @Body() updateServiceDto: UpdateServiceDto,
-    @Request() req: any
-  ) {
-    try {
-      const userId = req.user.userId;
-      const userRole = req.user.role;
-
-      if (userRole !== 'vendor') {
-        throw new HttpException(
-          'Only vendors can update services',
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      return await this.serviceService.updateServiceByName(
-        serviceName,
-        userId,
-        updateServiceDto
-      );
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to update service',
         error.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

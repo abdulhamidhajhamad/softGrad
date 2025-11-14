@@ -47,15 +47,12 @@ class _SignInScreenState extends State<SignInScreen> {
         final email = _emailController.text.trim();
         final password = _passwordController.text;
 
-        // استدعاء API الـ login
         final response = await AuthService.login(email, password);
 
-        // إذا كان الرد يحتوي على token و user، يعني Login ناجح
         if (response.containsKey('token') && response.containsKey('user')) {
           final userData = response['user'];
           final userName = userData['userName'] ?? 'Guest';
 
-          // Navigate to home screen and replace the current route
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
@@ -63,11 +60,10 @@ class _SignInScreenState extends State<SignInScreen> {
             ),
           );
         } else {
-          // إذا لم يكن هناك token أو user
           _showErrorDialog('Login failed. Please try again.');
         }
       } catch (e) {
-        // معالجة الأخطاء من API
+  
         String errorMessage = 'An error occurred. Please try again.';
         
         if (e.toString().contains('Invalid Email/Pass')) {

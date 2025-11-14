@@ -14,6 +14,8 @@ dependencies:
   path_provider: ^2.1.2
   share_plus: ^7.2.1
   pdf: ^3.10.7
+  image_picker: ^1.1.2
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
@@ -35,6 +37,7 @@ flutter:
     - assets/images/romantic1.png
     - assets/images/romantic2.png
     - assets/images/table.png
+    - assets/images/become_provider.png
 
   fonts:
     - family: Montserrat

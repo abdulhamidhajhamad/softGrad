@@ -1,4 +1,5 @@
 // lib/screens/edit_profile.dart
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile.dart'; // access User model and kAccentColor
@@ -18,6 +19,8 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  final _formKey = GlobalKey<FormState>();
+
   late TextEditingController _nameCtrl;
   late TextEditingController _emailCtrl;
   late TextEditingController _phoneCtrl;
@@ -44,13 +47,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
+  // Validate all fields before saving
   void _saveProfile() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile updated successfully')),
-    );
-    Navigator.pop(context);
+    if (_formKey.currentState!.validate()) {
+      // Only show success if all fields are valid
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile updated successfully')),
+      );
+      Navigator.pop(context);
+    }
   }
 
+  // Shared input decoration style
   InputDecoration _inputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
@@ -75,6 +83,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       focusedBorder: const OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(12)),
         borderSide: BorderSide(color: kAccentColor, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.red),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.red, width: 2),
+      ),
+      errorStyle: GoogleFonts.poppins(
+        color: Colors.red,
+        fontSize: 13,
       ),
     );
   }
@@ -108,85 +128,112 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   : Icons.dark_mode_outlined,
               color: textColor,
             ),
-            onPressed: () {
-              setState(() => _isDarkMode = !_isDarkMode);
-            },
+            onPressed: () => setState(() => _isDarkMode = !_isDarkMode),
           ),
         ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Full Name
-              TextField(
-                controller: _nameCtrl,
-                decoration: _inputDecoration('Full Name', Icons.person_outline),
-                style: TextStyle(color: textColor),
-              ),
-              const SizedBox(height: 16),
-
-              // Email
-              TextField(
-                controller: _emailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                decoration: _inputDecoration('Email', Icons.email_outlined),
-                style: TextStyle(color: textColor),
-              ),
-              const SizedBox(height: 16),
-
-              // Phone
-              TextField(
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration:
-                    _inputDecoration('Phone Number', Icons.phone_outlined),
-                style: TextStyle(color: textColor),
-              ),
-              const SizedBox(height: 16),
-
-              // Location (read-only)
-              TextField(
-                controller: _locationCtrl,
-                enabled: false,
-                decoration: _inputDecoration(
-                  'Location',
-                  Icons.location_on_outlined,
-                ).copyWith(
-                  suffixIcon:
-                      const Icon(Icons.lock_outline, color: Colors.grey),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Full Name
+                TextFormField(
+                  controller: _nameCtrl,
+                  decoration:
+                      _inputDecoration('Full Name', Icons.person_outline),
+                  style: TextStyle(color: textColor),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Please enter your full name';
+                    }
+                    return null;
+                  },
                 ),
-                style: TextStyle(color: textColor),
-              ),
+                const SizedBox(height: 16),
 
-              const SizedBox(height: 32),
+                // Email
+                TextFormField(
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: _inputDecoration('Email', Icons.email_outlined),
+                  style: TextStyle(color: textColor),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Please enter your email';
+                    }
+                    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                    if (!emailRegex.hasMatch(v.trim())) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
 
-              // Save button
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _saveProfile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kAccentColor,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                // Phone
+                TextFormField(
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration:
+                      _inputDecoration('Phone Number', Icons.phone_outlined),
+                  style: TextStyle(color: textColor),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Please enter your phone number';
+                    }
+                    if (v.length < 6) {
+                      return 'Please enter a valid phone number';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Location (locked, no validation)
+                TextFormField(
+                  controller: _locationCtrl,
+                  enabled: false,
+                  decoration: _inputDecoration(
+                    'Location',
+                    Icons.location_on_outlined,
+                  ).copyWith(
+                    suffixIcon:
+                        const Icon(Icons.lock_outline, color: Colors.grey),
+                  ),
+                  style: TextStyle(color: textColor),
+                ),
+
+                const SizedBox(height: 32),
+
+                // Save Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _saveProfile,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kAccentColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'Save Changes',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                  child: Text(
-                    'Save Changes',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

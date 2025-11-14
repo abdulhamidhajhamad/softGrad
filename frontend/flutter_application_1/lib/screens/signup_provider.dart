@@ -1,26 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class SignUpScreen extends StatefulWidget {
-  const SignUpScreen({Key? key}) : super(key: key);
+class SignUpProviderScreen extends StatefulWidget {
+  const SignUpProviderScreen({Key? key}) : super(key: key);
 
   @override
-  State<SignUpScreen> createState() => _SignUpScreenState();
+  State<SignUpProviderScreen> createState() => _SignUpProviderScreenState();
 }
 
-class _SignUpScreenState extends State<SignUpScreen> {
+class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
   // Form Key
   final _formKey = GlobalKey<FormState>();
 
   // Controllers
-  final _nameCtrl = TextEditingController();
+  final _brandCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
   final _otherCityCtrl = TextEditingController();
 
-  // Cities Dropdown
+  // Dropdowns
   final List<String> _cities = const [
     'Nablus',
     'Ramallah',
@@ -31,7 +32,38 @@ class _SignUpScreenState extends State<SignUpScreen> {
     'Other',
   ];
 
-  String? _selectedCity = "Nablus";
+  final List<String> _categories = const [
+    'Venues',
+    'Photographers',
+    'Catering',
+    'Cake',
+    'Flower Shops',
+    'Decor & Lighting',
+    'Music & Entertainment',
+    'Wedding Planners & Coordinators',
+    'Card Printing',
+    'Jewelry & Accessories',
+    'Car Rental & Transportation',
+    'Gift & Souvenir',
+  ];
+
+  final Map<String, IconData> _categoryIcons = {
+    'Venues': Icons.location_city_outlined,
+    'Photographers': Icons.camera_alt_outlined,
+    'Catering': Icons.restaurant_menu_outlined,
+    'Cake': Icons.cake_outlined,
+    'Flower Shops': Icons.local_florist_outlined,
+    'Decor & Lighting': Icons.light_mode_outlined,
+    'Music & Entertainment': Icons.music_note_outlined,
+    'Wedding Planners & Coordinators': Icons.event_available_outlined,
+    'Card Printing': Icons.print_outlined,
+    'Jewelry & Accessories': Icons.diamond_outlined,
+    'Car Rental & Transportation': Icons.directions_car_filled_outlined,
+    'Gift & Souvenir': Icons.card_giftcard_outlined,
+  };
+
+  String? _selectedCategory;
+  String? _selectedCity;
 
   // Password strength
   String _passwordStrengthLabel = "";
@@ -42,15 +74,17 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
+    _brandCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
+    _descCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
     _otherCityCtrl.dispose();
     super.dispose();
   }
 
+  // Colors
   static const kPrimaryButtonColor = Color.fromARGB(215, 20, 20, 215);
   static const kTextColor = Colors.black;
 
@@ -92,6 +126,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
       );
 
+  // Submit
   void _submit() {
     if (_formKey.currentState!.validate()) {
       Navigator.pushReplacementNamed(
@@ -102,7 +137,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
-  // ===== Password Strength Logic =====
+  // Password strength logic
   void _evaluatePasswordStrength(String password) {
     String label;
     Color color;
@@ -140,6 +175,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
+  // ===================== BUILD UI =====================
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
@@ -147,18 +183,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
 
-      // BACK BUTTON → يعود لصفحة choose_role
+      // Back Button
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.black,
-          ),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
 
@@ -176,7 +207,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Create Account as Customer',
+                  'Create Account as Provider',
                   style: GoogleFonts.poppins(
                     fontSize: 23,
                     fontWeight: FontWeight.w700,
@@ -184,7 +215,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     height: 0.8,
                   ),
                 ),
+
                 const SizedBox(height: 6),
+
                 Text(
                   'Join our wedding community in a few steps',
                   style: GoogleFonts.poppins(
@@ -195,24 +228,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 24),
 
-                // Full Name
-                _label('Full Name'),
+                // BRAND NAME
+                _label('Brand Name'),
                 const SizedBox(height: 8),
                 TextFormField(
                   autovalidateMode: AutovalidateMode.onUserInteraction,
-                  controller: _nameCtrl,
+                  controller: _brandCtrl,
                   decoration: _decor(
-                    hint: 'Enter your full name',
-                    icon: Icons.person_outline,
+                    hint: 'Enter your brand name',
+                    icon: Icons.storefront_outlined,
                   ),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Enter your name'
-                      : null,
+                  validator: (v) =>
+                      v == null || v.trim().isEmpty ? 'Enter brand name' : null,
                 ),
 
                 const SizedBox(height: 16),
 
-                // Email
+                // EMAIL
                 _label('Email'),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -220,13 +252,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   decoration: _decor(
-                    hint: 'you@example.com',
+                    hint: 'you@business.com',
                     icon: Icons.email_outlined,
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'Enter your email';
-                    }
+                    if (v == null || v.trim().isEmpty) return 'Enter email';
                     final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
                         .hasMatch(v.trim());
                     return ok ? null : 'Enter a valid email';
@@ -235,7 +265,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 16),
 
-                // Phone
+                // PHONE
                 _label('Phone Number'),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -253,33 +283,81 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 16),
 
-                // City Dropdown
+                // CATEGORY
+                _label('Category'),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  value: _selectedCategory,
+                  items: _categories.map((cat) {
+                    final iconData = _categoryIcons[cat];
+                    return DropdownMenuItem(
+                      value: cat,
+                      child: Row(
+                        children: [
+                          Icon(iconData, size: 18, color: kPrimaryButtonColor),
+                          const SizedBox(width: 8),
+                          Text(cat, style: GoogleFonts.poppins(fontSize: 14)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  decoration: _decor(
+                    hint: 'Select your category',
+                    icon: Icons.category_outlined,
+                  ),
+                  onChanged: (v) => setState(() => _selectedCategory = v),
+                  validator: (v) => v == null ? 'Select a category' : null,
+                ),
+
+                const SizedBox(height: 16),
+
+                // DESCRIPTION
+                _label('Business Description'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  controller: _descCtrl,
+                  maxLines: 4,
+                  maxLength: 2000,
+                  decoration: _decor(
+                    hint: 'Describe your services (max 200 words)',
+                    icon: Icons.description_outlined,
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Enter business description';
+                    }
+                    final words = v.trim().split(RegExp(r'\s+')).length;
+                    if (words > 200) return 'Max 200 words allowed';
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // CITY
                 _label('City'),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   autovalidateMode: AutovalidateMode.onUserInteraction,
                   value: _selectedCity,
                   items: _cities
-                      .map(
-                        (city) => DropdownMenuItem(
-                          value: city,
-                          child: Text(
-                            city,
-                            style: GoogleFonts.poppins(fontSize: 14),
-                          ),
-                        ),
-                      )
+                      .map((city) => DropdownMenuItem(
+                            value: city,
+                            child: Text(city,
+                                style: GoogleFonts.poppins(fontSize: 14)),
+                          ))
                       .toList(),
                   decoration: _decor(
-                    hint: 'Select your city',
+                    hint: "Select your city",
                     icon: Icons.location_city_outlined,
                   ),
-                  onChanged: (value) => setState(() => _selectedCity = value),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Select your city' : null,
+                  onChanged: (v) => setState(() => _selectedCity = v),
+                  validator: (v) => v == null ? 'Select your city' : null,
                 ),
 
-                if (_selectedCity == 'Other') ...[
+                if (_selectedCity == "Other") ...[
                   const SizedBox(height: 12),
                   TextFormField(
                     autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -289,7 +367,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       icon: Icons.edit_location_alt_outlined,
                     ),
                     validator: (v) {
-                      if (_selectedCity == 'Other' &&
+                      if (_selectedCity == "Other" &&
                           (v == null || v.trim().isEmpty)) {
                         return 'Please enter your city';
                       }
@@ -300,7 +378,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 16),
 
-                // Password
+                // PASSWORD
                 _label('Password'),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -312,9 +390,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     hint: '••••••••',
                     icon: Icons.lock_outline,
                     suffix: IconButton(
-                      onPressed: () {
-                        setState(() => _showPass = !_showPass);
-                      },
+                      onPressed: () => setState(() => _showPass = !_showPass),
                       icon: Icon(
                         _showPass
                             ? Icons.visibility_outlined
@@ -334,19 +410,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       minHeight: 6,
                       value: _strengthValue(),
                       backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        _passwordStrengthColor,
-                      ),
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(_passwordStrengthColor),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(
-                        Icons.bolt_rounded,
-                        size: 16,
-                        color: _passwordStrengthColor,
-                      ),
+                      Icon(Icons.bolt_rounded,
+                          size: 16, color: _passwordStrengthColor),
                       const SizedBox(width: 6),
                       Text(
                         'Password strength: $_passwordStrengthLabel',
@@ -362,7 +434,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 16),
 
-                // Confirm Password
+                // CONFIRM PASSWORD
                 _label('Confirm Password'),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -391,6 +463,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 24),
 
+                // SUBMIT BUTTON
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -404,7 +477,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ),
                     child: Text(
-                      'Sign up as Customer',
+                      'Sign up as Provider',
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w700,
                         fontSize: 16,

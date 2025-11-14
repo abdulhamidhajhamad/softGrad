@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'edit_profile.dart';
 import 'security_password.dart';
+import 'provider.dart';
 
 /// Simple user data model for the profile screen
 class User {
@@ -106,7 +107,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Account Info
             Text('Account Info', style: sectionTitleStyle),
             const SizedBox(height: 8),
             _SectionCard(
@@ -153,11 +153,107 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Settings
+            // Become a Provider section
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24.0),
+              child: Material(
+                color: _isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
+                elevation: 1,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _isDarkMode
+                        ? const Color(0xFF1E1E1E) // darker for dark mode
+                        : const Color.fromARGB(
+                            157, 198, 222, 249), // light blue for light mode
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _isDarkMode
+                            ? Colors.black.withOpacity(0.2)
+                            : Colors.black12.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.storefront_rounded,
+                        size: 36,
+                        color: _isDarkMode ? Colors.white : Colors.black,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Become a Provider',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color:
+                                    _isDarkMode ? Colors.white : Colors.black,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'List your wedding services and reach couples planning their big day.',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: _isDarkMode
+                                    ? Colors.white70
+                                    : Colors.black87,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: 180,
+                              height: 40,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: kAccentColor,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ProviderScreen(
+                                          isDarkMode: _isDarkMode),
+                                    ),
+                                  );
+                                },
+                                child: const Text(
+                                  'Switch to Provider Mode',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Settings Section
             Text('Settings', style: sectionTitleStyle),
             const SizedBox(height: 8),
 
-            // App Theme Selection
             Text('App Theme', style: sectionTitleStyle),
             const SizedBox(height: 8),
             Row(
@@ -220,7 +316,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   _NotificationToggleRow(
-                    title: 'Booking updates',
+                    title: 'Booking Updates',
                     subtitle:
                         'Notifications about confirmed bookings, changes, or cancellations.',
                     value: _bookingUpdates,
@@ -230,7 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     iconColor: iconColor,
                   ),
                   _NotificationToggleRow(
-                    title: 'Offers & discounts',
+                    title: 'Offers & Discounts',
                     subtitle:
                         'Promotions and vendor offers tailored to your plan.',
                     value: _offersAndDiscounts,
@@ -240,7 +336,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     iconColor: iconColor,
                   ),
                   _NotificationToggleRow(
-                    title: 'Reminders & checklist',
+                    title: 'Reminders & Checklist',
                     subtitle:
                         'Reminders about tasks, deadlines, and your wedding timeline.',
                     value: _remindersAndChecklist,
@@ -255,7 +351,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Security
+            // Security Section
             Text('Security', style: sectionTitleStyle),
             const SizedBox(height: 8),
             _SectionCard(
@@ -290,7 +386,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 },
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 22),
 
             // Sign Out
             ElevatedButton(
@@ -315,11 +411,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
             Center(
               child: Text(
                 'You can sign in again anytime using your email.',
-                style: bodyStyle,
+                style: bodyStyle.copyWith(fontSize: 13),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -330,6 +426,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+// ---------------- Helper Widgets ----------------
+
 class _ProfileHeader extends StatelessWidget {
   final User user;
   final Color textPrimary;
@@ -338,41 +436,24 @@ class _ProfileHeader extends StatelessWidget {
   final bool isDarkMode;
 
   const _ProfileHeader({
-    Key? key,
     required this.user,
     required this.textPrimary,
     required this.textSecondary,
     required this.iconColor,
     required this.isDarkMode,
-  }) : super(key: key);
-
-  String _getInitials(String fullName) {
-    final parts = fullName.trim().split(' ');
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-    return (parts.first.characters.first + parts.last.characters.first)
-        .toUpperCase();
-  }
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         CircleAvatar(
-          radius: 32,
-          backgroundColor: kAccentColor.withOpacity(0.15),
-          backgroundImage: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
-              ? NetworkImage(user.avatarUrl!)
-              : null,
-          child: user.avatarUrl == null || user.avatarUrl!.isEmpty
-              ? Text(
-                  _getInitials(user.fullName),
-                  style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: kAccentColor,
-                  ),
-                )
+          radius: 36,
+          backgroundImage:
+              user.avatarUrl != null ? NetworkImage(user.avatarUrl!) : null,
+          backgroundColor: isDarkMode ? Colors.white12 : Colors.grey.shade200,
+          child: user.avatarUrl == null
+              ? Icon(Icons.person, size: 40, color: iconColor)
               : null,
         ),
         const SizedBox(width: 16),
@@ -380,31 +461,19 @@ class _ProfileHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                user.fullName,
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: textPrimary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              Text(user.fullName,
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary)),
               const SizedBox(height: 4),
-              Text(
-                user.email,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: textSecondary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              Text(user.email,
+                  style: TextStyle(fontSize: 14, color: textSecondary)),
             ],
           ),
         ),
-        const SizedBox(width: 8),
-        TextButton.icon(
+        IconButton(
+          icon: Icon(Icons.edit, color: iconColor),
           onPressed: () {
             Navigator.push(
               context,
@@ -416,19 +485,6 @@ class _ProfileHeader extends StatelessWidget {
               ),
             );
           },
-          style: TextButton.styleFrom(
-            foregroundColor: kAccentColor,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          ),
-          icon: const Icon(Icons.edit_outlined, size: 18, color: kAccentColor),
-          label: Text(
-            'Edit',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: kAccentColor,
-            ),
-          ),
         ),
       ],
     );
@@ -436,20 +492,17 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  final Widget child;
   final Color backgroundColor;
-  const _SectionCard(
-      {Key? key, required this.child, required this.backgroundColor})
-      : super(key: key);
+  final Widget child;
+  const _SectionCard({required this.backgroundColor, required this.child});
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: backgroundColor,
-      borderRadius: BorderRadius.circular(20),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: child,
+    return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
       ),
+      child: child,
     );
   }
 }
@@ -462,40 +515,21 @@ class _InfoRow extends StatelessWidget {
   final Color textSecondary;
   final Color iconColor;
   const _InfoRow({
-    Key? key,
     required this.icon,
     required this.label,
     required this.value,
     required this.textPrimary,
     required this.textSecondary,
     required this.iconColor,
-  }) : super(key: key);
+  });
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Icon(icon, color: iconColor),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: GoogleFonts.poppins(
-                        fontSize: 12, color: textSecondary)),
-                const SizedBox(height: 2),
-                Text(value,
-                    style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: textPrimary)),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return ListTile(
+      leading: Icon(icon, color: iconColor),
+      title: Text(label, style: TextStyle(fontSize: 14, color: textSecondary)),
+      subtitle: Text(value,
+          style: TextStyle(
+              fontSize: 15, fontWeight: FontWeight.w500, color: textPrimary)),
     );
   }
 }
@@ -510,7 +544,6 @@ class _NotificationToggleRow extends StatelessWidget {
   final Color iconColor;
 
   const _NotificationToggleRow({
-    Key? key,
     required this.title,
     required this.subtitle,
     required this.value,
@@ -518,37 +551,32 @@ class _NotificationToggleRow extends StatelessWidget {
     required this.textPrimary,
     required this.textSecondary,
     required this.iconColor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     return SwitchListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       value: value,
       onChanged: onChanged,
-      activeColor: kAccentColor,
       title: Text(title,
-          style: GoogleFonts.poppins(
-              fontSize: 14, fontWeight: FontWeight.w500, color: textPrimary)),
-      subtitle: Text(subtitle,
-          style: GoogleFonts.poppins(fontSize: 12, color: textSecondary)),
-      secondary: Icon(Icons.checklist_outlined, color: iconColor),
+          style: TextStyle(fontWeight: FontWeight.w500, color: textPrimary)),
+      subtitle:
+          Text(subtitle, style: TextStyle(fontSize: 12, color: textSecondary)),
+      activeColor: kAccentColor,
     );
   }
 }
 
-// === Theme Button ===
 class _ThemeButton extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   const _ThemeButton({
-    Key? key,
     required this.label,
     required this.selected,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -556,20 +584,16 @@ class _ThemeButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          height: 40,
-          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: selected ? kAccentColor : Colors.transparent,
-            border: Border.all(
-              color: selected ? kAccentColor : Colors.grey.shade400,
-            ),
-            borderRadius: BorderRadius.circular(24),
+            color: selected ? kAccentColor : Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(10),
           ),
+          alignment: Alignment.center,
           child: Text(
             label,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: selected ? Colors.white : Colors.grey.shade800,
+            style: TextStyle(
+              color: selected ? Colors.white : Colors.black87,
               fontWeight: FontWeight.w500,
             ),
           ),

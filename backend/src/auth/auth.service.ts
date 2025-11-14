@@ -35,57 +35,67 @@ export class AuthService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  async signUp(signUpDto: SignUpDto): Promise<{ message: string; email: string }> {
-    const { userName, email, password, phone, city, role, imageUrl } = signUpDto;
-    
-    // Validate role
-    const allowedRoles = ['client', 'vendor', 'admin'];
-    if (!allowedRoles.includes(role)) {
-      throw new ForbiddenException(`Role must be one of: ${allowedRoles.join(', ')}`);
-    }
 
-    // Check if user already exists
-    const existingUser = await this.userModel.findOne({ email }).exec();
-    if (existingUser) {
-      throw new ConflictException('Email already exists');
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Generate verification code and expiration (15 minutes from now)
-    const verificationCode = this.generateVerificationCode();
-    const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-    // Create user
-    const user = new this.userModel({
-      userName,
-      email,
-      password: hashedPassword,
-      phone,
-      city,
-      role,
-      imageUrl,
-      isVerified: false,
-      verificationCode,
-      verificationCodeExpires,
-    });
-
-    await user.save();
-
-    // Send verification email
-    try {
-      await this.mailService.sendVerificationEmail(email, verificationCode);
-    } catch (error) {
-      console.error('Failed to send verification email:', error);
-      // Don't fail registration if email fails, but log it
-    }
-
-    return {
-      message: 'User registered successfully. Please check your email for verification code.',
-      email: user.email,
-    };
+  private generateDefaultAvatar(userName: string): string {
+  const initials = this.getUserInitials(userName);
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=0D8ABC&color=fff&size=128`;
+}
+  private getUserInitials(userName: string): string {
+  if (!userName) return 'U';
+  
+  const names = userName.trim().split(/\s+/);
+  
+  if (names.length === 1) {
+    return userName.substring(0, 2).toUpperCase();
+  } else {
+    return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
   }
+}
+  async signUp(signUpDto: SignUpDto): Promise<{ message: string; email: string }> {
+  const { userName, email, password, phone, city, imageUrl } = signUpDto;
+  // Set default role to 'user'
+  const role = 'user';
+  // Check if user already exists
+  const existingUser = await this.userModel.findOne({ email }).exec();
+  if (existingUser) {
+    throw new ConflictException('Email already exists');
+  }
+  // Hash password
+  const hashedPassword = await bcrypt.hash(password, 10);
+  // Generate verification code and expiration (15 minutes from now)
+  const verificationCode = this.generateVerificationCode();
+  const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+  const finalImageUrl = imageUrl || this.generateDefaultAvatar(userName);
+  // Create user
+  const user = new this.userModel({
+    userName,
+    email,
+    password: hashedPassword,
+    phone,
+    city,
+    role,
+    imageUrl: finalImageUrl,
+    isVerified: false,
+    verificationCode,
+    verificationCodeExpires,
+  });
+
+  await user.save();
+
+  // Send verification email
+  try {
+    await this.mailService.sendVerificationEmail(email, verificationCode);
+  } catch (error) {
+    console.error('Failed to send verification email:', error);
+    // Don't fail registration if email fails, but log it
+  }
+
+  return {
+    message: 'User registered successfully. Please check your email for verification code.',
+    email: user.email,
+  };
+}
+
 
   // ✅ NEW: Verify email with code
   async verifyEmail(verifyEmailDto: VerifyEmailDto): Promise<{ token: string; user: any }> {

@@ -1,20 +1,22 @@
-// src/booking/booking.entity.ts
-
 import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
-import { User } from '../auth/user.entity'; 
-import { Service } from '../service/service.entity'; 
 
-// FIX: Export the User and Service Document types here
-export type UserDocument = User & Document;
-export type ServiceDocument = Service & Document;
-
-export enum BookingStatus {
-  PENDING = 'pending',
-  CONFIRMED = 'confirmed',
+export enum PaymentStatus {
+  SUCCESSFUL = 'successful',
   CANCELLED = 'cancelled',
-  COMPLETED = 'completed',
 }
+
+// Subdocument for service items in booking
+@Schema({ _id: false })
+export class BookingServiceItem {
+  @Prop({ required: true })
+  serviceId: string;
+
+  @Prop({ type: Date, required: true })
+  bookingDate: Date;
+}
+
+const BookingServiceItemSchema = SchemaFactory.createForClass(BookingServiceItem);
 
 @Schema({ 
   collection: 'bookings', 
@@ -23,44 +25,23 @@ export enum BookingStatus {
   toObject: { virtuals: true } 
 })
 export class Booking extends Document {
+  @Prop({ required: true })
+  userId: string;
 
-  @Prop({ required: true, ref: 'User' })
-  userId: number; 
+  @Prop({ type: [BookingServiceItemSchema], default: [] })
+  services: BookingServiceItem[];
 
-  @Prop({ required: true, ref: 'Service' })
-  serviceId: number; 
-
-  @Prop({ type: Date, required: true })
-  bookingDate: Date;
+  @Prop({ type: Number, required: true, min: 0 })
+  totalAmount: number;
 
   @Prop({
     type: String,
-    enum: Object.values(BookingStatus),
-    default: BookingStatus.PENDING,
+    enum: Object.values(PaymentStatus),
+    required: true,
   })
-  status: BookingStatus;
-
-  @Prop({ type: Number, required: true })
-  totalPrice: number;
-
-  user?: User;
-  service?: Service;
+  paymentStatus: PaymentStatus;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);
-
-BookingSchema.virtual('user', {
-  ref: 'User',
-  localField: 'userId',
-  foreignField: 'id', 
-  justOne: true,
-});
-
-BookingSchema.virtual('service', {
-  ref: 'Service',
-  localField: 'serviceId',
-  foreignField: 'serviceId', 
-  justOne: true,
-});
 
 export type BookingDocument = Booking & Document;

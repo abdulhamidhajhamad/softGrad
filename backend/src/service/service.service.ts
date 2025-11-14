@@ -11,79 +11,79 @@ export class ServiceService {
   ) {}
 
   // 1. Create Service (Only Vendors)
-  async createService(providerId: string, createServiceDto: CreateServiceDto): Promise<Service> {
-    try {
-      console.log('📦 Received createServiceDto:', JSON.stringify(createServiceDto, null, 2));
-      console.log('👤 Provider ID:', providerId);
+// في دالة createService، تأكد من تعيين الرايتنج الافتراضي
+async createService(providerId: string, createServiceDto: CreateServiceDto): Promise<Service> {
+  try {
+    console.log('📦 Received createServiceDto:', JSON.stringify(createServiceDto, null, 2));
+    console.log('👤 Provider ID:', providerId);
 
-      // تحقق إذا كان في خدمة بنفس الاسم لنفس المزود
-      const existingService = await this.serviceModel.findOne({ 
-        serviceName: createServiceDto.serviceName,
-        providerId 
-      });
+    // تحقق إذا كان في خدمة بنفس الاسم لنفس المزود
+    const existingService = await this.serviceModel.findOne({ 
+      serviceName: createServiceDto.serviceName,
+      providerId 
+    });
 
-      if (existingService) {
-        console.log('❌ Service already exists:', createServiceDto.serviceName);
-        throw new HttpException(
-          'Service with this name already exists',
-          HttpStatus.CONFLICT
-        );
-      }
-
-      // 🔄 تحديد companyName
-      let companyName = createServiceDto.companyName;
-      
-      // إذا لم يرسل companyName، استخدم الافتراضي
-      if (!companyName) {
-        companyName = `Vendor-${providerId.substring(0, 8)}`;
-        console.log('🏢 Using default company name:', companyName);
-      }
-
-      console.log('🏢 Final company name:', companyName);
-
-      const newServiceData = {
-        providerId,
-        companyName,
-        ...createServiceDto,
-        reviews: []
-      };
-
-      console.log('🔄 Creating service with data:', JSON.stringify(newServiceData, null, 2));
-
-      const newService = new this.serviceModel(newServiceData);
-      const savedService = await newService.save();
-      
-      console.log('✅ Service created successfully:', savedService._id);
-      return savedService;
-
-    } catch (error) {
-      console.error('💥 ERROR in createService:', error);
-      
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      
-      if (error.name === 'ValidationError') {
-        console.log('MongoDB Validation Error:', error.errors);
-        throw new HttpException(
-          `Validation error: ${Object.values(error.errors).map((e: any) => e.message).join(', ')}`,
-          HttpStatus.BAD_REQUEST
-        );
-      }
-
-      if (error.code === 11000) {
-        throw new HttpException(
-          'Service with this name already exists',
-          HttpStatus.CONFLICT
-        );
-      }
-
+    if (existingService) {
+      console.log('❌ Service already exists:', createServiceDto.serviceName);
       throw new HttpException(
-        error.message || 'Failed to create service',
-        HttpStatus.INTERNAL_SERVER_ERROR
+        'Service with this name already exists',
+        HttpStatus.CONFLICT
       );
     }
+
+    let companyName = createServiceDto.companyName;
+    
+    if (!companyName) {
+      companyName = `Vendor-${providerId.substring(0, 8)}`;
+      console.log('🏢 Using default company name:', companyName);
+    }
+
+    console.log('🏢 Final company name:', companyName);
+
+    const newServiceData = {
+      providerId,
+      companyName,
+      ...createServiceDto,
+      reviews: [],
+      rating: createServiceDto.rating || 0 // ✅ تعيين الرايتنج الافتراضي
+    };
+
+    console.log('🔄 Creating service with data:', JSON.stringify(newServiceData, null, 2));
+
+    const newService = new this.serviceModel(newServiceData);
+    const savedService = await newService.save();
+    
+    console.log('✅ Service created successfully:', savedService._id);
+    return savedService;
+
+  } catch (error) {
+    console.error('💥 ERROR in createService:', error);
+    
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    
+    if (error.name === 'ValidationError') {
+      console.log('MongoDB Validation Error:', error.errors);
+      throw new HttpException(
+        `Validation error: ${Object.values(error.errors).map((e: any) => e.message).join(', ')}`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (error.code === 11000) {
+      throw new HttpException(
+        'Service with this name already exists',
+        HttpStatus.CONFLICT
+      );
+    }
+
+    throw new HttpException(
+      error.message || 'Failed to create service',
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
   }
+}
 
   // 2. Delete Service by Name
   async deleteServiceByName(serviceName: string, providerId: string): Promise<{ message: string }> {
@@ -288,7 +288,7 @@ export class ServiceService {
   async getServicesByCategory(category: string): Promise<Service[]> {
     try {
       const services = await this.serviceModel.find({
-        'additionalInfo.category': { $regex: category, $options: 'i' }
+        category: { $regex: category, $options: 'i' }
       }).exec();
 
       if (!services || services.length === 0) {
@@ -318,5 +318,109 @@ export class ServiceService {
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+  }
+
+  // 11. Search services by city
+  async searchServicesByCity(city: string): Promise<Service[]> {
+    try {
+      const services = await this.serviceModel.find({
+        'location.city': { $regex: city, $options: 'i' }
+      }).exec();
+
+      if (!services || services.length === 0) {
+        throw new HttpException(
+          `No services found in city '${city}'`,
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      return services;
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to search services by city',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // البحث المتعدد بالفلترة
+  async searchServices(filters: any): Promise<Service[]> {
+    try {
+      let query: any = {};
+
+      // فلترة بالمدينة
+      if (filters.city) {
+        query['location.city'] = { $regex: filters.city, $options: 'i' };
+      }
+
+      // فلترة برينج السعر
+      if (filters.priceRange) {
+        query.price = {
+          $gte: filters.priceRange.min,
+          $lte: filters.priceRange.max
+        };
+      }
+
+      // فلترة بالتصنيف
+      if (filters.category) {
+        query.category = { $regex: filters.category, $options: 'i' };
+      }
+
+      // فلترة باسم السيرفس
+      if (filters.serviceName) {
+        query.serviceName = { $regex: filters.serviceName, $options: 'i' };
+      }
+
+      // فلترة باسم الشركة
+      if (filters.companyName) {
+        query.companyName = { $regex: filters.companyName, $options: 'i' };
+      }
+
+      // فلترة بالموقع (إذا كان بالإحداثيات)
+      if (filters.location) {
+        const { lat, lng, radius } = filters.location;
+        
+        // Calculate rough bounding box for faster filtering
+        const latDelta = radius / 111;
+        const lonDelta = radius / (111 * Math.cos(lat * Math.PI / 180));
+
+        query['location.latitude'] = {
+          $gte: lat - latDelta,
+          $lte: lat + latDelta
+        };
+        query['location.longitude'] = {
+          $gte: lng - lonDelta,
+          $lte: lng + lonDelta
+        };
+
+        const services = await this.serviceModel.find(query).exec();
+        // Filter by exact distance using Haversine formula
+        return services.filter(service => {
+          const distance = this.calculateDistance(
+            lat,
+            lng,
+            service.location.latitude,
+            service.location.longitude
+          );
+          return distance <= radius;
+        });
+      }
+      // إذا ما في فلترة موقع، استخدم البحث العادي
+      const services = await this.serviceModel.find(query).exec();
+
+      if (!services || services.length === 0) {
+        throw new HttpException(
+          'No services found matching your criteria',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      return services;
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to search services',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }

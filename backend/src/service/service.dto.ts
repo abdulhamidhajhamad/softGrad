@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsArray, IsOptional, IsObject, IsNotEmpty, Min } from 'class-validator';
+import { IsString, IsNumber, IsArray, IsOptional, IsObject, IsNotEmpty, Min, IsDate, MinLength, Max } from 'class-validator';
 
 export class LocationDto {
   @IsNumber()
@@ -39,13 +39,28 @@ export class CreateServiceDto {
   @Min(0)
   price: number;
 
+  @IsString()
+  @IsNotEmpty()
+  category: string;
+
   @IsOptional()
   additionalInfo?: any;
 
-  // 🔄 أضف هذا الحقل الجديد
   @IsString()
   @IsOptional()
   companyName?: string;
+
+  @IsArray()
+  @IsOptional()
+  @IsDate({ each: true })
+  bookedDates?: Date[];
+
+  // ✅ إضافة الرايتنج الافتراضي
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  @IsOptional()
+  rating?: number;
 }
 
 export class UpdateServiceDto {
@@ -66,13 +81,28 @@ export class UpdateServiceDto {
   @IsOptional()
   price?: number;
 
+  @IsString()
+  @IsOptional()
+  category?: string;
+
   @IsOptional()
   additionalInfo?: any;
 
-  // 🔄 أضف هذا الحقل الجديد
   @IsString()
   @IsOptional()
   companyName?: string;
+
+  @IsArray()
+  @IsOptional()
+  @IsDate({ each: true })
+  bookedDates?: Date[];
+
+  // ✅ إضافة الرايتنج للتحديث
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  @IsOptional()
+  rating?: number;
 }
 
 export class ServiceResponseDto {
@@ -83,10 +113,11 @@ export class ServiceResponseDto {
   reviews: any[];
   location: any;
   price: number;
+  category: string;
   additionalInfo?: any;
   createdAt: Date;
   updatedAt: Date;
-  
-  // 🔄 أضف هذا الحقل الجديد
   companyName?: string;
+  bookedDates: Date[];
+  rating: number; // ✅ إضافة الرايتنج للاستجابة
 }

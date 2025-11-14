@@ -1,8 +1,11 @@
+// lib/screens/verification.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Email verification screen with OTP input
+import 'home.dart';
+import 'home_provider.dart';
+
 class VerificationScreen extends StatefulWidget {
   const VerificationScreen({Key? key}) : super(key: key);
 
@@ -11,34 +14,112 @@ class VerificationScreen extends StatefulWidget {
 }
 
 class _VerificationScreenState extends State<VerificationScreen> {
-  // Controllers for OTP input fields
+  // OTP Text Controllers
   final List<TextEditingController> _controllers =
-      List.generate(6, (index) => TextEditingController());
+      List.generate(6, (_) => TextEditingController());
 
-  // Focus nodes for field navigation
-  final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
+  // Focus nodes for automatic movement
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   @override
   void dispose() {
-    for (var controller in _controllers) {
-      controller.dispose();
+    for (final c in _controllers) {
+      c.dispose();
     }
-    for (var node in _focusNodes) {
-      node.dispose();
+    for (final n in _focusNodes) {
+      n.dispose();
     }
     super.dispose();
   }
 
-  // Verify OTP and navigate to home
+  // ===========================================================
+  // NAVIGATE BASED ON ROLE
+  // ===========================================================
+  void _goToHome({
+    required String role,
+    required String name,
+    required String email,
+    required String phone,
+    required String category,
+    required String description,
+    required String city,
+  }) {
+    if (role.toLowerCase() == "customer") {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HomePage(userName: name),
+        ),
+        (_) => false,
+      );
+    } else {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HomeProviderScreen(
+            provider: ProviderModel(
+              brandName: name,
+              email: email,
+              phone: phone,
+              category: category,
+              description: description,
+              city: city,
+            ),
+          ),
+        ),
+        (_) => false,
+      );
+    }
+  }
+
+  // ===========================================================
+  // VERIFY EMAIL
+  // ===========================================================
   void _verifyEmail() {
+    final args = ModalRoute.of(context)?.settings.arguments;
+
+    // Defaults
+    String email = "example@mail.com";
+    String role = "customer";
+    String name = "Guest";
+
+    // Provider fields
+    String category = "";
+    String description = "";
+    String city = "";
+    String phone = "";
+
+    // Extract arguments
+    if (args is Map) {
+      email = args["email"] ?? email;
+      role = args["role"] ?? role;
+      name = args["name"] ?? name;
+
+      category = args["category"] ?? "";
+      description = args["description"] ?? "";
+      city = args["city"] ?? "";
+      phone = args["phone"] ?? "";
+    } else if (args is String) {
+      email = args;
+    }
+
     String code = _controllers.map((c) => c.text).join();
+
     if (code.length == 6) {
-      Navigator.pushReplacementNamed(context, '/home');
+      _goToHome(
+        role: role,
+        name: name,
+        email: email,
+        phone: phone,
+        category: category,
+        description: description,
+        city: city,
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please enter the complete code',
+            "Please enter the complete code",
             style: GoogleFonts.poppins(),
           ),
           backgroundColor: Colors.red,
@@ -47,11 +128,16 @@ class _VerificationScreenState extends State<VerificationScreen> {
     }
   }
 
-  // Resend OTP logic (mock)
+  // ===========================================================
+  // RESEND OTP
+  // ===========================================================
   void _resendCode() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Code resent successfully', style: GoogleFonts.poppins()),
+        content: Text(
+          "Code resent successfully",
+          style: GoogleFonts.poppins(),
+        ),
         backgroundColor: const Color.fromARGB(215, 20, 20, 215),
       ),
     );
@@ -59,30 +145,83 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String? email = ModalRoute.of(context)?.settings.arguments as String?;
+    final args = ModalRoute.of(context)?.settings.arguments;
+
+    // Defaults
+    String email = "example@mail.com";
+    String role = "customer";
+    String name = "Guest";
+
+    // Provider fields
+    String category = "";
+    String description = "";
+    String city = "";
+    String phone = "";
+
+    // Extract arguments
+    if (args is Map) {
+      email = args["email"] ?? email;
+      role = args["role"] ?? role;
+      name = args["name"] ?? name;
+
+      category = args["category"] ?? "";
+      description = args["description"] ?? "";
+      city = args["city"] ?? "";
+      phone = args["phone"] ?? "";
+    } else if (args is String) {
+      email = args;
+    }
 
     return WillPopScope(
-      // Handle Android back button
       onWillPop: () async {
         Navigator.pushReplacementNamed(context, '/signup');
         return false;
       },
       child: Scaffold(
         backgroundColor: Colors.white,
+
+        // AppBar
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new),
-            color: const Color(0xFF1A1A2E),
+            color: Colors.black87,
             onPressed: () => Navigator.pushReplacementNamed(context, '/signup'),
           ),
+
+          // Skip button
+          actions: [
+            TextButton(
+              onPressed: () {
+                _goToHome(
+                  role: role,
+                  name: name,
+                  email: email,
+                  phone: phone,
+                  category: category,
+                  description: description,
+                  city: city,
+                );
+              },
+              child: Text(
+                "Skip",
+                style: GoogleFonts.poppins(
+                  color: const Color.fromARGB(215, 20, 20, 215),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
         ),
+
+        // BODY
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // Title
                 Text(
@@ -90,27 +229,25 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   style: GoogleFonts.poppins(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1A1A2E),
+                    color: Colors.black,
                   ),
                 ),
 
                 const SizedBox(height: 16),
 
-                // Subtitle with email info
+                // Subtitle
                 RichText(
                   textAlign: TextAlign.center,
                   text: TextSpan(
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      color: Colors.grey.shade600,
-                    ),
+                    style:
+                        GoogleFonts.poppins(fontSize: 16, color: Colors.grey),
                     children: [
                       const TextSpan(text: 'We sent a code to '),
                       TextSpan(
-                        text: email ?? 'wazanitamara@gmail.com',
+                        text: email,
                         style: GoogleFonts.poppins(
                           fontWeight: FontWeight.w600,
-                          color: const Color(0xFF1A1A2E),
+                          color: Colors.black,
                         ),
                       ),
                     ],
@@ -119,66 +256,40 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
                 const SizedBox(height: 48),
 
-                // OTP input fields
+                // OTP Fields
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(6, (index) {
+                  children: List.generate(6, (i) {
                     return Container(
                       width: 50,
                       height: 60,
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       child: TextFormField(
-                        controller: _controllers[index],
-                        focusNode: _focusNodes[index],
+                        controller: _controllers[i],
+                        focusNode: _focusNodes[i],
                         textAlign: TextAlign.center,
                         keyboardType: TextInputType.number,
                         maxLength: 1,
                         style: GoogleFonts.poppins(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF1A1A2E),
                         ),
                         decoration: InputDecoration(
                           counterText: '',
                           filled: true,
-                          fillColor: index == 0
-                              ? const Color.fromARGB(215, 20, 20, 215)
-                                  .withOpacity(0.1)
-                              : Colors.grey.shade50,
+                          fillColor: Colors.grey.shade100,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: index == 0
-                                  ? const Color.fromARGB(215, 20, 20, 215)
-                                  : Colors.grey.shade300,
-                              width: 2,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: index == 0
-                                  ? const Color.fromARGB(215, 20, 20, 215)
-                                  : Colors.grey.shade300,
-                              width: 2,
-                            ),
-                          ),
-                          focusedBorder: const OutlineInputBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(12)),
-                            borderSide: BorderSide(
-                              color: Color.fromARGB(215, 20, 20, 215),
-                              width: 2,
-                            ),
                           ),
                         ),
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly
                         ],
                         onChanged: (value) {
-                          if (value.isNotEmpty && index < 5) {
-                            _focusNodes[index + 1].requestFocus();
-                          } else if (value.isEmpty && index > 0) {
-                            _focusNodes[index - 1].requestFocus();
+                          if (value.isNotEmpty && i < 5) {
+                            _focusNodes[i + 1].requestFocus();
+                          } else if (value.isEmpty && i > 0) {
+                            _focusNodes[i - 1].requestFocus();
                           }
                         },
                       ),
@@ -188,7 +299,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
                 const SizedBox(height: 48),
 
-                // Verify button
+                // Verify Button
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -197,7 +308,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color.fromARGB(215, 20, 20, 215),
                       foregroundColor: Colors.white,
-                      elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -214,7 +324,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
                 const SizedBox(height: 24),
 
-                // Resend code section
+                // Resend
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

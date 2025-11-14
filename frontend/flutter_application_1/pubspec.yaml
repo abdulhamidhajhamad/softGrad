@@ -26,6 +26,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/categories/
     - assets/images/classic.png
     - assets/images/classic1.png
     - assets/images/classic2.png

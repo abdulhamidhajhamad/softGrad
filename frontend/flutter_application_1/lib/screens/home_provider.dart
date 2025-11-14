@@ -65,17 +65,17 @@ class HomeProviderScreen extends StatelessWidget {
                 "WELCOME",
                 style: GoogleFonts.poppins(
                   fontSize: 14,
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.w700,
                   color: Colors.grey.shade700,
                 ),
               ),
               const SizedBox(height: 1),
               Text(
-                "${provider.brandName} ♡",
+                "♡",
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
                   fontSize: 20,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w900,
                   color: kTextColor,
                 ),
               ),

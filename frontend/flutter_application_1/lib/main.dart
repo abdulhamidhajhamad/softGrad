@@ -8,7 +8,7 @@ import 'package:flutter_application_1/screens/signup_provider.dart';
 import 'package:flutter_application_1/screens/signup_customer.dart';
 import 'package:flutter_application_1/screens/signin.dart';
 import 'package:flutter_application_1/screens/verification.dart';
-import 'package:flutter_application_1/screens/home.dart';
+import 'package:flutter_application_1/screens/home_customer.dart';
 import 'package:flutter_application_1/screens/vendors.dart';
 import 'package:flutter_application_1/screens/templates.dart';
 import 'package:flutter_application_1/screens/template_editor.dart';

@@ -1,5 +1,4 @@
 // lib/screens/home_provider.dart
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -7,6 +6,10 @@ import 'package:google_fonts/google_fonts.dart';
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
+
+// Orange color for contact icons
+const Color kContactIconColor = Color(0xFFFF7A00);
+const Color kContactCircleColor = Color(0xFFFFE6CC);
 
 /// Provider Data Model (FINAL VERSION)
 class ProviderModel {
@@ -53,37 +56,46 @@ class HomeProviderScreen extends StatelessWidget {
         appBar: AppBar(
           backgroundColor: kBackgroundColor,
           elevation: 0,
-          centerTitle: false,
-          title: Text(
-            "Welcome, ${provider.brandName}",
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: kTextColor,
-            ),
+          centerTitle: true,
+          toolbarHeight: 80,
+          title: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "WELCOME",
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                "${provider.brandName} ♡",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: kTextColor,
+                ),
+              ),
+            ],
           ),
         ),
-
-        // Support Button
         floatingActionButton: FloatingActionButton(
           backgroundColor: kPrimaryColor,
           onPressed: () {},
           child: const Icon(Icons.support_agent, color: Colors.white),
         ),
-
         body: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 1),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _HeaderCard(provider: provider),
-              const SizedBox(height: 20),
-
-              // ============================
-              // Stats
-              // ============================
+              ModernHeaderCard(provider: provider),
+              const SizedBox(height: 25),
               Text(
-                "Your Stats",
+                "Business Performance",
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -91,7 +103,6 @@ class HomeProviderScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-
               GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
@@ -122,12 +133,7 @@ class HomeProviderScreen extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 25),
-
-              // ============================
-              // Quick Actions
-              // ============================
               Text(
                 "Quick Actions",
                 style: GoogleFonts.poppins(
@@ -137,38 +143,30 @@ class HomeProviderScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-
               _ActionButton(
                 title: "Edit Profile",
                 icon: Icons.edit,
                 onTap: () {},
               ),
               const SizedBox(height: 12),
-
               _ActionButton(
-                title: "Add New Service",
+                title: "Services",
                 icon: Icons.add_circle,
                 onTap: () {},
               ),
               const SizedBox(height: 12),
-
               _ActionButton(
-                title: "View Messages",
+                title: "Messages",
                 icon: Icons.chat_bubble,
                 onTap: () {},
               ),
               const SizedBox(height: 12),
-
               _ActionButton(
                 title: "Manage Bookings",
                 icon: Icons.event_available,
                 onTap: () {},
               ),
               const SizedBox(height: 30),
-
-              // ============================
-              // Tips
-              // ============================
               Text(
                 "Grow Your Business",
                 style: GoogleFonts.poppins(
@@ -178,7 +176,6 @@ class HomeProviderScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-
               SizedBox(
                 height: 150,
                 child: ListView(
@@ -191,7 +188,6 @@ class HomeProviderScreen extends StatelessWidget {
                   ],
                 ),
               ),
-
               const SizedBox(height: 30),
             ],
           ),
@@ -201,108 +197,194 @@ class HomeProviderScreen extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// Header Card
-// ============================================================================
-class _HeaderCard extends StatelessWidget {
+/// ============================================================================
+/// CATEGORY → ICON MAPPER
+/// ============================================================================
+IconData mapCategoryToIcon(String category) {
+  switch (category.toLowerCase()) {
+    case "flowers":
+      return Icons.local_florist;
+    case "makeup":
+      return Icons.brush;
+    case "hair":
+      return Icons.cut;
+    case "dj":
+      return Icons.music_note;
+    case "hall":
+      return Icons.location_city;
+    case "dress":
+      return Icons.checkroom;
+    case "photography":
+      return Icons.camera_alt;
+    case "cake":
+      return Icons.cake;
+    case "decor":
+      return Icons.chair_alt;
+    case "video":
+      return Icons.videocam;
+    default:
+      return Icons.business_center;
+  }
+}
+
+/// ============================================================================
+/// Modern Header Card (With Edit Profile button added)
+/// ============================================================================
+class ModernHeaderCard extends StatelessWidget {
   final ProviderModel provider;
 
-  const _HeaderCard({required this.provider});
+  const ModernHeaderCard({Key? key, required this.provider}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final IconData dynamicIcon = mapCategoryToIcon(provider.category);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: kBackgroundColor,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.shade200,
-            blurRadius: 8,
-            spreadRadius: 2,
-            offset: const Offset(0, 2),
-          )
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: kPrimaryColor.withOpacity(0.1),
-            child: Icon(
-              Icons.business_center,
-              size: 32,
-              color: kPrimaryColor,
+          // TOP ROW = icon + brand name + category + EDIT PROFILE BUTTON
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 32,
+                backgroundColor: const Color(0xFFF2F2FF),
+                child: Icon(dynamicIcon, color: kPrimaryColor, size: 34),
+              ),
+
+              const SizedBox(width: 16),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      provider.brandName,
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      provider.category,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // *** NEW --- EDIT PROFILE BUTTON ***
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE7F0FF), // Very light blue background
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.edit,
+                        color: const Color.fromARGB(190, 0, 0, 0), size: 18),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Edit",
+                      style: GoogleFonts.poppins(
+                        color: const Color.fromARGB(190, 0, 0, 0),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          Text(
+            provider.description,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              height: 1.45,
+              color: Colors.grey.shade700,
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  provider.brandName,
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: kTextColor,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  provider.category,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  provider.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "City: ${provider.city}",
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                Text(
-                  "Phone: ${provider.phone}",
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                Text(
-                  "Email: ${provider.email}",
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
+
+          const SizedBox(height: 25),
+
+          _ContactRow(icon: Icons.location_on, label: provider.city),
+          const SizedBox(height: 15),
+          _ContactRow(icon: Icons.phone, label: provider.phone),
+          const SizedBox(height: 15),
+          _ContactRow(icon: Icons.email, label: provider.email),
         ],
       ),
     );
   }
 }
 
-// ============================================================================
-// Stat Card
-// ============================================================================
+/// ============================================================================
+/// Contact Row (orange icons)
+/// ============================================================================
+class _ContactRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _ContactRow({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: const BoxDecoration(
+            color: kContactCircleColor,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Icon(icon, size: 20, color: kContactIconColor),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Colors.black,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// ============================================================================
+/// Stat Card
+/// ============================================================================
 class _StatCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -339,15 +421,13 @@ class _StatCard extends StatelessWidget {
           Text(
             value,
             style: GoogleFonts.poppins(
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: FontWeight.w700,
-              color: kTextColor,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             label,
-            textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 13,
               color: Colors.grey.shade700,
@@ -359,9 +439,9 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// Action Button
-// ============================================================================
+/// ============================================================================
+/// Action Button
+/// ============================================================================
 class _ActionButton extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -406,12 +486,11 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// Tip Card
-// ============================================================================
+/// ============================================================================
+/// Tip Card
+/// ============================================================================
 class _TipCard extends StatelessWidget {
   final String text;
-
   const _TipCard({required this.text});
 
   @override
@@ -428,7 +507,6 @@ class _TipCard extends StatelessWidget {
           BoxShadow(
             color: Colors.grey.shade200,
             blurRadius: 8,
-            spreadRadius: 1,
             offset: const Offset(0, 2),
           )
         ],
@@ -437,7 +515,6 @@ class _TipCard extends StatelessWidget {
         text,
         style: GoogleFonts.poppins(
           fontSize: 14,
-          color: kTextColor,
           fontWeight: FontWeight.w500,
         ),
       ),

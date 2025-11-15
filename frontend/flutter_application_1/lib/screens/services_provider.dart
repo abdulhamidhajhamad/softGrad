@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+// NEW: import add service screen
+import 'add_service_provider.dart';
+
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
@@ -131,6 +134,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
     setState(() {});
   }
 
+  // still used لعمليات Edit و Add من أماكن أخرى (مثلاً في الـ Empty state أو من الكروت)
   void _openServiceForm({Map<String, dynamic>? service, int? index}) {
     final isEditing = service != null;
 
@@ -681,7 +685,15 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () => _openServiceForm(),
+            // NEW: navigate to AddServiceProviderScreen when pressing +
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AddServiceProviderScreen(),
+                ),
+              );
+            },
             icon: const Icon(Icons.add),
           ),
         ],
@@ -740,7 +752,15 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
           ? null
           : FloatingActionButton(
               backgroundColor: kPrimaryColor,
-              onPressed: () => _openServiceForm(),
+              // NEW: same navigation for FAB
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AddServiceProviderScreen(),
+                  ),
+                );
+              },
               child: const Icon(Icons.add, color: Colors.white),
             ),
     );

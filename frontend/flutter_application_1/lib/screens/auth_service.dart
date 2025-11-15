@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  static const String baseUrl = 'http://192.168.110.14:3000';
+  static const String baseUrl = 'http://192.168.110.6:3000';
 
   static Future<Map<String, dynamic>> login(String email, String password) async {
     try {
@@ -30,10 +30,9 @@ class AuthService {
     }
   }
 
-  // ✅ دالة لاختبار الاتصال
   static Future<void> testConnection() async {
     try {
-      final response = await http.get(Uri.parse('http://192.168.110.14:3000'));
+      final response = await http.get(Uri.parse('$baseUrl'));
       print('✅ Server connection test: ${response.statusCode}');
     } catch (e) {
       print('❌ Server connection failed: $e');

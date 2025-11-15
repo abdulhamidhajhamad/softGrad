@@ -21,9 +21,7 @@ import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
 
 @Injectable()
 export class AuthService {
-  // In-memory storage for verification codes (use Redis in production)
   private verificationCodes = new Map<string, { code: string; expires: Date }>();
-
   constructor(
     @InjectModel(User.name)
     private userModel: Model<User>,
@@ -31,7 +29,6 @@ export class AuthService {
     private mailService: MailService,
     private supabaseStorage: SupabaseStorageService,
   ) {}
-
   private generateVerificationCode(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }

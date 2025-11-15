@@ -45,14 +45,11 @@ export class ServiceService {
           HttpStatus.CONFLICT
         );
       }
-
       let companyName = createServiceDto.companyName;
-      
       if (!companyName) {
         companyName = `Vendor-${providerId.substring(0, 8)}`;
         console.log('🏢 Using default company name:', companyName);
       }
-
       console.log('🏢 Final company name:', companyName);
       let imageUrls: string[] = [];
       if (files && files.length > 0) {
@@ -67,7 +64,6 @@ export class ServiceService {
           console.error('❌ Failed to upload service images:', uploadError);
         }
       }
-
       const newServiceData = {
         providerId,
         companyName,

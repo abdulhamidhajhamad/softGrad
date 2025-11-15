@@ -12,7 +12,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 @Controller('services')
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
-
+  
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 10)) 
@@ -24,14 +24,12 @@ export class ServiceController {
     try {
       const userId = req.user.userId;
       const userRole = req.user.role;
-
       if (userRole !== 'vendor') {
         throw new HttpException(
           'Only vendors can add services',
           HttpStatus.FORBIDDEN
         );
       }
-
       return await this.serviceService.createService(userId, createServiceDto, files);
     } catch (error) {
       throw new HttpException(

@@ -6,27 +6,24 @@ import 'package:flutter_application_1/screens/auth_service.dart'; // Import Auth
 /// Sign In screen for existing users
 class SignInScreen extends StatefulWidget {
   const SignInScreen({Key? key}) : super(key: key);
-
+  
   @override
   State<SignInScreen> createState() => _SignInScreenState();
 }
-
 class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
   bool _isPasswordVisible = false;
   bool _rememberMe = false;
   bool _isLoading = false;
-
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
-    @override
+    @override 
   void initState() {
     super.initState();
     _testConnection();

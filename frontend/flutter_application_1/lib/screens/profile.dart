@@ -1,7 +1,7 @@
 // lib/screens/profile.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'edit_profile.dart';
+import 'edit_profile_customer.dart';
 import 'security_password.dart';
 import 'provider.dart';
 

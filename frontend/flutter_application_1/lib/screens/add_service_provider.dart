@@ -380,7 +380,6 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 22),
 
               // -------------------------

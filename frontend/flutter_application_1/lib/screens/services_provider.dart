@@ -685,14 +685,35 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         ),
         actions: [
           IconButton(
-            // NEW: navigate to AddServiceProviderScreen when pressing +
-            onPressed: () {
-              Navigator.push(
+            // فتح صفحة الإضافة + استقبال الخدمة الجديدة
+            onPressed: () async {
+              final newService = await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const AddServiceProviderScreen(),
                 ),
               );
+
+              if (newService != null) {
+                setState(() {
+                  _services.add({
+                    'name': newService['name'],
+                    'category': newService['category'],
+                    'city': newService['city'],
+                    'shortDescription': newService['shortDescription'],
+                    'fullDescription': newService['fullDescription'],
+                    'price': newService['price'],
+                    'isActive': newService['isActive'],
+                    'views': 0,
+                    'bookings': 0,
+                    'likes': 0,
+                    'images': List<String>.from(newService['images'] ?? []),
+                    'createdAt': DateTime.now(),
+                    'updatedAt': DateTime.now(),
+                  });
+                  _markUpdated();
+                });
+              }
             },
             icon: const Icon(Icons.add),
           ),
@@ -752,14 +773,35 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
           ? null
           : FloatingActionButton(
               backgroundColor: kPrimaryColor,
-              // NEW: same navigation for FAB
-              onPressed: () {
-                Navigator.push(
+              // فتح صفحة الإضافة من الـ FAB + استقبال الخدمة الجديدة
+              onPressed: () async {
+                final newService = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => const AddServiceProviderScreen(),
                   ),
                 );
+
+                if (newService != null) {
+                  setState(() {
+                    _services.add({
+                      'name': newService['name'],
+                      'category': newService['category'],
+                      'city': newService['city'],
+                      'shortDescription': newService['shortDescription'],
+                      'fullDescription': newService['fullDescription'],
+                      'price': newService['price'],
+                      'isActive': newService['isActive'],
+                      'views': 0,
+                      'bookings': 0,
+                      'likes': 0,
+                      'images': List<String>.from(newService['images'] ?? []),
+                      'createdAt': DateTime.now(),
+                      'updatedAt': DateTime.now(),
+                    });
+                    _markUpdated();
+                  });
+                }
               },
               child: const Icon(Icons.add, color: Colors.white),
             ),

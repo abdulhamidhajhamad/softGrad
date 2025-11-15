@@ -188,16 +188,23 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
     Navigator.pop(context, {
       "name": _nameCtrl.text.trim(),
       "brand": _brandCtrl.text.trim(),
+      "tagline": _taglineCtrl.text.trim(), // ← مهم
+      "address": _addressCtrl.text.trim(), // ← مهم
+
       "category": _selectedCategory,
       "city": _selectedCity == "Other" ? _otherCity : _selectedCity,
+
       "price": double.tryParse(_priceCtrl.text) ?? 0,
+      "priceType": _priceType,
+      "discount": _discountCtrl.text.trim(),
+
       "shortDescription": _shortDescCtrl.text.trim(),
       "fullDescription": _fullDescCtrl.text.trim(),
-      "priceType": _priceType,
-      "discount": _discountCtrl.text,
-      "images": _images,
-      "packages": _packages,
-      "highlights": _highlights,
+
+      "images": List<String>.from(_images),
+      "packages": List<Map<String, dynamic>>.from(_packages),
+      "highlights": List<String>.from(_highlights),
+
       "isActive": _isVisible,
     });
   }

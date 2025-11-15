@@ -1,14 +1,19 @@
 // lib/screens/home_provider.dart
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'edit_profile_provider.dart';
+import 'services_provider.dart';
 
 /// Color palette
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
 
-/// Provider Data Model (FINAL VERSION)
+// Orange shade
+const Color kContactIconColor = Color(0xFFFF7A00);
+const Color kContactCircleColor = Color(0xFFFFE6CC);
+
+/// Provider Model
 class ProviderModel {
   final String brandName;
   final String email;
@@ -17,7 +22,6 @@ class ProviderModel {
   final String description;
   final String city;
 
-  // Dashboard stats
   final int bookings;
   final int views;
   final int messages;
@@ -40,10 +44,8 @@ class ProviderModel {
 class HomeProviderScreen extends StatelessWidget {
   final ProviderModel provider;
 
-  const HomeProviderScreen({
-    Key? key,
-    required this.provider,
-  }) : super(key: key);
+  const HomeProviderScreen({Key? key, required this.provider})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -53,146 +55,222 @@ class HomeProviderScreen extends StatelessWidget {
         appBar: AppBar(
           backgroundColor: kBackgroundColor,
           elevation: 0,
-          centerTitle: false,
+          centerTitle: true,
           title: Text(
-            "Welcome, ${provider.brandName}",
+            "Provider Dashboard",
             style: GoogleFonts.poppins(
-              fontSize: 20,
+              color: Colors.black,
               fontWeight: FontWeight.w600,
-              color: kTextColor,
+              fontSize: 20,
             ),
           ),
+          actions: [
+            IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EditProfileProvider(provider: provider),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.edit, color: Colors.black),
+            ),
+          ],
         ),
-
-        // Support Button
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: kPrimaryColor,
-          onPressed: () {},
-          child: const Icon(Icons.support_agent, color: Colors.white),
-        ),
-
         body: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              /// HEADER CARD
               _HeaderCard(provider: provider),
-              const SizedBox(height: 20),
+              const SizedBox(height: 15),
 
-              // ============================
-              // Stats
-              // ============================
-              Text(
-                "Your Stats",
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: kTextColor,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.3,
+              /// STATS SECTION
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _StatCard(
-                    icon: Icons.calendar_month,
-                    label: "Active Bookings",
+                  _StatBox(
+                    icon: Icons
+                        .event_available_outlined, // Bookings icon (calendar + ✓)
+                    title: "Bookings",
                     value: provider.bookings.toString(),
                   ),
-                  _StatCard(
-                    icon: Icons.visibility,
-                    label: "Total Views",
+                  _StatBox(
+                    icon: Icons.visibility_outlined,
+                    title: "Views",
                     value: provider.views.toString(),
                   ),
-                  _StatCard(
-                    icon: Icons.message,
-                    label: "Messages",
+                  _StatBox(
+                    icon: Icons.chat_bubble_outline,
+                    title: "Messages",
                     value: provider.messages.toString(),
                   ),
-                  _StatCard(
-                    icon: Icons.reviews,
-                    label: "Pending Reviews",
+                  _StatBox(
+                    icon: Icons.star_border,
+                    title: "Reviews",
                     value: provider.reviews.toString(),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 25),
+              const SizedBox(height: 20),
 
-              // ============================
-              // Quick Actions
-              // ============================
+              /// QUICK ACTIONS IN ONE ROW
               Text(
                 "Quick Actions",
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: kTextColor,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 15),
 
-              _ActionButton(
-                title: "Edit Profile",
-                icon: Icons.edit,
-                onTap: () {},
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickAction(
+                      title: "Services",
+                      icon: Icons
+                          .auto_awesome_outlined, // Services icon (crossed tools)
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ServicesProviderScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _QuickAction(
+                      title: "Bookings",
+                      icon: Icons.calendar_month_outlined,
+                      onTap: () {},
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _QuickAction(
+                      title: "Messages",
+                      icon: Icons.chat_bubble_outline,
+                      onTap: () {},
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
 
-              _ActionButton(
-                title: "Add New Service",
-                icon: Icons.add_circle,
-                onTap: () {},
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 22),
 
-              _ActionButton(
-                title: "View Messages",
-                icon: Icons.chat_bubble,
-                onTap: () {},
-              ),
-              const SizedBox(height: 12),
-
-              _ActionButton(
-                title: "Manage Bookings",
-                icon: Icons.event_available,
-                onTap: () {},
-              ),
-              const SizedBox(height: 30),
-
-              // ============================
-              // Tips
-              // ============================
+              /// ABOUT BRAND
               Text(
-                "Grow Your Business",
+                "About Your Brand",
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
-                  color: kTextColor,
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
 
-              SizedBox(
-                height: 150,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: const [
-                    _TipCard(text: "Respond quickly to messages"),
-                    _TipCard(text: "Upload high quality photos"),
-                    _TipCard(text: "Keep your calendar up-to-date"),
-                    _TipCard(text: "Offer seasonal discounts"),
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Text(
+                  provider.description,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              /// CONTACT INFO
+              Text(
+                "Contact Info",
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 13),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const _ContactIcon(icon: Icons.email),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Email",
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                            Text(
+                              provider.email,
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 13),
+                    Row(
+                      children: [
+                        const _ContactIcon(icon: Icons.phone),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Phone",
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                            Text(
+                              provider.phone,
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 40),
             ],
           ),
         ),
@@ -201,9 +279,7 @@ class HomeProviderScreen extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// Header Card
-// ============================================================================
+/// HEADER CARD WIDGET (BIGGER)
 class _HeaderCard extends StatelessWidget {
   final ProviderModel provider;
 
@@ -212,84 +288,68 @@ class _HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade200,
-            blurRadius: 8,
-            spreadRadius: 2,
-            offset: const Offset(0, 2),
-          )
-        ],
+        color: const Color(0xFFF2F0FF),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: 28,
-            backgroundColor: kPrimaryColor.withOpacity(0.1),
-            child: Icon(
-              Icons.business_center,
-              size: 32,
-              color: kPrimaryColor,
+            radius: 36,
+            backgroundColor: kPrimaryColor.withOpacity(0.18),
+            child: Text(
+              provider.brandName[0].toUpperCase(),
+              style: GoogleFonts.poppins(
+                color: kPrimaryColor,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   provider.brandName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: kTextColor,
+                    fontSize: 21,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   provider.category,
                   style: GoogleFonts.poppins(
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
                     color: Colors.grey.shade700,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  provider.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "City: ${provider.city}",
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                Text(
-                  "Phone: ${provider.phone}",
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-                Text(
-                  "Email: ${provider.email}",
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      size: 18,
+                      color: Colors.grey.shade700,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        provider.city,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -300,57 +360,45 @@ class _HeaderCard extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// Stat Card
-// ============================================================================
-class _StatCard extends StatelessWidget {
+/// STAT BOX WIDGET
+class _StatBox extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final String title;
   final String value;
 
-  const _StatCard({
+  const _StatBox({
     required this.icon,
-    required this.label,
+    required this.title,
     required this.value,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      width: 85,
+      padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade200,
-            blurRadius: 8,
-            spreadRadius: 2,
-            offset: const Offset(0, 2),
-          )
-        ],
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: kPrimaryColor, size: 28),
-          const SizedBox(height: 10),
+          Icon(icon, size: 24, color: kPrimaryColor),
+          const SizedBox(height: 6),
           Text(
             value,
             style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: kTextColor,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
           Text(
-            label,
+            title,
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: Colors.grey.shade700,
+              fontSize: 12,
+              color: Colors.grey.shade600,
             ),
           ),
         ],
@@ -359,15 +407,13 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// Action Button
-// ============================================================================
-class _ActionButton extends StatelessWidget {
+/// QUICK ACTION BUTTON
+class _QuickAction extends StatelessWidget {
   final String title;
   final IconData icon;
   final VoidCallback onTap;
 
-  const _ActionButton({
+  const _QuickAction({
     required this.title,
     required this.icon,
     required this.onTap,
@@ -376,29 +422,25 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+        height: 90,
         decoration: BoxDecoration(
-          color: kPrimaryColor.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: kPrimaryColor.withOpacity(0.3)),
+          color: const Color(0xFFF3F2FF),
+          borderRadius: BorderRadius.circular(18),
         ),
-        child: Row(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: kPrimaryColor, size: 26),
-            const SizedBox(width: 14),
+            Icon(icon, size: 28, color: kPrimaryColor),
+            const SizedBox(height: 6),
             Text(
               title,
               style: GoogleFonts.poppins(
-                color: kTextColor,
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
-            ),
-            const Spacer(),
-            const Icon(Icons.arrow_forward_ios, size: 16, color: kTextColor),
+            )
           ],
         ),
       ),
@@ -406,40 +448,21 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// Tip Card
-// ============================================================================
-class _TipCard extends StatelessWidget {
-  final String text;
+/// CONTACT ICON WITH CIRCLE BG
+class _ContactIcon extends StatelessWidget {
+  final IconData icon;
 
-  const _TipCard({required this.text});
+  const _ContactIcon({required this.icon});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 210,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade200,
-            blurRadius: 8,
-            spreadRadius: 1,
-            offset: const Offset(0, 2),
-          )
-        ],
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.poppins(
-          fontSize: 14,
-          color: kTextColor,
-          fontWeight: FontWeight.w500,
-        ),
+    return CircleAvatar(
+      radius: 25,
+      backgroundColor: kContactCircleColor,
+      child: Icon(
+        icon,
+        color: kContactIconColor,
+        size: 26,
       ),
     );
   }

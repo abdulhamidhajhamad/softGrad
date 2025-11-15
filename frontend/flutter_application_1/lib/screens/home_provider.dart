@@ -1,6 +1,7 @@
 // lib/screens/home_provider.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'edit_profile_provider.dart';
 
 /// Color palette
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
@@ -20,7 +21,6 @@ class ProviderModel {
   final String description;
   final String city;
 
-  // Dashboard stats
   final int bookings;
   final int views;
   final int messages;
@@ -43,10 +43,8 @@ class ProviderModel {
 class HomeProviderScreen extends StatelessWidget {
   final ProviderModel provider;
 
-  const HomeProviderScreen({
-    Key? key,
-    required this.provider,
-  }) : super(key: key);
+  const HomeProviderScreen({Key? key, required this.provider})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -57,26 +55,15 @@ class HomeProviderScreen extends StatelessWidget {
           backgroundColor: kBackgroundColor,
           elevation: 0,
           centerTitle: true,
-          toolbarHeight: 80,
+          toolbarHeight: 60,
           title: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                "WELCOME",
+                "W E L C O M E",
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                   color: Colors.grey.shade700,
-                ),
-              ),
-              const SizedBox(height: 1),
-              Text(
-                "♡",
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: kTextColor,
                 ),
               ),
             ],
@@ -146,26 +133,27 @@ class HomeProviderScreen extends StatelessWidget {
               _ActionButton(
                 title: "Edit Profile",
                 icon: Icons.edit,
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          EditProfileProvider(provider: provider),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               _ActionButton(
-                title: "Services",
-                icon: Icons.add_circle,
-                onTap: () {},
-              ),
+                  title: "Services", icon: Icons.add_circle, onTap: () {}),
               const SizedBox(height: 12),
               _ActionButton(
-                title: "Messages",
-                icon: Icons.chat_bubble,
-                onTap: () {},
-              ),
+                  title: "Messages", icon: Icons.chat_bubble, onTap: () {}),
               const SizedBox(height: 12),
               _ActionButton(
-                title: "Manage Bookings",
-                icon: Icons.event_available,
-                onTap: () {},
-              ),
+                  title: "Manage Bookings",
+                  icon: Icons.event_available,
+                  onTap: () {}),
               const SizedBox(height: 30),
               Text(
                 "Grow Your Business",
@@ -197,9 +185,6 @@ class HomeProviderScreen extends StatelessWidget {
   }
 }
 
-/// ============================================================================
-/// CATEGORY → ICON MAPPER
-/// ============================================================================
 IconData mapCategoryToIcon(String category) {
   switch (category.toLowerCase()) {
     case "flowers":
@@ -227,9 +212,6 @@ IconData mapCategoryToIcon(String category) {
   }
 }
 
-/// ============================================================================
-/// Modern Header Card (With Edit Profile button added)
-/// ============================================================================
 class ModernHeaderCard extends StatelessWidget {
   final ProviderModel provider;
 
@@ -257,18 +239,14 @@ class ModernHeaderCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // TOP ROW = icon + brand name + category + EDIT PROFILE BUTTON
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CircleAvatar(
                 radius: 32,
                 backgroundColor: const Color(0xFFF2F2FF),
                 child: Icon(dynamicIcon, color: kPrimaryColor, size: 34),
               ),
-
               const SizedBox(width: 16),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,36 +269,44 @@ class ModernHeaderCard extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // *** NEW --- EDIT PROFILE BUTTON ***
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE7F0FF), // Very light blue background
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.edit,
-                        color: const Color.fromARGB(190, 0, 0, 0), size: 18),
-                    const SizedBox(width: 4),
-                    Text(
-                      "Edit",
-                      style: GoogleFonts.poppins(
-                        color: const Color.fromARGB(190, 0, 0, 0),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+              InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          EditProfileProvider(provider: provider),
                     ),
-                  ],
+                  );
+                },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE7F0FF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit,
+                          color: const Color.fromARGB(190, 0, 0, 0), size: 18),
+                      const SizedBox(width: 4),
+                      Text(
+                        "Edit",
+                        style: GoogleFonts.poppins(
+                          color: const Color.fromARGB(190, 0, 0, 0),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
           Text(
             provider.description,
             style: GoogleFonts.poppins(
@@ -329,9 +315,7 @@ class ModernHeaderCard extends StatelessWidget {
               color: Colors.grey.shade700,
             ),
           ),
-
           const SizedBox(height: 25),
-
           _ContactRow(icon: Icons.location_on, label: provider.city),
           const SizedBox(height: 15),
           _ContactRow(icon: Icons.phone, label: provider.phone),
@@ -343,9 +327,6 @@ class ModernHeaderCard extends StatelessWidget {
   }
 }
 
-/// ============================================================================
-/// Contact Row (orange icons)
-/// ============================================================================
 class _ContactRow extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -382,9 +363,6 @@ class _ContactRow extends StatelessWidget {
   }
 }
 
-/// ============================================================================
-/// Stat Card
-/// ============================================================================
 class _StatCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -439,9 +417,6 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/// ============================================================================
-/// Action Button
-/// ============================================================================
 class _ActionButton extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -486,9 +461,6 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-/// ============================================================================
-/// Tip Card
-/// ============================================================================
 class _TipCard extends StatelessWidget {
   final String text;
   const _TipCard({required this.text});

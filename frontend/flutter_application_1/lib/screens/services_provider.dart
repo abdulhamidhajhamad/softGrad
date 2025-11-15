@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+// NEW: import add service screen
+import 'add_service_provider.dart';
+
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
@@ -131,6 +134,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
     setState(() {});
   }
 
+  // still used لعمليات Edit و Add من أماكن أخرى (مثلاً في الـ Empty state أو من الكروت)
   void _openServiceForm({Map<String, dynamic>? service, int? index}) {
     final isEditing = service != null;
 
@@ -681,7 +685,36 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () => _openServiceForm(),
+            // فتح صفحة الإضافة + استقبال الخدمة الجديدة
+            onPressed: () async {
+              final newService = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AddServiceProviderScreen(),
+                ),
+              );
+
+              if (newService != null) {
+                setState(() {
+                  _services.add({
+                    'name': newService['name'],
+                    'category': newService['category'],
+                    'city': newService['city'],
+                    'shortDescription': newService['shortDescription'],
+                    'fullDescription': newService['fullDescription'],
+                    'price': newService['price'],
+                    'isActive': newService['isActive'],
+                    'views': 0,
+                    'bookings': 0,
+                    'likes': 0,
+                    'images': List<String>.from(newService['images'] ?? []),
+                    'createdAt': DateTime.now(),
+                    'updatedAt': DateTime.now(),
+                  });
+                  _markUpdated();
+                });
+              }
+            },
             icon: const Icon(Icons.add),
           ),
         ],
@@ -740,7 +773,36 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
           ? null
           : FloatingActionButton(
               backgroundColor: kPrimaryColor,
-              onPressed: () => _openServiceForm(),
+              // فتح صفحة الإضافة من الـ FAB + استقبال الخدمة الجديدة
+              onPressed: () async {
+                final newService = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AddServiceProviderScreen(),
+                  ),
+                );
+
+                if (newService != null) {
+                  setState(() {
+                    _services.add({
+                      'name': newService['name'],
+                      'category': newService['category'],
+                      'city': newService['city'],
+                      'shortDescription': newService['shortDescription'],
+                      'fullDescription': newService['fullDescription'],
+                      'price': newService['price'],
+                      'isActive': newService['isActive'],
+                      'views': 0,
+                      'bookings': 0,
+                      'likes': 0,
+                      'images': List<String>.from(newService['images'] ?? []),
+                      'createdAt': DateTime.now(),
+                      'updatedAt': DateTime.now(),
+                    });
+                    _markUpdated();
+                  });
+                }
+              },
               child: const Icon(Icons.add, color: Colors.white),
             ),
     );

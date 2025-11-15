@@ -7,6 +7,8 @@ import 'package:image_picker/image_picker.dart';
 
 // NEW: import add service screen
 import 'add_service_provider.dart';
+// NEW: import showMore screen
+import 'showMore_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -20,7 +22,8 @@ class ServicesProviderScreen extends StatefulWidget {
 }
 
 class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
-  final List<Map<String, dynamic>> _services = [
+  // ⭐ KEEP SERVICES PERSISTENT
+  static final List<Map<String, dynamic>> _services = [
     {
       'name': 'Bridal Makeup',
       'category': 'Beauty',
@@ -112,7 +115,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
       list.sort(
           (a, b) => (b['price'] as double).compareTo(a['price'] as double));
     } else {
-      // recent
       list.sort((a, b) {
         final da = (a['updatedAt'] ?? a['createdAt']) as DateTime;
         final db = (b['updatedAt'] ?? b['createdAt']) as DateTime;
@@ -134,10 +136,9 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
     setState(() {});
   }
 
-  // still used لعمليات Edit و Add من أماكن أخرى (مثلاً في الـ Empty state أو من الكروت)
+  // used for editing only
   void _openServiceForm({Map<String, dynamic>? service, int? index}) {
     final isEditing = service != null;
-
     final formKey = GlobalKey<FormState>();
 
     final nameController =
@@ -199,7 +200,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // drag handle
                         Center(
                           child: Container(
                             width: 40,
@@ -220,7 +220,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Service Name
+                        // name
                         TextFormField(
                           controller: nameController,
                           decoration: const InputDecoration(
@@ -234,7 +234,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Category + City row
                         Row(
                           children: [
                             Expanded(
@@ -288,7 +287,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Price
                         TextFormField(
                           controller: priceController,
                           keyboardType: const TextInputType.numberWithOptions(
@@ -311,7 +309,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Short description
                         TextFormField(
                           controller: shortDescController,
                           maxLength: 200,
@@ -320,14 +317,12 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                             labelText: 'Short Description',
                             border: OutlineInputBorder(),
                           ),
-                          validator: (value) =>
-                              (value == null || value.trim().isEmpty)
-                                  ? 'Required'
-                                  : null,
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Required'
+                              : null,
                         ),
                         const SizedBox(height: 4),
 
-                        // Full description
                         TextFormField(
                           controller: fullDescController,
                           maxLength: 1500,
@@ -339,7 +334,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                         ),
                         const SizedBox(height: 8),
 
-                        // Active switch
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -363,7 +357,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                         ),
                         const SizedBox(height: 8),
 
-                        // Images section
                         Text(
                           'Service Images',
                           style: GoogleFonts.poppins(
@@ -378,7 +371,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                           child: ListView(
                             scrollDirection: Axis.horizontal,
                             children: [
-                              // Add image card
                               GestureDetector(
                                 onTap: () async {
                                   showModalBottomSheet(
@@ -489,7 +481,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Buttons
                         Row(
                           children: [
                             Expanded(
@@ -562,9 +553,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                                   padding:
                                       const EdgeInsets.symmetric(vertical: 14),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ).borderRadius,
+                                    borderRadius: BorderRadius.circular(14),
                                   ),
                                 ),
                                 child: Text(
@@ -685,7 +674,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         ),
         actions: [
           IconButton(
-            // فتح صفحة الإضافة + استقبال الخدمة الجديدة
+            // زر +
             onPressed: () async {
               final newService = await Navigator.push(
                 context,
@@ -719,7 +708,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
           ),
         ],
       ),
-      body: _services.isEmpty
+      body: _filteredServices.isEmpty
           ? _buildEmptyState()
           : RefreshIndicator(
               onRefresh: _refresh,
@@ -773,7 +762,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
           ? null
           : FloatingActionButton(
               backgroundColor: kPrimaryColor,
-              // فتح صفحة الإضافة من الـ FAB + استقبال الخدمة الجديدة
+              // floating add button
               onPressed: () async {
                 final newService = await Navigator.push(
                   context,
@@ -984,8 +973,38 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
               ),
             ),
             const SizedBox(height: 18),
+
+            // ⭐⭐⭐ المطلوب فقط ⭐⭐⭐
             ElevatedButton(
-              onPressed: () => _openServiceForm(),
+              onPressed: () async {
+                final newService = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AddServiceProviderScreen(),
+                  ),
+                );
+
+                if (newService != null) {
+                  setState(() {
+                    _services.add({
+                      'name': newService['name'],
+                      'category': newService['category'],
+                      'city': newService['city'],
+                      'shortDescription': newService['shortDescription'],
+                      'fullDescription': newService['fullDescription'],
+                      'price': newService['price'],
+                      'isActive': newService['isActive'],
+                      'views': 0,
+                      'bookings': 0,
+                      'likes': 0,
+                      'images': List<String>.from(newService['images'] ?? []),
+                      'createdAt': DateTime.now(),
+                      'updatedAt': DateTime.now(),
+                    });
+                    _markUpdated();
+                  });
+                }
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: kPrimaryColor,
                 foregroundColor: Colors.white,
@@ -1098,11 +1117,23 @@ class _ServiceCard extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: onEdit,
+        onTap: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ShowMoreProviderScreen(
+                service: service,
+              ),
+            ),
+          );
+
+          if (result != null && result['edit'] == true) {
+            onEdit();
+          }
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
             if (images.isNotEmpty)
               ClipRRect(
                 borderRadius:
@@ -1142,7 +1173,6 @@ class _ServiceCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Name + price row
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1184,8 +1214,6 @@ class _ServiceCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-
-                  // Status + stats
                   Row(
                     children: [
                       Container(
@@ -1225,8 +1253,6 @@ class _ServiceCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
-
-                  // Actions row
                   Row(
                     children: [
                       OutlinedButton.icon(

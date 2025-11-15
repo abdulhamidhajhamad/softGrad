@@ -138,9 +138,12 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
           "email": _emailCtrl.text.trim(),
           "role": "provider",
           "name": _brandCtrl.text.trim(),
+          "phone": _phoneCtrl.text.trim(), //  ← أضف هذا السطر
           "category": _selectedCategory,
           "description": _descCtrl.text.trim(),
-          "city": _selectedCity,
+          "city": _selectedCity == "Other"
+              ? _otherCityCtrl.text.trim()
+              : _selectedCity,
         },
       );
     }

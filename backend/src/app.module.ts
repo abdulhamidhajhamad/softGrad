@@ -8,7 +8,7 @@ import { BookingModule } from './booking/booking.module';
 import { AdminModule } from './admin/admin.module';
 import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
 import { FirebaseModule } from './firebase/firebase.module';
-
+import { ChatModule } from './chatingService/chat.module';
 
 @Module({
   imports: [
@@ -31,6 +31,7 @@ import { FirebaseModule } from './firebase/firebase.module';
     AdminModule,
     ShoppingCartModule,
     FirebaseModule,
+    ChatModule,
   ],
 })
 export class AppModule {}

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/screens/home_customer.dart'; // Import HomePage
-import 'package:flutter_application_1/screens/auth_service.dart'; // Import AuthService
+import 'package:flutter_application_1/services/auth_service.dart'; // Import AuthService
 
 /// Sign In screen for existing users
 class SignInScreen extends StatefulWidget {

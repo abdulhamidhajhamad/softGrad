@@ -1,6 +1,6 @@
-// lib/screens/signup_provider.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_application_1/services/vendor_auth_service.dart';
 
 class SignUpProviderScreen extends StatefulWidget {
   const SignUpProviderScreen({Key? key}) : super(key: key);
@@ -65,12 +65,22 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
 
   String? _selectedCategory;
   String? _selectedCity;
-
-  // Password strength
   String _passwordStrengthLabel = "";
   Color _passwordStrengthColor = Colors.transparent;
   bool _showPass = false;
   bool _showConfirm = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _testConnection();
+  }
+
+  Future<void> _testConnection() async {
+    print('🔗 Testing vendor connection to server...');
+    await VendorAuthService.testConnection();
+  }
 
   @override
   void dispose() {
@@ -127,26 +137,88 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
       );
 
   // ======================================================
-  // Submit → Send provider data + role to Verification
+  // Submit → API Call
   // ======================================================
-  void _submit() {
+  Future<void> _submit() async {
     if (_formKey.currentState!.validate()) {
-      Navigator.pushReplacementNamed(
-        context,
-        '/verification',
-        arguments: {
-          "email": _emailCtrl.text.trim(),
-          "role": "provider",
-          "name": _brandCtrl.text.trim(),
-          "phone": _phoneCtrl.text.trim(), //  ← أضف هذا السطر
-          "category": _selectedCategory,
-          "description": _descCtrl.text.trim(),
-          "city": _selectedCity == "Other"
-              ? _otherCityCtrl.text.trim()
-              : _selectedCity,
-        },
-      );
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        final response = await VendorAuthService.signup(
+          userName: _brandCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          password: _passCtrl.text,
+          phone: _phoneCtrl.text.trim(),
+          city: _selectedCity == "Other" 
+              ? _otherCityCtrl.text.trim() 
+              : _selectedCity!,
+          category: _selectedCategory!,
+          description: _descCtrl.text.trim(),
+        );
+
+        if (response.containsKey('message')) {
+          // نجح التسجيل - الانتقال لشاشة التحقق
+          Navigator.pushReplacementNamed(
+            context,
+            '/verification',
+            arguments: {
+              "email": _emailCtrl.text.trim(),
+              "role": "provider",
+              "name": _brandCtrl.text.trim(),
+              "phone": _phoneCtrl.text.trim(),
+              "category": _selectedCategory,
+              "description": _descCtrl.text.trim(),
+              "city": _selectedCity == "Other"
+                  ? _otherCityCtrl.text.trim()
+                  : _selectedCity,
+            },
+          );
+        } else {
+          _showErrorDialog('Signup failed. Please try again.');
+        }
+      } catch (e) {
+        String errorMessage = 'An error occurred. Please try again.';
+        
+        if (e.toString().contains('email already exists')) {
+          errorMessage = 'Email already exists. Please use a different email.';
+        } else if (e.toString().contains('Network error')) {
+          errorMessage = 'Network error. Please check your connection.';
+        }
+        
+        _showErrorDialog(errorMessage);
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Signup Failed',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: Text(message, style: GoogleFonts.poppins()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'OK',
+              style: GoogleFonts.poppins(
+                color: const Color.fromARGB(215, 20, 20, 215),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // Password strength logic
@@ -483,7 +555,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _submit,
+                    onPressed: _isLoading ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kPrimaryButtonColor,
                       foregroundColor: Colors.white,
@@ -492,13 +564,22 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
-                      'Sign up as Provider',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
+                    child: _isLoading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Text(
+                            'Sign up as Provider',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
                   ),
                 ),
 
@@ -515,14 +596,15 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                       ),
                     ),
                     InkWell(
-                      onTap: () =>
-                          Navigator.pushReplacementNamed(context, '/signin'),
+                      onTap: _isLoading
+                          ? null
+                          : () => Navigator.pushReplacementNamed(context, '/signin'),
                       child: Text(
                         ' Sign In',
                         style: GoogleFonts.poppins(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: kPrimaryButtonColor,
+                          color: _isLoading ? Colors.grey.shade400 : kPrimaryButtonColor,
                         ),
                       ),
                     ),

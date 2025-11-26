@@ -16,6 +16,7 @@ dependencies:
   pdf: ^3.10.7
   image_picker: ^1.1.2
   permission_handler: ^11.3.1
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:

@@ -5,7 +5,7 @@ import { ChatService } from './chat.service';
 import { CreateConversationDto, SendMessageDto } from './chat.dto';
 
 @Controller('chat')
-@UseGuards(JwtAuthGuard) // ← أضف هذا السطر
+@UseGuards(JwtAuthGuard) 
 export class ChatController {
   constructor(private chatService: ChatService) {}
 

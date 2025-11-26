@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Put,
+  Query
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
@@ -76,19 +77,24 @@ export class AuthController {
     return this.authService.updateProfile(req.user.userId, updateData, file);
   }
 
-  /*
+
   @Post('forgot-password')
-  @HttpCode(HttpStatus.OK)
-  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(forgotPasswordDto);
+  async forgotPassword(@Body('email') email: string) {
+    return this.authService.forgotPassword(email);
+  }
+
+  @Get('verify-reset-token')
+  async verifyToken(@Query('token') token: string, @Query('email') email: string) {
+    return this.authService.verifyResetToken(token, email);
   }
 
   @Post('reset-password')
-  @HttpCode(HttpStatus.OK)
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-    return this.authService.resetPassword(resetPasswordDto);
+  async resetPassword(@Body() body: any) {
+    const { email, token, newPassword } = body;
+    return this.authService.resetPassword(email, token, newPassword);
   }
 
+ /*
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   async getProfile(@Req() req) {

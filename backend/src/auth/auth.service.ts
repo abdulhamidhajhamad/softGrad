@@ -3,7 +3,7 @@ import {
   ConflictException, 
   UnauthorizedException, 
   NotFoundException, 
-  BadRequestException 
+  BadRequestException,  
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -18,13 +18,17 @@ import {
 } from './auth.dto';
 import { MailService } from './mail.service';
 import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
-
+import * as crypto from 'crypto';
+import { PasswordResetToken } from './password-reset-token.schema'; 
 @Injectable()
 export class AuthService {
   private verificationCodes = new Map<string, { code: string; expires: Date }>();
   constructor(
     @InjectModel(User.name)
     private userModel: Model<User>,
+    @InjectModel(PasswordResetToken.name)
+    private passwordResetTokenModel: Model<PasswordResetToken>,
+
     private jwtService: JwtService,
     private mailService: MailService,
     private supabaseStorage: SupabaseStorageService,
@@ -302,4 +306,114 @@ export class AuthService {
       }
     }
   }
+
+
+async forgotPassword(email: string) {
+  const user = await this.userModel.findOne({ email });
+  if (!user) {
+    console.log('❌ User not found for email:', email);
+    return { message: 'If this email exists, a reset link has been sent.' };
+  }
+
+  console.log('✅ User found:', user.email);
+
+  // إنشاء التوكن
+  const token = crypto.randomBytes(32).toString('hex');
+  console.log('🔑 Original token:', token);
+
+  // حساب الـ hash بشكل صحيح
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  console.log('🔑 Token hash:', tokenHash);
+
+  // التأكد من عدم وجود مسافات أو أخطاء
+  if (tokenHash.includes(' ')) {
+    console.error('❌ ERROR: Token hash contains spaces!');
+  }
+
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+  // حفظ في قاعدة البيانات
+  await this.passwordResetTokenModel.create({
+    email,
+    tokenHash,
+    expiresAt
+  });
+
+  console.log('💾 Token saved to database successfully');
+
+  // لأغراض الت testing - إرجاع التوكن في ال response
+  return { 
+    message: 'If this email exists, a reset link has been sent.',
+    debug_token: token // ✅ إرجاع التوكن للتجربة
+  };
+}
+
+async verifyResetToken(token: string, email: string) {
+  console.log('🔍 Verifying token for email:', email);
+  console.log('🔑 Original token received:', token);
+  
+  // تنظيف التوكن من أي مسافات
+  const cleanToken = token.trim().replace(/\s+/g, '');
+  console.log('🔑 Cleaned token:', cleanToken);
+
+  const tokenHash = crypto.createHash('sha256').update(cleanToken).digest('hex');
+  console.log('🔑 Calculated hash:', tokenHash);
+
+  // فحص جميع التوكنات لهذا البريد (للتشخيص)
+  const allTokens = await this.passwordResetTokenModel.find({ email });
+  console.log('📋 All tokens in DB for this email:', allTokens);
+
+  const record = await this.passwordResetTokenModel.findOne({
+    email,
+    tokenHash,
+    expiresAt: { $gt: new Date() }
+  });
+
+  if (!record) {
+    console.log('❌ No matching token found');
+    console.log('⏰ Current time:', new Date());
+    const expiredRecord = await this.passwordResetTokenModel.findOne({
+      email,
+      tokenHash
+    });
+    if (expiredRecord) {
+      console.log('⏰ Found expired token:', expiredRecord.expiresAt);
+    }
+    
+    throw new BadRequestException('Invalid or expired token');
+  }
+
+  console.log('✅ Token is valid');
+  return { valid: true };
+}
+
+
+
+  async resetPassword(email: string, token: string, newPassword: string) {
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const record = await this.passwordResetTokenModel.findOne({
+    email,
+    tokenHash,
+    expiresAt: { $gt: new Date() }
+  });
+
+  if (!record)
+    throw new BadRequestException('Invalid or expired token');
+
+  // hash new password
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+  // update user password
+  await this.userModel.updateOne(
+    { email },
+    { $set: { password: hashedPassword } }
+  );
+
+  // حذف التوكن
+  await this.passwordResetTokenModel.deleteMany({ email });
+
+  return { message: 'Password has been reset successfully.' };
+}
+
 }

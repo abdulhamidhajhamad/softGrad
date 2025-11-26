@@ -1,8 +1,8 @@
-// lib/screens/verification.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:flutter_application_1/services/verification_service.dart';
+import 'package:flutter_application_1/services/auth_service.dart';
 import 'home_customer.dart';
 import 'home_provider.dart';
 
@@ -20,6 +20,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   // Focus nodes for automatic movement
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+
+  bool _isLoading = false;
+  bool _isResending = false;
 
   @override
   void dispose() {
@@ -43,12 +46,16 @@ class _VerificationScreenState extends State<VerificationScreen> {
     required String category,
     required String description,
     required String city,
+    required String token,
   }) {
-    if (role.toLowerCase() == "customer") {
+    // حفظ التوكن في AuthService لاستخدامه لاحقاً
+    AuthService.saveToken(token);
+
+    if (role.toLowerCase() == "customer" || role.toLowerCase() == "user") {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => HomePage(userName: name),
+          builder: (_) => HomePage(userName: name), // استخدام الكونستركتور الحالي
         ),
         (_) => false,
       );
@@ -65,6 +72,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               description: description,
               city: city,
             ),
+            // استخدام الكونستركتور الحالي بدون token
           ),
         ),
         (_) => false,
@@ -73,9 +81,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   // ===========================================================
-  // VERIFY EMAIL
+  // VERIFY EMAIL (API Call)
   // ===========================================================
-  void _verifyEmail() {
+  Future<void> _verifyEmail() async {
     final args = ModalRoute.of(context)?.settings.arguments;
 
     // Defaults
@@ -105,42 +113,186 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
     String code = _controllers.map((c) => c.text).join();
 
-    if (code.length == 6) {
-      _goToHome(
-        role: role,
-        name: name,
-        email: email,
-        phone: phone,
-        category: category,
-        description: description,
-        city: city,
-      );
-    } else {
+    if (code.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Please enter the complete code",
+            "Please enter the complete 6-digit code",
             style: GoogleFonts.poppins(),
           ),
           backgroundColor: Colors.red,
         ),
       );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await VerificationService.verifyEmail(
+        email: email,
+        verificationCode: code,
+      );
+
+      // التحقق من أن الرد يحتوي على token و user
+      if (response.containsKey('token') && response.containsKey('user')) {
+        final userData = response['user'];
+        final token = response['token'];
+        
+        // التحقق من أن isVerified أصبح true
+        if (userData['isVerified'] == true) {
+          // نجح التحقق - الانتقال للصفحة الرئيسية
+          _goToHome(
+            role: role,
+            name: name,
+            email: email,
+            phone: phone,
+            category: category,
+            description: description,
+            city: city,
+            token: token,
+          );
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                "Email verified successfully!",
+                style: GoogleFonts.poppins(),
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          _showErrorDialog('Verification failed. User not verified.');
+        }
+      } else {
+        _showErrorDialog('Verification failed. Please try again.');
+      }
+    } catch (e) {
+      String errorMessage = 'An error occurred. Please try again.';
+      
+      if (e.toString().contains('Invalid verification code')) {
+        errorMessage = 'Invalid verification code. Please check the code and try again.';
+      } else if (e.toString().contains('Verification code has expired')) {
+        errorMessage = 'Verification code has expired. Please request a new one.';
+      } else if (e.toString().contains('No verification code found')) {
+        errorMessage = 'No verification code found. Please request a new one.';
+      } else if (e.toString().contains('Email is already verified')) {
+        errorMessage = 'Email is already verified. You can proceed to login.';
+        // إذا الإيميل مفعل أصلاً، ننتقل مباشرة للصفحة الرئيسية
+        _navigateToLogin();
+      } else if (e.toString().contains('User not found')) {
+        errorMessage = 'User not found. Please check your email.';
+      } else if (e.toString().contains('Network error')) {
+        errorMessage = 'Network error. Please check your connection.';
+      }
+      
+      _showErrorDialog(errorMessage);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  // ===========================================================
-  // RESEND OTP
-  // ===========================================================
-  void _resendCode() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          "Code resent successfully",
-          style: GoogleFonts.poppins(),
+  void _navigateToLogin() {
+    Navigator.pushReplacementNamed(context, '/signin');
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Verification Failed',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color.fromARGB(215, 20, 20, 215),
+        content: Text(message, style: GoogleFonts.poppins()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'OK',
+              style: GoogleFonts.poppins(
+                color: const Color.fromARGB(215, 20, 20, 215),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  // ===========================================================
+  // RESEND OTP (API Call)
+  // ===========================================================
+  Future<void> _resendCode() async {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    String email = "example@mail.com";
+
+    // Extract email from arguments
+    if (args is Map) {
+      email = args["email"] ?? email;
+    } else if (args is String) {
+      email = args;
+    }
+
+    setState(() {
+      _isResending = true;
+    });
+
+    try {
+      final response = await VerificationService.resendVerificationCode(
+        email: email,
+      );
+
+      if (response.containsKey('message')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Verification code sent successfully!",
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: const Color.fromARGB(215, 20, 20, 215),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Failed to resend code. Please try again.",
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      String errorMessage = "Failed to resend code. Please try again.";
+      
+      if (e.toString().contains('User not found')) {
+        errorMessage = 'User not found. Please check your email.';
+      } else if (e.toString().contains('Network error')) {
+        errorMessage = 'Network error. Please check your connection.';
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            errorMessage,
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isResending = false;
+      });
+    }
   }
 
   @override
@@ -193,21 +345,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
           // Skip button
           actions: [
             TextButton(
-              onPressed: () {
-                _goToHome(
-                  role: role,
-                  name: name,
-                  email: email,
-                  phone: phone,
-                  category: category,
-                  description: description,
-                  city: city,
-                );
+              onPressed: _isLoading ? null : () {
+                _navigateToLogin();
               },
               child: Text(
                 "Skip",
                 style: GoogleFonts.poppins(
-                  color: const Color.fromARGB(215, 20, 20, 215),
+                  color: _isLoading 
+                      ? Colors.grey 
+                      : const Color.fromARGB(215, 20, 20, 215),
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
                 ),
@@ -304,7 +450,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: _verifyEmail,
+                    onPressed: _isLoading ? null : _verifyEmail,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color.fromARGB(215, 20, 20, 215),
                       foregroundColor: Colors.white,
@@ -312,13 +458,22 @@ class _VerificationScreenState extends State<VerificationScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
-                      'Verify Email',
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: _isLoading
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Text(
+                            'Verify Email',
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
 
@@ -336,15 +491,26 @@ class _VerificationScreenState extends State<VerificationScreen> {
                       ),
                     ),
                     GestureDetector(
-                      onTap: _resendCode,
-                      child: Text(
-                        'Resend',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: const Color.fromARGB(215, 20, 20, 215),
-                        ),
-                      ),
+                      onTap: _isResending ? null : _resendCode,
+                      child: _isResending
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  const Color.fromARGB(215, 20, 20, 215),
+                                ),
+                              ),
+                            )
+                          : Text(
+                              'Resend',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: const Color.fromARGB(215, 20, 20, 215),
+                              ),
+                            ),
                     ),
                   ],
                 ),

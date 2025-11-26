@@ -52,6 +52,9 @@ export class ForgotPasswordDto {
 }
 
 export class ResetPasswordDto {
+  @IsEmail()
+  email: string;
+
   @IsString()
   token: string;
 

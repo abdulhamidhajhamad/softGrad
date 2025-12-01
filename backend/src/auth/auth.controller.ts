@@ -43,6 +43,12 @@ export class AuthController {
     return this.authService.signUp(signUpDto, file);
   }
 
+  @Get('profile')
+@UseGuards(JwtAuthGuard)
+async getProfile(@Req() req) {
+  return this.authService.getUserProfile(req.user.userId);
+}
+
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
@@ -94,12 +100,5 @@ export class AuthController {
     return this.authService.resetPassword(email, token, newPassword);
   }
 
- /*
-  @Get('profile')
-  @UseGuards(JwtAuthGuard)
-  async getProfile(@Req() req) {
-    const { password, resetPasswordToken, resetPasswordExpires, ...user } = req.user;
-    return user;
-  }
-  */
+
 }

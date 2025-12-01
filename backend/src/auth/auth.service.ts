@@ -416,4 +416,26 @@ async verifyResetToken(token: string, email: string) {
   return { message: 'Password has been reset successfully.' };
 }
 
+async getUserProfile(userId: string): Promise<{
+  userName: string;
+  email: string;
+  phone?: string;
+  city?: string;
+  imageUrl?: string;
+}> {
+  const user = await this.userModel.findById(userId).exec();
+  
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  return {
+    userName: user.userName,
+    email: user.email,
+    phone: user.phone,
+    city: user.city,
+    imageUrl: user.imageUrl
+  };
+}
+
 }

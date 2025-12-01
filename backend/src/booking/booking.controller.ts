@@ -14,7 +14,7 @@ import { BookingService } from './booking.service';
 import { CreateBookingDto } from './booking.dto';
 import { Booking } from './booking.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-
+import { AdminGuard } from '../admin/admin.guard'; // 👈 يجب استيراد AdminGuard
 @Controller('bookings')
 export class BookingController {
   constructor(private readonly bookingService: BookingService) {}
@@ -29,14 +29,14 @@ export class BookingController {
   }
 
   // 2. Create booking from shopping cart 
-  @Post('from-cart')
+  @Post('')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   async createFromCart(@Request() req): Promise<Booking> {
     const userId = req.user.userId || req.user.id;
     return this.bookingService.createFromCart(userId);
   }
-
+/*
   // 3. Create booking with custom data
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -45,7 +45,7 @@ export class BookingController {
     const userId = req.user.userId || req.user.id;
     return this.bookingService.create(userId, dto);
   }
-
+*/
   // 4. Cancel booking (remove booking dates from services)
   @Delete(':bookingId')
   @UseGuards(JwtAuthGuard)
@@ -64,5 +64,21 @@ export class BookingController {
   @HttpCode(HttpStatus.OK)
   async findAll(): Promise<Booking[]> {
     return this.bookingService.findAll();
+  }
+
+  // 6. Admin Endpoint: Get Total Sales
+  @Get('admin/sales/total')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  async getTotalSales(): Promise<{ totalSales: number }> {
+    return this.bookingService.getTotalSales();
+  }
+
+  // 7. Admin Endpoint: Get Total Bookings and Services Details
+  @Get('admin/bookings/details')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  async getBookingsDetails(): Promise<{ totalBookings: number, bookedServices: { serviceId: string, bookingDate: Date }[] }> {
+    return this.bookingService.getTotalBookingsAndServices();
   }
 }

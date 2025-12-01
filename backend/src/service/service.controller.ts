@@ -38,6 +38,7 @@ export class ServiceController {
       );
     }
   }
+
   @Put('/:serviceName')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 10)) 
@@ -45,7 +46,7 @@ export class ServiceController {
     @Param('serviceName') serviceName: string,
     @Body() updateServiceDto: UpdateServiceDto,
     @Request() req: any,
-    @UploadedFiles() files?: Express.Multer.File[] // ✅ ملفات الصور الجديدة
+    @UploadedFiles() files?: Express.Multer.File[]
   ) {
     try {
       const userId = req.user.userId;
@@ -122,6 +123,29 @@ export class ServiceController {
     }
   }
 
+  // API جديد: يحصل على خدمات المزود الحالي المسجل دخولاً
+  @Get('my-services')
+  @UseGuards(JwtAuthGuard)
+  async getMyServices(@Request() req: any) {
+    try {
+      const userId = req.user.userId;
+      const userRole = req.user.role;
+      
+      if (userRole !== 'vendor') {
+        throw new HttpException(
+          'Only vendors can access their services',
+          HttpStatus.FORBIDDEN
+        );
+      }
+      return await this.serviceService.getServicesByVendorId(userId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch your services',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+  
   // 7. Get Services by Vendor ID - مفتوح للجميع
   @Get('vendor/id/:vendorId')
   async getServicesByVendorId(@Param('vendorId') vendorId: string) {

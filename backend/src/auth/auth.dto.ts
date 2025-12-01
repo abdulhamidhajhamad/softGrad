@@ -37,7 +37,7 @@ export class SignUpDto {
   role: 'user' | 'vendor';
 }
 
-// ... باقي الـ DTOs تبقى كما هي
+
 export class LoginDto {
   @IsEmail()
   email: string;

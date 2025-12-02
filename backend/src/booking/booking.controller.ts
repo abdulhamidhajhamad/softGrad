@@ -15,6 +15,9 @@ import { CreateBookingDto } from './booking.dto';
 import { Booking } from './booking.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminGuard } from '../admin/admin.guard'; // 👈 يجب استيراد AdminGuard
+class PaymentConfirmationDto {
+    bookingId: string;
+}
 @Controller('bookings')
 export class BookingController {
   constructor(private readonly bookingService: BookingService) {}
@@ -29,12 +32,25 @@ export class BookingController {
   }
 
   // 2. Create booking from shopping cart 
-  @Post('')
+@Post('')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
-  async createFromCart(@Request() req): Promise<Booking> {
+  async createPendingBooking(@Request() req): Promise<any> {
     const userId = req.user.userId || req.user.id;
-    return this.bookingService.createFromCart(userId);
+    // Call the new PENDING creation service
+    return this.bookingService.createPendingBookingFromCart(userId); 
+  }
+
+  // NEW: 3. Endpoint to finalize the booking after successful Stripe payment
+  @Post('confirm-payment')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async confirmPayment(
+    @Request() req,
+    @Body() dto: PaymentConfirmationDto
+  ): Promise<any> {
+    // In a real app, you might also pass the Stripe PaymentIntent ID for extra verification
+    return this.bookingService.confirmPaymentAndUpdateBooking(dto.bookingId);
   }
 /*
   // 3. Create booking with custom data
@@ -81,4 +97,9 @@ export class BookingController {
   async getBookingsDetails(): Promise<{ totalBookings: number, bookedServices: { serviceId: string, bookingDate: Date }[] }> {
     return this.bookingService.getTotalBookingsAndServices();
   }
+
+
+
+
+
 }

@@ -3,112 +3,15 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Service } from './service.schema';
 import { CreateServiceDto, UpdateServiceDto } from './service.dto';
+import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
 
 @Injectable()
 export class ServiceService {
   constructor(
     @InjectModel(Service.name) private serviceModel: Model<Service>,
+    private supabaseStorage: SupabaseStorageService,
   ) {}
 
-  // 1. Create Service (Only Vendors)
-// في دالة createService، تأكد من تعيين الرايتنج الافتراضي
-async createService(providerId: string, createServiceDto: CreateServiceDto): Promise<Service> {
-  try {
-    console.log('📦 Received createServiceDto:', JSON.stringify(createServiceDto, null, 2));
-    console.log('👤 Provider ID:', providerId);
-
-    // تحقق إذا كان في خدمة بنفس الاسم لنفس المزود
-    const existingService = await this.serviceModel.findOne({ 
-      serviceName: createServiceDto.serviceName,
-      providerId 
-    });
-
-    if (existingService) {
-      console.log('❌ Service already exists:', createServiceDto.serviceName);
-      throw new HttpException(
-        'Service with this name already exists',
-        HttpStatus.CONFLICT
-      );
-    }
-
-    let companyName = createServiceDto.companyName;
-    
-    if (!companyName) {
-      companyName = `Vendor-${providerId.substring(0, 8)}`;
-      console.log('🏢 Using default company name:', companyName);
-    }
-
-    console.log('🏢 Final company name:', companyName);
-
-    const newServiceData = {
-      providerId,
-      companyName,
-      ...createServiceDto,
-      reviews: [],
-      rating: createServiceDto.rating || 0 // ✅ تعيين الرايتنج الافتراضي
-    };
-
-    console.log('🔄 Creating service with data:', JSON.stringify(newServiceData, null, 2));
-
-    const newService = new this.serviceModel(newServiceData);
-    const savedService = await newService.save();
-    
-    console.log('✅ Service created successfully:', savedService._id);
-    return savedService;
-
-  } catch (error) {
-    console.error('💥 ERROR in createService:', error);
-    
-    if (error instanceof HttpException) {
-      throw error;
-    }
-    
-    if (error.name === 'ValidationError') {
-      console.log('MongoDB Validation Error:', error.errors);
-      throw new HttpException(
-        `Validation error: ${Object.values(error.errors).map((e: any) => e.message).join(', ')}`,
-        HttpStatus.BAD_REQUEST
-      );
-    }
-
-    if (error.code === 11000) {
-      throw new HttpException(
-        'Service with this name already exists',
-        HttpStatus.CONFLICT
-      );
-    }
-
-    throw new HttpException(
-      error.message || 'Failed to create service',
-      HttpStatus.INTERNAL_SERVER_ERROR
-    );
-  }
-}
-
-  // 2. Delete Service by Name
-  async deleteServiceByName(serviceName: string, providerId: string): Promise<{ message: string }> {
-    try {
-      const service = await this.serviceModel.findOne({ serviceName, providerId });
-
-      if (!service) {
-        throw new HttpException(
-          'Service not found or you do not have permission to delete it',
-          HttpStatus.NOT_FOUND
-        );
-      }
-
-      await this.serviceModel.deleteOne({ serviceName, providerId });
-
-      return { message: `Service '${serviceName}' deleted successfully` };
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to delete service',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  // 3. Get All Services
   async getAllServices(): Promise<Service[]> {
     try {
       return await this.serviceModel.find().exec();
@@ -120,11 +23,98 @@ async createService(providerId: string, createServiceDto: CreateServiceDto): Pro
     }
   }
 
-  // 4. Update Service by Name
+  async createService(
+    providerId: string, 
+    createServiceDto: CreateServiceDto,
+    files?: Express.Multer.File[] 
+  ): Promise<Service> {
+    try {
+      console.log('📦 Received createServiceDto:', JSON.stringify(createServiceDto, null, 2));
+      console.log('👤 Provider ID:', providerId);
+      console.log('🖼️ Number of images:', files?.length || 0);
+
+      const existingService = await this.serviceModel.findOne({ 
+        serviceName: createServiceDto.serviceName,
+        providerId 
+      });
+
+      if (existingService) {
+        console.log('❌ Service already exists:', createServiceDto.serviceName);
+        throw new HttpException(
+          'Service with this name already exists',
+          HttpStatus.CONFLICT
+        );
+      }
+      let companyName = createServiceDto.companyName;
+      if (!companyName) {
+        companyName = `Vendor-${providerId.substring(0, 8)}`;
+        console.log('🏢 Using default company name:', companyName);
+      }
+      console.log('🏢 Final company name:', companyName);
+      let imageUrls: string[] = [];
+      if (files && files.length > 0) {
+        try {
+          console.log('📤 Uploading service images to Supabase...');
+          const uploadPromises = files.map(file => 
+            this.supabaseStorage.uploadImage(file, 'services', true)
+          );
+          imageUrls = await Promise.all(uploadPromises);
+          console.log('✅ Service images uploaded successfully:', imageUrls);
+        } catch (uploadError) {
+          console.error('❌ Failed to upload service images:', uploadError);
+        }
+      }
+      const newServiceData = {
+        providerId,
+        companyName,
+        ...createServiceDto,
+        images: imageUrls,
+        reviews: [],
+        rating: createServiceDto.rating || 0
+      };
+
+      console.log('🔄 Creating service with data:', JSON.stringify(newServiceData, null, 2));
+
+      const newService = new this.serviceModel(newServiceData);
+      const savedService = await newService.save();
+      
+      console.log('✅ Service created successfully:', savedService._id);
+      return savedService;
+
+    } catch (error) {
+      console.error('💥 ERROR in createService:', error);
+      
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      if (error.name === 'ValidationError') {
+        console.log('MongoDB Validation Error:', error.errors);
+        throw new HttpException(
+          `Validation error: ${Object.values(error.errors).map((e: any) => e.message).join(', ')}`,
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (error.code === 11000) {
+        throw new HttpException(
+          'Service with this name already exists',
+          HttpStatus.CONFLICT
+        );
+      }
+
+      throw new HttpException(
+        error.message || 'Failed to create service',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   async updateServiceByName(
     serviceName: string,
     providerId: string,
-    updateServiceDto: UpdateServiceDto
+    updateServiceDto: UpdateServiceDto,
+    files?: Express.Multer.File[] // ✅ إضافة files parameter
   ): Promise<Service> {
     try {
       const service = await this.serviceModel.findOne({ serviceName, providerId });
@@ -136,9 +126,35 @@ async createService(providerId: string, createServiceDto: CreateServiceDto): Pro
         );
       }
 
+      // ✅ رفع الصور الجديدة إلى Supabase إذا وجدت
+      let newImageUrls: string[] = [];
+      if (files && files.length > 0) {
+        try {
+          console.log('📤 Uploading new service images to Supabase...');
+          const uploadPromises = files.map(file => 
+            this.supabaseStorage.uploadImage(file, 'services', true)
+          );
+          newImageUrls = await Promise.all(uploadPromises);
+          console.log('✅ New service images uploaded successfully:', newImageUrls);
+        } catch (uploadError) {
+          console.error('❌ Failed to upload new service images:', uploadError);
+
+        }
+      }
+
+      const updatedImages = [
+        ...(service.images || []),
+        ...newImageUrls
+      ];
+
+      const updateData = {
+        ...updateServiceDto,
+        images: updatedImages.length > 0 ? updatedImages : service.images
+      };
+
       const updatedService = await this.serviceModel.findOneAndUpdate(
         { serviceName, providerId },
-        { $set: updateServiceDto },
+        { $set: updateData },
         { new: true, runValidators: true }
       ).exec();
 
@@ -158,7 +174,44 @@ async createService(providerId: string, createServiceDto: CreateServiceDto): Pro
     }
   }
 
-  // 5. Get Services by Vendor Name (Company)
+  async deleteServiceByName(serviceName: string, providerId: string): Promise<{ message: string }> {
+    try {
+      const service = await this.serviceModel.findOne({ serviceName, providerId });
+
+      if (!service) {
+        throw new HttpException(
+          'Service not found or you do not have permission to delete it',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      // ✅ حذف الصور من Supabase
+      if (service.images && service.images.length > 0) {
+        try {
+          console.log('🗑️ Deleting service images from Supabase...');
+          const deletePromises = service.images.map(imageUrl => 
+            this.supabaseStorage.deleteFile(imageUrl)
+          );
+          await Promise.all(deletePromises);
+          console.log('✅ Service images deleted from Supabase');
+        } catch (deleteError) {
+          console.error('❌ Failed to delete service images from Supabase:', deleteError);
+          // الاستمرار في حذف السيرفس حتى لو فشل حذف الصور
+        }
+      }
+
+      await this.serviceModel.deleteOne({ serviceName, providerId });
+
+      return { message: `Service '${serviceName}' deleted successfully` };
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to delete service',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+
   async getServicesByVendorName(companyName: string): Promise<Service[]> {
     try {
       const services = await this.serviceModel.find({ companyName }).exec();

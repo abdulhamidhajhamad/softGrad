@@ -1,31 +1,42 @@
-import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SignUpDto {
   @IsString()
+  @ApiProperty({ example: 'John Doe' })
   userName: string;
 
   @IsEmail()
+  @ApiProperty({ example: 'john@example.com' })
   email: string;
 
   @IsString()
   @MinLength(6)
+  @ApiProperty({ example: '123456' })
   password: string;
 
   @IsOptional()
   @IsString()
+  @ApiPropertyOptional({ example: '0791234567' })
   phone?: string;
 
   @IsOptional()
   @IsString()
+  @ApiPropertyOptional({ example: 'Amman' })
   city?: string;
   
-  @ApiPropertyOptional({ description: 'Optional profile image URL' })
-  @IsOptional()
-  @IsString()
-  imageUrl?: string;
-
+  // ✅ NEW: Add role field with enum validation
+  @IsEnum(['user', 'vendor'], { 
+    message: 'Role must be either "user" or "vendor"' 
+  })
+  @ApiProperty({
+    enum: ['user', 'vendor'],
+    description: 'User role - either "user" or "vendor"',
+    example: 'user'
+  })
+  role: 'user' | 'vendor';
 }
+
 
 export class LoginDto {
   @IsEmail()
@@ -41,6 +52,9 @@ export class ForgotPasswordDto {
 }
 
 export class ResetPasswordDto {
+  @IsEmail()
+  email: string;
+
   @IsString()
   token: string;
 
@@ -49,7 +63,6 @@ export class ResetPasswordDto {
   newPassword: string;
 }
 
-// ✅ NEW: DTO for verifying email with code
 export class VerifyEmailDto {
   @IsEmail()
   email: string;
@@ -58,8 +71,24 @@ export class VerifyEmailDto {
   verificationCode: string;
 }
 
-// ✅ NEW: DTO for resending verification code
 export class ResendVerificationDto {
   @IsEmail()
   email: string;
+}
+
+export class UpdateProfileDto {
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional({ example: 'John Doe Updated' })
+  userName?: string;
+
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional({ example: '0797654321' })
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional({ example: 'Irbid' })
+  city?: string;
 }

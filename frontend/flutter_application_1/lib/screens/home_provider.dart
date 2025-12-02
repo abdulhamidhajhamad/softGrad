@@ -1,13 +1,13 @@
-// lib/screens/home_provider.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_application_1/services/auth_service.dart';
 import 'edit_profile_provider.dart';
 import 'services_provider.dart';
+import 'signin.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
-
 const Color kContactIconColor = Color(0xFFFF7A00);
 const Color kContactCircleColor = Color(0xFFFFE6CC);
 
@@ -18,7 +18,6 @@ class ProviderModel {
   final String category;
   final String description;
   final String city;
-
   final int bookings;
   final int views;
   final int messages;
@@ -89,6 +88,17 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                 }
               },
               icon: const Icon(Icons.edit, color: Colors.black),
+            ),
+            IconButton(
+              onPressed: () async {
+                await AuthService.deleteToken();
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => SignInScreen()),
+                  (_) => false,
+                );
+              },
+              icon: const Icon(Icons.logout, color: Colors.black),
             ),
           ],
         ),

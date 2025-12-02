@@ -4,16 +4,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'edit_profile_provider.dart';
 import 'services_provider.dart';
 
-/// Color palette
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
 
-// Orange shade
 const Color kContactIconColor = Color(0xFFFF7A00);
 const Color kContactCircleColor = Color(0xFFFFE6CC);
 
-/// Provider Model
 class ProviderModel {
   final String brandName;
   final String email;
@@ -41,11 +38,24 @@ class ProviderModel {
   });
 }
 
-class HomeProviderScreen extends StatelessWidget {
+class HomeProviderScreen extends StatefulWidget {
   final ProviderModel provider;
 
   const HomeProviderScreen({Key? key, required this.provider})
       : super(key: key);
+
+  @override
+  State<HomeProviderScreen> createState() => _HomeProviderScreenState();
+}
+
+class _HomeProviderScreenState extends State<HomeProviderScreen> {
+  late ProviderModel provider;
+
+  @override
+  void initState() {
+    super.initState();
+    provider = widget.provider;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,13 +76,17 @@ class HomeProviderScreen extends StatelessWidget {
           ),
           actions: [
             IconButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                final updated = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => EditProfileProvider(provider: provider),
                   ),
                 );
+
+                if (updated != null && updated is ProviderModel) {
+                  setState(() => provider = updated);
+                }
               },
               icon: const Icon(Icons.edit, color: Colors.black),
             ),
@@ -83,17 +97,13 @@ class HomeProviderScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// HEADER CARD
               _HeaderCard(provider: provider),
               const SizedBox(height: 15),
-
-              /// STATS SECTION
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _StatBox(
-                    icon: Icons
-                        .event_available_outlined, // Bookings icon (calendar + ✓)
+                    icon: Icons.event_available_outlined,
                     title: "Bookings",
                     value: provider.bookings.toString(),
                   ),
@@ -114,10 +124,7 @@ class HomeProviderScreen extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 20),
-
-              /// QUICK ACTIONS IN ONE ROW
               Text(
                 "Quick Actions",
                 style: GoogleFonts.poppins(
@@ -126,14 +133,12 @@ class HomeProviderScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 15),
-
               Row(
                 children: [
                   Expanded(
                     child: _QuickAction(
                       title: "Services",
-                      icon: Icons
-                          .auto_awesome_outlined, // Services icon (crossed tools)
+                      icon: Icons.auto_awesome_outlined,
                       onTap: () {
                         Navigator.push(
                           context,
@@ -162,19 +167,13 @@ class HomeProviderScreen extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 22),
-
-              /// ABOUT BRAND
               Text(
                 "About Your Brand",
                 style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                    fontSize: 18, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
-
               Container(
                 width: double.infinity,
                 padding:
@@ -192,10 +191,7 @@ class HomeProviderScreen extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(height: 25),
-
-              /// CONTACT INFO
               Text(
                 "Contact Info",
                 style: GoogleFonts.poppins(
@@ -204,7 +200,6 @@ class HomeProviderScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 13),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
@@ -269,7 +264,6 @@ class HomeProviderScreen extends StatelessWidget {
                   ],
                 ),
               ),
-
               const SizedBox(height: 40),
             ],
           ),
@@ -279,7 +273,6 @@ class HomeProviderScreen extends StatelessWidget {
   }
 }
 
-/// HEADER CARD WIDGET (BIGGER)
 class _HeaderCard extends StatelessWidget {
   final ProviderModel provider;
 
@@ -332,11 +325,8 @@ class _HeaderCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(
-                      Icons.location_on,
-                      size: 18,
-                      color: Colors.grey.shade700,
-                    ),
+                    Icon(Icons.location_on,
+                        size: 18, color: Colors.grey.shade700),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
@@ -360,7 +350,6 @@ class _HeaderCard extends StatelessWidget {
   }
 }
 
-/// STAT BOX WIDGET
 class _StatBox extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -407,7 +396,6 @@ class _StatBox extends StatelessWidget {
   }
 }
 
-/// QUICK ACTION BUTTON
 class _QuickAction extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -448,7 +436,6 @@ class _QuickAction extends StatelessWidget {
   }
 }
 
-/// CONTACT ICON WITH CIRCLE BG
 class _ContactIcon extends StatelessWidget {
   final IconData icon;
 

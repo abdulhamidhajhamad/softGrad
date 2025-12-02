@@ -26,7 +26,6 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
   String? _selectedCategory;
   String? _selectedCity;
 
-  // ====== CATEGORIES ======
   final List<String> _categories = const [
     'Venues',
     'Photographers',
@@ -132,7 +131,6 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
         ),
       );
 
-  // PASSWORD STRENGTH
   void _evaluatePasswordStrength(String password) {
     String label;
     Color color;
@@ -170,7 +168,6 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
     }
   }
 
-  // ========================= SAVE CHANGES =========================
   void _saveChanges() {
     if (!_formKey.currentState!.validate()) return;
 
@@ -190,37 +187,41 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
     Navigator.pop(context, updatedProvider);
   }
 
-  Widget _modernCard({required Widget child}) { /* unchanged */ return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(18),
-    margin: const EdgeInsets.only(bottom: 22),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: Colors.grey.shade200),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 12,
-          spreadRadius: 1,
-          offset: const Offset(0, 3),
-        )
-      ],
-    ),
-    child: child,
-  ); }
-
-  Widget _sectionTitle(String text) { /* unchanged */ return Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Text(
-      text,
-      style: GoogleFonts.poppins(
-        fontSize: 17,
-        fontWeight: FontWeight.w700,
-        color: Colors.black,
+  Widget _modernCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.only(bottom: 22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            spreadRadius: 1,
+            offset: const Offset(0, 3),
+          )
+        ],
       ),
-    ),
-  ); }
+      child: child,
+    );
+  }
+
+  Widget _sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        text,
+        style: GoogleFonts.poppins(
+          fontSize: 17,
+          fontWeight: FontWeight.w700,
+          color: Colors.black,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -246,7 +247,6 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
           key: _formKey,
           child: Column(
             children: [
-              // ---------------- PROFILE INFO ----------------
               _modernCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,8 +257,10 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _brandCtrl,
-                      decoration: _decor(hint: "Brand name", icon: Icons.storefront_outlined),
-                      validator: (v) => v == null || v.trim().isEmpty ? "Required" : null,
+                      decoration:
+                          _decor(hint: "Brand name", icon: Icons.storefront_outlined),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? "Required" : null,
                     ),
 
                     const SizedBox(height: 18),
@@ -268,10 +270,12 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                     TextFormField(
                       controller: _emailCtrl,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: _decor(hint: "Email address", icon: Icons.email_outlined),
+                      decoration:
+                          _decor(hint: "Email address", icon: Icons.email_outlined),
                       validator: (v) {
                         if (v == null || v.isEmpty) return "Required";
-                        final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v.trim());
+                        final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+                            .hasMatch(v.trim());
                         return ok ? null : "Invalid email";
                       },
                     ),
@@ -283,8 +287,10 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                     TextFormField(
                       controller: _phoneCtrl,
                       keyboardType: TextInputType.phone,
-                      decoration: _decor(hint: "Phone", icon: Icons.phone_outlined),
-                      validator: (v) => v == null || v.isEmpty ? "Required" : null,
+                      decoration:
+                          _decor(hint: "Phone", icon: Icons.phone_outlined),
+                      validator: (v) =>
+                          v == null || v.isEmpty ? "Required" : null,
                     ),
 
                     const SizedBox(height: 18),
@@ -294,7 +300,8 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                     DropdownButtonFormField<String>(
                       value: _selectedCity,
                       isExpanded: true,
-                      decoration: _decor(hint: "City", icon: Icons.location_city_outlined),
+                      decoration:
+                          _decor(hint: "City", icon: Icons.location_city_outlined),
                       items: _cities.map((city) {
                         return DropdownMenuItem(
                           value: city,
@@ -307,7 +314,6 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                 ),
               ),
 
-              // ---------------- BUSINESS INFO ----------------
               _modernCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,13 +325,15 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                     DropdownButtonFormField<String>(
                       value: _selectedCategory,
                       isExpanded: true,
-                      decoration: _decor(hint: "Select Category", icon: Icons.category_outlined),
+                      decoration: _decor(
+                          hint: "Select Category", icon: Icons.category_outlined),
                       items: _categories.map((cat) {
                         return DropdownMenuItem(
                           value: cat,
                           child: Row(
                             children: [
-                              Icon(_categoryIcons[cat], size: 18, color: kPrimaryColor),
+                              Icon(_categoryIcons[cat],
+                                  size: 18, color: kPrimaryColor),
                               const SizedBox(width: 8),
                               Flexible(
                                 child: Text(cat,
@@ -336,7 +344,8 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                           ),
                         );
                       }).toList(),
-                      onChanged: (v) => setState(() => _selectedCategory = v),
+                      onChanged: (v) =>
+                          setState(() => _selectedCategory = v),
                     ),
 
                     const SizedBox(height: 18),
@@ -346,19 +355,20 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                     TextFormField(
                       controller: _descCtrl,
                       maxLines: 4,
-                      decoration: _decor(hint: "Describe your business", icon: Icons.description_outlined),
-                      validator: (v) => v == null || v.isEmpty ? "Required" : null,
+                      decoration: _decor(
+                          hint: "Describe your business",
+                          icon: Icons.description_outlined),
+                      validator: (v) =>
+                          v == null || v.isEmpty ? "Required" : null,
                     ),
                   ],
                 ),
               ),
 
-              // ---------------- SECURITY ----------------
               _modernCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     _sectionTitle("Security"),
 
                     _label("New Password"),
@@ -371,8 +381,11 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                         hint: "••••••••",
                         icon: Icons.lock_outline,
                         suffix: IconButton(
-                          icon: Icon(_showPass ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                          onPressed: () => setState(() => _showPass = !_showPass),
+                          icon: Icon(_showPass
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined),
+                          onPressed: () =>
+                              setState(() => _showPass = !_showPass),
                         ),
                       ),
                     ),
@@ -385,13 +398,15 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                           value: _strengthValue(),
                           minHeight: 6,
                           backgroundColor: Colors.grey.shade300,
-                          valueColor: AlwaysStoppedAnimation<Color>(_passwordStrengthColor),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              _passwordStrengthColor),
                         ),
                       ),
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(Icons.bolt_rounded, size: 16, color: _passwordStrengthColor),
+                          Icon(Icons.bolt_rounded,
+                              size: 16, color: _passwordStrengthColor),
                           const SizedBox(width: 6),
                           Text(
                             "Password strength: $_passwordStrengthLabel",
@@ -416,8 +431,11 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                         hint: "••••••••",
                         icon: Icons.lock_outline,
                         suffix: IconButton(
-                          icon: Icon(_showConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                          onPressed: () => setState(() => _showConfirm = !_showConfirm),
+                          icon: Icon(_showConfirm
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined),
+                          onPressed: () =>
+                              setState(() => _showConfirm = !_showConfirm),
                         ),
                       ),
                       validator: (v) {
@@ -434,7 +452,6 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
 
               const SizedBox(height: 10),
 
-              // ---------------- SAVE BUTTON ----------------
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

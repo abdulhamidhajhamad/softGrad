@@ -37,11 +37,24 @@ class ProviderModel {
   });
 }
 
-class HomeProviderScreen extends StatelessWidget {
+class HomeProviderScreen extends StatefulWidget {
   final ProviderModel provider;
 
   const HomeProviderScreen({Key? key, required this.provider})
       : super(key: key);
+
+  @override
+  State<HomeProviderScreen> createState() => _HomeProviderScreenState();
+}
+
+class _HomeProviderScreenState extends State<HomeProviderScreen> {
+  late ProviderModel provider;
+
+  @override
+  void initState() {
+    super.initState();
+    provider = widget.provider;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,13 +75,17 @@ class HomeProviderScreen extends StatelessWidget {
           ),
           actions: [
             IconButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                final updated = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => EditProfileProvider(provider: provider),
                   ),
                 );
+
+                if (updated != null && updated is ProviderModel) {
+                  setState(() => provider = updated);
+                }
               },
               icon: const Icon(Icons.edit, color: Colors.black),
             ),
@@ -164,9 +181,7 @@ class HomeProviderScreen extends StatelessWidget {
               Text(
                 "About Your Brand",
                 style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                    fontSize: 18, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
               Container(
@@ -320,11 +335,8 @@ class _HeaderCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(
-                      Icons.location_on,
-                      size: 18,
-                      color: Colors.grey.shade700,
-                    ),
+                    Icon(Icons.location_on,
+                        size: 18, color: Colors.grey.shade700),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(

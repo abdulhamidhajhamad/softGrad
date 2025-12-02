@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'help_add_service_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -41,21 +42,19 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
   List<Map<String, dynamic>> _packages = [];
   List<String> _highlights = [];
 
-  final List<String> _categories = const [
-    'Venues',
-    'Photographers',
-    'Videography',
-    'Makeup & Hair',
-    'Cake',
-    'Catering',
-    'Flower Shops',
-    'Wedding Planner',
-    'Decorations',
-    'Music & DJ',
-    'Entertainment',
-    'Bridal Dresses',
-    'Groom Suits',
-    'Other',
+  final List<Map<String, dynamic>> _categories = [
+    {"name": "Venues", "icon": Icons.apartment},
+    {"name": "Photographers", "icon": Icons.photo_camera},
+    {"name": "Catering", "icon": Icons.restaurant_menu},
+    {"name": "Cake", "icon": Icons.cake},
+    {"name": "Flower Shops", "icon": Icons.local_florist},
+    {"name": "Decor & Lighting", "icon": Icons.wb_incandescent_outlined},
+    {"name": "Music & Entertainment", "icon": Icons.music_note},
+    {"name": "Wedding Planners & Coordinators", "icon": Icons.event_note},
+    {"name": "Card Printing", "icon": Icons.print},
+    {"name": "Jewelry & Accessories", "icon": Icons.diamond},
+    {"name": "Car Rental & Transportation", "icon": Icons.directions_car},
+    {"name": "Gift & Souvenir", "icon": Icons.redeem},
   ];
 
   final List<String> _cities = const [
@@ -229,7 +228,14 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.help_outline, color: Colors.black),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const HelpAddServiceProvider(),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -336,12 +342,25 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                     DropdownButtonFormField<String>(
                       value: _selectedCategory,
                       decoration: _inputDecoration(null),
-                      items: _categories
-                          .map((c) => DropdownMenuItem(
-                                value: c,
-                                child: Text(c),
-                              ))
-                          .toList(),
+                      items: _categories.map<DropdownMenuItem<String>>((item) {
+                        return DropdownMenuItem<String>(
+                          value: item["name"] as String,
+                          child: Row(
+                            children: [
+                              Icon(
+                                item["icon"] as IconData,
+                                color: kPrimaryColor,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                item["name"] as String,
+                                style: GoogleFonts.poppins(fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
                       onChanged: (v) {
                         setState(() => _selectedCategory = v!);
                       },

@@ -186,8 +186,8 @@ class HelpAddServiceProvider extends StatelessWidget {
                 child: Text(
                   "Got it",
                   style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
                     color: Colors.white,
                   ),
                 ),

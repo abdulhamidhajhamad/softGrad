@@ -9,6 +9,7 @@ import { AdminModule } from './admin/admin.module';
 import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { ChatModule } from './chatingService/chat.module';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ChatModule } from './chatingService/chat.module';
     ShoppingCartModule,
     FirebaseModule,
     ChatModule,
+    PaymentModule,
   ],
 })
 export class AppModule {}

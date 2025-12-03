@@ -655,16 +655,25 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                 setState(() {
                   _services.add({
                     'name': newService['name'],
+                    'brand': newService['brand'],
+                    'tagline': newService['tagline'],
+                    'address': newService['address'],
                     'category': newService['category'],
                     'city': newService['city'],
+                    'price': newService['price'],
+                    'priceType': newService['priceType'],
+                    'discount': newService['discount'],
                     'shortDescription': newService['shortDescription'],
                     'fullDescription': newService['fullDescription'],
-                    'price': newService['price'],
+                    'images': List<String>.from(newService['images'] ?? []),
+                    'packages': List<Map<String, dynamic>>.from(
+                        newService['packages'] ?? []),
+                    'highlights':
+                        List<String>.from(newService['highlights'] ?? []),
                     'isActive': newService['isActive'],
                     'views': 0,
                     'bookings': 0,
                     'likes': 0,
-                    'images': List<String>.from(newService['images'] ?? []),
                     'createdAt': DateTime.now(),
                     'updatedAt': DateTime.now(),
                   });

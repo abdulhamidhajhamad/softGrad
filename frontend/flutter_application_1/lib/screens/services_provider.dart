@@ -23,39 +23,7 @@ class ServicesProviderScreen extends StatefulWidget {
 
 class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
   // ⭐ KEEP SERVICES PERSISTENT
-  static final List<Map<String, dynamic>> _services = [
-    {
-      'name': 'Bridal Makeup',
-      'category': 'Beauty',
-      'city': 'Nablus',
-      'shortDescription': 'Soft glam bridal look',
-      'fullDescription': 'Soft glam bridal look including trial session.',
-      'price': 150.0,
-      'isActive': true,
-      'views': 220,
-      'bookings': 8,
-      'likes': 35,
-      'images': <String>[],
-      'createdAt': DateTime.now().subtract(const Duration(days: 3)),
-      'updatedAt': DateTime.now().subtract(const Duration(days: 1)),
-    },
-    {
-      'name': 'Wedding Photography',
-      'category': 'Photography',
-      'city': 'Ramallah',
-      'shortDescription': 'Full day coverage',
-      'fullDescription':
-          'Full wedding day coverage with edited photos and highlight video.',
-      'price': 500.0,
-      'isActive': true,
-      'views': 540,
-      'bookings': 15,
-      'likes': 80,
-      'images': <String>[],
-      'createdAt': DateTime.now().subtract(const Duration(days: 10)),
-      'updatedAt': DateTime.now().subtract(const Duration(days: 2)),
-    },
-  ];
+  static final List<Map<String, dynamic>> _services = [];
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';

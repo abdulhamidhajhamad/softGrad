@@ -5,17 +5,23 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { User, UserSchema } from './user.entity';
+import { PasswordResetToken, PasswordResetTokenSchema } from './password-reset-token.schema';
 import { JwtStrategy } from './jwt.strategy';
 import { MailService } from './mail.service';
+import { SupabaseStorageModule } from '../subbase/supabaseStorage.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+      { name: PasswordResetToken.name, schema: PasswordResetTokenSchema } 
+    ]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       secret: 'your-secret-key-change-in-production',
       signOptions: { expiresIn: '24h' },
     }),
+    SupabaseStorageModule, 
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, MailService],
@@ -23,7 +29,7 @@ import { MailService } from './mail.service';
     JwtStrategy, 
     PassportModule, 
     JwtModule,
-    MongooseModule, // ← Export MongooseModule so other modules can access User model
+    MongooseModule,
   ],
 })
 export class AuthModule {}

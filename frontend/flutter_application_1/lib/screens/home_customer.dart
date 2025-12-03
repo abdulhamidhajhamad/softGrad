@@ -1,10 +1,9 @@
-// lib/screens/home.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:flutter_application_1/services/auth_service.dart';
 import 'search.dart';
 import 'favorites.dart';
-import 'ai_assistant.dart'; // <-- NEW
+import 'ai_assistant.dart';
 import 'cart.dart';
 import 'profile.dart';
 import 'notifications.dart';
@@ -13,6 +12,7 @@ import 'packages.dart';
 import 'templates.dart';
 import 'vendors.dart';
 import 'vendor_profile.dart';
+import 'signin.dart';
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -113,7 +113,7 @@ class _HomeTab extends StatelessWidget {
   final VoidCallback onOpenOffers;
   final VoidCallback onOpenTemplates;
   final VoidCallback onOpenVendors;
-  final VoidCallback onOpenAiAssistant; // <-- NEW
+  final VoidCallback onOpenAiAssistant;
 
   const _HomeTab({
     Key? key,
@@ -123,7 +123,7 @@ class _HomeTab extends StatelessWidget {
     required this.onOpenOffers,
     required this.onOpenTemplates,
     required this.onOpenVendors,
-    required this.onOpenAiAssistant, // <-- NEW
+    required this.onOpenAiAssistant,
   }) : super(key: key);
 
   @override
@@ -261,7 +261,6 @@ class _HomeTab extends StatelessWidget {
                       icon: Icons.search,
                       tint: brand.withOpacity(0.12),
                       iconColor: brand,
-                      // حاليا يفتح قائمة الـ Vendors
                       onTap: onOpenVendors,
                     ),
                     _QuickActionCard(
@@ -288,10 +287,7 @@ class _HomeTab extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 20),
-
-                // AI assistant card -> opens AiAssistantScreen
                 _AiAssistantCard(onTap: onOpenAiAssistant),
-
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -342,7 +338,6 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
-/// Quick Action card
 class _QuickActionCard extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -554,9 +549,13 @@ class _AppDrawer extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Sign Out'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/signin');
+              onTap: () async {
+                await AuthService.deleteToken();
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => SignInScreen()),
+                  (_) => false,
+                );
               },
             ),
           ],

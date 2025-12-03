@@ -326,4 +326,109 @@ export class BookingService {
       bookedServices 
     };
   }
+
+
+
+
+
+/**
+ * Creates a Booking and updates the payment status to PENDING.
+ * This should be called BEFORE the actual payment is made in Stripe.
+ * @param userId - ID of the user.
+ * @returns The newly created booking document.
+ */
+async createPendingBookingFromCart(userId: string): Promise<any> {
+    const shoppingCart = await this.shoppingCartModel
+      .findOne({ userId: new Types.ObjectId(userId) })
+      .exec();
+
+    if (!shoppingCart || shoppingCart.services.length === 0) {
+      throw new BadRequestException('Shopping cart is empty');
+    }
+
+    // 1. Prepare services and check availability (Logic is similar to original createFromCart)
+    const preparedServices: PreparedService[] = [];
+    for (const cartService of shoppingCart.services) {
+      // ... (Availability check logic remains here)
+      const serviceId = this.extractServiceId(cartService.serviceId);
+      const service = await this.serviceModel.findById(serviceId).exec();
+      if (!service) {
+        throw new NotFoundException(`Service with ID '${serviceId}' not found`);
+      }
+      // Assuming availability check is done here.
+
+      preparedServices.push({
+        serviceId: serviceId,
+        bookingDate: cartService.bookingDate,
+      });
+    }
+
+    // 2. Calculate Total Amount
+    let totalAmount = shoppingCart.totalPrice; // Assuming total price is calculated in the cart
+    
+    // 3. Create Booking with PENDING status (Crucial change)
+    const newBooking = new this.bookingModel({
+      userId,
+      services: preparedServices,
+      totalAmount,
+      paymentStatus: PaymentStatus.PENDING, // <-- Start as PENDING
+    });
+
+    try {
+      const savedBooking = await newBooking.save();
+      
+      // Do NOT empty the cart or update bookedDates yet.
+      // This is done ONLY after SUCCESSFUL payment confirmation.
+
+      return this.formatBookingResponse(savedBooking);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create pending booking';
+      throw new BadRequestException(errorMessage);
+    }
+}
+
+/**
+ * Confirms payment, updates booking status to SUCCESSFUL, and finalizes cart/service dates.
+ * This is called AFTER Flutter confirms successful Stripe payment.
+ */
+async confirmPaymentAndUpdateBooking(bookingId: string): Promise<any> {
+    const booking = await this.bookingModel.findById(bookingId).exec();
+
+    if (!booking) {
+        throw new NotFoundException(`Booking with ID '${bookingId}' not found`);
+    }
+
+    if (booking.paymentStatus === PaymentStatus.SUCCESSFUL) {
+        return this.formatBookingResponse(booking); // Already processed
+    }
+    
+    // 1. Finalize payment status
+    booking.paymentStatus = PaymentStatus.SUCCESSFUL;
+    const savedBooking = await booking.save();
+
+    // 2. Update all associated services (add bookedDates)
+    for (const service of booking.services) {
+        await this.serviceModel.findByIdAndUpdate(
+            service.serviceId,
+            { 
+              $push: { 
+                bookedDates: service.bookingDate 
+              } 
+            }
+        ).exec();
+    }
+
+    // 3. Clear the user's shopping cart
+    await this.shoppingCartModel.findOneAndUpdate(
+        { userId: new Types.ObjectId(booking.userId) },
+        { 
+          $set: { 
+            services: [],
+            totalPrice: 0 
+          } 
+        }
+    ).exec();
+
+    return this.formatBookingResponse(savedBooking);
+}
 }

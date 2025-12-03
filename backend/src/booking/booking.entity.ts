@@ -3,6 +3,7 @@ import { Document } from 'mongoose';
 
 export enum PaymentStatus {
   SUCCESSFUL = 'successful',
+  PENDING = 'pending', // <--- ADD THIS
   CANCELLED = 'cancelled',
 }
 

@@ -285,4 +285,45 @@ export class BookingService {
       type: typeof serviceId
     };
   }
+
+
+  // 1. New Service: Get Total Sales
+  async getTotalSales(): Promise<{ totalSales: number }> {
+    const successfulBookings = await this.bookingModel.find({ 
+      paymentStatus: PaymentStatus.SUCCESSFUL 
+    }).exec();
+
+    const totalSales = successfulBookings.reduce(
+      (sum, booking) => sum + booking.totalAmount,
+      0,
+    );
+
+    return { totalSales };
+  }
+
+  // 2. New Service: Get Total Bookings and Services Details
+  async getTotalBookingsAndServices(): Promise<{ totalBookings: number, bookedServices: { serviceId: string, bookingDate: Date }[] }> {
+    const bookings = await this.bookingModel.find().exec();
+    const totalBookings = bookings.length;
+    
+    let bookedServices: { serviceId: string, bookingDate: Date }[] = [];
+
+    bookings.forEach(booking => {
+      if (Array.isArray(booking.services)) {
+        booking.services.forEach(serviceItem => {
+          const formattedItem = this.formatBookingResponse({ services: [serviceItem] }).services[0];
+          
+          bookedServices.push({
+            serviceId: formattedItem.serviceId,
+            bookingDate: formattedItem.bookingDate,
+          });
+        });
+      }
+    });
+
+    return { 
+      totalBookings, 
+      bookedServices 
+    };
+  }
 }

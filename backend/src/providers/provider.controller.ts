@@ -20,7 +20,6 @@ export class ProviderController {
       throw error;
     }
   }
-  // جلب جميع شركات المستخدم
   @Get()
   async getAll(@Req() req) {
     const userId = req.user.userId;

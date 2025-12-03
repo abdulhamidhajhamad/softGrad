@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'edit_profile_customer.dart';
 import 'security_password.dart';
 import 'provider.dart';
+import 'package:flutter_application_1/services/auth_service.dart'; // Import AuthService
 
 /// Simple user data model for the profile screen
 class User {
@@ -38,9 +39,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _bookingUpdates = true;
   bool _offersAndDiscounts = true;
   bool _remindersAndChecklist = true;
+  
+  // أضف متغيرات لتخزين البيانات الحقيقية
+  late User _currentUser;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final userData = await AuthService.getUserProfile();
+      
+      setState(() {
+        _currentUser = User(
+          fullName: userData['userName'] ?? 'Guest',
+          email: userData['email'] ?? 'No email',
+          phone: userData['phone'] ?? 'No phone',
+          location: userData['city'] ?? 'No location', // city بتكون location
+          avatarUrl: userData['imageUrl'],
+        );
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('❌ Error loading user profile: $e');
+      // إذا فشل جلب البيانات، استخدم البيانات الافتراضية
+      setState(() {
+        _currentUser = widget.currentUser;
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: _isDarkMode ? Colors.black : Colors.white,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: kAccentColor,
+          ),
+        ),
+      );
+    }
+
     final Color backgroundColor = _isDarkMode ? Colors.black : Colors.white;
     final Color cardColor =
         _isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5);
@@ -99,7 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
           children: [
             _ProfileHeader(
-              user: widget.currentUser,
+              user: _currentUser, // غيرت من widget.currentUser إلى _currentUser
               textPrimary: textPrimary,
               textSecondary: textSecondary,
               iconColor: iconColor,
@@ -116,7 +162,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _InfoRow(
                     icon: Icons.person_outline,
                     label: 'Full Name',
-                    value: widget.currentUser.fullName,
+                    value: _currentUser.fullName, // غيرت من widget.currentUser إلى _currentUser
                     textPrimary: textPrimary,
                     textSecondary: textSecondary,
                     iconColor: iconColor,
@@ -125,7 +171,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _InfoRow(
                     icon: Icons.mail_outline,
                     label: 'Email',
-                    value: widget.currentUser.email,
+                    value: _currentUser.email, // غيرت من widget.currentUser إلى _currentUser
                     textPrimary: textPrimary,
                     textSecondary: textSecondary,
                     iconColor: iconColor,
@@ -134,7 +180,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _InfoRow(
                     icon: Icons.phone_outlined,
                     label: 'Phone',
-                    value: widget.currentUser.phone,
+                    value: _currentUser.phone, // غيرت من widget.currentUser إلى _currentUser
                     textPrimary: textPrimary,
                     textSecondary: textSecondary,
                     iconColor: iconColor,
@@ -143,7 +189,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _InfoRow(
                     icon: Icons.location_on_outlined,
                     label: 'Location',
-                    value: widget.currentUser.location,
+                    value: _currentUser.location, // غيرت من widget.currentUser إلى _currentUser
                     textPrimary: textPrimary,
                     textSecondary: textSecondary,
                     iconColor: iconColor,

@@ -17,7 +17,8 @@ import { PaymentModule } from './payment/payment.module';
 // ✅ NEW MODULE IMPORTS
 import { NotificationModule } from './notification/notification.module';
 import { PromotionModule } from './promotion/promotion.module'; 
-
+import { ReviewModule } from './review/review.module'; 
+import { AiSearchModule } from './ai-search/ai-search.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -32,7 +33,6 @@ import { PromotionModule } from './promotion/promotion.module';
       inject: [ConfigService],
     }),
 
-    // 🌟 SOLUTION: Initialize BullModule with Redis connection details
     BullModule.forRoot({
       redis: {
         host: process.env.REDIS_HOST || 'localhost',
@@ -54,10 +54,11 @@ import { PromotionModule } from './promotion/promotion.module';
     ShoppingCartModule,
     FirebaseModule,
     ChatModule,
+    ReviewModule,
     PaymentModule,
     NotificationModule,
     PromotionModule,
-
+    AiSearchModule,
   ],
   controllers: [],
   providers: [],

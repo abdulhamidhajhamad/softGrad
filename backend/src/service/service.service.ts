@@ -232,7 +232,6 @@ export class ServiceService {
     }
   }
 
-  // 6. Get Services by Vendor ID
   async getServicesByVendorId(vendorId: string): Promise<Service[]> {
     try {
       const services = await this.serviceModel.find({ providerId: vendorId }).exec();
@@ -253,7 +252,6 @@ export class ServiceService {
     }
   }
 
-  // 7. Get Service by ID
   async getServiceById(serviceId: string): Promise<Service> {
     try {
       const service = await this.serviceModel.findById(serviceId).exec();
@@ -274,7 +272,6 @@ export class ServiceService {
     }
   }
 
-  // 8. Search services by location (within radius)
   async searchServicesByLocation(
     latitude: number,
     longitude: number,
@@ -314,7 +311,6 @@ export class ServiceService {
     }
   }
 
-  // 9. Search services by name
   async searchServicesByName(serviceName: string): Promise<Service[]> {
     try {
       const services = await this.serviceModel.find({
@@ -337,7 +333,6 @@ export class ServiceService {
     }
   }
 
-  // 10. Get services by category
   async getServicesByCategory(category: string): Promise<Service[]> {
     try {
       const services = await this.serviceModel.find({
@@ -360,20 +355,18 @@ export class ServiceService {
     }
   }
 
-  // Haversine formula to calculate distance
-  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
+ private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // نصف قطر الأرض بالكيلومتر
+    const dLat = this.deg2rad(lat2 - lat1);
+    const dLon = this.deg2rad(lon2 - lon1);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
-
-  // 11. Search services by city
+  
   async searchServicesByCity(city: string): Promise<Service[]> {
     try {
       const services = await this.serviceModel.find({
@@ -396,69 +389,55 @@ export class ServiceService {
     }
   }
 
-  // البحث المتعدد بالفلترة
+ 
+  
+  private deg2rad(deg: number): number {
+    return deg * (Math.PI / 180);
+  }
+
   async searchServices(filters: any): Promise<Service[]> {
     try {
       let query: any = {};
 
-      // فلترة بالمدينة
+      // ... (منطق فلترة المدينة والسعر والتصنيف واسم الخدمة واسم الشركة كما هو)
       if (filters.city) {
         query['location.city'] = { $regex: filters.city, $options: 'i' };
       }
-
-      // فلترة برينج السعر
       if (filters.priceRange) {
-        query.price = {
-          $gte: filters.priceRange.min,
-          $lte: filters.priceRange.max
-        };
+        query.price = { $gte: filters.priceRange.min, $lte: filters.priceRange.max };
       }
-
-      // فلترة بالتصنيف
       if (filters.category) {
         query.category = { $regex: filters.category, $options: 'i' };
       }
-
-      // فلترة باسم السيرفس
       if (filters.serviceName) {
         query.serviceName = { $regex: filters.serviceName, $options: 'i' };
       }
-
-      // فلترة باسم الشركة
       if (filters.companyName) {
         query.companyName = { $regex: filters.companyName, $options: 'i' };
       }
 
-      // فلترة بالموقع (إذا كان بالإحداثيات)
+      // 🆕 فلترة بواسطة العلامات المستخرجة من الذكاء الاصطناعي (AI Tags)
+      if (filters.aiTags && Array.isArray(filters.aiTags) && filters.aiTags.length > 0) {
+          // استخدام $in للبحث عن الخدمات التي تحتوي على أي من علامات الذكاء الاصطناعي المطلوبة.
+          query['aiAnalysis.tags'] = { $in: filters.aiTags }; 
+      }
+
+      // ... (منطق فلترة الموقع كما هو)
       if (filters.location) {
         const { lat, lng, radius } = filters.location;
-        
-        // Calculate rough bounding box for faster filtering
         const latDelta = radius / 111;
         const lonDelta = radius / (111 * Math.cos(lat * Math.PI / 180));
 
-        query['location.latitude'] = {
-          $gte: lat - latDelta,
-          $lte: lat + latDelta
-        };
-        query['location.longitude'] = {
-          $gte: lng - lonDelta,
-          $lte: lng + lonDelta
-        };
+        query['location.latitude'] = { $gte: lat - latDelta, $lte: lat + latDelta };
+        query['location.longitude'] = { $gte: lng - lonDelta, $lte: lng + lonDelta };
 
         const services = await this.serviceModel.find(query).exec();
-        // Filter by exact distance using Haversine formula
         return services.filter(service => {
-          const distance = this.calculateDistance(
-            lat,
-            lng,
-            service.location.latitude,
-            service.location.longitude
-          );
+          const distance = this.calculateDistance(lat, lng, service.location.latitude, service.location.longitude);
           return distance <= radius;
         });
       }
-      // إذا ما في فلترة موقع، استخدم البحث العادي
+      
       const services = await this.serviceModel.find(query).exec();
 
       if (!services || services.length === 0) {
@@ -476,4 +455,5 @@ export class ServiceService {
       );
     }
   }
+  
 }

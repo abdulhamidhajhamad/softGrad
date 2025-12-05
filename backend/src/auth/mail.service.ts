@@ -10,11 +10,12 @@ export class MailService {
     
     const transporterConfig: any = {
       host: process.env.MAIL_HOST || 'smtp.gmail.com',
+      // ✅ FIX: استخدام علامة (!) لضمان أن القيمة string عند قراءتها
       port: parseInt(process.env.MAIL_PORT!) || 587,
       secure: process.env.MAIL_PORT === '465', // true for 465, false for other ports
       auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASSWORD,
+        user: process.env.MAIL_USER!, // 👈 Fix: Non-Null assertion
+        pass: process.env.MAIL_PASSWORD!, // 👈 Fix: Non-Null assertion
       },
     };
 
@@ -42,33 +43,48 @@ export class MailService {
     }
   }
 
-  // ✅ Send verification code email
-  async sendVerificationEmail(email: string, verificationCode: string): Promise<void> {
+  // =============================================================
+  // 🌟 NEW: وظيفة إرسال بريد إلكتروني بمحتوى HTML عام
+  // =============================================================
+  async sendHtmlEmail(to: string, subject: string, htmlContent: string): Promise<void> {
+    const mailOptions = {
+      from: process.env.MAIL_FROM || 'noreply@example.com',
+      to: to,
+      subject: subject,
+      html: htmlContent,
+    };
+    
+    try {
+      await this.transporter.sendMail(mailOptions);
+    } catch (error) {
+      console.error(`❌ Failed to send HTML email to ${to}:`, error);
+      // إعادة إطلاق الخطأ لـ Bull ليتمكن من معالجة الفشل
+      throw new Error(`Failed to send HTML email: ${error.message}`);
+    }
+  }
+
+
+  async sendVerificationEmail(email: string, code: string): Promise<void> {
     const mailOptions = {
       from: process.env.MAIL_FROM || 'noreply@example.com',
       to: email,
-      subject: 'Email Verification Code',
+      subject: 'Verify your email address',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-          <h2 style="color: #333; text-align: center;">Welcome! Verify Your Email</h2>
-          <p style="color: #555; font-size: 16px;">Thank you for signing up! Please use the verification code below to verify your email address:</p>
-          
-          <div style="background-color: #f5f5f5; padding: 20px; text-align: center; border-radius: 5px; margin: 20px 0;">
-            <h1 style="color: #007bff; font-size: 32px; letter-spacing: 5px; margin: 0;">${verificationCode}</h1>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Email Verification</h2>
+          <p>Thank you for signing up! Please use the following code to verify your email address:</p>
+          <div style="background-color: #f0f8ff; padding: 15px; text-align: center; border-radius: 5px; margin: 20px 0;">
+            <strong style="font-size: 24px; color: #007bff;">${code}</strong>
           </div>
-          
-          <p style="color: #555; font-size: 14px;">This code will expire in <strong>15 minutes</strong>.</p>
-          <p style="color: #555; font-size: 14px;">If you didn't request this, please ignore this email.</p>
-          
-          <hr style="border: 1px solid #eee; margin: 20px 0;">
-          <p style="color: #999; font-size: 12px; text-align: center;">This is an automated message, please do not reply.</p>
+          <p>This code will expire shortly.</p>
+          <p>If you didn't create an account, please ignore this email.</p>
         </div>
       `,
     };
 
     try {
       await this.transporter.sendMail(mailOptions);
-      console.log(`✅ Verification email sent to ${email}`);
+      console.log('✅ Verification email sent to:', email);
     } catch (error) {
       console.error('❌ Error sending verification email:', error);
       throw new Error('Failed to send verification email');
@@ -96,7 +112,7 @@ export class MailService {
 
     try {
       await this.transporter.sendMail(mailOptions);
-      console.log(`✅ Password reset email sent to ${email}`);
+      console.log('✅ Password reset email sent to:', email);
     } catch (error) {
       console.error('❌ Error sending password reset email:', error);
       throw new Error('Failed to send password reset email');

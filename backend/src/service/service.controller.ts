@@ -12,7 +12,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 @Controller('services')
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
-  
+  //test
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 10)) 

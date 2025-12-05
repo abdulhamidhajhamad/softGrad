@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsOptional, IsEnum } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional, IsEnum,IsNotEmpty } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class SignUpDto {
@@ -91,4 +91,10 @@ export class UpdateProfileDto {
   @IsString()
   @ApiPropertyOptional({ example: 'Irbid' })
   city?: string;
+}
+export class UpdateFCMTokenDto {
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty({ example: 'fcm-registration-token-from-firebase' })
+  fcmToken: string;
 }

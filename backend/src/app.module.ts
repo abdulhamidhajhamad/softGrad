@@ -59,6 +59,7 @@ import { AiSearchModule } from './ai-search/ai-search.module';
     NotificationModule,
     PromotionModule,
     AiSearchModule,
+
   ],
   controllers: [],
   providers: [],

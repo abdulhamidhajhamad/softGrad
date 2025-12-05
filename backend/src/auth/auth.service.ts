@@ -20,6 +20,7 @@ import { MailService } from './mail.service';
 import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
 import * as crypto from 'crypto';
 import { PasswordResetToken } from './password-reset-token.schema'; 
+import { UpdateFCMTokenDto } from './auth.dto'; // Need to create this DTO
 @Injectable()
 export class AuthService {
   private verificationCodes = new Map<string, { code: string; expires: Date }>();
@@ -438,4 +439,17 @@ async getUserProfile(userId: string): Promise<{
   };
 }
 
+// ✅ NEW METHOD: Update user's FCM Token
+  async updateFCMToken(userId: string, token: string): Promise<void> {
+    // Find the user by ID
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    
+    // Set or update the token
+    user.fcmToken = token;
+    await user.save();
+    console.log(`FCM Token updated for user ${userId}`);
+  }
 }

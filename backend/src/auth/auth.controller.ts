@@ -100,5 +100,14 @@ async getProfile(@Req() req) {
     return this.authService.resetPassword(email, token, newPassword);
   }
 
+  // ✅ NEW: Endpoint to receive and store FCM token
+  @Put('fcm-token')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateFCMToken(@Req() req, @Body('fcmToken') fcmToken: string) {
+    await this.authService.updateFCMToken(req.user.userId, fcmToken);
+    return { message: 'FCM token updated successfully' };
+  }
+
 
 }

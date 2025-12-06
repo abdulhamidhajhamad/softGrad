@@ -57,14 +57,18 @@ class _SignInScreenState extends State<SignInScreen> {
             context,
             MaterialPageRoute(
               builder: (_) => HomeProviderScreen(
-                provider: ProviderModel(
-                  brandName: userName,
-                  email: email,
-                  phone: userData['phone'] ?? '',
-                  category: userData['category'] ?? 'Service Provider',
-                  description: userData['description'] ?? 'Professional service provider',
-                  city: userData['city'] ?? '',
-                ),
+              provider: ProviderModel(
+  brandName: userName,
+  email: email,
+  phone: userData['phone'] ?? '',
+  category: userData['category'] ?? 'Service Provider',
+  description: userData['description'] ?? 'Professional service provider',
+  city: userData['city'] ?? '',
+  bookings: userData['bookings'] ?? 0,
+  views: userData['views'] ?? 0,
+  messages: userData['messages'] ?? 0,
+  reviews: userData['reviews'] ?? 0,
+),
               ),
             ),
           );

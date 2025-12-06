@@ -2,10 +2,25 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 class ProviderService {
-  static const String baseUrl = 'http://localhost:3000'; // أو IP الخادم
-  
+  static String getBaseUrl() {
+    if (kIsWeb) {
+      // Web (Chrome)
+      return 'http://localhost:3000';
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      // Android Emulator
+      return 'http://10.0.2.2:3000';
+    } else {
+      // iOS / Desktop / غيره
+      return 'http://localhost:3000';
+    }
+  }
+
+  static final String baseUrl = getBaseUrl();
+
   // جلب token من localStorage
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -15,7 +30,7 @@ class ProviderService {
   // جلب جميع الـ services من الداتابيز
   Future<List<dynamic>> getMyServices() async {
     final token = await _getToken();
-    
+
     final response = await http.get(
       Uri.parse('$baseUrl/providers'),
       headers: {
@@ -34,7 +49,7 @@ class ProviderService {
   // إنشاء service جديد
   Future<dynamic> createService(Map<String, dynamic> serviceData) async {
     final token = await _getToken();
-    
+
     final response = await http.post(
       Uri.parse('$baseUrl/providers'),
       headers: {
@@ -52,9 +67,10 @@ class ProviderService {
   }
 
   // تحديث service
-  Future<dynamic> updateService(String companyName, Map<String, dynamic> updates) async {
+  Future<dynamic> updateService(
+      String companyName, Map<String, dynamic> updates) async {
     final token = await _getToken();
-    
+
     final response = await http.patch(
       Uri.parse('$baseUrl/providers/$companyName'),
       headers: {
@@ -74,7 +90,7 @@ class ProviderService {
   // حذف service
   Future<void> deleteService(String companyName) async {
     final token = await _getToken();
-    
+
     final response = await http.delete(
       Uri.parse('$baseUrl/providers/$companyName'),
       headers: {

@@ -32,7 +32,6 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.3,
@@ -50,7 +49,6 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 18),
         child: Column(
@@ -59,7 +57,7 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
             const SizedBox(height: 14),
 
             // ===========================
-            // COVER IMAGES (Carousel)
+            // COVER IMAGES
             // ===========================
             GestureDetector(
               onTap: () {
@@ -106,10 +104,12 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                 children: [
                   _iconInfo("Service Name", s["name"] ?? "-", Icons.star),
                   _divider(),
+
+                  // FIXED: Show tagline correctly
                   _iconInfo("Brand Name", s["brand"] ?? "-", Icons.storefront),
                   _divider(),
-                  _iconInfo("Short Tagline", s["shortDescription"] ?? "-",
-                      Icons.short_text),
+                  _iconInfo(
+                      "Short Tagline", s["tagline"] ?? "-", Icons.short_text),
                 ],
               ),
             ),
@@ -129,6 +129,8 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                   _iconInfo(
                       "City", s["city"] ?? "-", Icons.location_on_outlined),
                   _divider(),
+
+                  // FIXED: Address was always "-" → now correct
                   _iconInfo("Address", s["address"] ?? "-", Icons.map_outlined),
                 ],
               ),
@@ -146,14 +148,15 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                   _iconInfo("Starting Price", "\$${s['price']}",
                       Icons.payments_rounded),
                   _divider(),
-                  _iconInfo("Price Type", s["priceType"] ?? "-",
-                      Icons.timer_outlined),
-                  if (s["discount"] != null &&
-                      s["discount"].toString().isNotEmpty) ...[
-                    _divider(),
-                    _iconInfo("Discount", "${s['discount']}%",
-                        Icons.local_offer_outlined),
-                  ]
+
+                  // FIXED: Replace priceType with DISCOUNT instead
+                  _iconInfo(
+                    "Discount",
+                    s["discount"]?.toString().isEmpty ?? true
+                        ? "-"
+                        : "${s["discount"]}%",
+                    Icons.local_offer_outlined,
+                  ),
                 ],
               ),
             ),
@@ -215,7 +218,7 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
             ],
 
             // ===========================
-            // PACKAGES — Modern Premium Cards
+            // PACKAGES
             // ===========================
             if (packages.isNotEmpty) ...[
               _sectionTitle("Packages"),
@@ -228,10 +231,6 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
           ],
         ),
       ),
-
-      // ===========================
-      // EDIT BUTTON
-      // ===========================
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -268,9 +267,8 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
   }
 
   // ===========================
-  // WIDGET HELPERS
+  // HELPERS
   // ===========================
-
   Widget _sectionTitle(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),

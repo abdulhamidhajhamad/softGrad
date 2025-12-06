@@ -14,8 +14,11 @@ async function bootstrap() {
   });
 
   // Global validation pipe
-  app.useGlobalPipes(new ValidationPipe());
-
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true,  // ← هذا يحول النصوص إلى أرقام تلقائياً
+    whitelist: true,  // ← يسمح فقط بالحقول المحددة في DTO
+    forbidNonWhitelisted: true,  // ← يرفض الحقول الإضافية
+  }));
   // Listen on all network interfaces with explicit configuration
   const port = 3000;
   const host = '0.0.0.0'; // Listen on all network interfaces

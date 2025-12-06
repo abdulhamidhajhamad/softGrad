@@ -1,4 +1,5 @@
 import { IsString, IsNumber, IsArray, IsOptional, IsObject, IsNotEmpty, Min, IsDate, MinLength, Max } from 'class-validator';
+import { Transform, Type } from 'class-transformer'; // ← أضف هذا
 
 export class LocationDto {
   @IsNumber()
@@ -33,10 +34,12 @@ export class CreateServiceDto {
 
   @IsObject()
   @IsNotEmpty()
+  @Type(() => LocationDto) // ← مهم جداً
   location: LocationDto;
 
   @IsNumber()
   @Min(0)
+  @Transform(({ value }) => parseFloat(value)) // ← أضف هذا
   price: number;
 
   @IsString()
@@ -55,11 +58,11 @@ export class CreateServiceDto {
   @IsDate({ each: true })
   bookedDates?: Date[];
 
-  // ✅ إضافة الرايتنج الافتراضي
   @IsNumber()
   @Min(0)
   @Max(5)
   @IsOptional()
+  @Transform(({ value }) => value ? parseFloat(value) : 0) // ← أضف هذا
   rating?: number;
 }
 

@@ -39,6 +39,65 @@ export class ServiceController {
     }
   }
 
+  // 🆕 3. Update Service by ID - Protected (Vendor)
+  @Put('id/:serviceId') // ⬅️ Changed endpoint to use ID
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FilesInterceptor('images', 10)) 
+  async updateServiceById( // ⬅️ Changed function name
+    @Param('serviceId') serviceId: string, // ⬅️ Using serviceId
+    @Body() updateServiceDto: UpdateServiceDto,
+    @Request() req: any,
+    @UploadedFiles() files?: Express.Multer.File[]
+  ) {
+    try {
+      const userId = req.user.userId;
+      const userRole = req.user.role;
+
+      if (userRole !== 'vendor') {
+        throw new HttpException(
+          'Only vendors can update services',
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      return await this.serviceService.updateServiceById( // ⬅️ Calling new service function
+        serviceId,
+        userId,
+        updateServiceDto,
+        files
+      );
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to update service',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // 🆕 4. Delete Service by ID - Protected (Vendor)
+  @Delete('id/:serviceId') // ⬅️ Changed endpoint to use ID
+  @UseGuards(JwtAuthGuard)
+  async deleteServiceById(@Param('serviceId') serviceId: string, @Request() req: any) { // ⬅️ Changed function name and parameter
+    try {
+      const userId = req.user.userId;
+      const userRole = req.user.role;
+
+      if (userRole !== 'vendor') {
+        throw new HttpException(
+          'Only vendors can delete services',
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      return await this.serviceService.deleteServiceById(serviceId, userId); // ⬅️ Calling new service function
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to delete service',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Put('/:serviceName')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 10)) 

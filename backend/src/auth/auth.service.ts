@@ -21,6 +21,8 @@ import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
 import * as crypto from 'crypto';
 import { PasswordResetToken } from './password-reset-token.schema'; 
 import { UpdateFCMTokenDto } from './auth.dto'; // Need to create this DTO
+import { AdminStats } from '../admin/admin-stats.schema';
+
 @Injectable()
 export class AuthService {
   private verificationCodes = new Map<string, { code: string; expires: Date }>();
@@ -29,7 +31,8 @@ export class AuthService {
     private userModel: Model<User>,
     @InjectModel(PasswordResetToken.name)
     private passwordResetTokenModel: Model<PasswordResetToken>,
-
+    @InjectModel(AdminStats.name) 
+    private adminStatsModel: Model<AdminStats>,
     private jwtService: JwtService,
     private mailService: MailService,
     private supabaseStorage: SupabaseStorageService,
@@ -105,6 +108,7 @@ export class AuthService {
 
     await user.save();
     console.log('👤 User created with image:', imageUrl);
+    await this.incrementStats(signUpDto.role || 'user');
 
     // إرسال email التحقق
     try {
@@ -119,6 +123,36 @@ export class AuthService {
       imageUrl: imageUrl,
     };
   }
+
+  private async incrementStats(userRole: string): Promise<void> {
+    try {
+      // البحث عن الإحصائيات أو إنشاء جديدة
+      let stats = await this.adminStatsModel.findOne();
+      
+      if (!stats) {
+        stats = new this.adminStatsModel({
+          totalUsers: 0,
+          totalVendors: 0,
+          totalSales: 0
+        });
+      }
+
+      // زيادة العداد المناسب
+      if (userRole === 'user' || userRole === 'USER') {
+        stats.totalUsers += 1;
+      } else if (userRole === 'vendor' || userRole === 'VENDOR') {
+        stats.totalVendors += 1;
+      }
+
+      stats.lastUpdated = new Date();
+      await stats.save();
+      
+      console.log(`📊 Stats updated - Users: ${stats.totalUsers}, Vendors: ${stats.totalVendors}`);
+    } catch (error) {
+      console.error('❌ Failed to update stats:', error);
+    }
+  }
+
 
   // ✅ Verify email with code (using in-memory storage)
   async verifyEmail(verifyEmailDto: VerifyEmailDto): Promise<{ token: string; user: any }> {

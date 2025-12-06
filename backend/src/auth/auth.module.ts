@@ -10,11 +10,15 @@ import { JwtStrategy } from './jwt.strategy';
 import { MailService } from './mail.service';
 import { SupabaseStorageModule } from '../subbase/supabaseStorage.module';
 
+// استيراد AdminStats من مكانه الصحيح
+import { AdminStats, AdminStatsSchema } from '../admin/admin-stats.schema'; // ← تغيير المسار حسب موقع ملفك
+
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
-      { name: PasswordResetToken.name, schema: PasswordResetTokenSchema } 
+      { name: PasswordResetToken.name, schema: PasswordResetTokenSchema },
+      { name: AdminStats.name, schema: AdminStatsSchema }, // ← أضف هذا السطر
     ]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({

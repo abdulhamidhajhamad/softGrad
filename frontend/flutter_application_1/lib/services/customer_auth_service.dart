@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class CustomerAuthService {
-static const String baseUrl = 'http://192.168.110.22:3000';
+static const String baseUrl = 'http://localhost:3000';
 
 
   static Future<Map<String, dynamic>> signup({

@@ -10,14 +10,13 @@ import { ServiceModule } from './service/service.module';
 import { BookingModule } from './booking/booking.module';
 import { AdminModule } from './admin/admin.module';
 import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
-import { FirebaseModule } from './firebase/firebase.module';
 import { ChatModule } from './chatingService/chat.module';
 import { PaymentModule } from './payment/payment.module';
 
 // ✅ NEW MODULE IMPORTS
 import { NotificationModule } from './notification/notification.module';
-import { PromotionModule } from './promotion/promotion.module'; 
-import { ReviewModule } from './review/review.module'; 
+import { PromotionModule } from './promotion/promotion.module';
+import { ReviewModule } from './review/review.module';
 import { AiSearchModule } from './ai-search/ai-search.module';
 @Module({
   imports: [
@@ -28,7 +27,9 @@ import { AiSearchModule } from './ai-search/ai-search.module';
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGO_URI') || 'mongodb://localhost:27017/WeddingPlanner',
+        uri:
+          configService.get<string>('MONGO_URI') ||
+          'mongodb+srv://abdulhamid:0592370454@weddingplanner.yq50n6g.mongodb.net/?appName=WeddingPlanner',
       }),
       inject: [ConfigService],
     }),
@@ -52,7 +53,6 @@ import { AiSearchModule } from './ai-search/ai-search.module';
     BookingModule,
     AdminModule,
     ShoppingCartModule,
-    FirebaseModule,
     ChatModule,
     ReviewModule,
     PaymentModule,

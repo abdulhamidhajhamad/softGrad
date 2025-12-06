@@ -3,8 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String baseUrl = 'http://192.168.110.22:3000';
-
+  static const String baseUrl = 'http://localhost:3000';
 
   static Future<void> saveToken(String token) async {
     try {
@@ -28,7 +27,6 @@ class AuthService {
     }
   }
 
-  
   static Future<void> deleteToken() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -39,17 +37,16 @@ class AuthService {
     }
   }
 
- 
   static Future<bool> isLoggedIn() async {
     final token = await getToken();
     return token != null && token.isNotEmpty;
   }
 
- 
-  static Future<Map<String, dynamic>> login(String email, String password) async {
+  static Future<Map<String, dynamic>> login(
+      String email, String password) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'), 
+        Uri.parse('$baseUrl/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'email': email,
@@ -62,12 +59,12 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        
+
         // حفظ التوكن تلقائياً عند التسجيل الدخول
         if (responseData.containsKey('token')) {
           await saveToken(responseData['token']);
         }
-        
+
         return responseData;
       } else {
         final errorData = jsonDecode(response.body);
@@ -88,33 +85,33 @@ class AuthService {
     }
   }
 
-static Future<Map<String, dynamic>> getUserProfile() async {
-  try {
-    final token = await getToken();
-    
-    if (token == null) {
-      throw Exception('No token found');
+  static Future<Map<String, dynamic>> getUserProfile() async {
+    try {
+      final token = await getToken();
+
+      if (token == null) {
+        throw Exception('No token found');
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
+      );
+
+      print('👤 Profile Status Code: ${response.statusCode}');
+      print('👤 Profile Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to load user profile');
+      }
+    } catch (e) {
+      print('❌ Profile Error: $e');
+      throw Exception('Network error: $e');
     }
-
-    final response = await http.get(
-      Uri.parse('$baseUrl/auth/profile'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token'
-      },
-    );
-
-    print('👤 Profile Status Code: ${response.statusCode}');
-    print('👤 Profile Response: ${response.body}');
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to load user profile');
-    }
-  } catch (e) {
-    print('❌ Profile Error: $e');
-    throw Exception('Network error: $e');
   }
-}
 }

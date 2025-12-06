@@ -1,13 +1,10 @@
-// lib/screens/services_provider.dart
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
-// NEW: import add service screen
 import 'add_service_provider.dart';
-// NEW: import showMore screen
 import 'showMore_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
@@ -22,7 +19,6 @@ class ServicesProviderScreen extends StatefulWidget {
 }
 
 class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
-  // ⭐ KEEP SERVICES PERSISTENT
   static final List<Map<String, dynamic>> _services = [];
 
   final TextEditingController _searchController = TextEditingController();
@@ -57,7 +53,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
   List<Map<String, dynamic>> get _filteredServices {
     List<Map<String, dynamic>> list = _services.toList();
 
-    // filter by search
     if (_searchQuery.isNotEmpty) {
       list = list.where((service) {
         final name = (service['name'] ?? '').toString().toLowerCase();
@@ -68,20 +63,16 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
       }).toList();
     }
 
-    // filter by status
     if (_statusFilter == 'active') {
       list = list.where((s) => s['isActive'] == true).toList();
     } else if (_statusFilter == 'hidden') {
       list = list.where((s) => s['isActive'] == false).toList();
     }
 
-    // sort
     if (_sortOption == 'price_low') {
-      list.sort(
-          (a, b) => (a['price'] as double).compareTo(b['price'] as double));
+      list.sort((a, b) => (a['price'] as double).compareTo(b['price'] as double));
     } else if (_sortOption == 'price_high') {
-      list.sort(
-          (a, b) => (b['price'] as double).compareTo(a['price'] as double));
+      list.sort((a, b) => (b['price'] as double).compareTo(a['price'] as double));
     } else {
       list.sort((a, b) {
         final da = (a['updatedAt'] ?? a['createdAt']) as DateTime;
@@ -94,456 +85,12 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
   }
 
   void _markUpdated() {
-    setState(() {
-      _lastUpdated = DateTime.now();
-    });
+    setState(() => _lastUpdated = DateTime.now());
   }
 
   Future<void> _refresh() async {
     await Future<void>.delayed(const Duration(milliseconds: 600));
     setState(() {});
-  }
-
-  // used for editing only
-  void _openServiceForm({Map<String, dynamic>? service, int? index}) {
-    final isEditing = service != null;
-    final formKey = GlobalKey<FormState>();
-
-    final nameController =
-        TextEditingController(text: service != null ? service['name'] : '');
-    final shortDescController = TextEditingController(
-        text: service != null ? service['shortDescription'] : '');
-    final fullDescController = TextEditingController(
-        text: service != null ? service['fullDescription'] : '');
-    final priceController = TextEditingController(
-        text: service != null ? service['price'].toString() : '');
-    String selectedCategory =
-        service != null ? service['category'] as String : _categories.first;
-    String selectedCity =
-        service != null ? service['city'] as String : _cities.first;
-    bool isActive = service != null ? service['isActive'] as bool : true;
-    List<String> images =
-        service != null ? List<String>.from(service['images'] ?? []) : [];
-
-    final picker = ImagePicker();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            Future<void> pickImage(ImageSource source) async {
-              final picked =
-                  await picker.pickImage(source: source, imageQuality: 80);
-              if (picked != null) {
-                setSheetState(() {
-                  if (images.length < 10) {
-                    images.add(picked.path);
-                  }
-                });
-              }
-            }
-
-            return DraggableScrollableSheet(
-              expand: false,
-              initialChildSize: 0.9,
-              maxChildSize: 0.95,
-              minChildSize: 0.6,
-              builder: (context, scrollController) {
-                return SingleChildScrollView(
-                  controller: scrollController,
-                  padding: EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    top: 16,
-                    bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-                  ),
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Center(
-                          child: Container(
-                            width: 40,
-                            height: 4,
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                        ),
-                        Text(
-                          isEditing ? 'Edit Service' : 'Add Service',
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        // name
-                        TextFormField(
-                          controller: nameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Service Name',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) =>
-                              (value == null || value.trim().isEmpty)
-                                  ? 'Required'
-                                  : null,
-                        ),
-                        const SizedBox(height: 12),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: selectedCategory,
-                                decoration: const InputDecoration(
-                                  labelText: 'Category',
-                                  border: OutlineInputBorder(),
-                                ),
-                                items: _categories
-                                    .map(
-                                      (c) => DropdownMenuItem(
-                                        value: c,
-                                        child: Text(c),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) {
-                                  if (value == null) return;
-                                  setSheetState(() {
-                                    selectedCategory = value;
-                                  });
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                value: selectedCity,
-                                decoration: const InputDecoration(
-                                  labelText: 'City',
-                                  border: OutlineInputBorder(),
-                                ),
-                                items: _cities
-                                    .map(
-                                      (c) => DropdownMenuItem(
-                                        value: c,
-                                        child: Text(c),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) {
-                                  if (value == null) return;
-                                  setSheetState(() {
-                                    selectedCity = value;
-                                  });
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        TextFormField(
-                          controller: priceController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
-                          decoration: const InputDecoration(
-                            labelText: 'Price',
-                            prefixText: '\$ ',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Required';
-                            }
-                            final parsed = double.tryParse(value);
-                            if (parsed == null || parsed < 0) {
-                              return 'Enter a valid number';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-
-                        TextFormField(
-                          controller: shortDescController,
-                          maxLength: 200,
-                          maxLines: 2,
-                          decoration: const InputDecoration(
-                            labelText: 'Short Description',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Required'
-                              : null,
-                        ),
-                        const SizedBox(height: 4),
-
-                        TextFormField(
-                          controller: fullDescController,
-                          maxLength: 1500,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                            labelText: 'Full Description',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Service visibility',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Switch.adaptive(
-                              value: isActive,
-                              activeColor: kPrimaryColor,
-                              onChanged: (v) {
-                                setSheetState(() {
-                                  isActive = v;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-
-                        Text(
-                          'Service Images',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-
-                        SizedBox(
-                          height: 110,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            children: [
-                              GestureDetector(
-                                onTap: () async {
-                                  showModalBottomSheet(
-                                    context: context,
-                                    shape: const RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.vertical(
-                                        top: Radius.circular(16),
-                                      ),
-                                    ),
-                                    builder: (_) => SafeArea(
-                                      child: Wrap(
-                                        children: [
-                                          ListTile(
-                                            leading: const Icon(Icons.photo),
-                                            title: const Text(
-                                                'Upload from Gallery'),
-                                            onTap: () {
-                                              Navigator.pop(context);
-                                              pickImage(ImageSource.gallery);
-                                            },
-                                          ),
-                                          ListTile(
-                                            leading:
-                                                const Icon(Icons.camera_alt),
-                                            title: const Text(
-                                                'Capture from Camera'),
-                                            onTap: () {
-                                              Navigator.pop(context);
-                                              pickImage(ImageSource.camera);
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: Container(
-                                  width: 100,
-                                  margin: const EdgeInsets.only(right: 10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: Colors.grey.shade300,
-                                    ),
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.add_a_photo_outlined,
-                                          color: kPrimaryColor),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Add Image',
-                                        style:
-                                            GoogleFonts.poppins(fontSize: 11),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              ...images.map(
-                                (path) => Container(
-                                  width: 100,
-                                  margin: const EdgeInsets.only(right: 10),
-                                  child: Stack(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(16),
-                                        child: Image.file(
-                                          File(path),
-                                          fit: BoxFit.cover,
-                                          width: 100,
-                                          height: 110,
-                                        ),
-                                      ),
-                                      Positioned(
-                                        top: 4,
-                                        right: 4,
-                                        child: GestureDetector(
-                                          onTap: () {
-                                            setSheetState(() {
-                                              images.remove(path);
-                                            });
-                                          },
-                                          child: Container(
-                                            width: 22,
-                                            height: 22,
-                                            decoration: BoxDecoration(
-                                              color: Colors.black54,
-                                              borderRadius:
-                                                  BorderRadius.circular(11),
-                                            ),
-                                            child: const Icon(
-                                              Icons.close,
-                                              size: 14,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => Navigator.pop(context),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.grey.shade700,
-                                  side: BorderSide(color: Colors.grey.shade300),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                                child: Text(
-                                  'Cancel',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  if (!formKey.currentState!.validate()) {
-                                    return;
-                                  }
-                                  final price =
-                                      double.tryParse(priceController.text) ??
-                                          0;
-                                  final newService = {
-                                    'name': nameController.text.trim(),
-                                    'category': selectedCategory,
-                                    'city': selectedCity,
-                                    'shortDescription':
-                                        shortDescController.text.trim(),
-                                    'fullDescription':
-                                        fullDescController.text.trim(),
-                                    'price': price,
-                                    'isActive': isActive,
-                                    'views':
-                                        service != null ? service['views'] : 0,
-                                    'bookings': service != null
-                                        ? service['bookings']
-                                        : 0,
-                                    'likes':
-                                        service != null ? service['likes'] : 0,
-                                    'images': images,
-                                    'createdAt': service != null
-                                        ? service['createdAt']
-                                        : DateTime.now(),
-                                    'updatedAt': DateTime.now(),
-                                  };
-
-                                  setState(() {
-                                    if (isEditing && index != null) {
-                                      _services[index] = newService;
-                                    } else {
-                                      _services.add(newService);
-                                    }
-                                    _markUpdated();
-                                  });
-                                  Navigator.pop(context);
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: kPrimaryColor,
-                                  foregroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                                child: Text(
-                                  'Save Service',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
   }
 
   void _confirmDelete(int index) {
@@ -563,23 +110,17 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                   color: Colors.red, size: 24),
             ),
             const SizedBox(width: 10),
-            Text(
-              'Delete Service',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-            ),
+            Text('Delete Service',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
           ],
         ),
-        content: Text(
-          'Are you sure you want to delete this service?',
-          style: GoogleFonts.poppins(fontSize: 14),
-        ),
+        content: Text('Are you sure you want to delete this service?',
+            style: GoogleFonts.poppins(fontSize: 14)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.poppins(color: Colors.grey.shade700),
-            ),
+            child: Text('Cancel',
+                style: GoogleFonts.poppins(color: Colors.grey.shade700)),
           ),
           TextButton(
             onPressed: () {
@@ -589,10 +130,8 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
               });
               Navigator.pop(context);
             },
-            child: Text(
-              'Delete',
-              style: GoogleFonts.poppins(color: Colors.red),
-            ),
+            child: Text('Delete',
+                style: GoogleFonts.poppins(color: Colors.red)),
           ),
         ],
       ),
@@ -604,12 +143,12 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
     _searchController.dispose();
     super.dispose();
   }
-
   @override
   Widget build(BuildContext context) {
     final total = _services.length;
     final activeCount = _services.where((s) => s['isActive'] == true).length;
     final hiddenCount = total - activeCount;
+
     final lastUpdated = _lastUpdated ??
         (_services.isNotEmpty
             ? _services
@@ -635,14 +174,10 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 1,
-            color: Colors.grey.shade200,
-          ),
+          child: Container(height: 1, color: Colors.grey.shade200),
         ),
         actions: [
           IconButton(
-            // زر +
             onPressed: () async {
               final newService = await Navigator.push(
                 context,
@@ -653,30 +188,24 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
 
               if (newService != null) {
                 setState(() {
-                  _services.add({
-                    'name': newService['name'],
-                    'brand': newService['brand'],
-                    'tagline': newService['tagline'],
-                    'address': newService['address'],
-                    'category': newService['category'],
-                    'city': newService['city'],
-                    'price': newService['price'],
-                    'priceType': newService['priceType'],
-                    'discount': newService['discount'],
-                    'shortDescription': newService['shortDescription'],
-                    'fullDescription': newService['fullDescription'],
-                    'images': List<String>.from(newService['images'] ?? []),
-                    'packages': List<Map<String, dynamic>>.from(
-                        newService['packages'] ?? []),
-                    'highlights':
-                        List<String>.from(newService['highlights'] ?? []),
-                    'isActive': newService['isActive'],
-                    'views': 0,
-                    'bookings': 0,
-                    'likes': 0,
-                    'createdAt': DateTime.now(),
-                    'updatedAt': DateTime.now(),
-                  });
+                  final service = Map<String, dynamic>.from(newService);
+                  service['views'] = 0;
+                  service['bookings'] = 0;
+                  service['likes'] = 0;
+                  service['createdAt'] = DateTime.now();
+                  service['updatedAt'] = DateTime.now();
+
+                  // 🔥 حساب السعر بعد الخصم إن وجد
+                  if (service['discount'] != null &&
+                      service['discount'].toString().isNotEmpty) {
+                    final p = service['price'] as double;
+                    final d = double.tryParse(service['discount']) ?? 0;
+                    service['finalPrice'] = p - (p * (d / 100));
+                  } else {
+                    service['finalPrice'] = service['price'];
+                  }
+
+                  _services.add(service);
                   _markUpdated();
                 });
               }
@@ -693,31 +222,39 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                 slivers: [
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSummaryHeader(
-                              total, activeCount, hiddenCount, lastUpdated),
+                          _buildSummaryHeader(total, activeCount, hiddenCount,
+                              lastUpdated),
                           const SizedBox(height: 16),
                           _buildSearchAndFilters(),
                         ],
                       ),
                     ),
                   ),
+
+                  // ************** SERVICE LIST **************
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     sliver: SliverList.builder(
                       itemCount: _filteredServices.length,
                       itemBuilder: (context, index) {
                         final service = _filteredServices[index];
-                        final originalIndex =
-                            _services.indexOf(service); // for edits/deletes
+                        final originalIndex = _services.indexOf(service);
+
                         return _ServiceCard(
                           service: service,
-                          onEdit: () => _openServiceForm(
-                              service: service, index: originalIndex),
+                          onEdit: () async {
+                            final updated = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AddServiceProviderScreen(),
+                              ),
+                            );
+                          },
                           onDelete: () => _confirmDelete(originalIndex),
                           onToggleActive: (val) {
                             setState(() {
@@ -731,45 +268,10 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                       },
                     ),
                   ),
+
                   const SliverToBoxAdapter(child: SizedBox(height: 24)),
                 ],
               ),
-            ),
-      floatingActionButton: _services.isEmpty
-          ? null
-          : FloatingActionButton(
-              backgroundColor: kPrimaryColor,
-              // floating add button
-              onPressed: () async {
-                final newService = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AddServiceProviderScreen(),
-                  ),
-                );
-
-                if (newService != null) {
-                  setState(() {
-                    _services.add({
-                      'name': newService['name'],
-                      'category': newService['category'],
-                      'city': newService['city'],
-                      'shortDescription': newService['shortDescription'],
-                      'fullDescription': newService['fullDescription'],
-                      'price': newService['price'],
-                      'isActive': newService['isActive'],
-                      'views': 0,
-                      'bookings': 0,
-                      'likes': 0,
-                      'images': List<String>.from(newService['images'] ?? []),
-                      'createdAt': DateTime.now(),
-                      'updatedAt': DateTime.now(),
-                    });
-                    _markUpdated();
-                  });
-                }
-              },
-              child: const Icon(Icons.add, color: Colors.white),
             ),
     );
   }
@@ -817,9 +319,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         TextField(
           controller: _searchController,
           onChanged: (value) {
-            setState(() {
-              _searchQuery = value.trim();
-            });
+            setState(() => _searchQuery = value.trim());
           },
           decoration: InputDecoration(
             hintText: 'Search by name, category, or price',
@@ -842,71 +342,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
               borderSide: const BorderSide(color: kPrimaryColor),
             ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _sortOption,
-                decoration: InputDecoration(
-                  labelText: 'Sort',
-                  labelStyle: GoogleFonts.poppins(fontSize: 12),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'recent',
-                    child: Text('Recently added'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'price_low',
-                    child: Text('Price: Low → High'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'price_high',
-                    child: Text('Price: High → Low'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _sortOption = value;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: _statusFilter,
-                decoration: InputDecoration(
-                  labelText: 'Status',
-                  labelStyle: GoogleFonts.poppins(fontSize: 12),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'all', child: Text('All')),
-                  DropdownMenuItem(value: 'active', child: Text('Active')),
-                  DropdownMenuItem(value: 'hidden', child: Text('Hidden')),
-                ],
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _statusFilter = value;
-                  });
-                },
-              ),
-            ),
-          ],
         ),
       ],
     );
@@ -933,25 +368,17 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            Text(
-              'No Services Yet',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Text('No Services Yet',
+                style: GoogleFonts.poppins(
+                    fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
             Text(
               'Start by adding your first service.',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.grey.shade600,
-              ),
+                  fontSize: 14, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 18),
-
-            // ⭐⭐⭐ المطلوب فقط ⭐⭐⭐
             ElevatedButton(
               onPressed: () async {
                 final newService = await Navigator.push(
@@ -963,21 +390,23 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
 
                 if (newService != null) {
                   setState(() {
-                    _services.add({
-                      'name': newService['name'],
-                      'category': newService['category'],
-                      'city': newService['city'],
-                      'shortDescription': newService['shortDescription'],
-                      'fullDescription': newService['fullDescription'],
-                      'price': newService['price'],
-                      'isActive': newService['isActive'],
-                      'views': 0,
-                      'bookings': 0,
-                      'likes': 0,
-                      'images': List<String>.from(newService['images'] ?? []),
-                      'createdAt': DateTime.now(),
-                      'updatedAt': DateTime.now(),
-                    });
+                    final service = Map<String, dynamic>.from(newService);
+                    service['views'] = 0;
+                    service['bookings'] = 0;
+                    service['likes'] = 0;
+                    service['createdAt'] = DateTime.now();
+                    service['updatedAt'] = DateTime.now();
+
+                    if (service['discount'] != null &&
+                        service['discount'].toString().isNotEmpty) {
+                      final p = service['price'] as double;
+                      final d = double.tryParse(service['discount']) ?? 0;
+                      service['finalPrice'] = p - (p * (d / 100));
+                    } else {
+                      service['finalPrice'] = service['price'];
+                    }
+
+                    _services.add(service);
                     _markUpdated();
                   });
                 }
@@ -991,10 +420,8 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                   borderRadius: BorderRadius.circular(18),
                 ),
               ),
-              child: Text(
-                'Add Service',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-              ),
+              child: Text('Add Service',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
             ),
           ],
         ),
@@ -1075,7 +502,17 @@ class _ServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isActive = service['isActive'] == true;
     final images = List<String>.from(service['images'] ?? []);
-    final price = service['price'] as double? ?? 0;
+
+    final double originalPrice = (service['price'] ?? 0).toDouble();
+    final String? discountStr = service['discount']?.toString();
+    final bool hasDiscount = discountStr != null && discountStr.isNotEmpty;
+
+    double finalPrice = originalPrice;
+
+    if (hasDiscount) {
+      final d = double.tryParse(discountStr!) ?? 0;
+      finalPrice = originalPrice - (originalPrice * (d / 100));
+    }
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -1098,9 +535,7 @@ class _ServiceCard extends StatelessWidget {
           final result = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ShowMoreProviderScreen(
-                service: service,
-              ),
+              builder: (_) => ShowMoreProviderScreen(service: service),
             ),
           );
 
@@ -1111,23 +546,51 @@ class _ServiceCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ************** الصور **************
             if (images.isNotEmpty)
-              ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(18)),
-                child: SizedBox(
-                  height: 170,
-                  width: double.infinity,
-                  child: PageView.builder(
-                    itemCount: images.length,
-                    itemBuilder: (context, index) {
-                      return Image.file(
-                        File(images[index]),
-                        fit: BoxFit.cover,
-                      );
-                    },
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(18)),
+                    child: SizedBox(
+                      height: 170,
+                      width: double.infinity,
+                      child: PageView.builder(
+                        itemCount: images.length,
+                        itemBuilder: (context, index) {
+                          return Image.file(
+                            File(images[index]),
+                            fit: BoxFit.cover,
+                          );
+                        },
+                      ),
+                    ),
                   ),
-                ),
+
+                  // 🔥 Badge خصم
+                  if (hasDiscount)
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          "-${discountStr!.trim()}%",
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               )
             else
               ClipRRect(
@@ -1137,19 +600,19 @@ class _ServiceCard extends StatelessWidget {
                   height: 140,
                   color: Colors.grey.shade100,
                   child: Center(
-                    child: Icon(
-                      Icons.image_outlined,
-                      color: Colors.grey.shade400,
-                      size: 40,
-                    ),
+                    child: Icon(Icons.image_outlined,
+                        color: Colors.grey.shade400, size: 40),
                   ),
                 ),
               ),
+
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ************** الاسم + السعر **************
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1162,16 +625,35 @@ class _ServiceCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      Text(
-                        '\$${price.toStringAsFixed(0)}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: kPrimaryColor,
-                        ),
+
+                      // 🔥 السعر + خصم + شطب القديم
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (hasDiscount)
+                            Text(
+                              "₪${originalPrice.toStringAsFixed(0)}",
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                decoration: TextDecoration.lineThrough,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          Text(
+                            "₪${finalPrice.toStringAsFixed(0)}",
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: hasDiscount
+                                  ? Colors.redAccent
+                                  : kPrimaryColor,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 4),
                   Text(
                     service['category'] ?? '',
@@ -1180,6 +662,7 @@ class _ServiceCard extends StatelessWidget {
                       color: Colors.grey.shade600,
                     ),
                   ),
+
                   const SizedBox(height: 6),
                   Text(
                     service['shortDescription'] ?? '',
@@ -1190,12 +673,13 @@ class _ServiceCard extends StatelessWidget {
                       color: Colors.grey.shade800,
                     ),
                   ),
+
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: isActive
                               ? Colors.green.withOpacity(0.08)
@@ -1214,22 +698,22 @@ class _ServiceCard extends StatelessWidget {
                       ),
                       const Spacer(),
                       _StatChip(
-                        icon: Icons.visibility_outlined,
-                        value: '${service['views'] ?? 0}',
-                      ),
+                          icon: Icons.visibility_outlined,
+                          value: '${service['views'] ?? 0}'),
                       const SizedBox(width: 6),
                       _StatChip(
-                        icon: Icons.calendar_month_outlined,
-                        value: '${service['bookings'] ?? 0}',
-                      ),
+                          icon: Icons.calendar_month_outlined,
+                          value: '${service['bookings'] ?? 0}'),
                       const SizedBox(width: 6),
                       _StatChip(
-                        icon: Icons.favorite_border,
-                        value: '${service['likes'] ?? 0}',
-                      ),
+                          icon: Icons.favorite_border,
+                          value: '${service['likes'] ?? 0}'),
                     ],
                   ),
+
                   const SizedBox(height: 10),
+
+                  // ************** الأزرار **************
                   Row(
                     children: [
                       OutlinedButton.icon(
@@ -1243,34 +727,24 @@ class _ServiceCard extends StatelessWidget {
                           ),
                         ),
                         icon: const Icon(Icons.edit_outlined, size: 18),
-                        label: Text(
-                          'Edit',
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        label: Text('Edit',
+                            style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500)),
                       ),
                       const SizedBox(width: 8),
                       TextButton(
                         onPressed: onDelete,
-                        child: Text(
-                          'Delete',
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            color: Colors.red,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        child: Text('Delete',
+                            style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: Colors.red,
+                                fontWeight: FontWeight.w500)),
                       ),
                       const Spacer(),
-                      Text(
-                        'Visible',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
+                      Text('Visible',
+                          style: GoogleFonts.poppins(
+                              fontSize: 12, color: Colors.grey.shade700)),
                       Switch.adaptive(
                         value: isActive,
                         activeColor: kPrimaryColor,
@@ -1298,7 +772,8 @@ class _StatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
         borderRadius: BorderRadius.circular(20),

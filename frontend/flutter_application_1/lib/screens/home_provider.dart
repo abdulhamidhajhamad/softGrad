@@ -4,6 +4,7 @@ import 'package:flutter_application_1/services/auth_service.dart';
 import 'edit_profile_provider.dart';
 import 'services_provider.dart';
 import 'signin.dart';
+import 'package:flutter_application_1/screens/booking_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -18,10 +19,11 @@ class ProviderModel {
   final String category;
   final String description;
   final String city;
-  final int bookings;
-  final int views;
-  final int messages;
-  final int reviews;
+
+  int? bookings;
+  int? views;
+  int? messages;
+  int? reviews;
 
   ProviderModel({
     required this.brandName,
@@ -30,10 +32,10 @@ class ProviderModel {
     required this.category,
     required this.description,
     required this.city,
-    this.bookings = 3,
-    this.views = 1240,
-    this.messages = 4,
-    this.reviews = 2,
+    this.bookings,
+    this.views,
+    this.messages,
+    this.reviews,
   });
 }
 
@@ -49,11 +51,28 @@ class HomeProviderScreen extends StatefulWidget {
 
 class _HomeProviderScreenState extends State<HomeProviderScreen> {
   late ProviderModel provider;
+  List<Map<String, dynamic>> _services = [];
 
   @override
   void initState() {
     super.initState();
     provider = widget.provider;
+    _loadServices();
+  }
+
+  void _loadServices() async {
+    _services = [
+      {
+        "name": "Wedding Photography",
+        "price": 1000,
+        "discount": "20",
+      },
+      {
+        "name": "Event Lighting",
+        "price": 800,
+      },
+    ];
+    setState(() {});
   }
 
   @override
@@ -109,6 +128,40 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
             children: [
               _HeaderCard(provider: provider),
               const SizedBox(height: 15),
+              if (_services.any((s) =>
+                  s['discount'] != null && s['discount'].toString().isNotEmpty))
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _services
+                        .where((s) =>
+                            s['discount'] != null &&
+                            s['discount'].toString().isNotEmpty)
+                        .map((s) {
+                      final oldPrice = s['price'] ?? 0;
+                      final discount = double.tryParse(s['discount']) ?? 0;
+                      final newPrice = oldPrice - (oldPrice * (discount / 100));
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          "خصم ${discount.toInt()}% مفعّل على \"${s['name']}\" — السعر الجديد: ₪${newPrice.toStringAsFixed(0)} بدلًا من ₪$oldPrice",
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -164,7 +217,13 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                     child: _QuickAction(
                       title: "Bookings",
                       icon: Icons.calendar_month_outlined,
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const BookingsScreen()),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -227,20 +286,12 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              "Email",
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            Text(
-                              provider.email,
-                              style: GoogleFonts.poppins(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                            Text("Email",
+                                style: GoogleFonts.poppins(
+                                    fontSize: 14, color: Colors.grey.shade600)),
+                            Text(provider.email,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 15, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ],
@@ -253,20 +304,12 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              "Phone",
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            Text(
-                              provider.phone,
-                              style: GoogleFonts.poppins(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                            Text("Phone",
+                                style: GoogleFonts.poppins(
+                                    fontSize: 14, color: Colors.grey.shade600)),
+                            Text(provider.phone,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 15, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ],
@@ -344,9 +387,7 @@ class _HeaderCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: Colors.grey.shade700,
-                        ),
+                            fontSize: 14, color: Colors.grey.shade700),
                       ),
                     ),
                   ],
@@ -365,11 +406,8 @@ class _StatBox extends StatelessWidget {
   final String title;
   final String value;
 
-  const _StatBox({
-    required this.icon,
-    required this.title,
-    required this.value,
-  });
+  const _StatBox(
+      {required this.icon, required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -385,20 +423,19 @@ class _StatBox extends StatelessWidget {
         children: [
           Icon(icon, size: 24, color: kPrimaryColor),
           const SizedBox(height: 6),
+
+          // ★★ العملة هنا أصبحت شيكل بدل دولار ★★
           Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+            "₪$value",
+            style:
+                GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
           ),
+
           Text(
             title,
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
+            style:
+                GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
           ),
         ],
       ),
@@ -411,11 +448,8 @@ class _QuickAction extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _QuickAction({
-    required this.title,
-    required this.icon,
-    required this.onTap,
-  });
+  const _QuickAction(
+      {required this.title, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -432,13 +466,9 @@ class _QuickAction extends StatelessWidget {
           children: [
             Icon(icon, size: 28, color: kPrimaryColor),
             const SizedBox(height: 6),
-            Text(
-              title,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            )
+            Text(title,
+                style: GoogleFonts.poppins(
+                    fontSize: 14, fontWeight: FontWeight.w500))
           ],
         ),
       ),
@@ -456,11 +486,7 @@ class _ContactIcon extends StatelessWidget {
     return CircleAvatar(
       radius: 25,
       backgroundColor: kContactCircleColor,
-      child: Icon(
-        icon,
-        color: kContactIconColor,
-        size: 26,
-      ),
+      child: Icon(icon, color: kContactIconColor, size: 26),
     );
   }
 }

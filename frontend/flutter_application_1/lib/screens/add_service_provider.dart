@@ -183,29 +183,38 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
       return;
     }
 
-    /// simulate success
-    Navigator.pop(context, {
+    final serviceData = {
       "name": _nameCtrl.text.trim(),
-      "brand": _brandCtrl.text.trim(),
-      "tagline": _taglineCtrl.text.trim(), // ← مهم
-      "address": _addressCtrl.text.trim(), // ← مهم
-
       "category": _selectedCategory,
       "city": _selectedCity == "Other" ? _otherCity : _selectedCity,
-
       "price": double.tryParse(_priceCtrl.text) ?? 0,
       "priceType": _priceType,
-      "discount": _discountCtrl.text.trim(),
-
       "shortDescription": _shortDescCtrl.text.trim(),
       "fullDescription": _fullDescCtrl.text.trim(),
-
       "images": List<String>.from(_images),
       "packages": List<Map<String, dynamic>>.from(_packages),
       "highlights": List<String>.from(_highlights),
-
       "isActive": _isVisible,
-    });
+    };
+
+// ✅ فقط أضف القيم إذا كانت غير فاضية
+    if (_brandCtrl.text.trim().isNotEmpty) {
+      serviceData["brand"] = _brandCtrl.text.trim();
+    }
+
+    if (_taglineCtrl.text.trim().isNotEmpty) {
+      serviceData["tagline"] = _taglineCtrl.text.trim();
+    }
+
+    if (_addressCtrl.text.trim().isNotEmpty) {
+      serviceData["address"] = _addressCtrl.text.trim();
+    }
+
+    if (_discountCtrl.text.trim().isNotEmpty) {
+      serviceData["discount"] = _discountCtrl.text.trim();
+    }
+
+    Navigator.pop(context, serviceData);
   }
 
   @override
@@ -425,7 +434,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                       keyboardType: TextInputType.number,
                       validator: (v) => v!.isEmpty ? "Required" : null,
                       decoration: _inputDecoration("e.g., 500")
-                          .copyWith(prefixText: "\$ "),
+                          .copyWith(prefixText: "\₪ "),
                     ),
                     const SizedBox(height: 16),
 
@@ -479,7 +488,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        "${p['name']} — \$${p['price']}\n${p['desc']}",
+                                        "${p['name']} — ₪${p['price']}\n${p['desc']}",
                                         style:
                                             GoogleFonts.poppins(fontSize: 13),
                                       ),

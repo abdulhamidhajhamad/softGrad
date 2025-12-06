@@ -63,7 +63,7 @@ export class Service extends Document {
     @Prop({ type: [ReviewSchema], default: [] }) 
     reviews: Review[]; 
 
-    @Prop({ required: true })
+    @Prop({ required: false })
     companyName: string;
 
     @Prop({ type: [Date], default: [] })

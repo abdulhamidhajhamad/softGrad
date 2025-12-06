@@ -32,7 +32,9 @@ export class ServiceService {
       console.log('📦 Received createServiceDto:', JSON.stringify(createServiceDto, null, 2));
       console.log('👤 Provider ID:', providerId);
       console.log('🖼️ Number of images:', files?.length || 0);
-
+    if (typeof createServiceDto.price === 'string') {
+        createServiceDto.price = parseFloat(createServiceDto.price);
+      }
       const existingService = await this.serviceModel.findOne({ 
         serviceName: createServiceDto.serviceName,
         providerId 
@@ -78,9 +80,19 @@ export class ServiceService {
       const newService = new this.serviceModel(newServiceData);
       const savedService = await newService.save();
       
-      console.log('✅ Service created successfully:', savedService._id);
-      return savedService;
+ const responseService = await this.serviceModel
+        .findById(savedService._id)
+        .select('-reviews -bookedDates -rating -aiAnalysis') // ⬅️ الإضافة هنا
+        .exec();
 
+      if (!responseService) {
+         // في حالة نادرة جدًا لم يتم العثور على الخدمة بعد الحفظ
+         return savedService; 
+      }
+
+      console.log('✅ Service created successfully:', responseService._id); //
+      return responseService;
+      
     } catch (error) {
       console.error('💥 ERROR in createService:', error);
       
@@ -106,6 +118,139 @@ export class ServiceService {
       throw new HttpException(
         error.message || 'Failed to create service',
         HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // Function to update service by ID
+  async updateServiceById(
+    serviceId: string, 
+    providerId: string,
+    updateServiceDto: UpdateServiceDto,
+    files?: Express.Multer.File[] 
+  ): Promise<Service> {
+    try {
+      // 1. Find service by ID and ensure it belongs to the provider
+      const service = await this.serviceModel.findOne({ _id: serviceId, providerId });
+
+      if (!service) {
+        throw new HttpException(
+          'Service not found or you do not have permission to update it',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      let finalImageUrls: string[] = service.images || []; // Default to existing images
+
+      // 2. Check if new files were provided
+      if (files && files.length > 0) {
+        console.log('🆕 New files received. Starting replacement process...');
+        
+        // **A. Delete old images from Supabase**
+        if (service.images && service.images.length > 0) {
+          try {
+            console.log('🗑️ Deleting old service images from Supabase...');
+            const deletePromises = service.images.map(imageUrl => 
+              // Assuming you have a deleteFile method in SupabaseStorageService
+              this.supabaseStorage.deleteFile(imageUrl) 
+            );
+            await Promise.all(deletePromises);
+            console.log('✅ Old service images deleted from Supabase');
+          } catch (deleteError) {
+            console.error('⚠️ Failed to delete old service images from Supabase. Proceeding with update:', deleteError);
+            // We proceed with the update even if old images fail to delete
+          }
+        }
+
+        // **B. Upload new images to Supabase**
+        try {
+          console.log('📤 Uploading new service images to Supabase...');
+          const uploadPromises = files.map(file => 
+            this.supabaseStorage.uploadImage(file, 'services', true)
+          );
+          finalImageUrls = await Promise.all(uploadPromises); // ⬅️ Overwrite the finalImageUrls
+          console.log('✅ New service images uploaded successfully:', finalImageUrls);
+        } catch (uploadError) {
+          console.error('❌ Failed to upload new service images:', uploadError);
+          throw new HttpException(
+             'Failed to upload new service images',
+             HttpStatus.INTERNAL_SERVER_ERROR
+          );
+        }
+      }
+
+      // 3. Prepare update data
+      const updateData = {
+        ...updateServiceDto,
+        images: finalImageUrls // ⬅️ Using the new/existing list
+      };
+      
+      // Convert price string to number if it exists in DTO
+      if (typeof updateData.price === 'string') {
+          updateData.price = parseFloat(updateData.price);
+      }
+
+      // 4. Perform the update
+      const updatedService = await this.serviceModel.findOneAndUpdate(
+        { _id: serviceId, providerId }, 
+        { $set: updateData },
+        { new: true, runValidators: true }
+      )
+      .select('-reviews -bookedDates -rating -aiAnalysis') // ⬅️ Ensure the response is clean
+      .exec();
+
+      if (!updatedService) {
+        throw new HttpException(
+          'Failed to update service after finding it',
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+
+      return updatedService;
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to update service',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // 🆕 Function to delete service by ID
+  async deleteServiceById(serviceId: string, providerId: string): Promise<{ message: string }> {
+    try {
+      // 1. Find service by ID and ensure it belongs to the provider
+      const service = await this.serviceModel.findOne({ _id: serviceId, providerId });
+
+      if (!service) {
+        throw new HttpException(
+          'Service not found or you do not have permission to delete it',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      // 2. Delete images from Supabase
+      if (service.images && service.images.length > 0) {
+        try {
+          console.log('🗑️ Deleting service images from Supabase...');
+          const deletePromises = service.images.map(imageUrl => 
+            this.supabaseStorage.deleteFile(imageUrl)
+          );
+          await Promise.all(deletePromises);
+          console.log('✅ Service images deleted from Supabase');
+        } catch (deleteError) {
+          console.error('❌ Failed to delete service images from Supabase:', deleteError);
+          // Proceed with service deletion even if image deletion fails
+        }
+      }
+
+      // 3. Delete the service document
+      await this.serviceModel.deleteOne({ _id: serviceId, providerId });
+
+      return { message: `Service with ID '${serviceId}' deleted successfully` };
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to delete service',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }

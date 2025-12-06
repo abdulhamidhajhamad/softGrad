@@ -1,9 +1,23 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+
 
 class VendorAuthService {
-static const String baseUrl = 'http://192.168.110.22:3000';
-
+    static String getBaseUrl() {
+    if (kIsWeb) {
+      // Web (Chrome)
+      return 'http://localhost:3000';
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      // Android Emulator
+      return 'http://10.0.2.2:3000';
+    } else {
+      // iOS / Desktop / غيره
+      return 'http://localhost:3000';
+    }
+  }
+  static final String baseUrl = getBaseUrl();
 
   static Future<Map<String, dynamic>> signup({
     required String userName,
@@ -44,7 +58,6 @@ static const String baseUrl = 'http://192.168.110.22:3000';
       throw Exception('Network error: $e');
     }
   }
-
 
   static Future<void> testConnection() async {
     try {

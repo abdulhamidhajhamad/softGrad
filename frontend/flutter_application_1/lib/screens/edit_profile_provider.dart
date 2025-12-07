@@ -83,8 +83,13 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
     _passCtrl = TextEditingController();
     _confirmCtrl = TextEditingController();
 
-    _selectedCategory = widget.provider.category;
-    _selectedCity = widget.provider.city;
+    // أهم تعديل هنا: نتأكد إن القيمة موجودة في الليست
+    _selectedCategory = _categories.contains(widget.provider.category)
+        ? widget.provider.category
+        : null;
+
+    _selectedCity =
+        _cities.contains(widget.provider.city) ? widget.provider.city : null;
   }
 
   @override
@@ -252,26 +257,23 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _sectionTitle("Profile Information"),
-
                     _label("Brand Name"),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _brandCtrl,
-                      decoration:
-                          _decor(hint: "Brand name", icon: Icons.storefront_outlined),
+                      decoration: _decor(
+                          hint: "Brand name", icon: Icons.storefront_outlined),
                       validator: (v) =>
                           v == null || v.trim().isEmpty ? "Required" : null,
                     ),
-
                     const SizedBox(height: 18),
-
                     _label("Email"),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _emailCtrl,
                       keyboardType: TextInputType.emailAddress,
-                      decoration:
-                          _decor(hint: "Email address", icon: Icons.email_outlined),
+                      decoration: _decor(
+                          hint: "Email address", icon: Icons.email_outlined),
                       validator: (v) {
                         if (v == null || v.isEmpty) return "Required";
                         final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
@@ -279,9 +281,7 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                         return ok ? null : "Invalid email";
                       },
                     ),
-
                     const SizedBox(height: 18),
-
                     _label("Phone"),
                     const SizedBox(height: 8),
                     TextFormField(
@@ -292,20 +292,19 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                       validator: (v) =>
                           v == null || v.isEmpty ? "Required" : null,
                     ),
-
                     const SizedBox(height: 18),
-
                     _label("City"),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       value: _selectedCity,
                       isExpanded: true,
-                      decoration:
-                          _decor(hint: "City", icon: Icons.location_city_outlined),
+                      decoration: _decor(
+                          hint: "City", icon: Icons.location_city_outlined),
                       items: _cities.map((city) {
                         return DropdownMenuItem(
                           value: city,
-                          child: Text(city, style: GoogleFonts.poppins(fontSize: 14)),
+                          child: Text(city,
+                              style: GoogleFonts.poppins(fontSize: 14)),
                         );
                       }).toList(),
                       onChanged: (v) => setState(() => _selectedCity = v),
@@ -313,20 +312,19 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                   ],
                 ),
               ),
-
               _modernCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _sectionTitle("Business Details"),
-
                     _label("Category"),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       value: _selectedCategory,
                       isExpanded: true,
                       decoration: _decor(
-                          hint: "Select Category", icon: Icons.category_outlined),
+                          hint: "Select Category",
+                          icon: Icons.category_outlined),
                       items: _categories.map((cat) {
                         return DropdownMenuItem(
                           value: cat,
@@ -336,20 +334,19 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                                   size: 18, color: kPrimaryColor),
                               const SizedBox(width: 8),
                               Flexible(
-                                child: Text(cat,
-                                    style: GoogleFonts.poppins(),
-                                    overflow: TextOverflow.ellipsis),
+                                child: Text(
+                                  cat,
+                                  style: GoogleFonts.poppins(),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ],
                           ),
                         );
                       }).toList(),
-                      onChanged: (v) =>
-                          setState(() => _selectedCategory = v),
+                      onChanged: (v) => setState(() => _selectedCategory = v),
                     ),
-
                     const SizedBox(height: 18),
-
                     _label("Description"),
                     const SizedBox(height: 8),
                     TextFormField(
@@ -364,13 +361,11 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                   ],
                 ),
               ),
-
               _modernCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _sectionTitle("Security"),
-
                     _label("New Password"),
                     const SizedBox(height: 8),
                     TextFormField(
@@ -389,7 +384,6 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                         ),
                       ),
                     ),
-
                     if (_passwordStrengthLabel.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       ClipRRect(
@@ -419,9 +413,7 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                         ],
                       ),
                     ],
-
                     const SizedBox(height: 18),
-
                     _label("Confirm Password"),
                     const SizedBox(height: 8),
                     TextFormField(
@@ -440,8 +432,12 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                       ),
                       validator: (v) {
                         if (_passCtrl.text.isNotEmpty) {
-                          if (v == null || v.isEmpty) return "Confirm password";
-                          if (v != _passCtrl.text) return "Passwords do not match";
+                          if (v == null || v.isEmpty) {
+                            return "Confirm password";
+                          }
+                          if (v != _passCtrl.text) {
+                            return "Passwords do not match";
+                          }
                         }
                         return null;
                       },
@@ -449,9 +445,7 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 10),
-
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -473,7 +467,6 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
             ],
           ),

@@ -5,6 +5,7 @@ import 'edit_profile_provider.dart';
 import 'services_provider.dart';
 import 'signin.dart';
 import 'package:flutter_application_1/screens/booking_provider.dart';
+import 'package:flutter_application_1/screens/messages_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -231,7 +232,14 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                     child: _QuickAction(
                       title: "Messages",
                       icon: Icons.chat_bubble_outline,
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MessagesProviderScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],

@@ -7,6 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
+const Color kTextColor = Colors.black;
+const Color kBackgroundColor = Colors.white;
 
 class EditServiceProviderScreen extends StatefulWidget {
   final Map<String, dynamic> existingData;
@@ -41,6 +43,23 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
   List<Map<String, dynamic>> _packages = [];
 
   late AnimationController _animController;
+
+  // Category options with icons for the bottom sheet
+  final List<_CategoryOption> _categoryOptions = const [
+    _CategoryOption('Venues', Icons.apartment_rounded),
+    _CategoryOption('Photographers', Icons.photo_camera_outlined),
+    _CategoryOption('Catering', Icons.restaurant_menu_rounded),
+    _CategoryOption('Cake', Icons.cake_outlined),
+    _CategoryOption('Flower Shops', Icons.local_florist_outlined),
+    _CategoryOption('Decor & Lighting', Icons.lightbulb_outline),
+    _CategoryOption('Music & Entertainment', Icons.music_note_outlined),
+    _CategoryOption('Wedding Planners & Coordinators', Icons.event_available),
+    _CategoryOption('Card Printing', Icons.mail_outline),
+    _CategoryOption('Jewelry & Accessories', Icons.diamond_outlined),
+    _CategoryOption(
+        'Car Rental & Transportation', Icons.directions_car_filled_outlined),
+    _CategoryOption('Gift & Souvenir', Icons.card_giftcard_outlined),
+  ];
 
   @override
   void initState() {
@@ -160,38 +179,98 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     Navigator.pop(context, updatedData);
   }
 
+  // Open bottom sheet with category list + icons
+  Future<void> _openCategoryPicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Select category",
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: kTextColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _categoryOptions.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                    itemBuilder: (context, index) {
+                      final opt = _categoryOptions[index];
+                      final isSelected = _categoryCtrl.text.trim() == opt.label;
+                      return ListTile(
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 4),
+                        leading: Icon(
+                          opt.icon,
+                          color: kPrimaryColor,
+                        ),
+                        title: Text(
+                          opt.label,
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w500,
+                            color: kTextColor,
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? const Icon(Icons.check, color: kPrimaryColor)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _categoryCtrl.text = opt.label;
+                          });
+                          Navigator.pop(ctx);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final baseGradient = const LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Color(0xFF0F172A),
-        Color(0xFF111827),
-        Color(0xFF020617),
-      ],
-    );
-
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: kBackgroundColor,
       body: Stack(
         children: [
-          // خلفية جريدنت + دوائر 3D
-          Container(
-            decoration: BoxDecoration(gradient: baseGradient),
-          ),
-          Positioned(
-            top: -80,
-            right: -60,
-            child: _glowOrb(const Color(0xFF6366F1)),
-          ),
-          Positioned(
-            bottom: -100,
-            left: -40,
-            child: _glowOrb(const Color(0xFFEC4899)),
-          ),
-
-          // المحتوى مع أنيميشن
+          // plain white background (no gradients / waves)
+          Container(color: kBackgroundColor),
           SafeArea(
             child: AnimatedBuilder(
               animation: _animController,
@@ -215,8 +294,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
               ),
             ),
           ),
-
-          // زر الحفظ 3D عائم
           Positioned(
             bottom: 20,
             left: 20,
@@ -249,7 +326,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: kTextColor,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -257,16 +334,13 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                   "Update your service details",
                   style: GoogleFonts.poppins(
                     fontSize: 12,
-                    color: Colors.white.withOpacity(0.7),
+                    color: Colors.grey.shade700,
                   ),
                 ),
               ],
             ),
           ),
-          _glassIconButton(
-            icon: Icons.auto_awesome_rounded,
-            onTap: () {},
-          ),
+          // removed extra white icon button (sparkles)
         ],
       ),
     );
@@ -327,7 +401,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _label("Category"),
-                            _textField(_categoryCtrl, hint: "Photographers"),
+                            _categoryField(),
                           ],
                         ),
                       ),
@@ -423,9 +497,9 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                     children: [
                       ..._highlights.map(
                         (h) => Chip(
-                          backgroundColor: Colors.white.withOpacity(0.06),
-                          side: BorderSide(
-                            color: Colors.white.withOpacity(0.1),
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(
+                            color: Color(0xFFE0E7FF),
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
@@ -434,13 +508,13 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                             h,
                             style: GoogleFonts.poppins(
                               fontSize: 11,
-                              color: Colors.white,
+                              color: kTextColor,
                             ),
                           ),
-                          deleteIcon: const Icon(
+                          deleteIcon: Icon(
                             Icons.close,
                             size: 16,
-                            color: Colors.white70,
+                            color: Colors.grey.shade500,
                           ),
                           onDeleted: () {
                             setState(() => _highlights.remove(h));
@@ -451,25 +525,29 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                         onTap: _addHighlight,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
+                              horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
+                              color: kPrimaryColor.withOpacity(0.7),
                             ),
-                            color: Colors.white.withOpacity(0.04),
+                            color: Colors.white,
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.add_rounded,
-                                  size: 18, color: Colors.white70),
+                              Icon(
+                                Icons.add_rounded,
+                                size: 18,
+                                color: kPrimaryColor,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 "Add highlight",
                                 style: GoogleFonts.poppins(
                                   fontSize: 11,
-                                  color: Colors.white70,
+                                  color: kPrimaryColor,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ],
@@ -518,7 +596,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                               "Tip: Use bright, high-quality images to attract more bookings.",
                               style: GoogleFonts.poppins(
                                 fontSize: 11,
-                                color: Colors.white70,
+                                color: Colors.grey.shade700,
                               ),
                             ),
                           ],
@@ -549,27 +627,20 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
       child: ClipRRect(
         borderRadius: BorderRadius.circular(26),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.white.withOpacity(0.12),
-                  Colors.white.withOpacity(0.04),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: Colors.white.withOpacity(0.9),
               border: Border.all(
-                color: Colors.white.withOpacity(0.25),
+                color: Colors.grey.shade200,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.45),
-                  blurRadius: 24,
-                  offset: const Offset(0, 16),
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
@@ -593,10 +664,10 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                     height: 90,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(18),
-                      gradient: const LinearGradient(
+                      gradient: LinearGradient(
                         colors: [
-                          Color(0xFF6366F1),
-                          Color(0xFFEC4899),
+                          kPrimaryColor.withOpacity(0.85),
+                          const Color(0xFF42A5F5),
                         ],
                       ),
                     ),
@@ -620,7 +691,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                         style: GoogleFonts.poppins(
                           fontSize: 17,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: kTextColor,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -632,11 +703,13 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.poppins(
                           fontSize: 11.5,
-                          color: Colors.white.withOpacity(0.75),
+                          color: Colors.grey.shade700,
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
                         children: [
                           _miniPill(
                             icon: Icons.location_on_rounded,
@@ -644,7 +717,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                                 ? "City"
                                 : _cityCtrl.text,
                           ),
-                          const SizedBox(width: 8),
                           _miniPill(
                             icon: Icons.category_rounded,
                             label: _categoryCtrl.text.isEmpty
@@ -670,29 +742,22 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 350),
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.white.withOpacity(0.12),
-                Colors.white.withOpacity(0.04),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: Colors.white.withOpacity(0.9),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: Colors.white.withOpacity(0.18),
+              color: Colors.grey.shade200,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.45),
-                blurRadius: 20,
-                offset: const Offset(0, 12),
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 16,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
@@ -710,8 +775,8 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
           height: 18,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF6366F1), Color(0xFFEC4899)],
+            gradient: LinearGradient(
+              colors: [kPrimaryColor, const Color(0xFF42A5F5)],
             ),
           ),
         ),
@@ -721,7 +786,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
           style: GoogleFonts.poppins(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: kTextColor,
           ),
         ),
       ],
@@ -736,7 +801,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
         style: GoogleFonts.poppins(
           fontSize: 12,
           fontWeight: FontWeight.w500,
-          color: Colors.white.withOpacity(0.8),
+          color: Colors.grey.shade700,
         ),
       ),
     );
@@ -752,29 +817,29 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
-      style: GoogleFonts.poppins(color: Colors.white, fontSize: 13),
+      style: GoogleFonts.poppins(color: kTextColor, fontSize: 13),
       keyboardType: keyboardType,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: GoogleFonts.poppins(
           fontSize: 12,
-          color: Colors.white.withOpacity(0.45),
+          color: Colors.grey.shade500,
         ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.04),
+        fillColor: Colors.white,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.22)),
+          borderSide: BorderSide(color: Colors.grey.shade300),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.14)),
+          borderSide: BorderSide(color: Colors.grey.shade300),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderSide: BorderSide(
             color: kPrimaryColor,
             width: 1.6,
           ),
@@ -786,25 +851,51 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
         return null;
       },
       onChanged: (_) {
-        // تحديث الكارد العلوي لايف
         setState(() {});
       },
     );
   }
 
-  Widget _glowOrb(Color color) {
-    return Container(
-      width: 220,
-      height: 220,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [
-            color.withOpacity(0.55),
-            Colors.transparent,
-          ],
+  Widget _categoryField() {
+    return TextFormField(
+      controller: _categoryCtrl,
+      readOnly: true,
+      style: GoogleFonts.poppins(color: kTextColor, fontSize: 13),
+      decoration: InputDecoration(
+        hintText: "Select category",
+        hintStyle: GoogleFonts.poppins(
+          fontSize: 12,
+          color: Colors.grey.shade500,
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderSide: BorderSide(
+            color: kPrimaryColor,
+            width: 1.6,
+          ),
+        ),
+        suffixIcon: const Icon(
+          Icons.arrow_drop_down_rounded,
+          color: kPrimaryColor,
         ),
       ),
+      validator: (v) {
+        if (v == null || v.trim().isEmpty) return "Required";
+        return null;
+      },
+      onTap: _openCategoryPicker,
     );
   }
 
@@ -813,19 +904,19 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: Colors.black.withOpacity(0.45),
-        border: Border.all(color: Colors.white.withOpacity(0.16)),
+        color: kPrimaryColor.withOpacity(0.06),
+        border: Border.all(color: kPrimaryColor.withOpacity(0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: Colors.white.withOpacity(0.9)),
+          Icon(icon, size: 14, color: kPrimaryColor),
           const SizedBox(width: 4),
           Text(
             label,
             style: GoogleFonts.poppins(
               fontSize: 11,
-              color: Colors.white,
+              color: kTextColor,
             ),
           ),
         ],
@@ -842,23 +933,16 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
         height: 120,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
-          gradient: LinearGradient(
-            colors: [
-              Colors.white.withOpacity(0.06),
-              Colors.white.withOpacity(0.01),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          border: Border.all(color: Colors.grey.shade300),
+          color: Colors.white,
         ),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.add_photo_alternate_outlined,
-                color: Colors.white,
+                color: kPrimaryColor,
                 size: 30,
               ),
               const SizedBox(height: 6),
@@ -866,7 +950,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                 "Add service photos",
                 style: GoogleFonts.poppins(
                   fontSize: 13,
-                  color: Colors.white,
+                  color: kTextColor,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -874,7 +958,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                 "Tap to upload images",
                 style: GoogleFonts.poppins(
                   fontSize: 11,
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.grey.shade600,
                 ),
               ),
             ],
@@ -893,12 +977,12 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
         height: 90,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withOpacity(0.25)),
-          color: Colors.white.withOpacity(0.05),
+          border: Border.all(color: Colors.grey.shade300),
+          color: Colors.grey.shade100,
         ),
-        child: const Icon(
+        child: Icon(
           Icons.add_rounded,
-          color: Colors.white,
+          color: kPrimaryColor,
           size: 30,
         ),
       ),
@@ -916,9 +1000,9 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
             decoration: BoxDecoration(
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.35),
-                  blurRadius: 12,
-                  offset: const Offset(0, 8),
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
@@ -939,7 +1023,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
+                color: Colors.black.withOpacity(0.65),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -985,15 +1069,15 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
           height: 56,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               colors: [
-                Color(0xFF4F46E5),
-                Color(0xFFEC4899),
+                kPrimaryColor,
+                const Color(0xFF1414D7),
               ],
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF4F46E5).withOpacity(0.6),
+                color: kPrimaryColor.withOpacity(0.45),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -1021,7 +1105,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
@@ -1029,19 +1113,26 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              color: Colors.white.withOpacity(0.06),
+              color: Colors.white,
               border: Border.all(
-                color: Colors.white.withOpacity(0.18),
+                color: Colors.grey.shade300,
               ),
             ),
             child: Icon(
               icon,
               size: 22,
-              color: Colors.white,
+              color: kTextColor,
             ),
           ),
         ),
       ),
     );
   }
+}
+
+// Small model for category option
+class _CategoryOption {
+  final String label;
+  final IconData icon;
+  const _CategoryOption(this.label, this.icon);
 }

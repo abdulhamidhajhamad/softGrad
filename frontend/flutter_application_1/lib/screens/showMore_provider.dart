@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'full_image_viewer_provider.dart';
 
+// NEW: import شاشة الريفيوز
+import 'service_reviews_provider.dart';
+
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 
 class ShowMoreProviderScreen extends StatefulWidget {
@@ -22,6 +25,42 @@ class ShowMoreProviderScreen extends StatefulWidget {
 }
 
 class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
+  // دالة صغيرة لتحويل service['reviews'] (لو موجودة) إلى List<ServiceReview>
+  List<ServiceReview> _extractReviews() {
+    final raw = widget.service['reviews'];
+    if (raw is! List) return [];
+
+    return raw
+        .map<ServiceReview?>((item) {
+          if (item is! Map) return null;
+          final map = Map<String, dynamic>.from(item as Map);
+
+          int rating =
+              int.tryParse(map['rating']?.toString() ?? '') ?? 0; // 0..∞
+          if (rating < 1) rating = 1;
+          if (rating > 5) rating = 5;
+
+          DateTime createdAt;
+          final rawDate = map['createdAt'];
+          if (rawDate is DateTime) {
+            createdAt = rawDate;
+          } else {
+            createdAt =
+                DateTime.tryParse(rawDate?.toString() ?? '') ?? DateTime.now();
+          }
+
+          return ServiceReview(
+            id: map['id']?.toString() ?? '',
+            customerName: map['customerName']?.toString() ?? 'Customer',
+            rating: rating,
+            comment: map['comment']?.toString() ?? '',
+            createdAt: createdAt,
+          );
+        })
+        .whereType<ServiceReview>()
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.service;
@@ -61,6 +100,25 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
+        // NEW: زر Reviews يفتح شاشة الريفيوز
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.rate_review_outlined, color: Colors.black),
+            tooltip: 'View reviews',
+            onPressed: () {
+              final reviews = _extractReviews();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ServiceReviewsProviderScreen(
+                    service: s,
+                    reviews: reviews,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -225,18 +283,17 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
             const SizedBox(height: 20),
 
             // -----------------------
-            // التفاصيل
+            // التفاصيل (وصف واحد)
             // -----------------------
-            _sectionTitle("Description & Details"),
+            _sectionTitle("Description"),
             _card(
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _textTitle("Short Description"),
-                  _textBody(s["shortDescription"]),
-                  const SizedBox(height: 14),
-                  _textTitle("Full Description"),
-                  _textBody(s["fullDescription"]),
+                  _textTitle("Description"),
+                  _textBody(
+                    s["fullDescription"] ?? s["shortDescription"] ?? "-",
+                  ),
                 ],
               ),
             ),

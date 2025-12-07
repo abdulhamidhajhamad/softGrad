@@ -7,6 +7,7 @@ import 'signin.dart';
 import 'package:flutter_application_1/screens/booking_provider.dart';
 import 'package:flutter_application_1/screens/messages_provider.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
+import 'package:flutter_application_1/screens/reviews_provider.dart'; // NEW
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -242,10 +243,22 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _StatBox(
-                      icon: Icons.star_border,
-                      title: "Reviews",
-                      value: provider.reviews.toString(),
+                    // MAKE REVIEWS CLICKABLE
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const ReviewsProviderScreen(), // providerId optional
+                          ),
+                        );
+                      },
+                      child: _StatBox(
+                        icon: Icons.star_border,
+                        title: "Reviews",
+                        value: provider.reviews.toString(),
+                      ),
                     ),
                   ),
                 ],

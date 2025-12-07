@@ -9,6 +9,7 @@ import {
   HttpStatus,
   UseGuards,
   Request,
+  ForbiddenException, 
 } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { CreateBookingDto } from './booking.dto';
@@ -98,8 +99,25 @@ export class BookingController {
     return this.bookingService.getTotalBookingsAndServices();
   }
 
+/**
+   * Retrieves all successful bookings associated with the vendor's services and calculates total sales.
+   * Endpoint: GET /bookings/vendor/sales
+   * Protected: Vendor role only.
+   */
+  @Get('vendor/sales')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getVendorSales(@Request() req): Promise<{ totalSales: number; bookings: Booking[] }> {
+    const vendorId = req.user.userId || req.user.id;
+    const userRole = req.user.role; // Assumed to be available from the JWT payload
 
+    // Role check to ensure only vendors can access this data
+    if (userRole !== 'vendor') {
+      throw new ForbiddenException('Only vendors can access their sales data.');
+    }
 
+    return this.bookingService.getVendorSalesAndBookings(vendorId);
+  }
 
 
 }

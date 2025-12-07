@@ -129,4 +129,14 @@ class AuthService {
       throw Exception('Network error: $e');
     }
   }
+  
+  static Future<void> logout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('auth_token');
+      print('🗑️ Auth token removed successfully (Logged out)');
+    } catch (e) {
+      print('❌ Error logging out: $e');
+    }
+  }
 }

@@ -17,13 +17,14 @@ export class ServiceController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 10)) 
   async addService(
-    @Body() createServiceDto: CreateServiceDto, 
+    @Body('data') data: string,
     @Request() req: any,
     @UploadedFiles() files?: Express.Multer.File[] 
   ) {
     try {
+      const createServiceDto: CreateServiceDto = JSON.parse(data);
       const userId = req.user.userId;
-      const userRole = req.user.role;
+      const userRole = req.user.role
       if (userRole !== 'vendor') {
         throw new HttpException(
           'Only vendors can add services',

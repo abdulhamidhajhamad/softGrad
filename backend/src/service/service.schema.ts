@@ -30,6 +30,9 @@ export class Service extends Document {
     @Prop({ required: true })
     serviceName: string;
 
+    @Prop({ type: Boolean, default: true }) 
+    isActive: boolean
+    
     @Prop({ type: [String], default: [] })
     images: string[];
 

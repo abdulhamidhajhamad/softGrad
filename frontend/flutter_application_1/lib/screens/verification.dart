@@ -48,7 +48,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
     required String city,
     required String token,
   }) {
-    // حفظ التوكن في AuthService لاستخدامه لاحقاً
     AuthService.saveToken(token);
 
     if (role.toLowerCase() == "customer" || role.toLowerCase() == "user") {

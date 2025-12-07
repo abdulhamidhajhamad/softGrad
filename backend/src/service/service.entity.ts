@@ -11,11 +11,12 @@ export class Service {
   createdAt: Date;
   updatedAt: Date;
   bookedDates: Date[];
-  rating: number; // ✅ إضافة حقل الرايتنج
-
+  rating: number; 
+isActive: boolean;
   constructor(data: Partial<Service>) {
     Object.assign(this, data);
     this.bookedDates = data?.bookedDates || [];
+   this.isActive = data?.isActive ?? true;
     this.rating = data?.rating || 0; // ✅ تعيين قيمة افتراضية
   }
 }

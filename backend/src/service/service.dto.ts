@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsArray, IsOptional, IsObject, IsNotEmpty, Min, IsDate, MinLength, Max } from 'class-validator';
+import { IsString, IsNumber, IsArray, IsOptional,IsBoolean, IsObject, IsNotEmpty, Min, IsDate, MinLength, Max } from 'class-validator';
 import { Transform, Type } from 'class-transformer'; // ← أضف هذا
 
 export class LocationDto {
@@ -64,6 +64,15 @@ export class CreateServiceDto {
   @IsOptional()
   @Transform(({ value }) => value ? parseFloat(value) : 0) // ← أضف هذا
   rating?: number;
+  
+@IsBoolean()
+  @IsOptional()
+  @Transform(({ value }) => { 
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  isActive?: boolean;
 }
 
 export class UpdateServiceDto {
@@ -106,6 +115,10 @@ export class UpdateServiceDto {
   @Max(5)
   @IsOptional()
   rating?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
 
 export class ServiceResponseDto {

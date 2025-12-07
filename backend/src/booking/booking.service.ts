@@ -328,9 +328,6 @@ export class BookingService {
   }
 
 
-
-
-
 /**
  * Creates a Booking and updates the payment status to PENDING.
  * This should be called BEFORE the actual payment is made in Stripe.
@@ -431,4 +428,45 @@ async confirmPaymentAndUpdateBooking(bookingId: string): Promise<any> {
 
     return this.formatBookingResponse(savedBooking);
 }
+
+/**
+   * Retrieves all successful bookings associated with the vendor's services and calculates total sales.
+   * This is based on the assumption that a booking's totalAmount is attributed to the vendor 
+   * if it contains at least one of their services.
+   * @param vendorId The ID of the authenticated vendor (providerId).
+   * @returns A promise that resolves to an object containing total sales and a list of formatted bookings.
+   */
+  async getVendorSalesAndBookings(vendorId: string): Promise<{ totalSales: number; bookings: any[] }> {
+    // 1. Find all service IDs owned by the vendor.
+    // We only select the MongoDB ObjectId (_id) from the Service collection.
+    const vendorServices = await this.serviceModel.find({ providerId: vendorId }, { _id: 1 }).exec();
+    const serviceIds = vendorServices.map(service => service._id);
+
+    if (serviceIds.length === 0) {
+        // If the vendor has no services, they have no sales/bookings.
+        return { totalSales: 0, bookings: [] };
+    }
+
+    // 2. Find all successful bookings that contain at least one of these service IDs.
+    const bookings = await this.bookingModel.find({
+        // Match bookings where the 'services' array contains an item with a 'serviceId' that is in the 'serviceIds' list
+        'services.serviceId': { $in: serviceIds },
+        // Only count successful payments
+        paymentStatus: PaymentStatus.SUCCESSFUL,
+    }).sort({ createdAt: -1 }) // Sort by newest first
+      .exec();
+
+    // 3. Calculate total sales
+    let totalSales = 0;
+    bookings.forEach(booking => {
+        // Assuming the entire booking's totalAmount is the sales for this vendor
+        totalSales += booking.totalAmount;
+    });
+
+    // 4. Return results with formatted bookings
+    return { 
+        totalSales, 
+        bookings: bookings.map(booking => this.formatBookingResponse(booking)) 
+    };
+  }
 }

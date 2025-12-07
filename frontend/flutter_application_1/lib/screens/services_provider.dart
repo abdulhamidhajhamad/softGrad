@@ -1,11 +1,14 @@
+// lib/screens/services_provider.dart
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'add_service_provider.dart';
+import 'package:flutter_application_1/screens/add_service_provider.dart';
 import 'showMore_provider.dart';
+import 'edit_service_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -70,9 +73,11 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
     }
 
     if (_sortOption == 'price_low') {
-      list.sort((a, b) => (a['price'] as double).compareTo(b['price'] as double));
+      list.sort(
+          (a, b) => (a['price'] as double).compareTo(b['price'] as double));
     } else if (_sortOption == 'price_high') {
-      list.sort((a, b) => (b['price'] as double).compareTo(a['price'] as double));
+      list.sort(
+          (a, b) => (b['price'] as double).compareTo(a['price'] as double));
     } else {
       list.sort((a, b) {
         final da = (a['updatedAt'] ?? a['createdAt']) as DateTime;
@@ -130,8 +135,8 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
               });
               Navigator.pop(context);
             },
-            child: Text('Delete',
-                style: GoogleFonts.poppins(color: Colors.red)),
+            child:
+                Text('Delete', style: GoogleFonts.poppins(color: Colors.red)),
           ),
         ],
       ),
@@ -143,6 +148,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
     _searchController.dispose();
     super.dispose();
   }
+
   @override
   Widget build(BuildContext context) {
     final total = _services.length;
@@ -182,7 +188,9 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
               final newService = await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const AddServiceProviderScreen(),
+                  builder: (_) => AddServiceProviderScreen(
+                    existingData: null, // ← ← ← التعديل الوحيد
+                  ),
                 ),
               );
 
@@ -195,7 +203,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                   service['createdAt'] = DateTime.now();
                   service['updatedAt'] = DateTime.now();
 
-                  // 🔥 حساب السعر بعد الخصم إن وجد
                   if (service['discount'] != null &&
                       service['discount'].toString().isNotEmpty) {
                     final p = service['price'] as double;
@@ -222,21 +229,19 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                 slivers: [
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSummaryHeader(total, activeCount, hiddenCount,
-                              lastUpdated),
+                          _buildSummaryHeader(
+                              total, activeCount, hiddenCount, lastUpdated),
                           const SizedBox(height: 16),
                           _buildSearchAndFilters(),
                         ],
                       ),
                     ),
                   ),
-
-                  // ************** SERVICE LIST **************
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     sliver: SliverList.builder(
@@ -251,9 +256,21 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                             final updated = await Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => AddServiceProviderScreen(),
+                                builder: (_) => EditServiceProviderScreen(
+                                    existingData: service),
                               ),
                             );
+
+                            if (updated != null) {
+                              setState(() {
+                                _services[originalIndex] = {
+                                  ..._services[originalIndex],
+                                  ...updated,
+                                  "updatedAt": DateTime.now(),
+                                };
+                              });
+                              _markUpdated();
+                            }
                           },
                           onDelete: () => _confirmDelete(originalIndex),
                           onToggleActive: (val) {
@@ -268,7 +285,6 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                       },
                     ),
                   ),
-
                   const SliverToBoxAdapter(child: SizedBox(height: 24)),
                 ],
               ),
@@ -384,7 +400,9 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                 final newService = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const AddServiceProviderScreen(),
+                    builder: (_) => AddServiceProviderScreen(
+                      existingData: null, // ← ← ← التعديل فقط
+                    ),
                   ),
                 );
 
@@ -539,14 +557,20 @@ class _ServiceCard extends StatelessWidget {
             ),
           );
 
-          if (result != null && result['edit'] == true) {
-            onEdit();
+          if (result != null && result["edit"] == true) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => EditServiceProviderScreen(
+                  existingData: service,
+                ),
+              ),
+            );
           }
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ************** الصور **************
             if (images.isNotEmpty)
               Stack(
                 children: [
@@ -567,8 +591,6 @@ class _ServiceCard extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  // 🔥 Badge خصم
                   if (hasDiscount)
                     Positioned(
                       top: 12,
@@ -605,14 +627,11 @@ class _ServiceCard extends StatelessWidget {
                   ),
                 ),
               ),
-
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ************** الاسم + السعر **************
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -625,8 +644,6 @@ class _ServiceCard extends StatelessWidget {
                           ),
                         ),
                       ),
-
-                      // 🔥 السعر + خصم + شطب القديم
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -653,7 +670,6 @@ class _ServiceCard extends StatelessWidget {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 4),
                   Text(
                     service['category'] ?? '',
@@ -662,7 +678,6 @@ class _ServiceCard extends StatelessWidget {
                       color: Colors.grey.shade600,
                     ),
                   ),
-
                   const SizedBox(height: 6),
                   Text(
                     service['shortDescription'] ?? '',
@@ -673,13 +688,12 @@ class _ServiceCard extends StatelessWidget {
                       color: Colors.grey.shade800,
                     ),
                   ),
-
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: isActive
                               ? Colors.green.withOpacity(0.08)
@@ -710,10 +724,7 @@ class _ServiceCard extends StatelessWidget {
                           value: '${service['likes'] ?? 0}'),
                     ],
                   ),
-
                   const SizedBox(height: 10),
-
-                  // ************** الأزرار **************
                   Row(
                     children: [
                       OutlinedButton.icon(
@@ -729,8 +740,7 @@ class _ServiceCard extends StatelessWidget {
                         icon: const Icon(Icons.edit_outlined, size: 18),
                         label: Text('Edit',
                             style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500)),
+                                fontSize: 13, fontWeight: FontWeight.w500)),
                       ),
                       const SizedBox(width: 8),
                       TextButton(
@@ -772,8 +782,7 @@ class _StatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
         borderRadius: BorderRadius.circular(20),
@@ -786,7 +795,7 @@ class _StatChip extends StatelessWidget {
             value,
             style: GoogleFonts.poppins(
               fontSize: 11,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

@@ -4,14 +4,94 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'help_add_service_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
-const Color kTextColor = Colors.black;
-const Color kBackgroundColor = Colors.white;
+const Color kBackgroundColor = Color(0xFFF3F4F6);
+const Color kTextColor = Color(0xFF111827);
+
+// الخدمة + الأيقونة (نفس اللي عندك في Become a Provider)
+const List<Map<String, dynamic>> kServiceCategories = [
+  {
+    'value': 'Venues',
+    'label': 'Venues',
+    'icon': Icons.apartment_rounded,
+  },
+  {
+    'value': 'Photographers',
+    'label': 'Photographers',
+    'icon': Icons.photo_camera_outlined,
+  },
+  {
+    'value': 'Catering',
+    'label': 'Catering',
+    'icon': Icons.restaurant_menu_rounded,
+  },
+  {
+    'value': 'Cake',
+    'label': 'Cake',
+    'icon': Icons.cake_outlined,
+  },
+  {
+    'value': 'Flower Shops',
+    'label': 'Flower Shops',
+    'icon': Icons.local_florist_outlined,
+  },
+  {
+    'value': 'Decor & Lighting',
+    'label': 'Decor & Lighting',
+    'icon': Icons.lightbulb_outline_rounded,
+  },
+  {
+    'value': 'Music & Entertainment',
+    'label': 'Music & Entertainment',
+    'icon': Icons.music_note_rounded,
+  },
+  {
+    'value': 'Wedding Planners & Coordinators',
+    'label': 'Wedding Planners & Coordinators',
+    'icon': Icons.event_available_rounded,
+  },
+  {
+    'value': 'Card Printing',
+    'label': 'Card Printing',
+    'icon': Icons.mail_outline_rounded,
+  },
+  {
+    'value': 'Jewelry & Accessories',
+    'label': 'Jewelry & Accessories',
+    'icon': Icons.diamond_outlined,
+  },
+  {
+    'value': 'Car Rental & Transportation',
+    'label': 'Car Rental & Transportation',
+    'icon': Icons.directions_car_filled_outlined,
+  },
+  {
+    'value': 'Gift & Souvenir',
+    'label': 'Gift & Souvenir',
+    'icon': Icons.card_giftcard_outlined,
+  },
+];
+
+// المدن (عدليهم لو بدك)
+const List<String> kCities = [
+  'Nablus',
+  'Ramallah',
+  'Jenin',
+  'Tulkarm',
+  'Qalqilya',
+  'Hebron',
+  'Bethlehem',
+  'Jericho',
+  'Jerusalem',
+  'Other',
+];
 
 class AddServiceProviderScreen extends StatefulWidget {
-  const AddServiceProviderScreen({Key? key}) : super(key: key);
+  final Map<String, dynamic>? existingData;
+
+  const AddServiceProviderScreen({Key? key, this.existingData})
+      : super(key: key);
 
   @override
   State<AddServiceProviderScreen> createState() =>
@@ -21,9 +101,8 @@ class AddServiceProviderScreen extends StatefulWidget {
 class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // controllers
   final _nameCtrl = TextEditingController();
-  final _brandCtrl = TextEditingController(text: "Your Brand Name");
+  final _brandCtrl = TextEditingController();
   final _taglineCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
   final _shortDescCtrl = TextEditingController();
@@ -31,190 +110,276 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
   final _priceCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
 
-  String _selectedCategory = "Photographers";
-  String _selectedCity = "Nablus";
-  String _otherCity = "";
-  bool _isVisible = true;
-
-  String _priceType = "Per Event"; // chips
-
-  List<String> _images = [];
-  List<Map<String, dynamic>> _packages = [];
-  List<String> _highlights = [];
-
-  final List<Map<String, dynamic>> _categories = [
-    {"name": "Venues", "icon": Icons.apartment},
-    {"name": "Photographers", "icon": Icons.photo_camera},
-    {"name": "Catering", "icon": Icons.restaurant_menu},
-    {"name": "Cake", "icon": Icons.cake},
-    {"name": "Flower Shops", "icon": Icons.local_florist},
-    {"name": "Decor & Lighting", "icon": Icons.wb_incandescent_outlined},
-    {"name": "Music & Entertainment", "icon": Icons.music_note},
-    {"name": "Wedding Planners & Coordinators", "icon": Icons.event_note},
-    {"name": "Card Printing", "icon": Icons.print},
-    {"name": "Jewelry & Accessories", "icon": Icons.diamond},
-    {"name": "Car Rental & Transportation", "icon": Icons.directions_car},
-    {"name": "Gift & Souvenir", "icon": Icons.redeem},
-  ];
-
-  final List<String> _cities = const [
-    'Nablus',
-    'Ramallah',
-    'Hebron',
-    'Jenin',
-    'Tulkarm',
-    'Qalqilya',
-    'Other',
-  ];
-
   final picker = ImagePicker();
 
-  Future<void> _pickImage(ImageSource source) async {
-    if (_images.length >= 10) return;
+  String? _selectedCategory; // بدون default
+  String? _selectedCity; // بدون default
+  String? _priceType; // Per Event / Per Hour / Per Person
+  bool _isVisible = true;
 
-    final picked = await picker.pickImage(source: source, imageQuality: 80);
+  List<String> _images = [];
+  List<String> _highlights = [];
+  List<Map<String, dynamic>> _packages = [];
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (widget.existingData != null) {
+      final d = widget.existingData!;
+
+      _nameCtrl.text = d["name"] ?? "";
+      _brandCtrl.text = d["brand"] ?? "";
+      _taglineCtrl.text = d["tagline"] ?? "";
+      _addressCtrl.text = d["address"] ?? "";
+      _shortDescCtrl.text = d["shortDescription"] ?? "";
+      _fullDescCtrl.text = d["fullDescription"] ?? "";
+      _priceCtrl.text = d["price"]?.toString() ?? "";
+      _discountCtrl.text = d["discount"]?.toString() ?? "";
+
+      _selectedCity = d["city"];
+      _selectedCategory = d["category"];
+      _priceType = d["priceType"];
+      _isVisible = d["isActive"] ?? true;
+
+      _images = List<String>.from(d["images"] ?? []);
+      _highlights = List<String>.from(d["highlights"] ?? []);
+      _packages = List<Map<String, dynamic>>.from(d["packages"] ?? []);
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked != null) {
       setState(() => _images.add(picked.path));
     }
   }
 
-  void _addPackage() {
-    final nameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            left: 20,
-            right: 20,
-            top: 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text("Add Package",
-                  style: GoogleFonts.poppins(
-                      fontSize: 18, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: "Package Name"),
-              ),
-              TextField(
-                controller: priceCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Price"),
-              ),
-              TextField(
-                controller: descCtrl,
-                decoration:
-                    const InputDecoration(labelText: "Short Description"),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: kPrimaryColor,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14))),
-                onPressed: () {
-                  setState(() {
-                    _packages.add({
-                      "name": nameCtrl.text,
-                      "price": priceCtrl.text,
-                      "desc": descCtrl.text,
-                    });
-                  });
-                  Navigator.pop(context);
-                },
-                child: Text("Add Package",
-                    style: GoogleFonts.poppins(
-                        color: Colors.white, fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // highlight chips
   void _addHighlight() {
     final ctrl = TextEditingController();
 
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text("Add Highlight", style: GoogleFonts.poppins()),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text("Add Highlight",
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
         content: TextField(
           controller: ctrl,
-          decoration: const InputDecoration(hintText: "Highlight text"),
+          style: GoogleFonts.poppins(fontSize: 14),
+          decoration: InputDecoration(
+            hintText: "e.g. 4K Cinematic Coverage",
+            hintStyle:
+                GoogleFonts.poppins(fontSize: 13, color: Colors.grey[500]),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          ),
         ),
+        actionsPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel")),
-          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              "Cancel",
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kPrimaryColor,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              elevation: 0,
+            ),
             onPressed: () {
-              setState(() => _highlights.add(ctrl.text));
+              if (ctrl.text.trim().isNotEmpty) {
+                setState(() => _highlights.add(ctrl.text.trim()));
+              }
               Navigator.pop(context);
             },
-            child:
-                Text("Add", style: GoogleFonts.poppins(color: kPrimaryColor)),
+            child: Text(
+              "Add",
+              style: GoogleFonts.poppins(fontSize: 13, color: Colors.white),
+            ),
           ),
         ],
       ),
     );
   }
 
-  void _saveService() {
-    if (!_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text("Please complete required fields"),
-        backgroundColor: Colors.red,
-      ));
-      return;
-    }
+  void _addPackage() {
+    final nameCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
 
-    final serviceData = {
-      "name": _nameCtrl.text.trim(),
-      "category": _selectedCategory,
-      "city": _selectedCity == "Other" ? _otherCity : _selectedCity,
-      "price": double.tryParse(_priceCtrl.text) ?? 0,
-      "priceType": _priceType,
-      "shortDescription": _shortDescCtrl.text.trim(),
-      "fullDescription": _fullDescCtrl.text.trim(),
-      "images": List<String>.from(_images),
-      "packages": List<Map<String, dynamic>>.from(_packages),
-      "highlights": List<String>.from(_highlights),
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 18.0),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              Text(
+                "Add Package",
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: kTextColor,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                style: GoogleFonts.poppins(fontSize: 14),
+                decoration: InputDecoration(
+                  labelText: "Package Name",
+                  labelStyle: GoogleFonts.poppins(
+                      fontSize: 13, color: Colors.grey[700]),
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: kPrimaryColor,
+                      width: 1.4,
+                    ),
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: priceCtrl,
+                keyboardType: TextInputType.number,
+                style: GoogleFonts.poppins(fontSize: 14),
+                decoration: InputDecoration(
+                  labelText: "Price (₪)",
+                  labelStyle: GoogleFonts.poppins(
+                      fontSize: 13, color: Colors.grey[700]),
+                  filled: true,
+                  fillColor: const Color(0xFFF9FAFB),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: kPrimaryColor,
+                      width: 1.4,
+                    ),
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimaryColor,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _packages.add({
+                        "name": nameCtrl.text.trim(),
+                        "price": priceCtrl.text.trim(),
+                      });
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: Text(
+                    "Add Package",
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _save() {
+    final data = {
+      "name": _nameCtrl.text,
+      "brand": _brandCtrl.text,
+      "tagline": _taglineCtrl.text,
+      "address": _addressCtrl.text,
+      "shortDescription": _shortDescCtrl.text,
+      "fullDescription": _fullDescCtrl.text,
+      "category": _selectedCategory ?? "",
+      "city": _selectedCity ?? "",
+      "priceType": _priceType ?? "",
       "isActive": _isVisible,
+      "price": double.tryParse(_priceCtrl.text) ?? 0,
+      "discount": _discountCtrl.text,
+      "images": _images,
+      "highlights": _highlights,
+      "packages": _packages,
     };
 
-// ✅ فقط أضف القيم إذا كانت غير فاضية
-    if (_brandCtrl.text.trim().isNotEmpty) {
-      serviceData["brand"] = _brandCtrl.text.trim();
-    }
-
-    if (_taglineCtrl.text.trim().isNotEmpty) {
-      serviceData["tagline"] = _taglineCtrl.text.trim();
-    }
-
-    if (_addressCtrl.text.trim().isNotEmpty) {
-      serviceData["address"] = _addressCtrl.text.trim();
-    }
-
-    if (_discountCtrl.text.trim().isNotEmpty) {
-      serviceData["discount"] = _discountCtrl.text.trim();
-    }
-
-    Navigator.pop(context, serviceData);
+    Navigator.pop(context, data);
   }
 
   @override
@@ -225,580 +390,664 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
         backgroundColor: Colors.white,
         elevation: 0.5,
         centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+        surfaceTintColor: Colors.white,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                size: 18, color: kTextColor),
+            onPressed: () => Navigator.pop(context),
+          ),
         ),
         title: Text(
-          "Add New Service",
+          widget.existingData == null ? "Add New Service" : "Edit Service",
           style: GoogleFonts.poppins(
-              fontSize: 19, fontWeight: FontWeight.w600, color: Colors.black),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline, color: Colors.black),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const HelpAddServiceProvider(),
-                ),
-              );
-            },
+            fontWeight: FontWeight.w700,
+            fontSize: 17,
+            color: kTextColor,
           ),
-        ],
+        ),
       ),
-
-      // bottom buttons
       bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 6,
-                offset: const Offset(0, -2))
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextButton(
-                onPressed: () {},
-                child: Text("Save as Draft",
-                    style: GoogleFonts.poppins(
-                        fontSize: 14, color: Colors.grey.shade700)),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _saveService,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kPrimaryColor,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+        color: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 12.0),
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimaryColor,
+                padding:
+                    const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
                 ),
-                child: Text("Save Service",
+                elevation: 0,
+              ),
+              onPressed: _save,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.check_rounded,
+                      size: 18, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Save Service",
                     style: GoogleFonts.poppins(
-                        fontSize: 15,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600)),
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
-
-      body: Form(
-        key: _formKey,
+      body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // -------------------------
-              // SECTION: BASIC INFO
-              // -------------------------
-              Text("Basic Info",
-                  style: GoogleFonts.poppins(
-                      fontSize: 17, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-
-              _inputCard(
-                Column(
-                  children: [
-                    _label("Service Name"),
-                    TextFormField(
-                      controller: _nameCtrl,
-                      validator: (v) => v!.trim().isEmpty ? "Required" : null,
-                      decoration: _inputDecoration("e.g., Wedding Photography"),
-                    ),
-                    const SizedBox(height: 14),
-                    _label("Brand / Business Name"),
-                    TextFormField(
-                      controller: _brandCtrl,
-                      decoration: _inputDecoration("Your brand name"),
-                    ),
-                    const SizedBox(height: 14),
-                    _label("Short Tagline (optional)"),
-                    TextFormField(
-                      controller: _taglineCtrl,
-                      maxLength: 80,
-                      decoration: _inputDecoration(
-                          "A short catchy sentence about your service"),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 22),
-
-              // -------------------------
-              // SECTION: CATEGORY & LOCATION
-              // -------------------------
-              Text("Category & Location",
-                  style: GoogleFonts.poppins(
-                      fontSize: 17, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-
-              _inputCard(
-                Column(
-                  children: [
-                    _label("Category"),
-                    DropdownButtonFormField<String>(
-                      value: _selectedCategory,
-                      decoration: _inputDecoration(null),
-                      items: _categories.map<DropdownMenuItem<String>>((item) {
-                        return DropdownMenuItem<String>(
-                          value: item["name"] as String,
-                          child: Row(
-                            children: [
-                              Icon(
-                                item["icon"] as IconData,
-                                color: kPrimaryColor,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 10),
-                              Text(
-                                item["name"] as String,
-                                style: GoogleFonts.poppins(fontSize: 14),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (v) {
-                        setState(() => _selectedCategory = v!);
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    _label("City"),
-                    DropdownButtonFormField<String>(
-                      value: _selectedCity,
-                      decoration: _inputDecoration(null),
-                      items: _cities
-                          .map(
-                            (c) => DropdownMenuItem(
-                              value: c,
-                              child: Text(c),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          physics: const BouncingScrollPhysics(),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // Service details (بدون Address)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.02),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: kPrimaryColor.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(999),
                             ),
-                          )
-                          .toList(),
-                      onChanged: (v) {
-                        setState(() => _selectedCity = v!);
-                      },
-                    ),
-                    if (_selectedCity == "Other") ...[
+                            child: Text(
+                              "Service Details",
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: kPrimaryColor,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            _selectedCategory ?? "Select category",
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 14),
-                      _label("Enter City Name"),
-                      TextFormField(
-                        onChanged: (v) => _otherCity = v,
-                        validator: (v) {
-                          if (_selectedCity == "Other" && v!.trim().isEmpty) {
-                            return "Required";
-                          }
-                          return null;
-                        },
-                        decoration: _inputDecoration("Enter your city name"),
-                      ),
+                      _buildInput("Name", _nameCtrl),
+                      _buildInput("Brand", _brandCtrl),
+                      _buildInput("Tagline", _taglineCtrl),
                     ],
-                    const SizedBox(height: 14),
-                    _label("Address (optional)"),
-                    TextFormField(
-                      controller: _addressCtrl,
-                      maxLines: 2,
-                      decoration: _inputDecoration("e.g., Downtown Street 12"),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 22),
 
-              // -------------------------
-              // SECTION: PRICING
-              // -------------------------
-              Text("Pricing & Packages",
-                  style: GoogleFonts.poppins(
-                      fontSize: 17, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-
-              _inputCard(
-                Column(
-                  children: [
-                    _label("Starting Price"),
-                    TextFormField(
-                      controller: _priceCtrl,
-                      keyboardType: TextInputType.number,
-                      validator: (v) => v!.isEmpty ? "Required" : null,
-                      decoration: _inputDecoration("e.g., 500")
-                          .copyWith(prefixText: "\₪ "),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // price type
-                    Row(
-                      children: [
-                        _priceTypeChip("Per Event"),
-                        const SizedBox(width: 6),
-                        _priceTypeChip("Per Hour"),
-                        const SizedBox(width: 6),
-                        _priceTypeChip("Per Person"),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    _label("Discount (%)"),
-                    TextFormField(
-                      controller: _discountCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: _inputDecoration("0–100"),
-                    ),
-
-                    if (_discountCtrl.text.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                    ],
-
-                    const SizedBox(height: 24),
-                    _label("Packages (optional)"),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: _addPackage,
-                        child: const Text("+ Add Package"),
+                // Description card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.02),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
-                    ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            "Description",
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: kTextColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _buildInput("Short Description", _shortDescCtrl),
+                      _buildInput("Full Description", _fullDescCtrl),
+                    ],
+                  ),
+                ),
 
-                    Column(
-                      children: _packages
-                          .map((p) => Container(
-                                margin: const EdgeInsets.symmetric(vertical: 6),
-                                padding: const EdgeInsets.all(12),
+                // Pricing & Location (Address + City جنب بعض, price + discount + نوع السعر + الكاتيجوري)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.02),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Pricing & Location",
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: kTextColor,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Address + City
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInput("Address", _addressCtrl),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedCity,
+                              decoration: _inputDecoration("City"),
+                              icon: const Icon(Icons.expand_more_rounded,
+                                  size: 18),
+                              items: kCities
+                                  .map(
+                                    (city) => DropdownMenuItem<String>(
+                                      value: city,
+                                      child: Text(
+                                        city,
+                                        style:
+                                            GoogleFonts.poppins(fontSize: 13),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) {
+                                setState(() => _selectedCity = v);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Price + Discount
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInput("Price (₪)", _priceCtrl,
+                                isNumber: true),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildInput("Discount %", _discountCtrl,
+                                isNumber: true),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Price type chips
+                      Text(
+                        "Price Type",
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: kTextColor,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildPriceTypeChip("Per Event"),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildPriceTypeChip("Per Hour"),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildPriceTypeChip("Per Person"),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Category with icons
+                      Text(
+                        "Service Category",
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: kTextColor,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        value: _selectedCategory,
+                        decoration: _inputDecoration("Category"),
+                        icon: const Icon(Icons.expand_more_rounded, size: 18),
+                        items: kServiceCategories
+                            .map(
+                              (cat) => DropdownMenuItem<String>(
+                                value: cat['value'] as String,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      cat['icon'] as IconData,
+                                      size: 18,
+                                      color: kPrimaryColor,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      cat['label'] as String,
+                                      style: GoogleFonts.poppins(fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          setState(() => _selectedCategory = v);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Images
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.02),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Gallery",
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: kTextColor,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Upload a few shots that represent your work.",
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (final img in _images)
+                              Container(
+                                margin: const EdgeInsets.only(right: 10),
+                                width: 90,
+                                height: 90,
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Image(
+                                    image: FileImage(File(img)),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            GestureDetector(
+                              onTap: _pickImage,
+                              child: Container(
+                                width: 90,
+                                height: 90,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF3F4F6),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: const Color(0xFFD1D5DB),
+                                    width: 1,
+                                    style: BorderStyle.solid,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.add_a_photo_outlined,
+                                        size: 22, color: kPrimaryColor),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "Add",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 11,
+                                        color: kPrimaryColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Highlights & packages + visibility
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.02),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            "Highlights",
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: kTextColor,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: _addHighlight,
+                            icon: const Icon(Icons.add_circle_outline_rounded,
+                                size: 20, color: kPrimaryColor),
+                          ),
+                        ],
+                      ),
+                      if (_highlights.isEmpty)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            "Add key points that make your service special.",
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      if (_highlights.isNotEmpty)
+                        Column(
+                          children: [
+                            const SizedBox(height: 4),
+                            for (final h in _highlights)
+                              Container(
+                                margin: const EdgeInsets.symmetric(vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF9FAFB),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.star_rounded,
+                                        size: 16, color: Color(0xFFF59E0B)),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        h,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: kTextColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Text(
+                            "Packages",
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: kTextColor,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: _addPackage,
+                            icon: const Icon(Icons.add_circle_outline_rounded,
+                                size: 20, color: kPrimaryColor),
+                          ),
+                        ],
+                      ),
+                      if (_packages.isEmpty)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            "Add packages (e.g. Gold, Silver, Basic).",
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      if (_packages.isNotEmpty)
+                        Column(
+                          children: [
+                            const SizedBox(height: 4),
+                            for (final p in _packages)
+                              Container(
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF9FAFB),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                      color: const Color(0xFFE5E7EB)),
                                 ),
                                 child: Row(
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        "${p['name']} — ₪${p['price']}\n${p['desc']}",
-                                        style:
-                                            GoogleFonts.poppins(fontSize: 13),
+                                        p["name"],
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: kTextColor,
+                                        ),
                                       ),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete,
-                                          color: Colors.red),
-                                      onPressed: () {
-                                        setState(() => _packages.remove(p));
-                                      },
+                                    Text(
+                                      "₪${p["price"]}",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: kPrimaryColor,
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ))
-                          .toList(),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 22),
-
-              // -------------------------
-              // SECTION: DESCRIPTION
-              // -------------------------
-              Text("Description & Details",
-                  style: GoogleFonts.poppins(
-                      fontSize: 17, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-
-              _inputCard(
-                Column(
-                  children: [
-                    _label("Short Description"),
-                    TextFormField(
-                      controller: _shortDescCtrl,
-                      maxLines: 3,
-                      maxLength: 200,
-                      validator: (v) => v!.trim().isEmpty ? "Required" : null,
-                      decoration:
-                          _inputDecoration("Briefly describe your service..."),
-                    ),
-                    const SizedBox(height: 16),
-                    _label("Full Description / Details"),
-                    TextFormField(
-                      controller: _fullDescCtrl,
-                      maxLines: 6,
-                      maxLength: 1500,
-                      decoration: _inputDecoration(
-                          "Tell couples everything they need to know..."),
-                    ),
-                    const SizedBox(height: 20),
-                    _label("Key Highlights (optional)"),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton(
-                        onPressed: _addHighlight,
-                        child: const Text("+ Add Highlight"),
-                      ),
-                    ),
-                    Column(
-                      children: _highlights
-                          .map((h) => ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.circle,
-                                    size: 8, color: Colors.black87),
-                                title: Text(h,
-                                    style: GoogleFonts.poppins(fontSize: 13)),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.close),
-                                  onPressed: () =>
-                                      setState(() => _highlights.remove(h)),
-                                ),
-                              ))
-                          .toList(),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 22),
-
-              // -------------------------
-              // SECTION: MEDIA
-              // -------------------------
-              Text("Service Photos",
-                  style: GoogleFonts.poppins(
-                      fontSize: 17, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              Text(
-                "Upload high-quality images (up to 10).",
-                style: GoogleFonts.poppins(
-                    color: Colors.grey.shade600, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-
-              GestureDetector(
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(20)),
-                    ),
-                    builder: (_) => SafeArea(
-                      child: Wrap(
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.photo_library_outlined),
-                            title: const Text("Choose from Gallery"),
-                            onTap: () {
-                              Navigator.pop(context);
-                              _pickImage(ImageSource.gallery);
-                            },
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.camera_alt_outlined),
-                            title: const Text("Take a Photo"),
-                            onTap: () {
-                              Navigator.pop(context);
-                              _pickImage(ImageSource.camera);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  height: 150,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.grey.shade400),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.image_outlined,
-                            color: kPrimaryColor, size: 40),
-                        const SizedBox(height: 6),
-                        Text("Upload Photos",
-                            style: GoogleFonts.poppins(
-                                fontSize: 14, fontWeight: FontWeight.w500)),
-                        const SizedBox(height: 3),
-                        Text("Tap to add images",
-                            style: GoogleFonts.poppins(
-                                color: Colors.grey.shade600, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              SizedBox(
-                height: 110,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: _images
-                      .map(
-                        (path) => Container(
-                          width: 110,
-                          margin: const EdgeInsets.only(right: 10),
-                          child: Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(18),
-                                child: Image.file(File(path),
-                                    fit: BoxFit.cover, width: 110, height: 110),
                               ),
-                              Positioned(
-                                top: 6,
-                                right: 6,
-                                child: GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _images.remove(path)),
-                                  child: Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      color: Colors.black54,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(Icons.close,
-                                        size: 16, color: Colors.white),
-                                  ),
-                                ),
-                              )
-                            ],
+                          ],
+                        ),
+                      const SizedBox(height: 8),
+                      const Divider(height: 24),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          "Visible in search",
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: kTextColor,
                           ),
                         ),
-                      )
-                      .toList(),
-                ),
-              ),
-
-              if (_images.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    "We recommend adding at least 1 photo.",
-                    style: GoogleFonts.poppins(
-                        fontSize: 12, color: Colors.orange.shade700),
+                        subtitle: Text(
+                          "Turn off if you are temporarily unavailable.",
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        value: _isVisible,
+                        activeColor: kPrimaryColor,
+                        onChanged: (v) => setState(() => _isVisible = v),
+                      ),
+                    ],
                   ),
                 ),
-
-              const SizedBox(height: 30),
-
-              // -------------------------
-              // SETTINGS & VISIBILITY
-              // -------------------------
-              Text("Settings & Visibility",
-                  style: GoogleFonts.poppins(
-                      fontSize: 17, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-
-              _inputCard(
-                Column(
-                  children: [
-                    SwitchListTile.adaptive(
-                      title: Text("Make this service visible",
-                          style: GoogleFonts.poppins(fontSize: 15)),
-                      subtitle: Text(
-                        "You can hide or show this service anytime.",
-                        style: GoogleFonts.poppins(
-                            color: Colors.grey.shade600, fontSize: 12),
-                      ),
-                      value: _isVisible,
-                      activeColor: kPrimaryColor,
-                      onChanged: (v) => setState(() => _isVisible = v),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 80),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // HELPER: input decoration
-  InputDecoration _inputDecoration(String? hint) {
+  // Helpers
+
+  InputDecoration _inputDecoration(String label) {
     return InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(color: Colors.grey.shade500),
+      labelText: label,
+      labelStyle: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[700]),
       filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      fillColor: const Color(0xFFF9FAFB),
       border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300)),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: kPrimaryColor, width: 1.6),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
       ),
-    );
-  }
-
-  Widget _inputCard(Widget child) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 3)),
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  Widget _label(String text) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(text,
-          style:
-              GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500)),
-    );
-  }
-
-  Widget _priceTypeChip(String label) {
-    final isActive = _priceType == label;
-    return GestureDetector(
-      onTap: () => setState(() => _priceType = label),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? kPrimaryColor : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(20),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(
+          color: kPrimaryColor,
+          width: 1.4,
         ),
-        child: Text(
-          label,
-          style: GoogleFonts.poppins(
-            color: isActive ? Colors.white : Colors.black,
-            fontSize: 13,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    );
+  }
+
+  Widget _buildInput(String label, TextEditingController ctrl,
+      {bool isNumber = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: ctrl,
+        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        style: GoogleFonts.poppins(fontSize: 14, color: kTextColor),
+        maxLines: label == "Full Description" ? 3 : 1,
+        decoration: _inputDecoration(label),
+      ),
+    );
+  }
+
+  Widget _buildPriceTypeChip(String value) {
+    final bool isSelected = _priceType == value;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() => _priceType = value);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? kPrimaryColor : Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isSelected ? kPrimaryColor : const Color(0xFFE5E7EB),
+          ),
+        ),
+        child: Center(
+          child: Text(
+            value,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isSelected ? Colors.white : kTextColor,
+            ),
           ),
         ),
       ),

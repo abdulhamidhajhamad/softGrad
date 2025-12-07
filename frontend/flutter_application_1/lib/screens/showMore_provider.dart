@@ -303,7 +303,10 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
           ],
         ),
         child: ElevatedButton.icon(
-          onPressed: () => Navigator.pop(context, {"edit": true}),
+          onPressed: () => Navigator.pop(context, {
+            "edit": true,
+            "service": s, // ← لازم نرجّع بيانات الخدمة الأصلية
+          }),
           icon: const Icon(Icons.edit, color: Colors.white),
           style: ElevatedButton.styleFrom(
             backgroundColor: kPrimaryColor,

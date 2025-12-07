@@ -423,14 +423,11 @@ class _StatBox extends StatelessWidget {
         children: [
           Icon(icon, size: 24, color: kPrimaryColor),
           const SizedBox(height: 6),
-
-          // ★★ العملة هنا أصبحت شيكل بدل دولار ★★
           Text(
-            "₪$value",
+            "$value",
             style:
                 GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
           ),
-
           Text(
             title,
             textAlign: TextAlign.center,

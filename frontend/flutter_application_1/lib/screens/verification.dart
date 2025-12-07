@@ -54,7 +54,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => HomePage(userName: name), // استخدام الكونستركتور الحالي
+          builder: (_) =>
+              HomePage(userName: name), // استخدام الكونستركتور الحالي
         ),
         (_) => false,
       );
@@ -65,7 +66,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
           builder: (_) => HomeProviderScreen(
             provider: ProviderModel(
               brandName: name,
-              email: email,
+              email: email!,
               phone: phone,
               category: category,
               description: description,
@@ -139,7 +140,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
       if (response.containsKey('token') && response.containsKey('user')) {
         final userData = response['user'];
         final token = response['token'];
-        
+
         // التحقق من أن isVerified أصبح true
         if (userData['isVerified'] == true) {
           // نجح التحقق - الانتقال للصفحة الرئيسية
@@ -153,7 +154,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
             city: city,
             token: token,
           );
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -171,11 +172,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
       }
     } catch (e) {
       String errorMessage = 'An error occurred. Please try again.';
-      
+
       if (e.toString().contains('Invalid verification code')) {
-        errorMessage = 'Invalid verification code. Please check the code and try again.';
+        errorMessage =
+            'Invalid verification code. Please check the code and try again.';
       } else if (e.toString().contains('Verification code has expired')) {
-        errorMessage = 'Verification code has expired. Please request a new one.';
+        errorMessage =
+            'Verification code has expired. Please request a new one.';
       } else if (e.toString().contains('No verification code found')) {
         errorMessage = 'No verification code found. Please request a new one.';
       } else if (e.toString().contains('Email is already verified')) {
@@ -187,7 +190,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
       } else if (e.toString().contains('Network error')) {
         errorMessage = 'Network error. Please check your connection.';
       }
-      
+
       _showErrorDialog(errorMessage);
     } finally {
       setState(() {
@@ -271,13 +274,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
       }
     } catch (e) {
       String errorMessage = "Failed to resend code. Please try again.";
-      
+
       if (e.toString().contains('User not found')) {
         errorMessage = 'User not found. Please check your email.';
       } else if (e.toString().contains('Network error')) {
         errorMessage = 'Network error. Please check your connection.';
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -344,14 +347,16 @@ class _VerificationScreenState extends State<VerificationScreen> {
           // Skip button
           actions: [
             TextButton(
-              onPressed: _isLoading ? null : () {
-                _navigateToLogin();
-              },
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      _navigateToLogin();
+                    },
               child: Text(
                 "Skip",
                 style: GoogleFonts.poppins(
-                  color: _isLoading 
-                      ? Colors.grey 
+                  color: _isLoading
+                      ? Colors.grey
                       : const Color.fromARGB(215, 20, 20, 215),
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
@@ -463,7 +468,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
                         : Text(

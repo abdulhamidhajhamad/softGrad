@@ -30,6 +30,19 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
     final highlights = List<String>.from(s['highlights'] ?? []);
     final packages = List<Map<String, dynamic>>.from(s['packages'] ?? []);
 
+    // -----------------------------
+    // ⭐ حساب الخصم والسعر الجديد
+    // -----------------------------
+    final double oldPrice = (s['price'] ?? 0).toDouble();
+    final bool hasDiscount =
+        s["discount"] != null && s["discount"].toString().trim().isNotEmpty;
+
+    double finalPrice = oldPrice;
+    if (hasDiscount) {
+      final d = double.tryParse(s['discount'].toString()) ?? 0;
+      finalPrice = oldPrice - (oldPrice * (d / 100));
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -56,69 +69,97 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
           children: [
             const SizedBox(height: 14),
 
-            // ===========================
-            // COVER IMAGES
-            // ===========================
-            GestureDetector(
-              onTap: () {
-                if (images.isNotEmpty) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => FullImageViewer(images: images),
-                    ),
-                  );
-                }
-              },
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: Container(
-                  height: 260,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                  ),
-                  child: images.isEmpty
-                      ? Center(
-                          child: Icon(Icons.image_outlined,
-                              color: Colors.grey, size: 60),
-                        )
-                      : PageView.builder(
-                          itemCount: images.length,
-                          itemBuilder: (_, i) => Image.file(
-                            File(images[i]),
-                            fit: BoxFit.cover,
-                          ),
+            // ⭐ الصورة + badge الخصم (بدون حذف شيء)
+            Stack(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    if (images.isNotEmpty) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => FullImageViewer(images: images),
                         ),
+                      );
+                    }
+                  },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Container(
+                      height: 260,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                      ),
+                      child: images.isEmpty
+                          ? Center(
+                              child: Icon(Icons.image_outlined,
+                                  color: Colors.grey, size: 60),
+                            )
+                          : PageView.builder(
+                              itemCount: images.length,
+                              itemBuilder: (_, i) => Image.file(
+                                File(images[i]),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                    ),
+                  ),
                 ),
-              ),
+
+                // ⭐ Badge خصم — إضافة فقط بدون حذف شيء
+                if (hasDiscount)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        "-${s['discount']}%",
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
 
             const SizedBox(height: 24),
 
-            // ===========================
-            // BASIC INFO
-            // ===========================
+            // -----------------------
+            // المعلومات الأساسية
+            // -----------------------
             _sectionTitle("Basic Info"),
             _card(
               Column(
                 children: [
                   _iconInfo("Service Name", s["name"] ?? "-", Icons.star),
-                  _divider(),
-
-                  // FIXED: Show tagline correctly
-                  _iconInfo("Brand Name", s["brand"] ?? "-", Icons.storefront),
-                  _divider(),
-                  _iconInfo(
-                      "Short Tagline", s["tagline"] ?? "-", Icons.short_text),
+                  if (s["brand"] != null &&
+                      s["brand"].toString().trim().isNotEmpty) ...[
+                    _divider(),
+                    _iconInfo("Brand Name", s["brand"], Icons.storefront),
+                  ],
+                  if (s["tagline"] != null &&
+                      s["tagline"].toString().trim().isNotEmpty) ...[
+                    _divider(),
+                    _iconInfo("Short Tagline", s["tagline"], Icons.short_text),
+                  ],
                 ],
               ),
             ),
 
             const SizedBox(height: 20),
 
-            // ===========================
-            // CATEGORY & LOCATION
-            // ===========================
+            // -----------------------
+            // القسم: الفئة والموقع
+            // -----------------------
             _sectionTitle("Category & Location"),
             _card(
               Column(
@@ -128,44 +169,64 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                   _divider(),
                   _iconInfo(
                       "City", s["city"] ?? "-", Icons.location_on_outlined),
-                  _divider(),
-
-                  // FIXED: Address was always "-" → now correct
-                  _iconInfo("Address", s["address"] ?? "-", Icons.map_outlined),
+                  if (s["address"] != null &&
+                      s["address"].toString().trim().isNotEmpty) ...[
+                    _divider(),
+                    _iconInfo("Address", s["address"], Icons.map_outlined),
+                  ]
                 ],
               ),
             ),
 
             const SizedBox(height: 20),
 
-            // ===========================
-            // PRICING
-            // ===========================
+            // -----------------------
+            // ⭐ القسم: السعر والخصم
+            // -----------------------
             _sectionTitle("Pricing & Packages"),
             _card(
               Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _iconInfo("Starting Price", "\$${s['price']}",
-                      Icons.payments_rounded),
-                  _divider(),
-
-                  // FIXED: Replace priceType with DISCOUNT instead
-                  _iconInfo(
-                    "Discount",
-                    s["discount"]?.toString().isEmpty ?? true
-                        ? "-"
-                        : "${s["discount"]}%",
-                    Icons.local_offer_outlined,
+                  // سعر (معدل + شطب)
+                  Row(
+                    children: [
+                      if (hasDiscount)
+                        Text(
+                          "₪${oldPrice.toStringAsFixed(0)}",
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: Colors.grey,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                      if (hasDiscount) const SizedBox(width: 8),
+                      Text(
+                        "₪${finalPrice.toStringAsFixed(0)}",
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: hasDiscount ? Colors.red : Colors.black,
+                        ),
+                      ),
+                    ],
                   ),
+
+                  if (hasDiscount) ...[
+                    const SizedBox(height: 12),
+                    _divider(),
+                    _iconInfo("Discount", "${s['discount']}%",
+                        Icons.local_offer_outlined),
+                  ],
                 ],
               ),
             ),
 
             const SizedBox(height: 20),
 
-            // ===========================
-            // DESCRIPTIONS
-            // ===========================
+            // -----------------------
+            // التفاصيل
+            // -----------------------
             _sectionTitle("Description & Details"),
             _card(
               Column(
@@ -182,9 +243,9 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
 
             const SizedBox(height: 20),
 
-            // ===========================
-            // HIGHLIGHTS
-            // ===========================
+            // -----------------------
+            // الهايلايت
+            // -----------------------
             if (highlights.isNotEmpty) ...[
               _sectionTitle("Key Highlights"),
               Wrap(
@@ -217,14 +278,12 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
               const SizedBox(height: 28),
             ],
 
-            // ===========================
-            // PACKAGES
-            // ===========================
+            // -----------------------
+            // الباكجات
+            // -----------------------
             if (packages.isNotEmpty) ...[
               _sectionTitle("Packages"),
-              Column(
-                children: packages.map((p) => _packageCard(p)).toList(),
-              ),
+              Column(children: packages.map((p) => _packageCard(p)).toList()),
             ],
 
             const SizedBox(height: 90),
@@ -244,7 +303,10 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
           ],
         ),
         child: ElevatedButton.icon(
-          onPressed: () => Navigator.pop(context, {"edit": true}),
+          onPressed: () => Navigator.pop(context, {
+            "edit": true,
+            "service": s, // ← لازم نرجّع بيانات الخدمة الأصلية
+          }),
           icon: const Icon(Icons.edit, color: Colors.white),
           style: ElevatedButton.styleFrom(
             backgroundColor: kPrimaryColor,
@@ -266,173 +328,156 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
     );
   }
 
-  // ===========================
-  // HELPERS
-  // ===========================
-  Widget _sectionTitle(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(
-        text,
-        style: GoogleFonts.poppins(
-          fontSize: 17,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Widget _card(Widget child) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4)),
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  Widget _divider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Container(
-        height: 1,
-        color: Colors.grey.shade300,
-      ),
-    );
-  }
-
-  Widget _iconInfo(String title, String value, IconData icon) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, size: 22, color: Colors.black87),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
-                  style: GoogleFonts.poppins(
-                      fontSize: 12, color: Colors.grey.shade600)),
-              const SizedBox(height: 4),
-              Text(value,
-                  style: GoogleFonts.poppins(
-                      fontSize: 15, fontWeight: FontWeight.w600)),
-            ],
+  Widget _sectionTitle(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(
+          text,
+          style: GoogleFonts.poppins(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
           ),
         ),
-      ],
-    );
-  }
+      );
 
-  Widget _textTitle(String text) {
-    return Text(
-      text,
-      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
-    );
-  }
-
-  Widget _textBody(String? text) {
-    return Text(
-      text ?? "-",
-      style: GoogleFonts.poppins(
-        fontSize: 14,
-        color: Colors.grey.shade800,
-        height: 1.4,
-      ),
-    );
-  }
-
-  Widget _packageCard(Map<String, dynamic> p) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          colors: [
-            kPrimaryColor.withOpacity(0.08),
-            kPrimaryColor.withOpacity(0.02),
+  Widget _card(Widget child) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4)),
           ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
+        child: child,
+      );
+
+  Widget _divider() => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Container(
+          height: 1,
+          color: Colors.grey.shade300,
+        ),
+      );
+
+  Widget _iconInfo(String title, String value, IconData icon) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            p["name"],
-            style: GoogleFonts.poppins(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 22, color: Colors.black87),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: GoogleFonts.poppins(
+                        fontSize: 12, color: Colors.grey.shade600)),
+                const SizedBox(height: 4),
+                Text(value,
+                    style: GoogleFonts.poppins(
+                        fontSize: 15, fontWeight: FontWeight.w600)),
+              ],
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            p["desc"],
-            style:
-                GoogleFonts.poppins(fontSize: 13, color: Colors.grey.shade700),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.07),
-                        blurRadius: 5,
-                        offset: const Offset(0, 2))
-                  ],
-                ),
-                child: Text(
-                  "\$${p["price"]}",
-                  style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: kPrimaryColor),
-                ),
-              ),
-              Text(
-                "View details →",
-                style: GoogleFonts.poppins(
-                    color: kPrimaryColor,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13),
-              )
-            ],
-          ),
         ],
-      ),
-    );
-  }
+      );
+
+  Widget _textTitle(String text) => Text(
+        text,
+        style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
+      );
+
+  Widget _textBody(String? text) => Text(
+        text ?? "-",
+        style: GoogleFonts.poppins(
+          fontSize: 14,
+          color: Colors.grey.shade800,
+          height: 1.4,
+        ),
+      );
+
+  Widget _packageCard(Map<String, dynamic> p) => Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: LinearGradient(
+            colors: [
+              kPrimaryColor.withOpacity(0.08),
+              kPrimaryColor.withOpacity(0.02),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              p["name"],
+              style: GoogleFonts.poppins(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              p["desc"],
+              style: GoogleFonts.poppins(
+                  fontSize: 13, color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.07),
+                          blurRadius: 5,
+                          offset: const Offset(0, 2))
+                    ],
+                  ),
+                  child: Text(
+                    "₪${p["price"]}",
+                    style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: kPrimaryColor),
+                  ),
+                ),
+                Text(
+                  "View details →",
+                  style: GoogleFonts.poppins(
+                      color: kPrimaryColor,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13),
+                )
+              ],
+            ),
+          ],
+        ),
+      );
 }

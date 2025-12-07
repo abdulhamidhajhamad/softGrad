@@ -4,6 +4,10 @@ import 'package:flutter_application_1/services/auth_service.dart';
 import 'edit_profile_provider.dart';
 import 'services_provider.dart';
 import 'signin.dart';
+import 'package:flutter_application_1/screens/booking_provider.dart';
+import 'package:flutter_application_1/screens/messages_provider.dart';
+import 'package:flutter_application_1/screens/notifications_provider.dart';
+import 'package:flutter_application_1/screens/reviews_provider.dart'; // NEW
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -18,10 +22,11 @@ class ProviderModel {
   final String category;
   final String description;
   final String city;
-  final int bookings;
-  final int views;
-  final int messages;
-  final int reviews;
+
+  int? bookings;
+  int? views;
+  int? messages;
+  int? reviews;
 
   ProviderModel({
     required this.brandName,
@@ -30,10 +35,10 @@ class ProviderModel {
     required this.category,
     required this.description,
     required this.city,
-    this.bookings = 3,
-    this.views = 1240,
-    this.messages = 4,
-    this.reviews = 2,
+    this.bookings,
+    this.views,
+    this.messages,
+    this.reviews,
   });
 }
 
@@ -49,11 +54,126 @@ class HomeProviderScreen extends StatefulWidget {
 
 class _HomeProviderScreenState extends State<HomeProviderScreen> {
   late ProviderModel provider;
+  List<Map<String, dynamic>> _services = [];
 
   @override
   void initState() {
     super.initState();
     provider = widget.provider;
+    _loadServices();
+  }
+
+  void _loadServices() async {
+    _services = [
+      {
+        "name": "Wedding Photography",
+        "price": 1000,
+        "discount": "20",
+      },
+      {
+        "name": "Event Lighting",
+        "price": 800,
+      },
+    ];
+    setState(() {});
+  }
+
+  // ====== BURGER MENU ======
+  void _openMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.notifications_none_outlined,
+                      color: kPrimaryColor),
+                  title: Text(
+                    'Notifications',
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationsProviderScreen(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading:
+                      const Icon(Icons.settings_outlined, color: kPrimaryColor),
+                  title: Text(
+                    'Settings',
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final updated = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditProfileProvider(provider: provider),
+                      ),
+                    );
+                    if (updated != null && updated is ProviderModel) {
+                      setState(() => provider = updated);
+                    }
+                  },
+                ),
+                const Divider(height: 18),
+                ListTile(
+                  leading: const Icon(Icons.logout, color: Colors.redAccent),
+                  title: Text(
+                    'Sign out',
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await AuthService.deleteToken();
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => SignInScreen()),
+                      (_) => false,
+                    );
+                  },
+                ),
+                const SizedBox(height: 6),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -65,6 +185,10 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
           backgroundColor: kBackgroundColor,
           elevation: 0,
           centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.menu, color: Colors.black),
+            onPressed: _openMenu,
+          ),
           title: Text(
             "Provider Dashboard",
             style: GoogleFonts.poppins(
@@ -89,17 +213,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
               },
               icon: const Icon(Icons.edit, color: Colors.black),
             ),
-            IconButton(
-              onPressed: () async {
-                await AuthService.deleteToken();
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => SignInScreen()),
-                  (_) => false,
-                );
-              },
-              icon: const Icon(Icons.logout, color: Colors.black),
-            ),
           ],
         ),
         body: SingleChildScrollView(
@@ -109,31 +222,48 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
             children: [
               _HeaderCard(provider: provider),
               const SizedBox(height: 15),
+
+              // Stats row: Bookings / Messages / Reviews
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _StatBox(
-                    icon: Icons.event_available_outlined,
-                    title: "Bookings",
-                    value: provider.bookings.toString(),
+                  Expanded(
+                    child: _StatBox(
+                      icon: Icons.event_available_outlined,
+                      title: "Bookings",
+                      value: provider.bookings.toString(),
+                    ),
                   ),
-                  _StatBox(
-                    icon: Icons.visibility_outlined,
-                    title: "Views",
-                    value: provider.views.toString(),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _StatBox(
+                      icon: Icons.chat_bubble_outline,
+                      title: "Messages",
+                      value: provider.messages.toString(),
+                    ),
                   ),
-                  _StatBox(
-                    icon: Icons.chat_bubble_outline,
-                    title: "Messages",
-                    value: provider.messages.toString(),
-                  ),
-                  _StatBox(
-                    icon: Icons.star_border,
-                    title: "Reviews",
-                    value: provider.reviews.toString(),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    // MAKE REVIEWS CLICKABLE
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const ReviewsProviderScreen(), // providerId optional
+                          ),
+                        );
+                      },
+                      child: _StatBox(
+                        icon: Icons.star_border,
+                        title: "Reviews",
+                        value: provider.reviews.toString(),
+                      ),
+                    ),
                   ),
                 ],
               ),
+
               const SizedBox(height: 20),
               Text(
                 "Quick Actions",
@@ -143,40 +273,81 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                 ),
               ),
               const SizedBox(height: 15),
-              Row(
+
+              // ===== Quick Actions: 2 × 2 grid =====
+              Column(
                 children: [
-                  Expanded(
-                    child: _QuickAction(
-                      title: "Services",
-                      icon: Icons.auto_awesome_outlined,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ServicesProviderScreen(),
-                          ),
-                        );
-                      },
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _QuickAction(
+                          title: "Services",
+                          icon: Icons.auto_awesome_outlined,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ServicesProviderScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _QuickAction(
+                          title: "Bookings",
+                          icon: Icons.calendar_month_outlined,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BookingsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _QuickAction(
-                      title: "Bookings",
-                      icon: Icons.calendar_month_outlined,
-                      onTap: () {},
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _QuickAction(
-                      title: "Messages",
-                      icon: Icons.chat_bubble_outline,
-                      onTap: () {},
-                    ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _QuickAction(
+                          title: "Messages",
+                          icon: Icons.chat_bubble_outline,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const MessagesProviderScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _QuickAction(
+                          title: "Notifications",
+                          icon: Icons.notifications_none_outlined,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const NotificationsProviderScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
+
               const SizedBox(height: 22),
               Text(
                 "About Your Brand",
@@ -227,20 +398,12 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              "Email",
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            Text(
-                              provider.email,
-                              style: GoogleFonts.poppins(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                            Text("Email",
+                                style: GoogleFonts.poppins(
+                                    fontSize: 14, color: Colors.grey.shade600)),
+                            Text(provider.email,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 15, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ],
@@ -253,20 +416,12 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              "Phone",
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            Text(
-                              provider.phone,
-                              style: GoogleFonts.poppins(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                            Text("Phone",
+                                style: GoogleFonts.poppins(
+                                    fontSize: 14, color: Colors.grey.shade600)),
+                            Text(provider.phone,
+                                style: GoogleFonts.poppins(
+                                    fontSize: 15, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ],
@@ -344,9 +499,7 @@ class _HeaderCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: Colors.grey.shade700,
-                        ),
+                            fontSize: 14, color: Colors.grey.shade700),
                       ),
                     ),
                   ],
@@ -365,16 +518,12 @@ class _StatBox extends StatelessWidget {
   final String title;
   final String value;
 
-  const _StatBox({
-    required this.icon,
-    required this.title,
-    required this.value,
-  });
+  const _StatBox(
+      {required this.icon, required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 85,
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -382,23 +531,20 @@ class _StatBox extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 24, color: kPrimaryColor),
           const SizedBox(height: 6),
           Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+            "$value",
+            style:
+                GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
+            style:
+                GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
           ),
         ],
       ),
@@ -411,11 +557,8 @@ class _QuickAction extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _QuickAction({
-    required this.title,
-    required this.icon,
-    required this.onTap,
-  });
+  const _QuickAction(
+      {required this.title, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -456,11 +599,7 @@ class _ContactIcon extends StatelessWidget {
     return CircleAvatar(
       radius: 25,
       backgroundColor: kContactCircleColor,
-      child: Icon(
-        icon,
-        color: kContactIconColor,
-        size: 26,
-      ),
+      child: Icon(icon, color: kContactIconColor, size: 26),
     );
   }
 }

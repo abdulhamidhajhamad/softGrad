@@ -5,51 +5,66 @@ import { Model, Types } from 'mongoose';
 import { ServiceProvider } from './provider.entity';
 import { CreateServiceProviderDto, UpdateServiceProviderDto } from './provider.dto';
 import { DeleteResult } from 'mongodb';
-
+import { User } from '../auth/user.entity'; 
+// 🆕 استيراد خدمة المصادقة
+import { AuthService } from '../auth/auth.service';
 @Injectable()
 export class ProviderService {
   private readonly logger = new Logger(ProviderService.name);
-
-  constructor(@InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>) {}
+  
+constructor(
+    @InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>,
+    // ✅ التصحيح: استخدام Model<User> بدلاً من Model<UserDocument>
+    @InjectModel(User.name) private readonly userModel: Model<User>, 
+    private readonly authService: AuthService, 
+  ) {}
 
   // إنشاء مزود خدمة
 // provider.service.ts
-async create(userId: string, dto: CreateServiceProviderDto): Promise<ServiceProvider> {
-  try {
-    this.logger.debug(`Creating company for user: ${userId}`);
-    
-    // تحقق من صحة الـ userId
-    if (!Types.ObjectId.isValid(userId)) {
-      throw new Error(`Invalid user ID: ${userId}`);
+async create(userId: string, dto: CreateServiceProviderDto): Promise<{ provider: ServiceProvider, token: string }> {
+    try {
+      this.logger.debug(`Creating company for user: ${userId}`);
+      
+      if (!Types.ObjectId.isValid(userId)) {
+        throw new ForbiddenException(`Invalid user ID: ${userId}`);
+      }
+      
+      const userObjectId = new Types.ObjectId(userId);
+      
+      const existingCompany = await this.providerModel.findOne({ 
+        userId: userObjectId,
+        companyName: dto.companyName 
+      });
+      
+      if (existingCompany) {
+        throw new ConflictException('You already have a company with this name');
+      }
+      
+      const company = new this.providerModel({ ...dto, userId: userObjectId });
+      const savedCompany = await company.save();
+      this.logger.debug(`Company created successfully: ${savedCompany.companyName}`);
+
+      // 1. تحديث دور المستخدم في قاعدة البيانات
+      const updatedUser = await this.userModel.findByIdAndUpdate(
+        userId, 
+        { role: 'vendor' }, 
+        { new: true, lean: true } 
+      );
+      
+      if (!updatedUser) {
+           throw new NotFoundException('User not found after provider creation.');
+      }
+      
+      // 2. توليد JWT جديد بالدور المحدث
+      const newToken = await this.authService.generateToken(updatedUser); 
+      
+      return { provider: savedCompany, token: newToken };
+      
+    } catch (error) {
+      this.logger.error(`Error creating company: ${error.message}`);
+      throw error;
     }
-    
-    const userObjectId = new Types.ObjectId(userId);
-    
-    // تحقق من عدم وجود شركة بنفس الاسم لنفس المستخدم
-    const existingCompany = await this.providerModel.findOne({ 
-      userId: userObjectId,
-      companyName: dto.companyName 
-    });
-    
-    if (existingCompany) {
-      throw new ConflictException('You already have a company with this name');
-    }
-    
-    // أنشئ السجل الجديد
-    const company = new this.providerModel({ 
-      ...dto, 
-      userId: userObjectId
-    });
-    
-    const savedCompany = await company.save();
-    this.logger.debug(`Company created successfully: ${savedCompany.companyName}`);
-    return savedCompany;
-  } catch (error) {
-    this.logger.error(`Error creating company: ${error.message}`);
-    this.logger.error(`Stack: ${error.stack}`);
-    throw error;
   }
-}
 
 // أضف دالة لجلب جميع شركات المستخدم
 async findAllByUser(userId: string): Promise<ServiceProvider[]> {

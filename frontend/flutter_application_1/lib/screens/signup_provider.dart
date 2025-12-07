@@ -1,6 +1,11 @@
+// signup_provider.dart (ملف مصحح)
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_application_1/services/vendor_auth_service.dart';
+import 'package:flutter_application_1/services/auth_service.dart'; // استخدام AuthService
+import 'package:flutter_application_1/screens/home_provider.dart'; // استيراد شاشة لوحة التحكم
+import 'package:flutter_application_1/services/vendor_auth_service.dart'; 
+// يجب أن يكون لديك تعريف لـ ProviderModel في ملف HomeProviderScreen أو آخر.
 
 class SignUpProviderScreen extends StatefulWidget {
   const SignUpProviderScreen({Key? key}) : super(key: key);
@@ -17,9 +22,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
   final _brandCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  final _confirmCtrl = TextEditingController();
+  final _bioCtrl = TextEditingController(); 
   final _otherCityCtrl = TextEditingController();
 
   // Dropdowns
@@ -32,43 +35,8 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
     'Qalqilya',
     'Other',
   ];
-
-  final List<String> _categories = const [
-    'Venues',
-    'Photographers',
-    'Catering',
-    'Cake',
-    'Flower Shops',
-    'Decor & Lighting',
-    'Music & Entertainment',
-    'Wedding Planners & Coordinators',
-    'Card Printing',
-    'Jewelry & Accessories',
-    'Car Rental & Transportation',
-    'Gift & Souvenir',
-  ];
-
-  final Map<String, IconData> _categoryIcons = {
-    'Venues': Icons.location_city_outlined,
-    'Photographers': Icons.camera_alt_outlined,
-    'Catering': Icons.restaurant_menu_outlined,
-    'Cake': Icons.cake_outlined,
-    'Flower Shops': Icons.local_florist_outlined,
-    'Decor & Lighting': Icons.light_mode_outlined,
-    'Music & Entertainment': Icons.music_note_outlined,
-    'Wedding Planners & Coordinators': Icons.event_available_outlined,
-    'Card Printing': Icons.print_outlined,
-    'Jewelry & Accessories': Icons.diamond_outlined,
-    'Car Rental & Transportation': Icons.directions_car_filled_outlined,
-    'Gift & Souvenir': Icons.card_giftcard_outlined,
-  };
-
-  String? _selectedCategory;
   String? _selectedCity;
-  String _passwordStrengthLabel = "";
-  Color _passwordStrengthColor = Colors.transparent;
-  bool _showPass = false;
-  bool _showConfirm = false;
+  
   bool _isLoading = false;
 
   @override
@@ -79,7 +47,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
 
   Future<void> _testConnection() async {
     print('🔗 Testing vendor connection to server...');
-    await VendorAuthService.testConnection();
+    await AuthService.testConnection(); 
   }
 
   @override
@@ -87,9 +55,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
     _brandCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
-    _descCtrl.dispose();
-    _passCtrl.dispose();
-    _confirmCtrl.dispose();
+    _bioCtrl.dispose(); 
     _otherCityCtrl.dispose();
     super.dispose();
   }
@@ -98,7 +64,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
   static const kPrimaryButtonColor = Color.fromARGB(215, 20, 20, 215);
   static const kTextColor = Colors.black;
 
-  // Decoration
+  // Decoration (لم يتم تغييرها)
   InputDecoration _decor({
     required String hint,
     required IconData icon,
@@ -137,57 +103,50 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
       );
 
   // ======================================================
-  // Submit → API Call
+  // Submit → API Call 
   // ======================================================
   Future<void> _submit() async {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState!.validate()) { 
       setState(() {
         _isLoading = true;
       });
 
       try {
-        final response = await VendorAuthService.signup(
-          userName: _brandCtrl.text.trim(),
+        // 1. تسجيل تفاصيل المزود
+        final registerResponse = await AuthService.registerProviderDetails(
+          companyName: _brandCtrl.text.trim(),
           email: _emailCtrl.text.trim(),
-          password: _passCtrl.text,
           phone: _phoneCtrl.text.trim(),
           city: _selectedCity == "Other" 
-              ? _otherCityCtrl.text.trim() 
-              : _selectedCity!,
-          category: _selectedCategory!,
-          description: _descCtrl.text.trim(),
+                ? _otherCityCtrl.text.trim() 
+                : _selectedCity!,
+          description: _bioCtrl.text.trim(),
         );
 
-        if (response.containsKey('message')) {
-          // نجح التسجيل - الانتقال لشاشة التحقق
-          Navigator.pushReplacementNamed(
-            context,
-            '/verification',
-            arguments: {
-              "email": _emailCtrl.text.trim(),
-              "role": "provider",
-              "name": _brandCtrl.text.trim(),
-              "phone": _phoneCtrl.text.trim(),
-              "category": _selectedCategory,
-              "description": _descCtrl.text.trim(),
-              "city": _selectedCity == "Other"
-                  ? _otherCityCtrl.text.trim()
-                  : _selectedCity,
-            },
-          );
-        } else {
-          _showErrorDialog('Signup failed. Please try again.');
-        }
+        // 2. النجاح - الانتقال مباشرة إلى شاشة لوحة تحكم المزود
+        // 🆕 تم التعديل: الانتقال إلى /home_provider بدلاً من /verification
+        Navigator.pushReplacementNamed(
+          context,
+          '/signin', // 🔑 المسار المباشر الجديد
+          // لا تحتاج arguments في الغالب لشاشة لوحة التحكم
+        );
+          
       } catch (e) {
-        String errorMessage = 'An error occurred. Please try again.';
+        String errorMessage = 'An error occurred during provider registration.';
         
-        if (e.toString().contains('email already exists')) {
-          errorMessage = 'Email already exists. Please use a different email.';
+        if (e.toString().contains('already have a company')) {
+          errorMessage = 'You already have a company registered with this name.';
+        } else if (e.toString().contains('Authentication token not found')) {
+          errorMessage = 'Session expired. Please sign in again before completing provider registration.';
         } else if (e.toString().contains('Network error')) {
           errorMessage = 'Network error. Please check your connection.';
+        } else {
+           // رسالة خطأ عامة أخرى
+          errorMessage = 'Registration failed: ${e.toString().split(':')[1].trim()}'; 
         }
         
         _showErrorDialog(errorMessage);
+        await AuthService.deleteToken(); 
       } finally {
         setState(() {
           _isLoading = false;
@@ -201,7 +160,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          'Signup Failed',
+          'Registration Failed',
           style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
         content: Text(message, style: GoogleFonts.poppins()),
@@ -219,44 +178,6 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
         ],
       ),
     );
-  }
-
-  // Password strength logic
-  void _evaluatePasswordStrength(String password) {
-    String label;
-    Color color;
-
-    if (password.isEmpty) {
-      label = '';
-      color = Colors.transparent;
-    } else if (password.length < 6) {
-      label = 'Weak';
-      color = Colors.red;
-    } else if (password.length < 16) {
-      label = 'Medium';
-      color = Colors.orange;
-    } else {
-      label = 'Strong';
-      color = Colors.green;
-    }
-
-    setState(() {
-      _passwordStrengthLabel = label;
-      _passwordStrengthColor = color;
-    });
-  }
-
-  double _strengthValue() {
-    switch (_passwordStrengthLabel) {
-      case 'Weak':
-        return 0.33;
-      case 'Medium':
-        return 0.66;
-      case 'Strong':
-        return 1.0;
-      default:
-        return 0.0;
-    }
   }
 
   // ===================== BUILD UI =====================
@@ -291,7 +212,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Create Account as Provider',
+                  'Complete Provider Registration',
                   style: GoogleFonts.poppins(
                     fontSize: 23,
                     fontWeight: FontWeight.w700,
@@ -301,7 +222,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Join our wedding community in a few steps',
+                  'Enter your business details to complete registration.',
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     color: Colors.grey.shade600,
@@ -324,7 +245,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // EMAIL
+                // EMAIL (للتأكد من الإدخال الصحيح)
                 _label('Email'),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -361,52 +282,21 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // CATEGORY
-                _label('Category'),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  value: _selectedCategory,
-                  items: _categories.map((cat) {
-                    final iconData = _categoryIcons[cat];
-                    return DropdownMenuItem(
-                      value: cat,
-                      child: Row(
-                        children: [
-                          Icon(iconData, size: 18, color: kPrimaryButtonColor),
-                          const SizedBox(width: 8),
-                          Text(
-                            cat,
-                            style: GoogleFonts.poppins(fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  decoration: _decor(
-                    hint: 'Select your category',
-                    icon: Icons.category_outlined,
-                  ),
-                  onChanged: (v) => setState(() => _selectedCategory = v),
-                  validator: (v) => v == null ? 'Select a category' : null,
-                ),
-                const SizedBox(height: 16),
-
-                // DESCRIPTION
-                _label('Business Description'),
+                // BIO (وصف الخدمات)
+                _label('Bio'),
                 const SizedBox(height: 8),
                 TextFormField(
                   autovalidateMode: AutovalidateMode.onUserInteraction,
-                  controller: _descCtrl,
+                  controller: _bioCtrl, 
                   maxLines: 4,
                   maxLength: 2000,
                   decoration: _decor(
-                    hint: 'Describe your services (max 200 words)',
+                    hint: 'Provide a brief description of your services',
                     icon: Icons.description_outlined,
                   ),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) {
-                      return 'Enter business description';
+                      return 'Enter your bio/description';
                     }
                     final words = v.trim().split(RegExp(r'\s+')).length;
                     if (words > 200) return 'Max 200 words allowed';
@@ -457,98 +347,6 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                     },
                   ),
                 ],
-
-                const SizedBox(height: 16),
-
-                // PASSWORD
-                _label('Password'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  controller: _passCtrl,
-                  obscureText: !_showPass,
-                  onChanged: _evaluatePasswordStrength,
-                  decoration: _decor(
-                    hint: '••••••••',
-                    icon: Icons.lock_outline,
-                    suffix: IconButton(
-                      onPressed: () => setState(() => _showPass = !_showPass),
-                      icon: Icon(
-                        _showPass
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
-                    ),
-                  ),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Enter a password' : null,
-                ),
-
-                if (_passwordStrengthLabel.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      minHeight: 6,
-                      value: _strengthValue(),
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        _passwordStrengthColor,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.bolt_rounded,
-                        size: 16,
-                        color: _passwordStrengthColor,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Password strength: $_passwordStrengthLabel',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _passwordStrengthColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-
-                const SizedBox(height: 16),
-
-                // CONFIRM PASSWORD
-                _label('Confirm Password'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  controller: _confirmCtrl,
-                  obscureText: !_showConfirm,
-                  decoration: _decor(
-                    hint: '••••••••',
-                    icon: Icons.lock_outline,
-                    suffix: IconButton(
-                      onPressed: () =>
-                          setState(() => _showConfirm = !_showConfirm),
-                      icon: Icon(
-                        _showConfirm
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
-                    ),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) {
-                      return 'Confirm your password';
-                    }
-                    if (v != _passCtrl.text) return 'Passwords do not match';
-                    return null;
-                  },
-                ),
-
                 const SizedBox(height: 24),
 
                 // SUBMIT BUTTON
@@ -574,7 +372,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                             ),
                           )
                         : Text(
-                            'Sign up as Provider',
+                            'Complete Registration',
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w700,
                               fontSize: 16,

@@ -434,9 +434,9 @@ async confirmPaymentAndUpdateBooking(bookingId: string): Promise<any> {
    * This is based on the assumption that a booking's totalAmount is attributed to the vendor 
    * if it contains at least one of their services.
    * @param vendorId The ID of the authenticated vendor (providerId).
-   * @returns A promise that resolves to an object containing total sales and a list of formatted bookings.
+   * @returns A promise that resolves to an object containing total sales and the total number of bookings.
    */
-  async getVendorSalesAndBookings(vendorId: string): Promise<{ totalSales: number; bookings: any[] }> {
+  async getVendorSalesAndBookings(vendorId: string): Promise<{ totalSales: number; totalBookings: number }> {
     // 1. Find all service IDs owned by the vendor.
     // We only select the MongoDB ObjectId (_id) from the Service collection.
     const vendorServices = await this.serviceModel.find({ providerId: vendorId }, { _id: 1 }).exec();
@@ -444,29 +444,34 @@ async confirmPaymentAndUpdateBooking(bookingId: string): Promise<any> {
 
     if (serviceIds.length === 0) {
         // If the vendor has no services, they have no sales/bookings.
-        return { totalSales: 0, bookings: [] };
+        return { totalSales: 0, totalBookings: 0 }; // Updated return
     }
 
     // 2. Find all successful bookings that contain at least one of these service IDs.
+    // We only select totalAmount for aggregation, excluding the full 'services' array for performance if possible.
     const bookings = await this.bookingModel.find({
         // Match bookings where the 'services' array contains an item with a 'serviceId' that is in the 'serviceIds' list
         'services.serviceId': { $in: serviceIds },
         // Only count successful payments
         paymentStatus: PaymentStatus.SUCCESSFUL,
-    }).sort({ createdAt: -1 }) // Sort by newest first
+    }).select('totalAmount') // Select only totalAmount for faster retrieval
       .exec();
 
-    // 3. Calculate total sales
+    // 3. Calculate total sales and total bookings
     let totalSales = 0;
+    const totalBookings = bookings.length; // Count the number of matched bookings
+    
     bookings.forEach(booking => {
         // Assuming the entire booking's totalAmount is the sales for this vendor
         totalSales += booking.totalAmount;
     });
 
-    // 4. Return results with formatted bookings
+    // 4. Return results with total sales and total bookings count
     return { 
         totalSales, 
-        bookings: bookings.map(booking => this.formatBookingResponse(booking)) 
+        totalBookings, // Return total count instead of the array
     };
   }
+
+  
 }

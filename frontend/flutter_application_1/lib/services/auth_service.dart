@@ -1,3 +1,5 @@
+// auth_service.dart
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,7 +26,7 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('auth_token', token);
-      print('✅ Token saved successfully: $token');
+      print('✅ Token saved successfully.');
     } catch (e) {
       print('❌ Error saving token: $e');
     }
@@ -34,7 +36,7 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
-      print('🔑 Retrieved token: $token');
+      print('🔑 Retrieved token: ${token != null ? 'Found' : 'Not Found'}');
       return token;
     } catch (e) {
       print('❌ Error getting token: $e');
@@ -46,22 +48,108 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('auth_token');
-      print('✅ Token deleted successfully');
+      print('🗑️ Token deleted successfully.');
     } catch (e) {
       print('❌ Error deleting token: $e');
     }
   }
 
-  static Future<bool> isLoggedIn() async {
+  // 🆕 دالة لاستخراج دور المستخدم من التوكن
+  static Future<String?> getUserRole() async {
     final token = await getToken();
-    return token != null && token.isNotEmpty;
+    if (token == null) return null;
+
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) {
+        return null;
+      }
+      final payload = parts[1];
+      String normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+      while (normalized.length % 4 != 0) {
+        normalized += '=';
+      }
+      final payloadData = utf8.decode(base64Decode(normalized));
+      final decodedPayload = jsonDecode(payloadData);
+      
+      return decodedPayload['role'] ?? decodedPayload['userRole'] as String?; 
+    } catch (e) {
+      print('❌ Error decoding token payload: $e');
+      return null;
+    }
   }
 
-  static Future<Map<String, dynamic>> login(
-      String email, String password) async {
+  // ====================== AUTHENTICATION METHODS =========================
+
+  // 🆕 1. دالة اختبار الاتصال
+  static Future<bool> testConnection() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/health')); 
+      if (response.statusCode == 200) {
+        print('✅ Backend connection successful.');
+        return true;
+      } else {
+        print('❌ Backend connection failed with status: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error during connection test: $e');
+      return false;
+    }
+  }
+
+  // 🔄 2. دالة تسجيل حساب مستخدم جديد (signup) - بدون كلمة مرور وبدون حقول المزود
+  static Future<Map<String, dynamic>> signup({
+    required String userName,
+    required String email,
+    String? password, // أصبح اختيارياً
+    String? phone,
+    String? city,
+    required String role, 
+  }) async {
+    try {
+      // 🔑 إعداد الجسم لإرسال البيانات
+      final Map<String, dynamic> body = {
+          'userName': userName,
+          'email': email,
+          'phone': phone,
+          'city': city,
+          'role': role,
+      };
+
+      // 🔑 إضافة كلمة المرور فقط إذا كانت موجودة 
+      if (password != null) {
+        body['password'] = password;
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/signup'), 
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body), // استخدام الـ body المُجهز
+      );
+
+      final responseBody = jsonDecode(response.body);
+
+      if (response.statusCode == 201) {
+        final token = responseBody['token'];
+        if (token != null) {
+          await saveToken(token);
+        }
+        return responseBody;
+      } else {
+        throw Exception(responseBody['message'] ?? 'فشل في عملية التسجيل.');
+      }
+    } catch (e) {
+      print('❌ Error in signup: $e');
+      rethrow;
+    }
+  }
+
+  // 🆕 3. دالة تسجيل الدخول (login)
+  static Future<Map<String, dynamic>> login(String email, String password) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'),
+        Uri.parse('$baseUrl/auth/login'), 
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'email': email,
@@ -69,74 +157,101 @@ class AuthService {
         }),
       );
 
-      print('🔐 Status Code: ${response.statusCode}');
-      print('🔐 Response Body: ${response.body}');
+      final responseBody = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-
-        // حفظ التوكن تلقائياً عند التسجيل الدخول
-        if (responseData.containsKey('token')) {
-          await saveToken(responseData['token']);
+        final token = responseBody['token'];
+        if (token != null) {
+          await saveToken(token);
         }
-
-        return responseData;
+        return responseBody;
       } else {
-        final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? 'Login failed');
+        throw Exception(responseBody['message'] ?? 'فشل في عملية تسجيل الدخول.');
       }
     } catch (e) {
-      print('❌ Login Error: $e');
-      throw Exception('Network error: $e');
+      print('❌ Error in login: $e');
+      rethrow;
     }
   }
 
-  static Future<void> testConnection() async {
-    try {
-      final response = await http.get(Uri.parse('$baseUrl'));
-      print('✅ Server connection test: ${response.statusCode}');
-    } catch (e) {
-      print('❌ Server connection failed: $e');
-    }
-  }
-
+  // 🆕 4. دالة جلب ملف المستخدم (getUserProfile)
   static Future<Map<String, dynamic>> getUserProfile() async {
     try {
       final token = await getToken();
-
       if (token == null) {
-        throw Exception('No token found');
+        throw Exception('رمز المصادقة غير موجود. الرجاء تسجيل الدخول أولاً.');
       }
 
       final response = await http.get(
-        Uri.parse('$baseUrl/auth/profile'),
+        Uri.parse('$baseUrl/auth/profile'), 
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token'
+          'Authorization': 'Bearer $token',
         },
       );
 
-      print('👤 Profile Status Code: ${response.statusCode}');
-      print('👤 Profile Response: ${response.body}');
+      final responseBody = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return responseBody;
       } else {
-        throw Exception('Failed to load user profile');
+        throw Exception(responseBody['message'] ?? 'فشل في جلب ملف المستخدم.');
       }
     } catch (e) {
-      print('❌ Profile Error: $e');
-      throw Exception('Network error: $e');
+      print('❌ Error in getUserProfile: $e');
+      rethrow;
     }
   }
-  
-  static Future<void> logout() async {
+
+  // ====================== PROVIDER REGISTRATION =========================
+  // 🔄 تم التعديل لحذف حقل category
+  static Future<Map<String, dynamic>> registerProviderDetails({
+    required String companyName,
+    required String description,
+    required String city,
+    required String phone, 
+    required String email, 
+    // 🗑️ تم حذف: required String category, 
+  }) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('auth_token');
-      print('🗑️ Auth token removed successfully (Logged out)');
+      final token = await getToken();
+      if (token == null) {
+        throw Exception('Authentication token not found.');
+      }
+      
+      // The endpoint for provider details registration
+      final response = await http.post(
+        Uri.parse('$baseUrl/providers'), 
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token', 
+        },
+        body: jsonEncode({
+          'companyName': companyName,
+          'description': description,
+          // 🗑️ تم حذف: 'category': category,
+          'location': {
+            'city': city,
+          },
+          'details': {
+            'phone': phone,
+            'email': email,
+          }
+        }),
+      );
+      
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        // ✅ النجاح: فك تشفير الـ JSON وإرجاع البيانات
+        return jsonDecode(response.body);
+      } else {
+        // ❌ فشل: التعامل مع رسالة الخطأ من الـ Backend
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to register provider details.');
+      }
     } catch (e) {
-      print('❌ Error logging out: $e');
+      print('❌ Error in registerProviderDetails: $e');
+      rethrow;
     }
   }
+
 }

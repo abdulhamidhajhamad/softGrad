@@ -19,7 +19,6 @@ class ProviderModel {
   final String brandName;
   final String email;
   final String phone;
-  final String category;
   final String description;
   final String city;
 
@@ -32,7 +31,6 @@ class ProviderModel {
     required this.brandName,
     required this.email,
     required this.phone,
-    required this.category,
     required this.description,
     required this.city,
     this.bookings,
@@ -480,13 +478,6 @@ class _HeaderCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  provider.category,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
                 const SizedBox(height: 4),
                 Row(
                   children: [

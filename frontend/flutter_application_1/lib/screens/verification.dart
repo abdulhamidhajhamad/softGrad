@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/verification_service.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
+// استيراد شاشات التنقل
 import 'home_customer.dart';
 import 'home_provider.dart';
+import 'signup_provider.dart'; // ✅ NEW: استيراد شاشة إكمال بيانات المزود
 
 class VerificationScreen extends StatefulWidget {
   const VerificationScreen({Key? key}) : super(key: key);
@@ -35,50 +37,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     super.dispose();
   }
 
-  // ===========================================================
-  // NAVIGATE BASED ON ROLE
-  // ===========================================================
-  void _goToHome({
-    required String role,
-    required String name,
-    required String email,
-    required String phone,
-    required String category,
-    required String description,
-    required String city,
-    required String token,
-  }) {
-    AuthService.saveToken(token);
-
-    if (role.toLowerCase() == "customer" || role.toLowerCase() == "user") {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              HomePage(userName: name), // استخدام الكونستركتور الحالي
-        ),
-        (_) => false,
-      );
-    } else {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => HomeProviderScreen(
-            provider: ProviderModel(
-              brandName: name,
-              email: email!,
-              phone: phone,
-              category: category,
-              description: description,
-              city: city,
-            ),
-            // استخدام الكونستركتور الحالي بدون token
-          ),
-        ),
-        (_) => false,
-      );
-    }
-  }
+  // تم حذف دالة _goToHome واستبدال منطقها في _verifyEmail
 
   // ===========================================================
   // VERIFY EMAIL (API Call)
@@ -91,22 +50,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
     String role = "customer";
     String name = "Guest";
 
-    // Provider fields
-    String category = "";
-    String description = "";
-    String city = "";
-    String phone = "";
-
-    // Extract arguments
+    // استخراج الإيميل والدور من الـ arguments
     if (args is Map) {
       email = args["email"] ?? email;
       role = args["role"] ?? role;
       name = args["name"] ?? name;
-
-      category = args["category"] ?? "";
-      description = args["description"] ?? "";
-      city = args["city"] ?? "";
-      phone = args["phone"] ?? "";
     } else if (args is String) {
       email = args;
     }
@@ -143,17 +91,36 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
         // التحقق من أن isVerified أصبح true
         if (userData['isVerified'] == true) {
-          // نجح التحقق - الانتقال للصفحة الرئيسية
-          _goToHome(
-            role: role,
-            name: name,
-            email: email,
-            phone: phone,
-            category: category,
-            description: description,
-            city: city,
-            token: token,
-          );
+          // 1. حفظ التوكن
+          await AuthService.saveToken(token);
+
+          // 2. نجح التحقق - الانتقال للصفحة الصحيحة بناءً على الدور
+          final userRole = role.toLowerCase();
+
+          if (userRole == "customer" || userRole == "user") {
+            // العميل يذهب مباشرة إلى الصفحة الرئيسية
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                // يجب التأكد من استخدام اسم الشاشة الصحيح للعملاء (Customer Home)
+                builder: (_) => HomePage(userName: name), 
+              ),
+              (_) => false,
+            );
+          } else if (userRole == "vendor") {
+            // المزود (الخطوة الأولى اكتملت)، يذهب لإكمال التفاصيل (الخطوة الثانية)
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                // التوجيه إلى شاشة إكمال تفاصيل المزود
+                builder: (_) => const SignUpProviderScreen(), 
+              ),
+              (_) => false,
+            );
+          } else {
+            // حالة غير متوقعة
+            _navigateToLogin(); 
+          }
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -183,7 +150,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
         errorMessage = 'No verification code found. Please request a new one.';
       } else if (e.toString().contains('Email is already verified')) {
         errorMessage = 'Email is already verified. You can proceed to login.';
-        // إذا الإيميل مفعل أصلاً، ننتقل مباشرة للصفحة الرئيسية
         _navigateToLogin();
       } else if (e.toString().contains('User not found')) {
         errorMessage = 'User not found. Please check your email.';
@@ -305,8 +271,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
     String email = "example@mail.com";
     String role = "customer";
     String name = "Guest";
-
-    // Provider fields
+    
+    // Variables for unused arguments (left for context if needed elsewhere)
     String category = "";
     String description = "";
     String city = "";

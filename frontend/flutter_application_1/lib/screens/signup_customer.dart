@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_application_1/services/customer_auth_service.dart';
+// **التعديل هنا:** استيراد الخدمة الموحدة
+import 'package:flutter_application_1/services/auth_service.dart'; 
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);
@@ -39,15 +40,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _showConfirm = false;
   bool _isLoading = false;
 
+  // لحفظ الدور الحالي
+  String _currentRole = 'customer'; 
+
   @override
   void initState() {
     super.initState();
-    _testConnection();
+    // استخدام AuthService
+    AuthService.testConnection(); 
   }
 
   Future<void> _testConnection() async {
     print('🔗 Testing connection to server...');
-    await CustomerAuthService.testConnection();
+    await AuthService.testConnection(); 
   }
 
   static const kPrimaryButtonColor = Color.fromARGB(215, 20, 20, 215);
@@ -100,8 +105,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
         _isLoading = true;
       });
 
+      // **التعديل هنا:** قراءة الدور من الـ Arguments
+      final arguments = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final String userRole = arguments?['role'] ?? 'customer';
+
       try {
-        final response = await CustomerAuthService.signup(
+        // **التعديل هنا:** استخدام AuthService.signup وتمرير الدور
+        final response = await AuthService.signup(
           userName: _nameCtrl.text.trim(),
           email: _emailCtrl.text.trim(),
           password: _passCtrl.text,
@@ -109,6 +119,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           city: _selectedCity == 'Other' 
               ? _otherCityCtrl.text.trim() 
               : _selectedCity!,
+          role: userRole, // تمرير الدور ('customer' أو 'vendor')
         );
 
         if (response.containsKey('message')) {
@@ -118,7 +129,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
             '/verification',
             arguments: {
               "email": _emailCtrl.text.trim(),
-              "role": "customer",
+              // تمرير الدور إلى شاشة التحقق ليتم توجيهه بعدها إلى شاشة المزود إذا كان الدور 'vendor'
+              "role": userRole, 
               "name": _nameCtrl.text.trim(),
             },
           );
@@ -218,8 +230,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // قراءة الدور وتحديث حالة الواجهة عند تغيير التبعيات
+    final arguments = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    _currentRole = arguments?['role'] ?? 'customer';
+  }
+
+  @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    // لتحديد النص المعروض بناءً على الدور
+    final String roleDisplay = _currentRole == 'vendor' ? 'Provider' : 'Customer';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -253,7 +275,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Create Account as Customer',
+                  // **التعديل هنا:** عرض الدور
+                  'Create Account as $roleDisplay',
                   style: GoogleFonts.poppins(
                     fontSize: 23,
                     fontWeight: FontWeight.w700,
@@ -491,7 +514,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             ),
                           )
                         : Text(
-                            'Sign up as Customer',
+                            // **التعديل هنا:** عرض الدور
+                            'Sign up as $roleDisplay',
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w700,
                               fontSize: 16,

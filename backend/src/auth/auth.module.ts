@@ -34,6 +34,7 @@ import { AdminStats, AdminStatsSchema } from '../admin/admin-stats.schema'; // â
     PassportModule, 
     JwtModule,
     MongooseModule,
+    AuthService,
   ],
 })
 export class AuthModule {}

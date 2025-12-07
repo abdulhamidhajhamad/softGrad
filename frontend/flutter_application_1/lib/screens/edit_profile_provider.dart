@@ -23,38 +23,7 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
   late TextEditingController _passCtrl;
   late TextEditingController _confirmCtrl;
 
-  String? _selectedCategory;
   String? _selectedCity;
-
-  final List<String> _categories = const [
-    'Venues',
-    'Photographers',
-    'Catering',
-    'Cake',
-    'Flower Shops',
-    'Decor & Lighting',
-    'Music & Entertainment',
-    'Wedding Planners & Coordinators',
-    'Card Printing',
-    'Jewelry & Accessories',
-    'Car Rental & Transportation',
-    'Gift & Souvenir',
-  ];
-
-  final Map<String, IconData> _categoryIcons = {
-    'Venues': Icons.location_city_outlined,
-    'Photographers': Icons.camera_alt_outlined,
-    'Catering': Icons.restaurant_menu_outlined,
-    'Cake': Icons.cake_outlined,
-    'Flower Shops': Icons.local_florist_outlined,
-    'Decor & Lighting': Icons.light_mode_outlined,
-    'Music & Entertainment': Icons.music_note_outlined,
-    'Wedding Planners & Coordinators': Icons.event_available_outlined,
-    'Card Printing': Icons.print_outlined,
-    'Jewelry & Accessories': Icons.diamond_outlined,
-    'Car Rental & Transportation': Icons.directions_car_filled_outlined,
-    'Gift & Souvenir': Icons.card_giftcard_outlined,
-  };
 
   final List<String> _cities = const [
     'Nablus',
@@ -83,10 +52,7 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
     _passCtrl = TextEditingController();
     _confirmCtrl = TextEditingController();
 
-    // أهم تعديل هنا: نتأكد إن القيمة موجودة في الليست
-    _selectedCategory = _categories.contains(widget.provider.category)
-        ? widget.provider.category
-        : null;
+
 
     _selectedCity =
         _cities.contains(widget.provider.city) ? widget.provider.city : null;
@@ -180,7 +146,6 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
       brandName: _brandCtrl.text.trim(),
       email: _emailCtrl.text.trim(),
       phone: _phoneCtrl.text.trim(),
-      category: _selectedCategory ?? widget.provider.category,
       description: _descCtrl.text.trim(),
       city: _selectedCity ?? widget.provider.city,
       bookings: widget.provider.bookings,
@@ -317,36 +282,6 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _sectionTitle("Business Details"),
-                    _label("Category"),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _selectedCategory,
-                      isExpanded: true,
-                      decoration: _decor(
-                          hint: "Select Category",
-                          icon: Icons.category_outlined),
-                      items: _categories.map((cat) {
-                        return DropdownMenuItem(
-                          value: cat,
-                          child: Row(
-                            children: [
-                              Icon(_categoryIcons[cat],
-                                  size: 18, color: kPrimaryColor),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  cat,
-                                  style: GoogleFonts.poppins(),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (v) => setState(() => _selectedCategory = v),
-                    ),
-                    const SizedBox(height: 18),
                     _label("Description"),
                     const SizedBox(height: 8),
                     TextFormField(

@@ -1,6 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose'; 
-
+export enum PayType { // 🆕 إضافة الـ Enum هنا
+    PerEvent = 'per event',
+    PerHour = 'per hour',
+    PerPerson = 'per person',
+}
 @Schema({ _id: false }) 
 export class Review {
     @Prop({ type: String, required: true })
@@ -11,7 +15,12 @@ export class Review {
     
     @Prop({ type: Number, required: true, min: 1, max: 5 })
     rating: number; 
-
+    @Prop({ 
+            type: String, 
+            required: true, 
+            enum: [PayType.PerEvent, PayType.PerHour, PayType.PerPerson] 
+        })
+    payType: PayType;
     @Prop({ type: String })
     comment: string;
     

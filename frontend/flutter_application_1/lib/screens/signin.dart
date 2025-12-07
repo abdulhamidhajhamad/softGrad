@@ -61,7 +61,6 @@ class _SignInScreenState extends State<SignInScreen> {
   brandName: userName,
   email: email,
   phone: userData['phone'] ?? '',
-  category: userData['category'] ?? 'Service Provider',
   description: userData['description'] ?? 'Professional service provider',
   city: userData['city'] ?? '',
   bookings: userData['bookings'] ?? 0,

@@ -95,22 +95,21 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
                     onPressed: _selectedRole == null
                         ? null
                         : () {
-                            if (_selectedRole == UserRole.customer) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const SignUpScreen(),
+                            // التوجيه دائماً إلى شاشة التسجيل المشتركة (SignUpScreen)
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SignUpScreen(),
+                                settings: RouteSettings(
+                                  arguments: {
+                                    // نمرر الدور: 'customer' أو 'vendor'
+                                    'role': _selectedRole == UserRole.provider
+                                        ? 'vendor'
+                                        : 'customer',
+                                  },
                                 ),
-                              );
-                            } else if (_selectedRole == UserRole.provider) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const SignUpProviderScreen(),
-                                ),
-                              );
-                            }
+                              ),
+                            );
                           },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color.fromARGB(215, 20, 20, 215),
@@ -151,7 +150,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
       onTap: onTap,
       child: Center(
         child: SizedBox(
-          width: 240, // لتكون أقرب لمربّع ومش ممتدة على كامل الشاشة
+          width: 240, 
           child: Card(
             elevation: 6,
             shadowColor: Colors.black.withOpacity(0.08),

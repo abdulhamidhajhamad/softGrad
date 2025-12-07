@@ -1,25 +1,29 @@
-import { Controller, Post, Body, Patch, Delete, Get, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller,HttpCode,HttpStatus, Post, Body, Patch, Delete, Get, Param, Req, UseGuards } from '@nestjs/common';
 import { ProviderService } from './provider.service';
 import { CreateServiceProviderDto, UpdateServiceProviderDto } from './provider.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DeleteResult } from 'mongodb';
-
+import { ServiceProvider } from './provider.entity';
 // provider.controller.ts
 @Controller('providers')
 @UseGuards(JwtAuthGuard)
 export class ProviderController {
   constructor(private readonly providerService: ProviderService) {}
 
-  @Post()
-  async create(@Req() req, @Body() dto: CreateServiceProviderDto) {
-    try {
-      const userId = req.user.userId;
-      console.log('Creating provider for user:', userId);
-      return await this.providerService.create(userId, dto);
-    } catch (error) {
-      throw error;
-    }
+@Post()
+  @HttpCode(HttpStatus.CREATED)
+  async create(@Req() req, @Body() dto: CreateServiceProviderDto): Promise<{ provider: ServiceProvider, token: string }> {
+    try {
+      const userId = req.user.userId;
+      console.log('Creating provider for user:', userId);
+     
+      return await this.providerService.create(userId, dto);
+    } catch (error) {
+      throw error;
+    }
   }
+
+
   @Get()
   async getAll(@Req() req) {
     const userId = req.user.userId;

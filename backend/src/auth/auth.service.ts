@@ -37,6 +37,8 @@ export class AuthService {
     private mailService: MailService,
     private supabaseStorage: SupabaseStorageService,
   ) {}
+
+
   private generateVerificationCode(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
@@ -485,5 +487,14 @@ async getUserProfile(userId: string): Promise<{
     user.fcmToken = token;
     await user.save();
     console.log(`FCM Token updated for user ${userId}`);
+  }
+
+async generateToken(user: any): Promise<string> {
+    const payload = { 
+        email: user.email, 
+        userId: user._id, 
+        role: user.role 
+    };
+    return this.jwtService.sign(payload);
   }
 }

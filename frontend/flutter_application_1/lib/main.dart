@@ -13,7 +13,8 @@ import 'package:flutter_application_1/screens/vendors.dart';
 import 'package:flutter_application_1/screens/templates.dart';
 import 'package:flutter_application_1/screens/template_editor.dart';
 import 'package:flutter_application_1/screens/choose_role.dart'; // NEW SCREEN
-
+// أضف هذه الاستيرادات في أعلى الملف:
+import 'package:flutter_application_1/screens/home_provider.dart'; // استيراد HomeProviderScreen
 void main() {
   runApp(const MyApp());
 }
@@ -79,6 +80,26 @@ class MyApp extends StatelessWidget {
           );
         }
 
+        // Home Provider Route
+  if (settings.name == '/home_provider') {
+    final args = settings.arguments;
+    if (args != null && args is ProviderModel) {
+      return MaterialPageRoute(
+        builder: (_) => HomeProviderScreen(provider: args),
+        settings: settings,
+      );
+    } else {
+      // إرجاع شاشة خطأ إذا لم يتم تمرير البيانات
+      return MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Error')),
+          body: const Center(
+            child: Text('Provider data is required to access this page'),
+          ),
+        ),
+      );
+    }
+  }
         return null;
       },
     );

@@ -1,6 +1,10 @@
-import { IsString, IsNumber, IsArray, IsOptional,IsBoolean, IsObject, IsNotEmpty, Min, IsDate, MinLength, Max } from 'class-validator';
+import { IsString,IsEnum, IsNumber, IsArray, IsOptional,IsBoolean, IsObject, IsNotEmpty, Min, IsDate, MinLength, Max } from 'class-validator';
 import { Transform, Type } from 'class-transformer'; // ← أضف هذا
-
+export enum PayType { // 🆕 تعريف الـ Enum لاستخدامه مع class-validator
+  PerEvent = 'per event',
+  PerHour = 'per hour',
+  PerPerson = 'per person',
+}
 export class LocationDto {
   @IsNumber()
   @IsNotEmpty()
@@ -42,6 +46,9 @@ export class CreateServiceDto {
   @Transform(({ value }) => parseFloat(value)) // ← أضف هذا
   price: number;
 
+@IsEnum(PayType)
+  @IsNotEmpty()
+  payType: PayType;
   @IsString()
   @IsNotEmpty()
   category: string;
@@ -88,6 +95,10 @@ export class UpdateServiceDto {
   @IsOptional()
   location?: LocationDto;
 
+  @IsEnum(PayType)
+  @IsOptional()
+  payType?: PayType;
+
   @IsNumber()
   @Min(0)
   @IsOptional()
@@ -127,6 +138,7 @@ export class ServiceResponseDto {
   serviceName: string;
   images: string[];
   reviews: any[];
+  payType: PayType; 
   location: any;
   price: number;
   category: string;
@@ -135,6 +147,5 @@ export class ServiceResponseDto {
   updatedAt: Date;
   companyName?: string;
   bookedDates: Date[];
-  rating: number; // ✅ إضافة الرايتنج للاستجابة
+  rating: number; 
 }
-//things

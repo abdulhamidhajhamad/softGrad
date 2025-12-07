@@ -107,7 +107,8 @@ export class BookingController {
   @Get('vendor/sales')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async getVendorSales(@Request() req): Promise<{ totalSales: number; bookings: Booking[] }> {
+  // Updated the return type to reflect the new structure: totalSales and totalBookings
+  async getVendorSales(@Request() req): Promise<{ totalSales: number; totalBookings: number }> {
     const vendorId = req.user.userId || req.user.id;
     const userRole = req.user.role; // Assumed to be available from the JWT payload
 
@@ -119,5 +120,4 @@ export class BookingController {
     return this.bookingService.getVendorSalesAndBookings(vendorId);
   }
 
-
-}
+} 

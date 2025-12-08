@@ -3,9 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
-
 class VendorAuthService {
-    static String getBaseUrl() {
+  static String getBaseUrl() {
     if (kIsWeb) {
       // Web (Chrome)
       return 'http://localhost:3000';
@@ -17,6 +16,7 @@ class VendorAuthService {
       return 'http://localhost:3000';
     }
   }
+
   static final String baseUrl = getBaseUrl();
 
   static Future<Map<String, dynamic>> signup({

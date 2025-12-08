@@ -39,7 +39,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
     _loadServices();
   }
 
- Future<void> _loadServices() async {
+  Future<void> _loadServices() async {
     setState(() {
       _isLoading = true;
       _hasError = false; // A soft error (No services found) is not a hard error
@@ -78,7 +78,9 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
 
     if (_searchQuery.isNotEmpty) {
       list = list.where((service) {
-        final name = (service['serviceName'] ?? service['name'] ?? '').toString().toLowerCase();
+        final name = (service['serviceName'] ?? service['name'] ?? '')
+            .toString()
+            .toLowerCase();
         final cat = (service['category'] ?? '').toString().toLowerCase();
         final price = (service['price'] ?? '').toString();
         final q = _searchQuery.toLowerCase();
@@ -93,15 +95,19 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
     }
 
     if (_sortOption == 'price_low') {
-      list.sort(
-          (a, b) => (a['price'] as num).compareTo(b['price'] as num));
+      list.sort((a, b) => (a['price'] as num).compareTo(b['price'] as num));
     } else if (_sortOption == 'price_high') {
-      list.sort(
-          (a, b) => (b['price'] as num).compareTo(a['price'] as num));
+      list.sort((a, b) => (b['price'] as num).compareTo(a['price'] as num));
     } else {
       list.sort((a, b) {
-        final da = DateTime.tryParse(a['updatedAt']?.toString() ?? a['createdAt']?.toString() ?? '') ?? DateTime.now();
-        final db = DateTime.tryParse(b['updatedAt']?.toString() ?? b['createdAt']?.toString() ?? '') ?? DateTime.now();
+        final da = DateTime.tryParse(a['updatedAt']?.toString() ??
+                a['createdAt']?.toString() ??
+                '') ??
+            DateTime.now();
+        final db = DateTime.tryParse(b['updatedAt']?.toString() ??
+                b['createdAt']?.toString() ??
+                '') ??
+            DateTime.now();
         return db.compareTo(da);
       });
     }
@@ -365,7 +371,8 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                               _loadServices();
                             }
                           },
-                          onDelete: () => _confirmDelete(originalIndex, serviceId),
+                          onDelete: () =>
+                              _confirmDelete(originalIndex, serviceId),
                           onToggleActive: (val) async {
                             try {
                               await ServiceService.updateService(
@@ -378,7 +385,9 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                               });
                               _showSnackBar('Service visibility updated');
                             } catch (e) {
-                              _showSnackBar('Failed to update service: ${e.toString()}', isError: true);
+                              _showSnackBar(
+                                  'Failed to update service: ${e.toString()}',
+                                  isError: true);
                             }
                           },
                         );
@@ -614,7 +623,9 @@ class _ServiceCard extends StatelessWidget {
     }
 
     final serviceName = service['serviceName'] ?? service['name'] ?? '';
-    final description = service['additionalInfo']?['description'] ?? service['fullDescription'] ?? '';
+    final description = service['additionalInfo']?['description'] ??
+        service['fullDescription'] ??
+        '';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),

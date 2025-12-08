@@ -39,7 +39,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _bookingUpdates = true;
   bool _offersAndDiscounts = true;
   bool _remindersAndChecklist = true;
-  
+
   // أضف متغيرات لتخزين البيانات الحقيقية
   late User _currentUser;
   bool _isLoading = true;
@@ -53,7 +53,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadUserProfile() async {
     try {
       final userData = await AuthService.getUserProfile();
-      
+
       setState(() {
         _currentUser = User(
           fullName: userData['userName'] ?? 'Guest',
@@ -162,7 +162,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _InfoRow(
                     icon: Icons.person_outline,
                     label: 'Full Name',
-                    value: _currentUser.fullName, // غيرت من widget.currentUser إلى _currentUser
+                    value: _currentUser
+                        .fullName, // غيرت من widget.currentUser إلى _currentUser
                     textPrimary: textPrimary,
                     textSecondary: textSecondary,
                     iconColor: iconColor,
@@ -171,7 +172,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _InfoRow(
                     icon: Icons.mail_outline,
                     label: 'Email',
-                    value: _currentUser.email, // غيرت من widget.currentUser إلى _currentUser
+                    value: _currentUser
+                        .email, // غيرت من widget.currentUser إلى _currentUser
                     textPrimary: textPrimary,
                     textSecondary: textSecondary,
                     iconColor: iconColor,
@@ -180,7 +182,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _InfoRow(
                     icon: Icons.phone_outlined,
                     label: 'Phone',
-                    value: _currentUser.phone, // غيرت من widget.currentUser إلى _currentUser
+                    value: _currentUser
+                        .phone, // غيرت من widget.currentUser إلى _currentUser
                     textPrimary: textPrimary,
                     textSecondary: textSecondary,
                     iconColor: iconColor,
@@ -189,7 +192,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _InfoRow(
                     icon: Icons.location_on_outlined,
                     label: 'Location',
-                    value: _currentUser.location, // غيرت من widget.currentUser إلى _currentUser
+                    value: _currentUser
+                        .location, // غيرت من widget.currentUser إلى _currentUser
                     textPrimary: textPrimary,
                     textSecondary: textSecondary,
                     iconColor: iconColor,

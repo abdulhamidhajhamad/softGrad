@@ -2,6 +2,8 @@
 
 import 'dart:io';
 import 'dart:ui';
+import 'dart:typed_data'; // ✅ إضافة ضرورية
+import 'package:flutter/foundation.dart'; // ✅ إضافة ضرورية لـ kIsWeb
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -37,14 +39,17 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
   late TextEditingController _categoryCtrl;
   late TextEditingController _priceCtrl;
   late TextEditingController _discountCtrl;
+// ⭐ NEW: Controllers for Longitude and Latitude
+  late TextEditingController _langCtrl;
+  late TextEditingController _latCtrl;
+  // ✅ تغيير النوع ليقبل String (روابط) أو Uint8List (صور جديدة للويب)
+  List<dynamic> _images = [];
 
-  List<String> _images = [];
   List<String> _highlights = [];
   List<Map<String, dynamic>> _packages = [];
 
   late AnimationController _animController;
 
-  // Category options with icons for the bottom sheet
   final List<_CategoryOption> _categoryOptions = const [
     _CategoryOption('Venues', Icons.apartment_rounded),
     _CategoryOption('Photographers', Icons.photo_camera_outlined),
@@ -72,7 +77,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     _taglineCtrl = TextEditingController(text: s['tagline'] ?? "");
     _addressCtrl = TextEditingController(text: s['address'] ?? "");
 
-    // وصف واحد موحّد
     final descText =
         (s['fullDescription'] ?? s['shortDescription'] ?? "").toString();
     _shortDescCtrl = TextEditingController(text: descText);
@@ -84,7 +88,9 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     _discountCtrl =
         TextEditingController(text: s['discount']?.toString() ?? "");
 
-    _images = List<String>.from(s['images'] ?? []);
+    // تحميل الصور الموجودة مسبقاً (عادة تكون روابط Strings)
+    _images = List<dynamic>.from(s['images'] ?? []);
+
     _highlights = List<String>.from(s['highlights'] ?? []);
     _packages = List<Map<String, dynamic>>.from(s['packages'] ?? []);
 
@@ -110,13 +116,26 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     super.dispose();
   }
 
+  // ✅ دالة اختيار الصور المعدلة لتدعم الويب
   Future<void> _pickImages() async {
     final picker = ImagePicker();
     final picked = await picker.pickMultiImage(imageQuality: 80);
+
     if (picked.isNotEmpty) {
-      setState(() {
-        _images.addAll(picked.map((e) => e.path));
-      });
+      if (kIsWeb) {
+        // للويب: نحول الصور إلى Bytes ونضيفها للقائمة
+        for (var file in picked) {
+          final bytes = await file.readAsBytes();
+          setState(() {
+            _images.add(bytes); // إضافة كـ Uint8List
+          });
+        }
+      } else {
+        // للموبايل: نستخدم المسار كالمعتاد
+        setState(() {
+          _images.addAll(picked.map((e) => e.path));
+        });
+      }
     }
   }
 
@@ -163,8 +182,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
               final key = keyCtrl.text.trim();
               final value = valueCtrl.text.trim();
               if (key.isNotEmpty || value.isNotEmpty) {
-                final combined =
-                    value.isNotEmpty ? "$key • $value" : key; // نص واحد
+                final combined = value.isNotEmpty ? "$key • $value" : key;
                 setState(() => _highlights.add(combined));
               }
               Navigator.pop(context);
@@ -192,14 +210,13 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
       "brand": _brandCtrl.text.trim(),
       "tagline": _taglineCtrl.text.trim(),
       "address": _addressCtrl.text.trim(),
-      // وصف واحد يُخزّن في الاثنين
       "shortDescription": desc,
       "fullDescription": desc,
       "city": _cityCtrl.text.trim(),
       "category": _categoryCtrl.text.trim(),
       "price": double.tryParse(_priceCtrl.text.trim()) ?? 0,
       "discount": _discountCtrl.text.trim(),
-      "images": _images,
+      "images": _images, // يحتوي الآن على خليط من الروابط والبايتات
       "highlights": _highlights,
       "packages": _packages,
     };
@@ -207,7 +224,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     Navigator.pop(context, updatedData);
   }
 
-  // Open bottom sheet with category list + icons
   Future<void> _openCategoryPicker() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -291,13 +307,36 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     );
   }
 
+  // ✅ دالة مساعدة ذكية لعرض الصورة حسب نوعها (رابط أو بايتات أو ملف)
+  Widget _buildDisplayImage(dynamic imageSource, {BoxFit fit = BoxFit.cover}) {
+    if (imageSource is Uint8List) {
+      // صورة جديدة على الويب (Bytes)
+      return Image.memory(imageSource, fit: fit);
+    } else if (imageSource is String) {
+      if (imageSource.startsWith('http')) {
+        // صورة قادمة من السيرفر (URL)
+        return Image.network(
+          imageSource,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.broken_image, color: Colors.grey),
+        );
+      } else {
+        // مسار ملف محلي (Android/iOS only)
+        if (!kIsWeb) {
+          return Image.file(File(imageSource), fit: fit);
+        }
+      }
+    }
+    return Container(color: Colors.grey.shade200);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBackgroundColor,
       body: Stack(
         children: [
-          // plain white background (no gradients / waves)
           Container(color: kBackgroundColor),
           SafeArea(
             child: AnimatedBuilder(
@@ -333,8 +372,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     );
   }
 
-  // ===================== APP BAR =====================
-
   Widget _buildAppBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -368,13 +405,10 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
               ],
             ),
           ),
-          // removed extra white icon button (sparkles)
         ],
       ),
     );
   }
-
-  // ===================== FORM BODY =====================
 
   Widget _buildFormScroll() {
     return SingleChildScrollView(
@@ -393,7 +427,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                   const SizedBox(height: 12),
                   _label("Service Name"),
                   _textField(_nameCtrl, hint: "e.g., Luxe Wedding Photography"),
-                  // تم الإبقاء على الكود، لكن تم إزالة حقول Brand و Tagline من الواجهة فقط
                 ],
               ),
             ),
@@ -622,8 +655,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     );
   }
 
-  // ===================== HERO / IMAGE HEADER =====================
-
   Widget _heroImageCard() {
     final hasImage = _images.isNotEmpty;
     return TweenAnimationBuilder<double>(
@@ -664,10 +695,8 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                     child: SizedBox(
                       width: 90,
                       height: 90,
-                      child: Image.file(
-                        File(_images.first),
-                        fit: BoxFit.cover,
-                      ),
+                      // ✅ تم استخدام الدالة المساعدة هنا لعرض الصورة بشكل صحيح
+                      child: _buildDisplayImage(_images.first),
                     ),
                   )
                 else
@@ -736,7 +765,8 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                                 : _categoryCtrl.text,
                           ),
                         ],
-                      ),
+                      ), 
+                      const SizedBox(height: 10),
                     ],
                   ),
                 ),
@@ -747,8 +777,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
       ),
     );
   }
-
-  // ===================== HELPERS: UI PARTS =====================
 
   Widget _glassCard({required Widget child}) {
     return ClipRRect(
@@ -936,8 +964,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     );
   }
 
-  // ===================== IMAGES =====================
-
   Widget _emptyImagesState() {
     return GestureDetector(
       onTap: _pickImages,
@@ -1001,7 +1027,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     );
   }
 
-  Widget _imageTile(String path) {
+  Widget _imageTile(dynamic imageSource) {
     return Stack(
       children: [
         ClipRRect(
@@ -1018,10 +1044,8 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                 ),
               ],
             ),
-            child: Image.file(
-              File(path),
-              fit: BoxFit.cover,
-            ),
+            // ✅ تم استخدام الدالة المساعدة هنا
+            child: _buildDisplayImage(imageSource),
           ),
         ),
         Positioned(
@@ -1029,7 +1053,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
           right: 4,
           child: GestureDetector(
             onTap: () {
-              setState(() => _images.remove(path));
+              setState(() => _images.remove(imageSource));
             },
             child: Container(
               width: 24,
@@ -1049,8 +1073,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
       ],
     );
   }
-
-  // ===================== SAVE BUTTON =====================
 
   Widget _buildSaveButton() {
     return TweenAnimationBuilder<double>(
@@ -1110,8 +1132,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     );
   }
 
-  // ===================== GLASS ICON BUTTON =====================
-
   Widget _glassIconButton(
       {required IconData icon, required VoidCallback onTap}) {
     return ClipRRect(
@@ -1142,7 +1162,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
   }
 }
 
-// Small model for category option
 class _CategoryOption {
   final String label;
   final IconData icon;

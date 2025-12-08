@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 // **التعديل هنا:** استيراد الخدمة الموحدة
-import 'package:flutter_application_1/services/auth_service.dart'; 
+import 'package:flutter_application_1/services/auth_service.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);
@@ -41,18 +41,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _isLoading = false;
 
   // لحفظ الدور الحالي
-  String _currentRole = 'customer'; 
+  String _currentRole = 'customer';
 
   @override
   void initState() {
     super.initState();
     // استخدام AuthService
-    AuthService.testConnection(); 
+    AuthService.testConnection();
   }
 
   Future<void> _testConnection() async {
     print('🔗 Testing connection to server...');
-    await AuthService.testConnection(); 
+    await AuthService.testConnection();
   }
 
   static const kPrimaryButtonColor = Color.fromARGB(215, 20, 20, 215);
@@ -106,7 +106,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
       });
 
       // **التعديل هنا:** قراءة الدور من الـ Arguments
-      final arguments = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final arguments =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       final String userRole = arguments?['role'] ?? 'customer';
 
       try {
@@ -116,8 +117,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
           email: _emailCtrl.text.trim(),
           password: _passCtrl.text,
           phone: _phoneCtrl.text.trim(),
-          city: _selectedCity == 'Other' 
-              ? _otherCityCtrl.text.trim() 
+          city: _selectedCity == 'Other'
+              ? _otherCityCtrl.text.trim()
               : _selectedCity!,
           role: userRole, // تمرير الدور ('customer' أو 'vendor')
         );
@@ -130,7 +131,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             arguments: {
               "email": _emailCtrl.text.trim(),
               // تمرير الدور إلى شاشة التحقق ليتم توجيهه بعدها إلى شاشة المزود إذا كان الدور 'vendor'
-              "role": userRole, 
+              "role": userRole,
               "name": _nameCtrl.text.trim(),
             },
           );
@@ -139,13 +140,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
         }
       } catch (e) {
         String errorMessage = 'An error occurred. Please try again.';
-        
+
         if (e.toString().contains('email already exists')) {
           errorMessage = 'Email already exists. Please use a different email.';
         } else if (e.toString().contains('Network error')) {
           errorMessage = 'Network error. Please check your connection.';
         }
-        
+
         _showErrorDialog(errorMessage);
       } finally {
         setState(() {
@@ -233,7 +234,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // قراءة الدور وتحديث حالة الواجهة عند تغيير التبعيات
-    final arguments = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final arguments =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     _currentRole = arguments?['role'] ?? 'customer';
   }
 
@@ -241,7 +243,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     // لتحديد النص المعروض بناءً على الدور
-    final String roleDisplay = _currentRole == 'vendor' ? 'Provider' : 'Customer';
+    final String roleDisplay =
+        _currentRole == 'vendor' ? 'Provider' : 'Customer';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -510,7 +513,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
                         : Text(
@@ -537,15 +541,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ),
                     InkWell(
-                      onTap: _isLoading 
-                          ? null 
-                          : () => Navigator.pushReplacementNamed(context, '/signin'),
+                      onTap: _isLoading
+                          ? null
+                          : () => Navigator.pushReplacementNamed(
+                              context, '/signin'),
                       child: Text(
                         '  Sign In',
                         style: GoogleFonts.poppins(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: _isLoading ? Colors.grey.shade400 : kPrimaryButtonColor,
+                          color: _isLoading
+                              ? Colors.grey.shade400
+                              : kPrimaryButtonColor,
                         ),
                       ),
                     ),

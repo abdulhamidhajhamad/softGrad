@@ -146,7 +146,8 @@ class _TemplatesPageState extends State<TemplatesPage> {
                 itemCount: visibleItems.length,
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
-                  childAspectRatio: 2 / 3, // taller cards so images stay vertical
+                  childAspectRatio:
+                      2 / 3, // taller cards so images stay vertical
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
                 ),
@@ -154,8 +155,7 @@ class _TemplatesPageState extends State<TemplatesPage> {
                   final t = visibleItems[i];
 
                   // use global FavoritesStore instead of local Set
-                  final bool isFav =
-                      FavoritesStore.isTemplateFavorite(t.asset);
+                  final bool isFav = FavoritesStore.isTemplateFavorite(t.asset);
 
                   return Material(
                     color: Colors.white,
@@ -212,8 +212,8 @@ class _TemplatesPageState extends State<TemplatesPage> {
                                     onPressed: () {
                                       setState(() {
                                         if (isFav) {
-                                          FavoritesStore
-                                              .removeTemplateByAsset(t.asset);
+                                          FavoritesStore.removeTemplateByAsset(
+                                              t.asset);
                                         } else {
                                           FavoritesStore.addTemplate(
                                             FavoriteTemplate(

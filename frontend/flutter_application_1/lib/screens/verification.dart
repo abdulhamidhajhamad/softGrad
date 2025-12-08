@@ -103,7 +103,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
               context,
               MaterialPageRoute(
                 // يجب التأكد من استخدام اسم الشاشة الصحيح للعملاء (Customer Home)
-                builder: (_) => HomePage(userName: name), 
+                builder: (_) => HomePage(userName: name),
               ),
               (_) => false,
             );
@@ -113,13 +113,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
               context,
               MaterialPageRoute(
                 // التوجيه إلى شاشة إكمال تفاصيل المزود
-                builder: (_) => const SignUpProviderScreen(), 
+                builder: (_) => const SignUpProviderScreen(),
               ),
               (_) => false,
             );
           } else {
             // حالة غير متوقعة
-            _navigateToLogin(); 
+            _navigateToLogin();
           }
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -271,7 +271,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     String email = "example@mail.com";
     String role = "customer";
     String name = "Guest";
-    
+
     // Variables for unused arguments (left for context if needed elsewhere)
     String category = "";
     String description = "";

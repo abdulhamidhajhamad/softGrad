@@ -1,6 +1,7 @@
 // lib/screens/showMore_provider.dart
 
 import 'dart:io';
+import 'package:flutter/foundation.dart'; // NEW: إضافة مكتبة kIsWeb
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'full_image_viewer_provider.dart';
@@ -61,11 +62,57 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
         .toList();
   }
 
+  // NEW: دالة مساعدة ذكية لعرض الصورة حسب نوعها (رابط أو ملف)
+  // هذه الدالة تمكن التطبيق من عرض الصور على الويب (Image.network) وعلى الموبايل (Image.file)
+  Widget _buildDisplayImage(dynamic imageSource, {BoxFit fit = BoxFit.cover}) {
+    // 1. صورة جديدة على الويب (Bytes) - عادة لا تحدث هنا لكن كإجراء وقائي
+    if (imageSource is Uint8List) {
+      return Image.memory(imageSource, fit: fit);
+    } 
+    
+    // 2. إذا كان المصدر String (مسار ملف محلي أو رابط سيرفر)
+    else if (imageSource is String) {
+      if (imageSource.startsWith('http') || imageSource.startsWith('https')) {
+        // صورة قادمة من السيرفر (URL)
+        return Image.network(
+          imageSource,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) =>
+              const Center(child: Icon(Icons.broken_image, color: Colors.grey, size: 40)),
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+              child: CircularProgressIndicator(
+                color: kPrimaryColor,
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            );
+          },
+        );
+      } else {
+        // مسار ملف محلي (Android/iOS only)
+        if (!kIsWeb) {
+          return Image.file(
+            File(imageSource),
+            fit: fit,
+            errorBuilder: (context, error, stackTrace) =>
+                const Center(child: Icon(Icons.broken_image, color: Colors.grey, size: 40)),
+          );
+        }
+      }
+    }
+    // Fallback في حالة عدم وجود صورة أو خطأ في الويب
+    return Container(color: Colors.grey.shade200);
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.service;
 
-    final images = List<String>.from(s['images'] ?? []);
+    final images = List<dynamic>.from(s['images'] ?? []);
     final highlights = List<String>.from(s['highlights'] ?? []);
     final packages = List<Map<String, dynamic>>.from(s['packages'] ?? []);
 
@@ -136,7 +183,7 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => FullImageViewer(images: images),
+                          builder: (_) => FullImageViewer(images: images.map((e) => e.toString()).toList()),
                         ),
                       );
                     }
@@ -155,8 +202,8 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                             )
                           : PageView.builder(
                               itemCount: images.length,
-                              itemBuilder: (_, i) => Image.file(
-                                File(images[i]),
+                              itemBuilder: (_, i) => _buildDisplayImage(
+                                images[i],
                                 fit: BoxFit.cover,
                               ),
                             ),

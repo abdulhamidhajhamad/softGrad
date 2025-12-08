@@ -150,7 +150,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
       onTap: onTap,
       child: Center(
         child: SizedBox(
-          width: 240, 
+          width: 240,
           child: Card(
             elevation: 6,
             shadowColor: Colors.black.withOpacity(0.08),

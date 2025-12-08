@@ -255,7 +255,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                         );
                       },
                       child: _StatBox(
-                        icon:Icons.attach_money,
+                        icon: Icons.attach_money,
                         title: "Sales",
                         value: provider.reviews.toString(),
                       ),
@@ -417,12 +417,10 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                           children: [
                             Text("Email",
                                 style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: Colors.grey.shade600)),
+                                    fontSize: 14, color: Colors.grey.shade600)),
                             Text(provider.email,
                                 style: GoogleFonts.poppins(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500)),
+                                    fontSize: 15, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ],
@@ -437,12 +435,10 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                           children: [
                             Text("Phone",
                                 style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: Colors.grey.shade600)),
+                                    fontSize: 14, color: Colors.grey.shade600)),
                             Text(provider.phone,
                                 style: GoogleFonts.poppins(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500)),
+                                    fontSize: 15, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ],

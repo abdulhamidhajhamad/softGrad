@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/screens/home_customer.dart'; // Import HomePage
 import 'package:flutter_application_1/services/auth_service.dart'; // Import AuthService
-import 'package:flutter_application_1/screens/home_provider.dart'; 
+import 'package:flutter_application_1/screens/home_provider.dart';
 
 /// Sign In screen for existing users
 class SignInScreen extends StatefulWidget {
   const SignInScreen({Key? key}) : super(key: key);
-  
+
   @override
   State<SignInScreen> createState() => _SignInScreenState();
 }
+
 class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
@@ -24,7 +25,8 @@ class _SignInScreenState extends State<SignInScreen> {
     _passwordController.dispose();
     super.dispose();
   }
-    @override 
+
+  @override
   void initState() {
     super.initState();
     _testConnection();
@@ -35,72 +37,73 @@ class _SignInScreenState extends State<SignInScreen> {
     await AuthService.testConnection();
   }
 
- Future<void> _signIn() async {
-  if (_formKey.currentState!.validate()) {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final email = _emailController.text.trim();
-      final password = _passwordController.text;
-
-      final response = await AuthService.login(email, password);
-
-      if (response.containsKey('token') && response.containsKey('user')) {
-        final userData = response['user'];
-        final userName = userData['userName'] ?? 'Guest';
-        final userRole = userData['role'] ?? 'user';
-
-        if (userRole == 'vendor') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => HomeProviderScreen(
-              provider: ProviderModel(
-  brandName: userName,
-  email: email,
-  phone: userData['phone'] ?? '',
-  description: userData['description'] ?? 'Professional service provider',
-  city: userData['city'] ?? '',
-  bookings: userData['bookings'] ?? 0,
-  views: userData['views'] ?? 0,
-  messages: userData['messages'] ?? 0,
-  reviews: userData['reviews'] ?? 0,
-),
-              ),
-            ),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => HomePage(userName: userName),
-            ),
-          );
-        }
-      } else {
-        _showErrorDialog('Login failed. Please try again.');
-      }
-    } catch (e) {
-      String errorMessage = 'An error occurred. Please try again.';
-      
-      if (e.toString().contains('Invalid Email/Pass')) {
-        errorMessage = 'Invalid email or password. Please try again.';
-      } else if (e.toString().contains('verify your email')) {
-        errorMessage = 'Please verify your email before logging in.';
-      } else if (e.toString().contains('Network error')) {
-        errorMessage = 'Network error. Please check your connection.';
-      }
-      
-      _showErrorDialog(errorMessage);
-    } finally {
+  Future<void> _signIn() async {
+    if (_formKey.currentState!.validate()) {
       setState(() {
-        _isLoading = false;
+        _isLoading = true;
       });
+
+      try {
+        final email = _emailController.text.trim();
+        final password = _passwordController.text;
+
+        final response = await AuthService.login(email, password);
+
+        if (response.containsKey('token') && response.containsKey('user')) {
+          final userData = response['user'];
+          final userName = userData['userName'] ?? 'Guest';
+          final userRole = userData['role'] ?? 'user';
+
+          if (userRole == 'vendor') {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => HomeProviderScreen(
+                  provider: ProviderModel(
+                    brandName: userName,
+                    email: email,
+                    phone: userData['phone'] ?? '',
+                    description: userData['description'] ??
+                        'Professional service provider',
+                    city: userData['city'] ?? '',
+                    bookings: userData['bookings'] ?? 0,
+                    views: userData['views'] ?? 0,
+                    messages: userData['messages'] ?? 0,
+                    reviews: userData['reviews'] ?? 0,
+                  ),
+                ),
+              ),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => HomePage(userName: userName),
+              ),
+            );
+          }
+        } else {
+          _showErrorDialog('Login failed. Please try again.');
+        }
+      } catch (e) {
+        String errorMessage = 'An error occurred. Please try again.';
+
+        if (e.toString().contains('Invalid Email/Pass')) {
+          errorMessage = 'Invalid email or password. Please try again.';
+        } else if (e.toString().contains('verify your email')) {
+          errorMessage = 'Please verify your email before logging in.';
+        } else if (e.toString().contains('Network error')) {
+          errorMessage = 'Network error. Please check your connection.';
+        }
+
+        _showErrorDialog(errorMessage);
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
-}
 
   void _showErrorDialog(String message) {
     showDialog(
@@ -350,7 +353,8 @@ class _SignInScreenState extends State<SignInScreen> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
                         : Text(

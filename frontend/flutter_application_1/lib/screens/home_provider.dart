@@ -255,8 +255,8 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                         );
                       },
                       child: _StatBox(
-                        icon: Icons.star_border,
-                        title: "Reviews",
+                        icon:Icons.attach_money,
+                        title: "Sales",
                         value: provider.reviews.toString(),
                       ),
                     ),

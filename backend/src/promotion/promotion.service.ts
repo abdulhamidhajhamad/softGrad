@@ -67,7 +67,7 @@ private userModel: Model<User>,
     const emailHtml = this.generateGeneralEmailHtml(dto.title, dto.body);
 
     // Queue the broadcast tasks
-    await this.broadcastToUsers(subject, body, emailHtml, NotificationType.GENERAL_BROADCAST);
+    await this.broadcastToUsers(subject, body, emailHtml, NotificationType.MESSAGE);
     
     return { message: 'Broadcast jobs successfully added to queues.' };
   }

@@ -4,7 +4,7 @@ import { Document, Types } from 'mongoose';
 
 export enum NotificationType {
   PROMO_CODE = 'PROMO_CODE',
-  GENERAL_BROADCAST = 'GENERAL_BROADCAST',
+  MESSAGE = 'MESSAGE',
 }
 
 export enum NotificationStatus {

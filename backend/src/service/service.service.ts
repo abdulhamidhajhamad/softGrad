@@ -397,26 +397,6 @@ export class ServiceService {
     }
   }
 
-  async getServiceById(serviceId: string): Promise<Service> {
-    try {
-      const service = await this.serviceModel.findById(serviceId).exec();
-
-      if (!service) {
-        throw new HttpException(
-          'Service not found',
-          HttpStatus.NOT_FOUND
-        );
-      }
-
-      return service;
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to fetch service',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
   async searchServicesByLocation(
     latitude: number,
     longitude: number,
@@ -596,6 +576,38 @@ export class ServiceService {
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to search services',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  async getServiceById(serviceId: string): Promise<any> { // ⬅️ تغيير نوع الإرجاع إلى 'any' أو إنشاء DTO مخصص
+    try {
+      const service = await this.serviceModel
+        .findById(serviceId)
+        .select('serviceName category location.city price additionalInfo') // ⬅️ التعديل هنا لتحديد الحقول
+        .exec();
+
+      if (!service) {
+        throw new HttpException(
+          'Service not found',
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      // تحويل النتيجة إلى كائن عادي وإعادة ترتيب الحقول
+      const serviceObject = service.toObject();
+      return {
+          serviceName: serviceObject.serviceName,
+          category: serviceObject.category,
+          city: serviceObject.location?.city, // استخدام الاختيار الاختياري
+          price: serviceObject.price,
+          description: serviceObject.additionalInfo // إعادة تسمية additionalInfo إلى description في الرد
+      };
+      
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch service',
         error.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

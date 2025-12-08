@@ -301,4 +301,19 @@ export class ServiceController {
       );
     }
   }
+
+
+  // 🆕 11. Get Service Details by ID - مفتوح للجميع ويرجع حقول محددة
+  @Get('id/:serviceId') // ⬅️ استخدام مسار محدد لتجنب التعارض مع Get()
+  async getServiceDetailsById(@Param('serviceId') serviceId: string) {
+    try {
+      // الدالة في service.service.ts تم تعديلها لتنفيذ SELECT والحقول المرجعة
+      return await this.serviceService.getServiceById(serviceId); 
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch service details',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 }

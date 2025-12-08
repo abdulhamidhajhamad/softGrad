@@ -122,4 +122,20 @@ async findByName(userId: string, companyName: string): Promise<ServiceProvider> 
   
   return company;
 }
+
+async findCompanyNameByUserId(userId: string): Promise<string> {
+  const userObjectId = new Types.ObjectId(userId);
+  
+  // البحث عن أول شركة تابعة لهذا المستخدم واختيار حقل companyName فقط
+  const company = await this.providerModel.findOne(
+    { userId: userObjectId },
+    { companyName: 1 } // اختيار حقل companyName فقط
+  ).exec();
+  
+  if (!company) {
+    throw new NotFoundException('No company found for this user.');
+  }
+  
+  return company.companyName;
+}
 }

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:flutter_application_1/screens/add_service_provider.dart';
+import 'package:flutter_application_1/services/service_service.dart';
 import 'showMore_provider.dart';
 import 'edit_service_provider.dart';
 
@@ -15,16 +16,15 @@ const Color kBackgroundColor = Colors.white;
 class ServicesProviderScreen extends StatefulWidget {
   const ServicesProviderScreen({Key? key}) : super(key: key);
 
-  // << NEW: لإرجاع كل الخدمات لأي شاشة ثانية (مثل الباكيجات)
-  static List<Map<String, dynamic>> get services =>
-      _ServicesProviderScreenState._services;
-
   @override
   State<ServicesProviderScreen> createState() => _ServicesProviderScreenState();
 }
 
 class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
-  static final List<Map<String, dynamic>> _services = [];
+  List<Map<String, dynamic>> _services = [];
+  bool _isLoading = true;
+  bool _hasError = false;
+  String _errorMessage = '';
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -33,34 +33,52 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
 
   DateTime? _lastUpdated;
 
-  final List<String> _categories = const [
-    'Venues',
-    'Photographers',
-    'Catering',
-    'Cake',
-    'Flower Shops',
-    'Makeup Artists',
-    'Music & DJ',
-    'Decor & Lighting',
-    'Other',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadServices();
+  }
 
-  final List<String> _cities = const [
-    'Nablus',
-    'Ramallah',
-    'Hebron',
-    'Jenin',
-    'Tulkarm',
-    'Qalqilya',
-    'Other',
-  ];
+ Future<void> _loadServices() async {
+    setState(() {
+      _isLoading = true;
+      _hasError = false; // A soft error (No services found) is not a hard error
+    });
+
+    try {
+      final services = await ServiceService.fetchMyServices();
+      setState(() {
+        _services = List<Map<String, dynamic>>.from(services);
+        _isLoading = false;
+        _lastUpdated = DateTime.now();
+      });
+    } catch (e) {
+      // ✅ التعديل هنا: معالجة حالة "لا توجد خدمات"
+      if (e.toString().contains('No services found for vendor ID')) {
+        setState(() {
+          _services = []; // تأكد أن القائمة فارغة
+          _isLoading = false;
+          _hasError = false; // لا نعتبرها خطأ جدي، بل حالة فارغة
+          // لا حاجة لتعيين _errorMessage لأننا سنعرض شاشة الـ Empty State
+        });
+      } else {
+        // إذا كان خطأ آخر، فاعرض شاشة الخطأ الحقيقية
+        setState(() {
+          _isLoading = false;
+          _hasError = true; // خطأ حقيقي
+          _errorMessage = e.toString();
+        });
+        print('Error loading services: $e');
+      }
+    }
+  }
 
   List<Map<String, dynamic>> get _filteredServices {
     List<Map<String, dynamic>> list = _services.toList();
 
     if (_searchQuery.isNotEmpty) {
       list = list.where((service) {
-        final name = (service['name'] ?? '').toString().toLowerCase();
+        final name = (service['serviceName'] ?? service['name'] ?? '').toString().toLowerCase();
         final cat = (service['category'] ?? '').toString().toLowerCase();
         final price = (service['price'] ?? '').toString();
         final q = _searchQuery.toLowerCase();
@@ -76,14 +94,14 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
 
     if (_sortOption == 'price_low') {
       list.sort(
-          (a, b) => (a['price'] as double).compareTo(b['price'] as double));
+          (a, b) => (a['price'] as num).compareTo(b['price'] as num));
     } else if (_sortOption == 'price_high') {
       list.sort(
-          (a, b) => (b['price'] as double).compareTo(a['price'] as double));
+          (a, b) => (b['price'] as num).compareTo(a['price'] as num));
     } else {
       list.sort((a, b) {
-        final da = (a['updatedAt'] ?? a['createdAt']) as DateTime;
-        final db = (b['updatedAt'] ?? b['createdAt']) as DateTime;
+        final da = DateTime.tryParse(a['updatedAt']?.toString() ?? a['createdAt']?.toString() ?? '') ?? DateTime.now();
+        final db = DateTime.tryParse(b['updatedAt']?.toString() ?? b['createdAt']?.toString() ?? '') ?? DateTime.now();
         return db.compareTo(da);
       });
     }
@@ -96,11 +114,10 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
   }
 
   Future<void> _refresh() async {
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    setState(() {});
+    await _loadServices();
   }
 
-  void _confirmDelete(int index) {
+  void _confirmDelete(int index, String serviceId) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -130,17 +147,39 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                 style: GoogleFonts.poppins(color: Colors.grey.shade700)),
           ),
           TextButton(
-            onPressed: () {
-              setState(() {
-                _services.removeAt(index);
-                _markUpdated();
-              });
+            onPressed: () async {
               Navigator.pop(context);
+              await _deleteService(serviceId, index);
             },
             child:
                 Text('Delete', style: GoogleFonts.poppins(color: Colors.red)),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _deleteService(String serviceId, int index) async {
+    try {
+      await ServiceService.deleteService(serviceId);
+      setState(() {
+        _services.removeAt(index);
+        _markUpdated();
+      });
+      _showSnackBar('Service deleted successfully');
+    } catch (e) {
+      _showSnackBar('Failed to delete service: ${e.toString()}', isError: true);
+      print('Error deleting service: $e');
+    }
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -153,17 +192,93 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: kBackgroundColor,
+        appBar: AppBar(
+          backgroundColor: kBackgroundColor,
+          elevation: 0,
+          centerTitle: true,
+          iconTheme: const IconThemeData(color: kTextColor),
+          title: Text(
+            'My Services',
+            style: GoogleFonts.poppins(
+              color: kTextColor,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(color: kPrimaryColor),
+        ),
+      );
+    }
+
+    if (_hasError) {
+      return Scaffold(
+        backgroundColor: kBackgroundColor,
+        appBar: AppBar(
+          backgroundColor: kBackgroundColor,
+          elevation: 0,
+          centerTitle: true,
+          iconTheme: const IconThemeData(color: kTextColor),
+          title: Text(
+            'My Services',
+            style: GoogleFonts.poppins(
+              color: kTextColor,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  'Failed to load services',
+                  style: GoogleFonts.poppins(
+                      fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _errorMessage,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                      fontSize: 14, color: Colors.grey.shade600),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _loadServices,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 32, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  child: Text('Retry',
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final total = _services.length;
     final activeCount = _services.where((s) => s['isActive'] == true).length;
     final hiddenCount = total - activeCount;
 
-    final lastUpdated = _lastUpdated ??
-        (_services.isNotEmpty
-            ? _services
-                .map<DateTime>(
-                    (s) => (s['updatedAt'] ?? s['createdAt']) as DateTime)
-                .reduce((a, b) => a.isAfter(b) ? a : b)
-            : null);
+    final lastUpdated = _lastUpdated;
 
     return Scaffold(
       backgroundColor: kBackgroundColor,
@@ -187,7 +302,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         actions: [
           IconButton(
             onPressed: () async {
-              final newService = await Navigator.push(
+              final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => AddServiceProviderScreen(
@@ -196,27 +311,8 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                 ),
               );
 
-              if (newService != null) {
-                setState(() {
-                  final service = Map<String, dynamic>.from(newService);
-                  service['views'] = 0;
-                  service['bookings'] = 0;
-                  service['likes'] = 0;
-                  service['createdAt'] = DateTime.now();
-                  service['updatedAt'] = DateTime.now();
-
-                  if (service['discount'] != null &&
-                      service['discount'].toString().isNotEmpty) {
-                    final p = service['price'] as double;
-                    final d = double.tryParse(service['discount']) ?? 0;
-                    service['finalPrice'] = p - (p * (d / 100));
-                  } else {
-                    service['finalPrice'] = service['price'];
-                  }
-
-                  _services.add(service);
-                  _markUpdated();
-                });
+              if (result == true) {
+                _loadServices();
               }
             },
             icon: const Icon(Icons.add),
@@ -251,11 +347,13 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                       itemBuilder: (context, index) {
                         final service = _filteredServices[index];
                         final originalIndex = _services.indexOf(service);
+                        final serviceId = service['_id'] ?? '';
 
                         return _ServiceCard(
                           service: service,
                           onEdit: () async {
-                            final updated = await Navigator.push(
+                            // Navigate to edit screen
+                            final result = await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => EditServiceProviderScreen(
@@ -263,25 +361,25 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                               ),
                             );
 
-                            if (updated != null) {
-                              setState(() {
-                                _services[originalIndex] = {
-                                  ..._services[originalIndex],
-                                  ...updated,
-                                  "updatedAt": DateTime.now(),
-                                };
-                              });
-                              _markUpdated();
+                            if (result == true) {
+                              _loadServices();
                             }
                           },
-                          onDelete: () => _confirmDelete(originalIndex),
-                          onToggleActive: (val) {
-                            setState(() {
-                              _services[originalIndex]['isActive'] = val;
-                              _services[originalIndex]['updatedAt'] =
-                                  DateTime.now();
-                              _markUpdated();
-                            });
+                          onDelete: () => _confirmDelete(originalIndex, serviceId),
+                          onToggleActive: (val) async {
+                            try {
+                              await ServiceService.updateService(
+                                serviceId,
+                                {'isActive': val},
+                              );
+                              setState(() {
+                                _services[originalIndex]['isActive'] = val;
+                                _markUpdated();
+                              });
+                              _showSnackBar('Service visibility updated');
+                            } catch (e) {
+                              _showSnackBar('Failed to update service: ${e.toString()}', isError: true);
+                            }
                           },
                         );
                       },
@@ -399,7 +497,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
             const SizedBox(height: 18),
             ElevatedButton(
               onPressed: () async {
-                final newService = await Navigator.push(
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => AddServiceProviderScreen(
@@ -408,27 +506,8 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                   ),
                 );
 
-                if (newService != null) {
-                  setState(() {
-                    final service = Map<String, dynamic>.from(newService);
-                    service['views'] = 0;
-                    service['bookings'] = 0;
-                    service['likes'] = 0;
-                    service['createdAt'] = DateTime.now();
-                    service['updatedAt'] = DateTime.now();
-
-                    if (service['discount'] != null &&
-                        service['discount'].toString().isNotEmpty) {
-                      final p = service['price'] as double;
-                      final d = double.tryParse(service['discount']) ?? 0;
-                      service['finalPrice'] = p - (p * (d / 100));
-                    } else {
-                      service['finalPrice'] = service['price'];
-                    }
-
-                    _services.add(service);
-                    _markUpdated();
-                  });
+                if (result == true) {
+                  _loadServices();
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -534,6 +613,9 @@ class _ServiceCard extends StatelessWidget {
       finalPrice = originalPrice - (originalPrice * (d / 100));
     }
 
+    final serviceName = service['serviceName'] ?? service['name'] ?? '';
+    final description = service['additionalInfo']?['description'] ?? service['fullDescription'] ?? '';
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
@@ -585,9 +667,15 @@ class _ServiceCard extends StatelessWidget {
                       child: PageView.builder(
                         itemCount: images.length,
                         itemBuilder: (context, index) {
-                          return Image.file(
-                            File(images[index]),
+                          return Image.network(
+                            images[index],
                             fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.broken_image, size: 48),
+                              );
+                            },
                           );
                         },
                       ),
@@ -639,7 +727,7 @@ class _ServiceCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          service['name'] ?? '',
+                          serviceName,
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -682,7 +770,7 @@ class _ServiceCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    service['fullDescription'] ?? '',
+                    description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
@@ -713,7 +801,6 @@ class _ServiceCard extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      // تمت إزالة أيقونة العين (views) فقط
                       _StatChip(
                           icon: Icons.calendar_month_outlined,
                           value: '${service['bookings'] ?? 0}'),

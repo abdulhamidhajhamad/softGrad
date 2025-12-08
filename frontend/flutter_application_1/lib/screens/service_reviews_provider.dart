@@ -1,6 +1,5 @@
 // lib/screens/service_reviews_provider.dart
 
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -90,8 +89,8 @@ class ServiceReviewsProviderScreen extends StatelessWidget {
                     child: SizedBox(
                       height: 150,
                       width: double.infinity,
-                      child: Image.file(
-                        File(images.first),
+                      child: Image.network(
+                        images.first,
                         fit: BoxFit.cover,
                       ),
                     ),

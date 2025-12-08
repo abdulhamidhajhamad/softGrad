@@ -1,6 +1,5 @@
 // lib/screens/showMore_provider.dart
 
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'full_image_viewer_provider.dart';
@@ -155,8 +154,8 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                             )
                           : PageView.builder(
                               itemCount: images.length,
-                              itemBuilder: (_, i) => Image.file(
-                                File(images[i]),
+                              itemBuilder: (_, i) => Image.network(
+                                images[i],
                                 fit: BoxFit.cover,
                               ),
                             ),

@@ -664,8 +664,8 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                     child: SizedBox(
                       width: 90,
                       height: 90,
-                      child: Image.file(
-                        File(_images.first),
+                      child: Image.network(
+                        _images.first,
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -1018,8 +1018,8 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                 ),
               ],
             ),
-            child: Image.file(
-              File(path),
+            child: Image.network(
+              _images.first,
               fit: BoxFit.cover,
             ),
           ),

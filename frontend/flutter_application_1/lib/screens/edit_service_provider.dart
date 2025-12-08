@@ -71,8 +71,13 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     _brandCtrl = TextEditingController(text: s['brand'] ?? "");
     _taglineCtrl = TextEditingController(text: s['tagline'] ?? "");
     _addressCtrl = TextEditingController(text: s['address'] ?? "");
-    _shortDescCtrl = TextEditingController(text: s['shortDescription'] ?? "");
-    _fullDescCtrl = TextEditingController(text: s['fullDescription'] ?? "");
+
+    // وصف واحد موحّد
+    final descText =
+        (s['fullDescription'] ?? s['shortDescription'] ?? "").toString();
+    _shortDescCtrl = TextEditingController(text: descText);
+    _fullDescCtrl = TextEditingController(text: descText);
+
     _cityCtrl = TextEditingController(text: s['city'] ?? "");
     _categoryCtrl = TextEditingController(text: s['category'] ?? "");
     _priceCtrl = TextEditingController(text: s['price']?.toString() ?? "");
@@ -116,7 +121,9 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
   }
 
   void _addHighlight() {
-    final ctrl = TextEditingController();
+    final keyCtrl = TextEditingController();
+    final valueCtrl = TextEditingController();
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -125,11 +132,25 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
           "Add Highlight",
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(
-            hintText: "e.g. 4K Cinematic Coverage",
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: keyCtrl,
+              decoration: const InputDecoration(
+                labelText: "Key",
+                hintText: "e.g. Website",
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: valueCtrl,
+              decoration: const InputDecoration(
+                labelText: "Value",
+                hintText: "e.g. https://example.com",
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -139,8 +160,12 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
           ),
           TextButton(
             onPressed: () {
-              if (ctrl.text.trim().isNotEmpty) {
-                setState(() => _highlights.add(ctrl.text.trim()));
+              final key = keyCtrl.text.trim();
+              final value = valueCtrl.text.trim();
+              if (key.isNotEmpty || value.isNotEmpty) {
+                final combined =
+                    value.isNotEmpty ? "$key • $value" : key; // نص واحد
+                setState(() => _highlights.add(combined));
               }
               Navigator.pop(context);
             },
@@ -160,13 +185,16 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
   void _save() {
     if (!_formKey.currentState!.validate()) return;
 
+    final desc = _fullDescCtrl.text.trim();
+
     final updatedData = {
       "name": _nameCtrl.text.trim(),
       "brand": _brandCtrl.text.trim(),
       "tagline": _taglineCtrl.text.trim(),
       "address": _addressCtrl.text.trim(),
-      "shortDescription": _shortDescCtrl.text.trim(),
-      "fullDescription": _fullDescCtrl.text.trim(),
+      // وصف واحد يُخزّن في الاثنين
+      "shortDescription": desc,
+      "fullDescription": desc,
       "city": _cityCtrl.text.trim(),
       "category": _categoryCtrl.text.trim(),
       "price": double.tryParse(_priceCtrl.text.trim()) ?? 0,
@@ -365,15 +393,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                   const SizedBox(height: 12),
                   _label("Service Name"),
                   _textField(_nameCtrl, hint: "e.g., Luxe Wedding Photography"),
-                  const SizedBox(height: 12),
-                  _label("Brand"),
-                  _textField(_brandCtrl, hint: "Your brand name"),
-                  const SizedBox(height: 12),
-                  _label("Tagline"),
-                  _textField(
-                    _taglineCtrl,
-                    hint: "e.g., \"Capturing your forever moments\"",
-                  ),
+                  // تم الإبقاء على الكود، لكن تم إزالة حقول Brand و Tagline من الواجهة فقط
                 ],
               ),
             ),
@@ -465,21 +485,13 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _sectionTitle("Descriptions"),
+                  _sectionTitle("Description"),
                   const SizedBox(height: 12),
-                  _label("Short Description"),
-                  _textField(
-                    _shortDescCtrl,
-                    hint: "A short intro that appears in cards…",
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 12),
-                  _label("Full Description"),
+                  _label("Description"),
                   _textField(
                     _fullDescCtrl,
                     hint: "Explain everything about your service…",
                     maxLines: 5,
-                    required: false,
                   ),
                 ],
               ),

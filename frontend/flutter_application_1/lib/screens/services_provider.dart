@@ -1,5 +1,3 @@
-// lib/screens/services_provider.dart
-
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -16,6 +14,10 @@ const Color kBackgroundColor = Colors.white;
 
 class ServicesProviderScreen extends StatefulWidget {
   const ServicesProviderScreen({Key? key}) : super(key: key);
+
+  // << NEW: لإرجاع كل الخدمات لأي شاشة ثانية (مثل الباكيجات)
+  static List<Map<String, dynamic>> get services =>
+      _ServicesProviderScreenState._services;
 
   @override
   State<ServicesProviderScreen> createState() => _ServicesProviderScreenState();
@@ -189,7 +191,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (_) => AddServiceProviderScreen(
-                    existingData: null, // ← ← ← التعديل الوحيد
+                    existingData: null,
                   ),
                 ),
               );
@@ -401,7 +403,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (_) => AddServiceProviderScreen(
-                      existingData: null, // ← ← ← التعديل فقط
+                      existingData: null,
                     ),
                   ),
                 );
@@ -680,7 +682,7 @@ class _ServiceCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    service['shortDescription'] ?? '',
+                    service['fullDescription'] ?? '',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
@@ -711,10 +713,7 @@ class _ServiceCard extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      _StatChip(
-                          icon: Icons.visibility_outlined,
-                          value: '${service['views'] ?? 0}'),
-                      const SizedBox(width: 6),
+                      // تمت إزالة أيقونة العين (views) فقط
                       _StatChip(
                           icon: Icons.calendar_month_outlined,
                           value: '${service['bookings'] ?? 0}'),

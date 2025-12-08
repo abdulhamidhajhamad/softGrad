@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 
 class PackagesProviderScreen extends StatefulWidget {
+  /// قائمة الخدمات القادمة من شاشة الخدمات
+  /// كل عنصر Map فيه على الأقل:  name  , price
   final List<Map<String, dynamic>> services;
 
   const PackagesProviderScreen({

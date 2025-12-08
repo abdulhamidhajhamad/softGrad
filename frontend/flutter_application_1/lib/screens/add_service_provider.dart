@@ -9,6 +9,7 @@ const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kBackgroundColor = Color(0xFFF3F4F6);
 const Color kTextColor = Color(0xFF111827);
 
+// الخدمة + الأيقونة (نفس اللي عندك في Become a Provider)
 const List<Map<String, dynamic>> kServiceCategories = [
   {
     'value': 'Venues',
@@ -117,7 +118,10 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
   bool _isVisible = true;
 
   List<String> _images = [];
-  List<String> _highlights = [];
+
+  // صارت key–value: title + url
+  List<Map<String, dynamic>> _highlights = [];
+
   List<Map<String, dynamic>> _packages = [];
 
   @override
@@ -131,8 +135,11 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
       _brandCtrl.text = d["brand"] ?? "";
       _taglineCtrl.text = d["tagline"] ?? "";
       _addressCtrl.text = d["address"] ?? "";
-      _shortDescCtrl.text = d["shortDescription"] ?? "";
-      _fullDescCtrl.text = d["fullDescription"] ?? "";
+
+      // دمج الـ short و full في description واحد
+      _fullDescCtrl.text = d["fullDescription"] ?? d["shortDescription"] ?? "";
+      _shortDescCtrl.text = d["fullDescription"] ?? d["shortDescription"] ?? "";
+
       _priceCtrl.text = d["price"]?.toString() ?? "";
       _discountCtrl.text = d["discount"]?.toString() ?? "";
 
@@ -142,7 +149,29 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
       _isVisible = d["isActive"] ?? true;
 
       _images = List<String>.from(d["images"] ?? []);
-      _highlights = List<String>.from(d["highlights"] ?? []);
+
+      // دعم القديم (List<String>) والجديد (List<Map<String, dynamic>>)
+      final rawHighlights = d["highlights"];
+      if (rawHighlights is List) {
+        _highlights = rawHighlights.map<Map<String, dynamic>>((h) {
+          if (h is Map<String, dynamic>) {
+            return {
+              "title": (h["title"] ?? "").toString(),
+              "url": (h["url"] ?? "").toString(),
+            };
+          } else if (h is Map) {
+            final map = Map<String, dynamic>.from(h);
+            return {
+              "title": (map["title"] ?? "").toString(),
+              "url": (map["url"] ?? "").toString(),
+            };
+          } else {
+            // لو كان String قديم نخليه title فقط
+            return {"title": h.toString(), "url": ""};
+          }
+        }).toList();
+      }
+
       _packages = List<Map<String, dynamic>>.from(d["packages"] ?? []);
     }
   }
@@ -155,7 +184,8 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
   }
 
   void _addHighlight() {
-    final ctrl = TextEditingController();
+    final titleCtrl = TextEditingController();
+    final urlCtrl = TextEditingController();
 
     showDialog(
       context: context,
@@ -163,19 +193,41 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text("Add Highlight",
             style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-        content: TextField(
-          controller: ctrl,
-          style: GoogleFonts.poppins(fontSize: 14),
-          decoration: InputDecoration(
-            hintText: "e.g. 4K Cinematic Coverage",
-            hintStyle:
-                GoogleFonts.poppins(fontSize: 13, color: Colors.grey[500]),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              style: GoogleFonts.poppins(fontSize: 14),
+              decoration: InputDecoration(
+                labelText: "Title / Website",
+                hintText: "e.g. Official Website",
+                hintStyle:
+                    GoogleFonts.poppins(fontSize: 13, color: Colors.grey[500]),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
             ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: urlCtrl,
+              style: GoogleFonts.poppins(fontSize: 14),
+              decoration: InputDecoration(
+                labelText: "URL",
+                hintText: "e.g. https://example.com",
+                hintStyle:
+                    GoogleFonts.poppins(fontSize: 13, color: Colors.grey[500]),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+            ),
+          ],
         ),
         actionsPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -200,8 +252,13 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
               elevation: 0,
             ),
             onPressed: () {
-              if (ctrl.text.trim().isNotEmpty) {
-                setState(() => _highlights.add(ctrl.text.trim()));
+              final title = titleCtrl.text.trim();
+              final url = urlCtrl.text.trim();
+              if (title.isNotEmpty || url.isNotEmpty) {
+                setState(() => _highlights.add({
+                      "title": title,
+                      "url": url,
+                    }));
               }
               Navigator.pop(context);
             },
@@ -365,8 +422,11 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
       "brand": _brandCtrl.text,
       "tagline": _taglineCtrl.text,
       "address": _addressCtrl.text,
-      "shortDescription": _shortDescCtrl.text,
+
+      // Description واحدة تُحفظ في الاثنين
+      "shortDescription": _fullDescCtrl.text,
       "fullDescription": _fullDescCtrl.text,
+
       "category": _selectedCategory ?? "",
       "city": _selectedCity ?? "",
       "priceType": _priceType ?? "",
@@ -374,7 +434,10 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
       "price": double.tryParse(_priceCtrl.text) ?? 0,
       "discount": _discountCtrl.text,
       "images": _images,
+
+      // الآن عبارة عن List<Map<String, dynamic>>
       "highlights": _highlights,
+
       "packages": _packages,
     };
 
@@ -502,13 +565,12 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                       ),
                       const SizedBox(height: 14),
                       _buildInput("Name", _nameCtrl),
-                      _buildInput("Brand", _brandCtrl),
-                      _buildInput("Tagline", _taglineCtrl),
+                      // تم حذف حقول Brand و Tagline من الواجهة فقط
                     ],
                   ),
                 ),
 
-                // Description card
+                // Description card (حقل واحد فقط)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -540,12 +602,12 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      _buildInput("Short Description", _shortDescCtrl),
-                      _buildInput("Full Description", _fullDescCtrl),
+                      _buildInput("Description", _fullDescCtrl),
                     ],
                   ),
                 ),
 
+                // Pricing & Location (Address + City جنب بعض, price + discount + نوع السعر + الكاتيجوري)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -797,7 +859,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                   ),
                 ),
 
-                // Highlights & packages + visibility
+                // Highlights + visibility (تم حذف قسم Packages فقط)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -864,82 +926,29 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                                         size: 16, color: Color(0xFFF59E0B)),
                                     const SizedBox(width: 6),
                                     Expanded(
-                                      child: Text(
-                                        h,
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          color: kTextColor,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Text(
-                            "Packages",
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: kTextColor,
-                            ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            onPressed: _addPackage,
-                            icon: const Icon(Icons.add_circle_outline_rounded,
-                                size: 20, color: kPrimaryColor),
-                          ),
-                        ],
-                      ),
-                      if (_packages.isEmpty)
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            "Add packages (e.g. Gold, Silver, Basic).",
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ),
-                      if (_packages.isNotEmpty)
-                        Column(
-                          children: [
-                            const SizedBox(height: 4),
-                            for (final p in _packages)
-                              Container(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF9FAFB),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                      color: const Color(0xFFE5E7EB)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        p["name"],
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                          color: kTextColor,
-                                        ),
-                                      ),
-                                    ),
-                                    Text(
-                                      "₪${p["price"]}",
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: kPrimaryColor,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            (h["title"] ?? "").toString(),
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 12,
+                                              color: kTextColor,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          if ((h["url"] ?? "")
+                                              .toString()
+                                              .isNotEmpty)
+                                            Text(
+                                              (h["url"] ?? "").toString(),
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 11,
+                                                color: Colors.grey[600],
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -1016,7 +1025,8 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
         controller: ctrl,
         keyboardType: isNumber ? TextInputType.number : TextInputType.text,
         style: GoogleFonts.poppins(fontSize: 14, color: kTextColor),
-        maxLines: label == "Full Description" ? 3 : 1,
+        maxLines:
+            (label == "Full Description" || label == "Description") ? 3 : 1,
         decoration: _inputDecoration(label),
       ),
     );

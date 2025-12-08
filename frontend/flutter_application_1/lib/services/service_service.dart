@@ -19,7 +19,8 @@ class ServiceService {
       }
 
       final response = await http.get(
-        Uri.parse('$baseUrl/services/my-services'), // الـ Endpoint لجلب خدمات المستخدم الموثق
+        Uri.parse(
+            '$baseUrl/services/my-services'), // الـ Endpoint لجلب خدمات المستخدم الموثق
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -43,14 +44,14 @@ class ServiceService {
   // --------------------------------------------------------------------------
 
   // ====================== 2. إضافة خدمة جديدة مع دعم الصور (POST /services) =========================
-static Future<Map<String, dynamic>> addService({
+  static Future<Map<String, dynamic>> addService({
     required String title,
     required String description,
     required double price,
     required List<Map<String, String>> highlights,
     required List<Map<String, dynamic>> imageFilesData,
     required String category,
-    required String priceType, 
+    required String priceType,
     double? latitude, // القيمة المتوفرة من شاشة الإدخال
     double? longitude, // القيمة المتوفرة من شاشة الإدخال
     required String address,
@@ -72,53 +73,53 @@ static Future<Map<String, dynamic>> addService({
       });
 
       // 2. إعداد حقول النص وإرسالها كـ JSON في حقل 'data'
-      
+
       // ✅ تجهيز كائن الموقع (location object) بناءً على Schema الجديد
       final Map<String, dynamic> locationData = {
-          'latitude': latitude ?? 0.0, 
-          'longitude': longitude ?? 0.0,
-          'address': address, // يرسل لتحديد الموقع لاحقاً
-          'city': city, // يرسل
+        'latitude': latitude ?? 0.0,
+        'longitude': longitude ?? 0.0,
+        'address': address, // يرسل لتحديد الموقع لاحقاً
+        'city': city, // يرسل
       };
-      
+
       final createServiceDtoForJson = {
-        'serviceName': title, 
+        'serviceName': title,
         'description': description,
-        'price': price, 
+        'price': price,
         'category': category,
-        'priceType': priceType, 
+        'priceType': priceType,
         'location': locationData, // تمرير كائن الموقع المجهز
         'highlights': highlights,
         "companyName": companyName,
       };
       request.fields['data'] = jsonEncode(createServiceDtoForJson);
 
-
       for (var fileData in imageFilesData) {
         final List<int> fileBytes = fileData['bytes'] as List<int>;
         final String fileName = fileData['name'] as String;
 
         if (fileBytes.isNotEmpty) {
-            request.files.add(
-                http.MultipartFile.fromBytes(
-                    'images', 
-                    fileBytes,
-                    filename: fileName,
-                ),
-            );
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'images',
+              fileBytes,
+              filename: fileName,
+            ),
+          );
         }
       }
 
       // 4. إرسال الطلب واستقبال الرد
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
-      
+
       final responseBody = jsonDecode(response.body);
 
       if (response.statusCode == 201) {
         return responseBody;
       } else {
-        final errorMessage = responseBody['message'] ?? 'Failed to create service.';
+        final errorMessage =
+            responseBody['message'] ?? 'Failed to create service.';
         throw Exception(errorMessage);
       }
     } catch (e) {
@@ -129,7 +130,7 @@ static Future<Map<String, dynamic>> addService({
 
   // --------------------------------------------------------------------------
 
- // ====================== 3. حذف خدمة (DELETE /services/:id) =========================
+  // ====================== 3. حذف خدمة (DELETE /services/:id) =========================
   static Future<void> deleteService(String serviceId) async {
     try {
       final token = await AuthService.getToken(); // 🔑 جلب رمز المصادقة
@@ -141,7 +142,8 @@ static Future<Map<String, dynamic>> addService({
         Uri.parse('$baseUrl/services/id/$serviceId'), // الـ Endpoint للحذف
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token', // ✅ إضافة رمز المصادقة للتحقق من الإذن
+          'Authorization':
+              'Bearer $token', // ✅ إضافة رمز المصادقة للتحقق من الإذن
         },
       );
 
@@ -151,8 +153,7 @@ static Future<Map<String, dynamic>> addService({
       } else {
         // ❌ فشل: التعامل مع رسالة الخطأ
         final errorData = jsonDecode(response.body);
-        throw Exception(
-            errorData['message'] ?? 'Failed to delete service.');
+        throw Exception(errorData['message'] ?? 'Failed to delete service.');
       }
     } catch (e) {
       print('❌ Error in deleteService: $e');
@@ -164,9 +165,7 @@ static Future<Map<String, dynamic>> addService({
 
   // ====================== 4. تحديث خدمة جزئياً (PATCH /services/:id) =========================
   // تُستخدم لتحديث أي حقل، وغالباً ما تستخدم لتغيير حالة isActive
-  
-  
-  
+
   static Future<Map<String, dynamic>> updateService(
       String serviceId, Map<String, dynamic> updateData) async {
     try {
@@ -190,8 +189,7 @@ static Future<Map<String, dynamic>> addService({
       if (response.statusCode == 200) {
         return responseBody;
       } else {
-        throw Exception(
-            responseBody['message'] ?? 'Failed to update service.');
+        throw Exception(responseBody['message'] ?? 'Failed to update service.');
       }
     } catch (e) {
       print('❌ Error in updateService: $e');
@@ -208,7 +206,7 @@ static Future<Map<String, dynamic>> addService({
 
       final response = await http.get(
         // استخدام نهاية النقطة التي حددتها
-        Uri.parse('$baseUrl/providers/my-company-name'), 
+        Uri.parse('$baseUrl/providers/my-company-name'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -227,7 +225,8 @@ static Future<Map<String, dynamic>> addService({
         // التعامل مع رسائل الخطأ الأخرى
         final errorData = jsonDecode(response.body);
         print('Failed to fetch company name: ${errorData['message']}');
-        throw Exception(errorData['message'] ?? 'Failed to fetch company name.');
+        throw Exception(
+            errorData['message'] ?? 'Failed to fetch company name.');
       }
     } catch (e) {
       print('Error fetching company name: $e');
@@ -256,7 +255,8 @@ static Future<Map<String, dynamic>> addService({
       } else {
         // ❌ فشل: التعامل مع رسالة الخطأ
         final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? 'Failed to fetch service details.');
+        throw Exception(
+            errorData['message'] ?? 'Failed to fetch service details.');
       }
     } catch (e) {
       print('❌ Error in getServiceById: $e');
@@ -264,17 +264,16 @@ static Future<Map<String, dynamic>> addService({
     }
   }
 
-
-static Future<String> uploadImageFile(String filePath) async {
+  static Future<String> uploadImageFile(String filePath) async {
     try {
       final token = await AuthService.getToken();
       if (token == null) {
         throw Exception('Authentication token not found.');
       }
-      
-      // ⚠️ يجب التأكد من أن هذا هو الـ Endpoint الصحيح لرفع الملفات لديك 
+
+      // ⚠️ يجب التأكد من أن هذا هو الـ Endpoint الصحيح لرفع الملفات لديك
       // الـ Backend هو من يقوم بالتعامل مع Supabase الآن.
-      final url = Uri.parse('$baseUrl/upload/service-image'); 
+      final url = Uri.parse('$baseUrl/upload/service-image');
       final request = http.MultipartRequest('POST', url);
       request.headers.addAll({
         'Authorization': 'Bearer $token',
@@ -292,11 +291,12 @@ static Future<String> uploadImageFile(String filePath) async {
       if (response.statusCode == 201 || response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
         // ⚠️ يجب التأكد من أن الخادم يعيد الرابط في هذا المفتاح (نستخدم 'url' كافتراض)
-        final imageUrl = responseData['url']; 
+        final imageUrl = responseData['url'];
         if (imageUrl != null) {
           return imageUrl;
         } else {
-          throw Exception('Image upload succeeded, but URL not returned by server.');
+          throw Exception(
+              'Image upload succeeded, but URL not returned by server.');
         }
       } else {
         final errorData = jsonDecode(response.body);

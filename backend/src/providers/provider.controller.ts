@@ -40,6 +40,13 @@ export class ProviderController {
     return this.providerService.update(userId, companyName, dto);
   }
 
+  @Get('my-company-name')
+  async getCompanyName(@Req() req): Promise<{ companyName: string }> {
+    const userId = req.user.userId;
+    const companyName = await this.providerService.findCompanyNameByUserId(userId);
+    return { companyName };
+  }
+  
   @Delete(':companyName')
   async remove(@Req() req, @Param('companyName') companyName: string): Promise<DeleteResult> {
     const userId = req.user.userId;

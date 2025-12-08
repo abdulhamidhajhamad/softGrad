@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/auth_service.dart'; // استخدام AuthService
 import 'package:flutter_application_1/screens/home_provider.dart'; // استيراد شاشة لوحة التحكم
-import 'package:flutter_application_1/services/vendor_auth_service.dart'; 
+import 'package:flutter_application_1/services/vendor_auth_service.dart';
 // يجب أن يكون لديك تعريف لـ ProviderModel في ملف HomeProviderScreen أو آخر.
 
 class SignUpProviderScreen extends StatefulWidget {
@@ -22,7 +22,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
   final _brandCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-  final _bioCtrl = TextEditingController(); 
+  final _bioCtrl = TextEditingController();
   final _otherCityCtrl = TextEditingController();
 
   // Dropdowns
@@ -36,7 +36,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
     'Other',
   ];
   String? _selectedCity;
-  
+
   bool _isLoading = false;
 
   @override
@@ -47,7 +47,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
 
   Future<void> _testConnection() async {
     print('🔗 Testing vendor connection to server...');
-    await AuthService.testConnection(); 
+    await AuthService.testConnection();
   }
 
   @override
@@ -55,7 +55,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
     _brandCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
-    _bioCtrl.dispose(); 
+    _bioCtrl.dispose();
     _otherCityCtrl.dispose();
     super.dispose();
   }
@@ -103,10 +103,10 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
       );
 
   // ======================================================
-  // Submit → API Call 
+  // Submit → API Call
   // ======================================================
   Future<void> _submit() async {
-    if (_formKey.currentState!.validate()) { 
+    if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
       });
@@ -117,9 +117,9 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
           companyName: _brandCtrl.text.trim(),
           email: _emailCtrl.text.trim(),
           phone: _phoneCtrl.text.trim(),
-          city: _selectedCity == "Other" 
-                ? _otherCityCtrl.text.trim() 
-                : _selectedCity!,
+          city: _selectedCity == "Other"
+              ? _otherCityCtrl.text.trim()
+              : _selectedCity!,
           description: _bioCtrl.text.trim(),
         );
 
@@ -130,23 +130,25 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
           '/signin', // 🔑 المسار المباشر الجديد
           // لا تحتاج arguments في الغالب لشاشة لوحة التحكم
         );
-          
       } catch (e) {
         String errorMessage = 'An error occurred during provider registration.';
-        
+
         if (e.toString().contains('already have a company')) {
-          errorMessage = 'You already have a company registered with this name.';
+          errorMessage =
+              'You already have a company registered with this name.';
         } else if (e.toString().contains('Authentication token not found')) {
-          errorMessage = 'Session expired. Please sign in again before completing provider registration.';
+          errorMessage =
+              'Session expired. Please sign in again before completing provider registration.';
         } else if (e.toString().contains('Network error')) {
           errorMessage = 'Network error. Please check your connection.';
         } else {
-           // رسالة خطأ عامة أخرى
-          errorMessage = 'Registration failed: ${e.toString().split(':')[1].trim()}'; 
+          // رسالة خطأ عامة أخرى
+          errorMessage =
+              'Registration failed: ${e.toString().split(':')[1].trim()}';
         }
-        
+
         _showErrorDialog(errorMessage);
-        await AuthService.deleteToken(); 
+        await AuthService.deleteToken();
       } finally {
         setState(() {
           _isLoading = false;
@@ -287,7 +289,7 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                 const SizedBox(height: 8),
                 TextFormField(
                   autovalidateMode: AutovalidateMode.onUserInteraction,
-                  controller: _bioCtrl, 
+                  controller: _bioCtrl,
                   maxLines: 4,
                   maxLength: 2000,
                   decoration: _decor(
@@ -368,7 +370,8 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
                         : Text(
@@ -396,13 +399,16 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                     InkWell(
                       onTap: _isLoading
                           ? null
-                          : () => Navigator.pushReplacementNamed(context, '/signin'),
+                          : () => Navigator.pushReplacementNamed(
+                              context, '/signin'),
                       child: Text(
                         ' Sign In',
                         style: GoogleFonts.poppins(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: _isLoading ? Colors.grey.shade400 : kPrimaryButtonColor,
+                          color: _isLoading
+                              ? Colors.grey.shade400
+                              : kPrimaryButtonColor,
                         ),
                       ),
                     ),

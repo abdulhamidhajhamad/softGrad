@@ -110,6 +110,10 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
   final _priceCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
 
+  // ⬇⬇ Controllers للـ Longitude / Latitude
+  final _longCtrl = TextEditingController();
+  final _latCtrl = TextEditingController();
+
   final picker = ImagePicker();
 
   String? _selectedCategory; // بدون default
@@ -149,6 +153,11 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
       _isVisible = d["isActive"] ?? true;
 
       _images = List<String>.from(d["images"] ?? []);
+
+      // ⬇⬇ تحميل القيم القديمة للـ Lat / Long لو موجودة
+      _longCtrl.text =
+          d["longitude"]?.toString() ?? d["long"]?.toString() ?? "";
+      _latCtrl.text = d["latitude"]?.toString() ?? d["lat"]?.toString() ?? "";
 
       // دعم القديم (List<String>) والجديد (List<Map<String, dynamic>>)
       final rawHighlights = d["highlights"];
@@ -432,8 +441,13 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
       "priceType": _priceType ?? "",
       "isActive": _isVisible,
       "price": double.tryParse(_priceCtrl.text) ?? 0,
+
       "discount": _discountCtrl.text,
       "images": _images,
+
+      // ⬇⬇ حفظ الـ Lat / Long
+      "longitude": double.tryParse(_longCtrl.text),
+      "latitude": double.tryParse(_latCtrl.text),
 
       // الآن عبارة عن List<Map<String, dynamic>>
       "highlights": _highlights,
@@ -669,7 +683,23 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 8),
+
+                      // Longitude + Latitude
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildInput("Longitude", _longCtrl,
+                                isNumber: true),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildInput("Latitude", _latCtrl,
+                                isNumber: true),
+                          ),
+                        ],
+                      ),
 
                       // Price + Discount
                       Row(
@@ -830,7 +860,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                                   color: const Color(0xFFF3F4F6),
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
-                                    color: const Color(0xFFD1D5DB),
+                                    color: Color(0xFFD1D5DB),
                                     width: 1,
                                     style: BorderStyle.solid,
                                   ),

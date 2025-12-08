@@ -216,13 +216,13 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                 Text(
                   'Complete Provider Registration',
                   style: GoogleFonts.poppins(
-                    fontSize: 23,
+                    fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: kTextColor,
                     height: 0.8,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 17),
                 Text(
                   'Enter your business details to complete registration.',
                   style: GoogleFonts.poppins(

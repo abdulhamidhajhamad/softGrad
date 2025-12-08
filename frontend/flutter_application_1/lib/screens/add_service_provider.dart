@@ -4,12 +4,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_application_1/services/service_service.dart';
+import 'dart:typed_data'; // 💡 إضافة ضرورية للتعامل مع MemoryImage (لحل مشكلة الويب)
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kBackgroundColor = Color(0xFFF3F4F6);
 const Color kTextColor = Color(0xFF111827);
 
-// الخدمة + الأيقونة (نفس اللي عندك في Become a Provider)
 const List<Map<String, dynamic>> kServiceCategories = [
   {
     'value': 'Venues',
@@ -73,7 +74,6 @@ const List<Map<String, dynamic>> kServiceCategories = [
   },
 ];
 
-// المدن (عدليهم لو بدك)
 const List<String> kCities = [
   'Nablus',
   'Ramallah',
@@ -109,24 +109,35 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
   final _fullDescCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
-
-  // ⬇⬇ Controllers للـ Longitude / Latitude
-  final _longCtrl = TextEditingController();
-  final _latCtrl = TextEditingController();
+  final _latitudeCtrl = TextEditingController();
+  final _longitudeCtrl = TextEditingController();
 
   final picker = ImagePicker();
 
-  String? _selectedCategory; // بدون default
-  String? _selectedCity; // بدون default
-  String? _priceType; // Per Event / Per Hour / Per Person
+  String? _selectedCategory;
+  String? _selectedCity;
+  String? _priceType;
   bool _isVisible = true;
+  bool _isLoading = false;
 
-  List<String> _images = [];
-
-  // صارت key–value: title + url
+// 1. لتخزين الصور الجديدة التي تم اختيارها فقط (قبل رفعها)
+  List<Map<String, dynamic>> _images = [];
+  // 2. 💡 جديد: لتخزين روابط الصور القديمة التي جُلبت من الـ Backend
+  List<String> _existingImageUrls = [];
   List<Map<String, dynamic>> _highlights = [];
-
   List<Map<String, dynamic>> _packages = [];
+
+  void _showLoadingSnackBar(String message, {bool isError = false}) {
+    // نستخدم الألوان الافتراضية للتطبيق (kPrimaryColor و Colors.red)
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : kPrimaryColor,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -135,32 +146,40 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
     if (widget.existingData != null) {
       final d = widget.existingData!;
 
-      _nameCtrl.text = d["name"] ?? "";
-      _brandCtrl.text = d["brand"] ?? "";
+      _nameCtrl.text = d["name"] ?? d["serviceName"] ?? "";
+      _brandCtrl.text = d["brand"] ?? d["companyName"] ?? "";
       _taglineCtrl.text = d["tagline"] ?? "";
-      _addressCtrl.text = d["address"] ?? "";
+      _addressCtrl.text = d["address"] ?? d["location"]?["address"] ?? "";
 
-      // دمج الـ short و full في description واحد
-      _fullDescCtrl.text = d["fullDescription"] ?? d["shortDescription"] ?? "";
-      _shortDescCtrl.text = d["fullDescription"] ?? d["shortDescription"] ?? "";
+      _latitudeCtrl.text =
+          (d["latitude"] ?? d["location"]?["latitude"])?.toString() ?? "";
+      _longitudeCtrl.text =
+          (d["longitude"] ?? d["location"]?["longitude"])?.toString() ?? "";
+
+      _fullDescCtrl.text = d["fullDescription"] ??
+          d["additionalInfo"]?["description"] ??
+          d["shortDescription"] ??
+          "";
+      _shortDescCtrl.text = d["fullDescription"] ??
+          d["additionalInfo"]?["description"] ??
+          d["shortDescription"] ??
+          "";
 
       _priceCtrl.text = d["price"]?.toString() ?? "";
       _discountCtrl.text = d["discount"]?.toString() ?? "";
 
-      _selectedCity = d["city"];
+      _selectedCity = d["city"] ?? d["location"]?["city"];
       _selectedCategory = d["category"];
       _priceType = d["priceType"];
       _isVisible = d["isActive"] ?? true;
 
-      _images = List<String>.from(d["images"] ?? []);
+      if (d['images'] is List) {
+        _existingImageUrls =
+            List<String>.from(d["images"]?.cast<String>() ?? []);
+      }
 
-      // ⬇⬇ تحميل القيم القديمة للـ Lat / Long لو موجودة
-      _longCtrl.text =
-          d["longitude"]?.toString() ?? d["long"]?.toString() ?? "";
-      _latCtrl.text = d["latitude"]?.toString() ?? d["lat"]?.toString() ?? "";
-
-      // دعم القديم (List<String>) والجديد (List<Map<String, dynamic>>)
-      final rawHighlights = d["highlights"];
+      final rawHighlights =
+          d["highlights"] ?? d["additionalInfo"]?["highlights"];
       if (rawHighlights is List) {
         _highlights = rawHighlights.map<Map<String, dynamic>>((h) {
           if (h is Map<String, dynamic>) {
@@ -175,7 +194,6 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
               "url": (map["url"] ?? "").toString(),
             };
           } else {
-            // لو كان String قديم نخليه title فقط
             return {"title": h.toString(), "url": ""};
           }
         }).toList();
@@ -185,10 +203,64 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _brandCtrl.dispose();
+    _taglineCtrl.dispose();
+    _addressCtrl.dispose();
+    _shortDescCtrl.dispose();
+    _fullDescCtrl.dispose();
+    _priceCtrl.dispose();
+    _discountCtrl.dispose();
+    _latitudeCtrl.dispose();
+    _longitudeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<String> _uploadAndSaveImage(String path) async {
+    // 💡 مثال افتراضي (يجب استبداله بمنطقك الفعلي):
+    if (path.isEmpty) {
+      throw Exception("Image path is invalid.");
+    }
+
+    // final File imageFile = File(path);
+    // final String imageUrl = await SupabaseService.uploadFile(imageFile);
+    // return imageUrl;
+
+    // لإزالة خطأ التصريف حاليًا، سنعيد قيمة نصية فارغة.
+    // ❌ يجب تعديل هذا السطر بمنطق الرفع الخاص بك
+    return Future.value("temp_supabase_url_needs_real_logic");
+  }
+
   Future<void> _pickImage() async {
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() => _images.add(picked.path));
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile == null || pickedFile.path.isEmpty) {
+      return;
+    }
+
+    _showLoadingSnackBar('Processing image...');
+
+    try {
+      // 💡 الحل لخطأ الـ Namespace: قراءة البايتات مباشرة من XFile
+      final bytes = await pickedFile.readAsBytes();
+      final fileName = pickedFile.name;
+
+      setState(() {
+        // تخزين البايتات واسم الملف بدلاً من المسار
+        _images.add({
+          'bytes': bytes,
+          'name': fileName,
+        });
+      });
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      _showLoadingSnackBar('Image selected successfully.', isError: false);
+    } catch (e) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      _showLoadingSnackBar('Failed to process image: $e', isError: true);
     }
   }
 
@@ -425,37 +497,97 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
     );
   }
 
-  void _save() {
-    final data = {
-      "name": _nameCtrl.text,
-      "brand": _brandCtrl.text,
-      "tagline": _taglineCtrl.text,
-      "address": _addressCtrl.text,
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    // 💡 تصحيح 1: إضافة فحص لـ _priceType
+    if (_selectedCategory == null ||
+        _selectedCity == null ||
+        _priceType == null) {
+      _showLoadingSnackBar('Please select Category, City, and Price Type.',
+          isError: true);
+      return;
+    }
 
-      // Description واحدة تُحفظ في الاثنين
-      "shortDescription": _fullDescCtrl.text,
-      "fullDescription": _fullDescCtrl.text,
+    // 💡 تعديل: فحص الصور يجب أن يشمل الملفات الجديدة (باستخدام _images)
+    if (_images.isEmpty && _existingImageUrls.isEmpty) {
+      _showLoadingSnackBar('Please upload at least one image for the service.',
+          isError: true);
+      return;
+    }
 
-      "category": _selectedCategory ?? "",
-      "city": _selectedCity ?? "",
-      "priceType": _priceType ?? "",
-      "isActive": _isVisible,
-      "price": double.tryParse(_priceCtrl.text) ?? 0,
+    setState(() => _isLoading = true);
 
-      "discount": _discountCtrl.text,
-      "images": _images,
+    try {
+      // 🆕 1. جلب اسم الشركة تلقائياً
+      final companyName = await ServiceService.fetchCompanyName();
+      if (companyName == null) {
+        // يمكنك هنا عرض رسالة خطأ إذا كان اسم الشركة مطلوباً بشكل صارم
+        // استخدم الدالة المخصصة لديك لعرض الرسالة
+        _showLoadingSnackBar(
+            'Could not retrieve company name. Please contact support.',
+            isError: true);
+        setState(() => _isLoading = false);
+        return;
+      }
 
-      // ⬇⬇ حفظ الـ Lat / Long
-      "longitude": double.tryParse(_longCtrl.text),
-      "latitude": double.tryParse(_latCtrl.text),
+      // 2. استمرار عملية الحفظ
+      try {
+        final double price = double.tryParse(_priceCtrl.text) ?? 0.0;
+        final double? latitude = double.tryParse(_latitudeCtrl.text.trim());
+        final double? longitude = double.tryParse(_longitudeCtrl.text.trim());
 
-      // الآن عبارة عن List<Map<String, dynamic>>
-      "highlights": _highlights,
+        final highlightsForApi = _highlights.map((h) {
+          return {
+            "title": h["title"].toString(),
+            "url": h["url"].toString(),
+          };
+        }).toList();
 
-      "packages": _packages,
-    };
+        // 💡 تصحيح 2: تمرير companyName كمعامل جديد
+        final result = await ServiceService.addService(
+          title: _nameCtrl.text.trim(),
+          description: _fullDescCtrl.text.trim(),
+          price: price,
+          priceType: _priceType!,
+          highlights: highlightsForApi,
+          imageFilesData: _images,
+          category: _selectedCategory!,
+          latitude: latitude,
+          longitude: longitude,
+          address: _addressCtrl.text.trim(),
+          city: _selectedCity!,
+          companyName: companyName, // ⬅️ 🆕 تم إضافة اسم الشركة هنا
+        );
 
-    Navigator.pop(context, data);
+        _showLoadingSnackBar('Service saved successfully!', isError: false);
+        Navigator.of(context).pop(true);
+      } catch (e) {
+        print('Error adding service: $e');
+        _showLoadingSnackBar('Error adding service: ${e.toString()}',
+            isError: true);
+      } finally {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      // التعامل مع الخطأ العام (مثل خطأ جلب اسم الشركة)
+      print('General error during save process: $e');
+      _showLoadingSnackBar('An unexpected error occurred: ${e.toString()}',
+          isError: true);
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
   @override
@@ -501,23 +633,32 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                 ),
                 elevation: 0,
               ),
-              onPressed: _save,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.check_rounded,
-                      size: 18, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Text(
-                    "Save Service",
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+              onPressed: _isLoading ? null : _save,
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.check_rounded,
+                            size: 18, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Save Service",
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
             ),
           ),
         ),
@@ -530,7 +671,6 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
             key: _formKey,
             child: Column(
               children: [
-                // Service details (بدون Address)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -553,38 +693,27 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
+                                horizontal: 105, vertical: 12),
                             decoration: BoxDecoration(
                               color: kPrimaryColor.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(5),
                             ),
                             child: Text(
                               "Service Details",
                               style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
                                 color: kPrimaryColor,
                               ),
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            _selectedCategory ?? "Select category",
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              color: Colors.grey[600],
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 14),
                       _buildInput("Name", _nameCtrl),
-                      // تم حذف حقول Brand و Tagline من الواجهة فقط
                     ],
                   ),
                 ),
-
-                // Description card (حقل واحد فقط)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -620,8 +749,6 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                     ],
                   ),
                 ),
-
-                // Pricing & Location (Address + City جنب بعض, price + discount + نوع السعر + الكاتيجوري)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -650,8 +777,6 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // Address + City
                       Row(
                         children: [
                           Expanded(
@@ -683,25 +808,31 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 8),
-
-                      // Longitude + Latitude
                       Row(
                         children: [
                           Expanded(
-                            child: _buildInput("Longitude", _longCtrl,
-                                isNumber: true),
+                            child: TextFormField(
+                              controller: _latitudeCtrl,
+                              decoration: _inputDecoration("Latitude"),
+                              keyboardType: TextInputType.numberWithOptions(
+                                  decimal: true),
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: _buildInput("Latitude", _latCtrl,
-                                isNumber: true),
+                            child: TextFormField(
+                              controller: _longitudeCtrl,
+                              decoration: _inputDecoration("Longitude"),
+                              keyboardType: TextInputType.numberWithOptions(
+                                  decimal: true),
+                              style: GoogleFonts.poppins(fontSize: 13),
+                            ),
                           ),
                         ],
                       ),
-
-                      // Price + Discount
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
@@ -716,8 +847,6 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
-
-                      // Price type chips
                       Text(
                         "Price Type",
                         style: GoogleFonts.poppins(
@@ -743,8 +872,6 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-
-                      // Category with icons
                       Text(
                         "Service Category",
                         style: GoogleFonts.poppins(
@@ -786,8 +913,6 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                     ],
                   ),
                 ),
-
-                // Images
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -828,6 +953,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
+                            // 1. عرض الصور الجديدة (التي تم اختيارها للتو)
                             for (final img in _images)
                               Container(
                                 margin: const EdgeInsets.only(right: 10),
@@ -846,11 +972,43 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(16),
                                   child: Image(
-                                    image: FileImage(File(img)),
+                                    // ✅ التصحيح الجوهري هنا: استخدام MemoryImage
+                                    // لأن img عبارة عن Map يحتوي على bytes
+                                    image: MemoryImage(img['bytes']),
                                     fit: BoxFit.cover,
                                   ),
                                 ),
                               ),
+
+                            // 2. عرض الصور القديمة (إذا كنت في وضع التعديل)
+                            for (final url in _existingImageUrls)
+                              Container(
+                                margin: const EdgeInsets.only(right: 10),
+                                width: 90,
+                                height: 90,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Image.network(
+                                    url, // للصور القادمة من السيرفر نستخدم Network
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            const Icon(Icons.error),
+                                  ),
+                                ),
+                              ),
+
+                            // زر الإضافة
                             GestureDetector(
                               onTap: _pickImage,
                               child: Container(
@@ -860,7 +1018,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                                   color: const Color(0xFFF3F4F6),
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
-                                    color: Color(0xFFD1D5DB),
+                                    color: const Color(0xFFD1D5DB),
                                     width: 1,
                                     style: BorderStyle.solid,
                                   ),
@@ -888,8 +1046,6 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                     ],
                   ),
                 ),
-
-                // Highlights + visibility (تم حذف قسم Packages فقط)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -1019,8 +1175,6 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
       ),
     );
   }
-
-  // Helpers
 
   InputDecoration _inputDecoration(String label) {
     return InputDecoration(

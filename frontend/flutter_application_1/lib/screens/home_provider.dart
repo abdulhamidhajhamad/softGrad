@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'edit_profile_provider.dart';
-import 'sales_provider.dart';
+import 'services_provider.dart';
 import 'signin.dart';
 import 'package:flutter_application_1/screens/booking_provider.dart';
 import 'package:flutter_application_1/screens/messages_provider.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
-import 'package:flutter_application_1/screens/reviews_provider.dart';
+import 'package:flutter_application_1/screens/sales_provider.dart';
 import 'package:flutter_application_1/screens/packages_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
@@ -20,6 +20,7 @@ class ProviderModel {
   final String brandName;
   final String email;
   final String phone;
+  // تم حذف final String category;
   final String description;
   final String city;
 
@@ -32,6 +33,7 @@ class ProviderModel {
     required this.brandName,
     required this.email,
     required this.phone,
+    // تم حذف required this.category,
     required this.description,
     required this.city,
     this.bookings,
@@ -63,15 +65,22 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
   }
 
   void _loadServices() async {
-    // بيانات مؤقتة
+    // هذه البيانات المؤقتة يمكنك إزالتها لاحقاً
     _services = [
-      {"name": "Wedding Photography", "price": 1000, "discount": "20"},
-      {"name": "Event Lighting", "price": 800},
+      {
+        "name": "Wedding Photography",
+        "price": 1000,
+        "discount": "20",
+      },
+      {
+        "name": "Event Lighting",
+        "price": 800,
+      },
     ];
     setState(() {});
   }
 
-  // ===== MENU =====
+  // ====== BURGER MENU ======
   void _openMenu() {
     showModalBottomSheet(
       context: context,
@@ -82,7 +91,8 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
       builder: (_) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -96,28 +106,35 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                   ),
                 ),
                 ListTile(
-                  leading: const Icon(
-                    Icons.notifications_none_outlined,
-                    color: kPrimaryColor,
+                  leading: const Icon(Icons.notifications_none_outlined,
+                      color: kPrimaryColor),
+                  title: Text(
+                    'Notifications',
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                  title: Text("Notifications",
-                      style: GoogleFonts.poppins(
-                          fontSize: 15, fontWeight: FontWeight.w500)),
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => const NotificationsProviderScreen()),
+                        builder: (_) => const NotificationsProviderScreen(),
+                      ),
                     );
                   },
                 ),
                 ListTile(
                   leading:
                       const Icon(Icons.settings_outlined, color: kPrimaryColor),
-                  title: Text("Settings",
-                      style: GoogleFonts.poppins(
-                          fontSize: 15, fontWeight: FontWeight.w500)),
+                  title: Text(
+                    'Settings',
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   onTap: () async {
                     Navigator.pop(context);
                     final updated = await Navigator.push(
@@ -134,11 +151,14 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                 const Divider(height: 18),
                 ListTile(
                   leading: const Icon(Icons.logout, color: Colors.redAccent),
-                  title: Text("Sign out",
-                      style: GoogleFonts.poppins(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.redAccent)),
+                  title: Text(
+                    'Sign out',
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.redAccent,
+                    ),
+                  ),
                   onTap: () async {
                     Navigator.pop(context);
                     await AuthService.deleteToken();
@@ -157,8 +177,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
       },
     );
   }
-
-  // ========================= UI =========================
 
   @override
   Widget build(BuildContext context) {
@@ -190,6 +208,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                     builder: (_) => EditProfileProvider(provider: provider),
                   ),
                 );
+
                 if (updated != null && updated is ProviderModel) {
                   setState(() => provider = updated);
                 }
@@ -198,8 +217,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
             ),
           ],
         ),
-
-        // BODY
         body: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           child: Column(
@@ -208,7 +225,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
               _HeaderCard(provider: provider),
               const SizedBox(height: 15),
 
-              // ===== STATS (Bookings, Messages, Sales) =====
+              // Stats row: Bookings / Messages / Reviews
               Row(
                 children: [
                   Expanded(
@@ -227,8 +244,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-
-                  /// *** FIXED HERE ***
                   Expanded(
                     child: InkWell(
                       onTap: () {
@@ -251,13 +266,14 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
 
               const SizedBox(height: 20),
 
-              // ===== PACKAGES CARD =====
+              // Packages teaser card
               _PackagesTeaserCard(
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => PackagesProviderScreen(
+                        // << HERE: نمرّر الخدمات الحقيقية من شاشة الخدمات
                         services: _services,
                       ),
                     ),
@@ -267,10 +283,13 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
 
               const SizedBox(height: 20),
 
-              // ===== QUICK ACTIONS =====
-              Text("Quick Actions",
-                  style: GoogleFonts.poppins(
-                      fontSize: 18, fontWeight: FontWeight.w600)),
+              Text(
+                "Quick Actions",
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 15),
 
               Column(
@@ -285,7 +304,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const SalesProviderScreen(),
+                                builder: (_) => const ServicesProviderScreen(),
                               ),
                             );
                           },
@@ -319,8 +338,8 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                  builder: (_) =>
-                                      const MessagesProviderScreen()),
+                                builder: (_) => const MessagesProviderScreen(),
+                              ),
                             );
                           },
                         ),
@@ -346,34 +365,15 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                 ],
               ),
 
-              const SizedBox(height: 22),
-              Text("About Your Brand",
-                  style: GoogleFonts.poppins(
-                      fontSize: 18, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
-
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Text(
-                  provider.description,
-                  style: GoogleFonts.poppins(
-                      fontSize: 14, color: Colors.grey.shade800),
+              const SizedBox(height: 25),
+              Text(
+                "Contact Info",
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-
-              const SizedBox(height: 25),
-              Text("Contact Info",
-                  style: GoogleFonts.poppins(
-                      fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 13),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
@@ -422,7 +422,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 40),
             ],
           ),
@@ -431,8 +430,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
     );
   }
 }
-
-// ========================= COMPONENTS =========================
 
 class _HeaderCard extends StatelessWidget {
   final ProviderModel provider;
@@ -463,35 +460,39 @@ class _HeaderCard extends StatelessWidget {
           ),
           const SizedBox(width: 20),
           Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                provider.brandName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(
-                  fontSize: 21,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(Icons.location_on,
-                      size: 18, color: Colors.grey.shade700),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      provider.city,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                          fontSize: 14, color: Colors.grey.shade700),
-                    ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  provider.brandName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 21,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
-              ),
-            ]),
+                ),
+                // تم حذف Text(provider.category, ...)
+                // const SizedBox(height: 2),
+                const SizedBox(height: 4), // تم تعديل الارتفاع ليتناسب مع الحذف
+                Row(
+                  children: [
+                    Icon(Icons.location_on,
+                        size: 18, color: Colors.grey.shade700),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        provider.city,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                            fontSize: 14, color: Colors.grey.shade700),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -590,7 +591,7 @@ class _ContactIcon extends StatelessWidget {
   }
 }
 
-// PACKAGES CARD
+// Packages teaser card
 class _PackagesTeaserCard extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -602,6 +603,7 @@ class _PackagesTeaserCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
       child: Container(
+        width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
@@ -613,7 +615,9 @@ class _PackagesTeaserCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          border: Border.all(color: kPrimaryColor.withOpacity(0.25)),
+          border: Border.all(
+            color: kPrimaryColor.withOpacity(0.25),
+          ),
         ),
         child: Row(
           children: [
@@ -624,38 +628,49 @@ class _PackagesTeaserCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3)),
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
                 ],
               ),
-              child: const Icon(Icons.inventory_2_rounded,
-                  color: kPrimaryColor, size: 26),
+              child: const Icon(
+                Icons.inventory_2_rounded,
+                color: kPrimaryColor,
+                size: 26,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Packages Overview",
-                        style: GoogleFonts.poppins(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: kTextColor)),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Create and manage your wedding packages in one place.",
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.grey.shade700,
-                        height: 1.3,
-                      ),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Packages Overview",
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: kTextColor,
                     ),
-                  ]),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Create and manage your wedding packages in one place.",
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(width: 6),
-            const Icon(Icons.arrow_forward_ios_rounded,
-                size: 18, color: kPrimaryColor),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 18,
+              color: kPrimaryColor,
+            ),
           ],
         ),
       ),

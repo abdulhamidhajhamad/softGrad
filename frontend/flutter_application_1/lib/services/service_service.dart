@@ -1,147 +1,310 @@
 // lib/services/service_service.dart
 
 import 'dart:convert';
-// import 'dart:io'; // ❌ تم حذفه لإصلاح مشكلة الـ Web
 import 'package:http/http.dart' as http;
-import 'package:flutter_application_1/services/auth_service.dart'; 
-import 'package:image_picker/image_picker.dart'; // ⭐️ إضافة لاستخدام XFile
+// تأكد من تحديث المسار الصحيح لـ AuthService
+import 'package:flutter_application_1/services/auth_service.dart';
+import 'dart:io';
 
-/// Model class for a single Service entity.
-class ServiceModel {
-  final String id;
-  final String name; 
-  final String description; 
-  final double price;
-  final String category;
-  final bool isActive;
-  final int reviewsCount;
-  final double rating;
-  final String? imageUrl;  
-
-  ServiceModel({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.price,
-    required this.category,
-    required this.isActive,
-    required this.reviewsCount,
-    required this.rating,
-    this.imageUrl,
-  });
-
-  factory ServiceModel.fromJson(Map<String, dynamic> json) {
-    final additionalInfo = json['additionalInfo'] as Map<String, dynamic>?;
-    final description = additionalInfo?['description'] ?? ''; 
-    
-    final List<dynamic> images = json['images'] ?? []; 
-    final String? firstImageUrl = images.isNotEmpty ? images.first as String? : null;
-
-    final reviews = json['reviews'] as List<dynamic>?;
-    final reviewsCount = reviews?.length ?? 0;
-
-    return ServiceModel(
-      id: json['_id'] ?? '',
-      name: json['serviceName'] ?? 'No Name',
-      description: description,
-      price: (json['price'] as num?)?.toDouble() ?? 0.0,
-      category: json['category'] ?? 'General',
-      isActive: json['isActive'] ?? true,
-      reviewsCount: reviewsCount, 
-      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-      imageUrl: firstImageUrl, 
-    );
-  }
-}
-
-/// Service class for making API calls related to provider services.
 class ServiceService {
   static final String baseUrl = AuthService.getBaseUrl();
-  static const String _myServicesEndpoint = '/services/my-services';
-  
-  // ---------------------------- دالة إضافة خدمة (Multipart)
-  // ⭐️ تم تحديث التوقيع لقبول List<XFile>
-  static Future<void> addService(
-      Map<String, dynamic> serviceData, List<XFile> imageFiles) async { // ⬅️ List<XFile>
-    final token = await AuthService.getToken();
-    if (token == null) {
-      throw Exception('Authentication token missing. Please log in again.');
-    }
 
-    var request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$baseUrl/services'),
-    );
-
-    request.headers.addAll({
-      'Authorization': 'Bearer $token',
-    });
-
-    request.fields['data'] = jsonEncode(serviceData);
-    
-    // 4. إضافة ملفات الصور
-    for (XFile file in imageFiles) { 
-      // ⭐️ قراءة البايتات بدلاً من المسار (مهم للويب)
-      final bytes = await file.readAsBytes();
-      final filename = file.name; 
-
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'images', 
-          bytes,
-          filename: filename,
-        ),
-      );
-    }
-
+  // ====================== 1. جلب خدمات المزود (GET /services/my) =========================
+  // تستخدم لجلب قائمة الخدمات التي أنشأها المستخدم الموثق (المزود)
+  static Future<List<dynamic>> fetchMyServices() async {
     try {
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      print('📝 Add Service Status Code: ${response.statusCode}');
-      print('📝 Add Service Response Body: ${response.body}');
-
-      if (response.statusCode == 201) {
-        print('✅ Service added successfully');
-      } else {
-        final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? 'Failed to add service');
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Authentication token not found.');
       }
-    } catch (e) {
-      print('❌ Add Service Error: $e');
-      throw Exception('Network error while adding service: $e');
-    }
-  }
 
-  // ---------------------------- دالة جلب الخدمات
-  static Future<List<ServiceModel>> fetchMyServices() async {
-    final token = await AuthService.getToken();
-    if (token == null) {
-      throw Exception('Authentication token missing. Please log in again.');
-    }
-
-    try {
       final response = await http.get(
-        Uri.parse('$baseUrl$_myServicesEndpoint'),
+        Uri.parse('$baseUrl/services/my-services'), // الـ Endpoint لجلب خدمات المستخدم الموثق
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token', 
+          'Authorization': 'Bearer $token',
         },
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> servicesJson = jsonDecode(response.body);
-        return servicesJson
-            .map((json) => ServiceModel.fromJson(json))
-            .toList();
+        // ✅ النجاح: فك تشفير الـ JSON وإرجاع قائمة الخدمات
+        return jsonDecode(response.body);
       } else {
+        // ❌ فشل: التعامل مع رسالة الخطأ
         final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? 'Failed to load services');
+        throw Exception(errorData['message'] ?? 'Failed to fetch services.');
       }
     } catch (e) {
-      throw Exception('Network error while fetching services: $e');
+      print('❌ Error in fetchMyServices: $e');
+      rethrow;
     }
   }
 
-  // ... (يمكنك إضافة باقي الدوال هنا)
+  // --------------------------------------------------------------------------
+
+  // ====================== 2. إضافة خدمة جديدة مع دعم الصور (POST /services) =========================
+static Future<Map<String, dynamic>> addService({
+    required String title,
+    required String description,
+    required double price,
+    required List<Map<String, String>> highlights,
+    required List<Map<String, dynamic>> imageFilesData,
+    required String category,
+    required String priceType, 
+    double? latitude, // القيمة المتوفرة من شاشة الإدخال
+    double? longitude, // القيمة المتوفرة من شاشة الإدخال
+    required String address,
+    required String city,
+    required String companyName,
+  }) async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Authentication token not found.');
+      }
+
+      final url = Uri.parse('$baseUrl/services');
+      final request = http.MultipartRequest('POST', url);
+
+      // 1. إضافة الـ Headers
+      request.headers.addAll({
+        'Authorization': 'Bearer $token',
+      });
+
+      // 2. إعداد حقول النص وإرسالها كـ JSON في حقل 'data'
+      
+      // ✅ تجهيز كائن الموقع (location object) بناءً على Schema الجديد
+      final Map<String, dynamic> locationData = {
+          'latitude': latitude ?? 0.0, 
+          'longitude': longitude ?? 0.0,
+          'address': address, // يرسل لتحديد الموقع لاحقاً
+          'city': city, // يرسل
+      };
+      
+      final createServiceDtoForJson = {
+        'serviceName': title, 
+        'description': description,
+        'price': price, 
+        'category': category,
+        'priceType': priceType, 
+        'location': locationData, // تمرير كائن الموقع المجهز
+        'highlights': highlights,
+        "companyName": companyName,
+      };
+      request.fields['data'] = jsonEncode(createServiceDtoForJson);
+
+
+      for (var fileData in imageFilesData) {
+        final List<int> fileBytes = fileData['bytes'] as List<int>;
+        final String fileName = fileData['name'] as String;
+
+        if (fileBytes.isNotEmpty) {
+            request.files.add(
+                http.MultipartFile.fromBytes(
+                    'images', 
+                    fileBytes,
+                    filename: fileName,
+                ),
+            );
+        }
+      }
+
+      // 4. إرسال الطلب واستقبال الرد
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      
+      final responseBody = jsonDecode(response.body);
+
+      if (response.statusCode == 201) {
+        return responseBody;
+      } else {
+        final errorMessage = responseBody['message'] ?? 'Failed to create service.';
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      print('❌ Error in addService with file upload: $e');
+      rethrow;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+
+ // ====================== 3. حذف خدمة (DELETE /services/:id) =========================
+  static Future<void> deleteService(String serviceId) async {
+    try {
+      final token = await AuthService.getToken(); // 🔑 جلب رمز المصادقة
+      if (token == null) {
+        throw Exception('Authentication token not found.');
+      }
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/services/id/$serviceId'), // الـ Endpoint للحذف
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token', // ✅ إضافة رمز المصادقة للتحقق من الإذن
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        // 200/204: نجاح الحذف
+        return;
+      } else {
+        // ❌ فشل: التعامل مع رسالة الخطأ
+        final errorData = jsonDecode(response.body);
+        throw Exception(
+            errorData['message'] ?? 'Failed to delete service.');
+      }
+    } catch (e) {
+      print('❌ Error in deleteService: $e');
+      rethrow;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+
+  // ====================== 4. تحديث خدمة جزئياً (PATCH /services/:id) =========================
+  // تُستخدم لتحديث أي حقل، وغالباً ما تستخدم لتغيير حالة isActive
+  
+  
+  
+  static Future<Map<String, dynamic>> updateService(
+      String serviceId, Map<String, dynamic> updateData) async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Authentication token not found.');
+      }
+
+      // يُفضل استخدام http.patch للتحديث الجزئي
+      final response = await http.patch(
+        Uri.parse('$baseUrl/services/$serviceId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(updateData),
+      );
+
+      final responseBody = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return responseBody;
+      } else {
+        throw Exception(
+            responseBody['message'] ?? 'Failed to update service.');
+      }
+    } catch (e) {
+      print('❌ Error in updateService: $e');
+      rethrow;
+    }
+  }
+
+  static Future<String?> fetchCompanyName() async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Authentication token not found.');
+      }
+
+      final response = await http.get(
+        // استخدام نهاية النقطة التي حددتها
+        Uri.parse('$baseUrl/providers/my-company-name'), 
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        // نفترض أن بنية الرد هي { "companyName": "اسم الشركة" }
+        return responseData['companyName'] as String?;
+      } else if (response.statusCode == 404) {
+        // التعامل مع حالة عدم العثور على اسم الشركة
+        print('Company name not found for this provider (404).');
+        return null;
+      } else {
+        // التعامل مع رسائل الخطأ الأخرى
+        final errorData = jsonDecode(response.body);
+        print('Failed to fetch company name: ${errorData['message']}');
+        throw Exception(errorData['message'] ?? 'Failed to fetch company name.');
+      }
+    } catch (e) {
+      print('Error fetching company name: $e');
+      // لا ترمي خطأ لعدم إيقاف عملية إضافة الخدمة بالكامل، بل أعد القيمة Null
+      return null;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+
+  // ====================== 5. جلب تفاصيل خدمة معينة (GET /services/:id) =========================
+  // يستخدمه العميل لعرض شاشة تفاصيل خدمة
+  static Future<Map<String, dynamic>> getServiceById(String serviceId) async {
+    try {
+      // لا نحتاج لـ token لأن هذه نقطة وصول عامة للعملاء
+      final response = await http.get(
+        Uri.parse('$baseUrl/services/$serviceId'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        // ✅ النجاح: فك تشفير الـ JSON وإرجاع تفاصيل الخدمة
+        return jsonDecode(response.body);
+      } else {
+        // ❌ فشل: التعامل مع رسالة الخطأ
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to fetch service details.');
+      }
+    } catch (e) {
+      print('❌ Error in getServiceById: $e');
+      rethrow;
+    }
+  }
+
+
+static Future<String> uploadImageFile(String filePath) async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Authentication token not found.');
+      }
+      
+      // ⚠️ يجب التأكد من أن هذا هو الـ Endpoint الصحيح لرفع الملفات لديك 
+      // الـ Backend هو من يقوم بالتعامل مع Supabase الآن.
+      final url = Uri.parse('$baseUrl/upload/service-image'); 
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll({
+        'Authorization': 'Bearer $token',
+      });
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'file', // ⚠️ هذا هو اسم الحقل الذي يتوقعه الـ Backend (تحقق من الـ NestJS لديك)
+          filePath,
+        ),
+      );
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        // ⚠️ يجب التأكد من أن الخادم يعيد الرابط في هذا المفتاح (نستخدم 'url' كافتراض)
+        final imageUrl = responseData['url']; 
+        if (imageUrl != null) {
+          return imageUrl;
+        } else {
+          throw Exception('Image upload succeeded, but URL not returned by server.');
+        }
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['message'] ?? 'Failed to upload image.');
+      }
+    } catch (e) {
+      print('❌ Error in uploadImageFile: $e');
+      rethrow;
+    }
+  }
 }

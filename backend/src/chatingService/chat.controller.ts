@@ -13,7 +13,7 @@ export class ChatController {
   createChat(@Req() req, @Body() dto: CreateConversationDto) {
     return this.chatService.createChat(req.user.id, dto.receiverId);
   }
-
+  
   // Send message
   @Post('send')
   sendMessage(@Req() req, @Body() dto: SendMessageDto) {

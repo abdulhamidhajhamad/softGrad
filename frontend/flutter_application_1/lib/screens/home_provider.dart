@@ -7,7 +7,8 @@ import 'signin.dart';
 import 'package:flutter_application_1/screens/booking_provider.dart';
 import 'package:flutter_application_1/screens/messages_provider.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
-import 'package:flutter_application_1/screens/reviews_provider.dart'; // NEW
+import 'package:flutter_application_1/screens/reviews_provider.dart';
+import 'package:flutter_application_1/screens/packages_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -19,6 +20,7 @@ class ProviderModel {
   final String brandName;
   final String email;
   final String phone;
+  // تم حذف final String category;
   final String description;
   final String city;
 
@@ -31,6 +33,7 @@ class ProviderModel {
     required this.brandName,
     required this.email,
     required this.phone,
+    // تم حذف required this.category,
     required this.description,
     required this.city,
     this.bookings,
@@ -62,6 +65,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
   }
 
   void _loadServices() async {
+    // هذه البيانات المؤقتة يمكنك إزالتها لاحقاً
     _services = [
       {
         "name": "Wedding Photography",
@@ -241,14 +245,12 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    // MAKE REVIEWS CLICKABLE
                     child: InkWell(
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                const ReviewsProviderScreen(), // providerId optional
+                            builder: (_) => const ReviewsProviderScreen(),
                           ),
                         );
                       },
@@ -263,6 +265,24 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
               ),
 
               const SizedBox(height: 20),
+
+              // Packages teaser card
+              _PackagesTeaserCard(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PackagesProviderScreen(
+                        // << HERE: نمرّر الخدمات الحقيقية من شاشة الخدمات
+                        services: _services,
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 20),
+
               Text(
                 "Quick Actions",
                 style: GoogleFonts.poppins(
@@ -272,7 +292,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
               ),
               const SizedBox(height: 15),
 
-              // ===== Quick Actions: 2 × 2 grid =====
               Column(
                 children: [
                   Row(
@@ -398,10 +417,12 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                           children: [
                             Text("Email",
                                 style: GoogleFonts.poppins(
-                                    fontSize: 14, color: Colors.grey.shade600)),
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600)),
                             Text(provider.email,
                                 style: GoogleFonts.poppins(
-                                    fontSize: 15, fontWeight: FontWeight.w500)),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ],
@@ -416,10 +437,12 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                           children: [
                             Text("Phone",
                                 style: GoogleFonts.poppins(
-                                    fontSize: 14, color: Colors.grey.shade600)),
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600)),
                             Text(provider.phone,
                                 style: GoogleFonts.poppins(
-                                    fontSize: 15, fontWeight: FontWeight.w500)),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ],
@@ -477,8 +500,9 @@ class _HeaderCard extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 2),
-                const SizedBox(height: 4),
+                // تم حذف Text(provider.category, ...)
+                // const SizedBox(height: 2),
+                const SizedBox(height: 4), // تم تعديل الارتفاع ليتناسب مع الحذف
                 Row(
                   children: [
                     Icon(Icons.location_on,
@@ -591,6 +615,93 @@ class _ContactIcon extends StatelessWidget {
       radius: 25,
       backgroundColor: kContactCircleColor,
       child: Icon(icon, color: kContactIconColor, size: 26),
+    );
+  }
+}
+
+// Packages teaser card
+class _PackagesTeaserCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _PackagesTeaserCard({Key? key, required this.onTap}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: LinearGradient(
+            colors: [
+              kPrimaryColor.withOpacity(0.08),
+              kPrimaryColor.withOpacity(0.02),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: kPrimaryColor.withOpacity(0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.inventory_2_rounded,
+                color: kPrimaryColor,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Packages Overview",
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: kTextColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Create and manage your wedding packages in one place.",
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 18,
+              color: kPrimaryColor,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -87,7 +87,7 @@ class ServiceReviewsProviderScreen extends StatelessWidget {
                     borderRadius:
                         const BorderRadius.vertical(top: Radius.circular(18)),
                     child: SizedBox(
-                      height: 150,
+                      height: 280,
                       width: double.infinity,
                       child: Image.network(
                         images.first,
@@ -146,10 +146,6 @@ class ServiceReviewsProviderScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          _RatingChip(
-                            rating: _avgRating,
-                            totalReviews: reviews.length,
-                          ),
                         ],
                       ),
                     ],
@@ -159,7 +155,113 @@ class ServiceReviewsProviderScreen extends StatelessWidget {
             ),
           ),
 
-          // فلتر / ترتيب بسيط (تصميم فقط – بدون منطق معقد)
+          // ⭐⭐⭐ NEW: Modern Rating Summary Box ⭐⭐⭐
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOut,
+            margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              gradient: LinearGradient(
+                colors: [
+                  kPrimaryColor.withOpacity(0.12),
+                  kPrimaryColor.withOpacity(0.03),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                // LEFT: Average Rating
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Average Rating",
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(
+                            _avgRating > 0
+                                ? _avgRating.toStringAsFixed(1)
+                                : "-",
+                            style: GoogleFonts.poppins(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              color: kPrimaryColor,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Row(
+                            children: List.generate(
+                              5,
+                              (i) => Icon(
+                                i < _avgRating.round()
+                                    ? Icons.star
+                                    : Icons.star_border,
+                                size: 18,
+                                color: Colors.amber,
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Divider
+                Container(
+                  height: 55,
+                  width: 1.1,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  color: Colors.grey.shade300,
+                ),
+
+                // RIGHT: Total reviews
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        "Total Reviews",
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        reviews.length.toString(),
+                        style: GoogleFonts.poppins(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          color: kPrimaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // فلتر / ترتيب
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Row(
@@ -168,9 +270,7 @@ class ServiceReviewsProviderScreen extends StatelessWidget {
                   child: _PillFilter(
                     icon: Icons.sort,
                     label: 'Newest first',
-                    onTap: () {
-                      // يمكن لاحقاً إضافة منطق ترتيب حسب الحاجة
-                    },
+                    onTap: () {},
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -207,54 +307,6 @@ class ServiceReviewsProviderScreen extends StatelessWidget {
   }
 }
 
-/// كارت تلخيص متوسط التقييم وعدد الريفيوز
-class _RatingChip extends StatelessWidget {
-  final double rating;
-  final int totalReviews;
-
-  const _RatingChip({
-    Key? key,
-    required this.rating,
-    required this.totalReviews,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final showRating = rating > 0;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.yellow.shade50,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.yellow.shade700.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.star, size: 16, color: Colors.amber),
-          const SizedBox(width: 4),
-          Text(
-            showRating ? rating.toStringAsFixed(1) : "-",
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            "(${totalReviews.toString()} reviews)",
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              color: Colors.grey.shade700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// زر فلتر/سورت بسيط على شكل Pill
 class _PillFilter extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -298,7 +350,6 @@ class _PillFilter extends StatelessWidget {
   }
 }
 
-/// كارت ريفيو واحد
 class _ReviewCard extends StatelessWidget {
   final ServiceReview review;
 
@@ -389,9 +440,8 @@ class _ReviewCard extends StatelessWidget {
   }
 }
 
-/// صف نجوم لتقييم 1–5 بدون كسور
 class _StarsRow extends StatelessWidget {
-  final int rating; // 1–5
+  final int rating;
 
   const _StarsRow({Key? key, required this.rating}) : super(key: key);
 
@@ -410,7 +460,6 @@ class _StarsRow extends StatelessWidget {
   }
 }
 
-/// حالة عدم وجود أي تعليقات
 class _EmptyReviewsState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

@@ -197,7 +197,11 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
             _card(
               Column(
                 children: [
-                  _iconInfo("Service Name", s["name"] ?? "-", Icons.star),
+                  _iconInfo(
+                    "Service Name",
+                    s["serviceName"] ?? s["name"] ?? "-",
+                    Icons.star,
+                  ),
                   if (s["brand"] != null &&
                       s["brand"].toString().trim().isNotEmpty) ...[
                     _divider(),
@@ -240,40 +244,25 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
             // -----------------------
             // ⭐ القسم: السعر والخصم
             // -----------------------
-            _sectionTitle("Pricing & Packages"),
+            _sectionTitle("Category & Location"),
             _card(
               Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // سعر (معدل + شطب)
-                  Row(
-                    children: [
-                      if (hasDiscount)
-                        Text(
-                          "₪${oldPrice.toStringAsFixed(0)}",
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: Colors.grey,
-                            decoration: TextDecoration.lineThrough,
-                          ),
-                        ),
-                      if (hasDiscount) const SizedBox(width: 8),
-                      Text(
-                        "₪${finalPrice.toStringAsFixed(0)}",
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: hasDiscount ? Colors.red : Colors.black,
-                        ),
-                      ),
-                    ],
+                  _iconInfo(
+                    "Category",
+                    s["category"] ?? "-",
+                    Icons.grid_view_rounded,
                   ),
-
-                  if (hasDiscount) ...[
-                    const SizedBox(height: 12),
+                  _divider(),
+                  _iconInfo(
+                    "City",
+                    s["city"] ?? "-",
+                    Icons.location_on_outlined,
+                  ),
+                  if (s["address"] != null &&
+                      s["address"].toString().trim().isNotEmpty) ...[
                     _divider(),
-                    _iconInfo("Discount", "${s['discount']}%",
-                        Icons.local_offer_outlined),
+                    _iconInfo("Address", s["address"], Icons.map_outlined),
                   ],
                 ],
               ),
@@ -291,7 +280,7 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                 children: [
                   _textTitle("Description"),
                   _textBody(
-                    s["fullDescription"] ?? s["shortDescription"] ?? "-",
+                    s["description"] ?? "-",
                   ),
                 ],
               ),

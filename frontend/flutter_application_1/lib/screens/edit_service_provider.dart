@@ -664,10 +664,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                     child: SizedBox(
                       width: 90,
                       height: 90,
-                      child: Image.network(
-                        _images.first,
-                        fit: BoxFit.cover,
-                      ),
+                      child: _buildImageWidget(_images.first),
                     ),
                   )
                 else
@@ -1050,6 +1047,22 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     );
   }
 
+  Widget _buildImageWidget(String path) {
+    // إذا كانت الصورة من الجهاز
+    if (File(path).existsSync()) {
+      return Image.file(
+        File(path),
+        fit: BoxFit.cover,
+      );
+    }
+
+    // وإلا فهي من السيرفر (Network)
+    return Image.network(
+      path,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 40),
+    );
+  }
   // ===================== SAVE BUTTON =====================
 
   Widget _buildSaveButton() {

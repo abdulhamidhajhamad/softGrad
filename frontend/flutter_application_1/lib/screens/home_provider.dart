@@ -273,7 +273,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => PackagesProviderScreen(
-                        // << HERE: نمرّر الخدمات الحقيقية من شاشة الخدمات
+                       // << HERE: نمرّر الخدمات الحقيقية من شاشة الخدمات
                         services: _services,
                       ),
                     ),

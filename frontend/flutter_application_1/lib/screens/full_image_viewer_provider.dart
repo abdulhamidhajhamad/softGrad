@@ -20,6 +20,10 @@ class _FullImageViewerState extends State<FullImageViewer> {
     _controller = PageController();
   }
 
+  bool _isNetwork(String path) {
+    return path.startsWith("http");
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -33,12 +37,19 @@ class _FullImageViewerState extends State<FullImageViewer> {
         controller: _controller,
         itemCount: widget.images.length,
         itemBuilder: (_, index) {
+          final img = widget.images[index];
+
           return Center(
             child: InteractiveViewer(
-              child: Image.file(
-                File(widget.images[index]),
-                fit: BoxFit.contain,
-              ),
+              child: _isNetwork(img)
+                  ? Image.network(
+                      img,
+                      fit: BoxFit.contain,
+                    )
+                  : Image.file(
+                      File(img),
+                      fit: BoxFit.contain,
+                    ),
             ),
           );
         },

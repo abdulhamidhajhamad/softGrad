@@ -562,7 +562,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
         );
 
         _showLoadingSnackBar('Service saved successfully!', isError: false);
-        Navigator.of(context).pop(true);
+        Navigator.of(context).pop(result);
       } catch (e) {
         print('Error adding service: $e');
         _showLoadingSnackBar('Error adding service: ${e.toString()}',

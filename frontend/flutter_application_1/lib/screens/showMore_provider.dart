@@ -143,7 +143,7 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(22),
                     child: Container(
-                      height: 260,
+                      height: 280,
                       decoration: BoxDecoration(
                         color: Colors.grey.shade200,
                       ),

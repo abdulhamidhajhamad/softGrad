@@ -38,6 +38,9 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
   late TextEditingController _priceCtrl;
   late TextEditingController _discountCtrl;
 
+  late TextEditingController _longCtrl;
+  late TextEditingController _latCtrl;
+
   List<String> _images = [];
   List<String> _highlights = [];
   List<Map<String, dynamic>> _packages = [];
@@ -59,6 +62,19 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     _CategoryOption(
         'Car Rental & Transportation', Icons.directions_car_filled_outlined),
     _CategoryOption('Gift & Souvenir', Icons.card_giftcard_outlined),
+  ];
+
+  final List<String> _cities = const [
+    'Nablus',
+    'Ramallah',
+    'Jenin',
+    'Tulkarm',
+    'Qalqilya',
+    'Hebron',
+    'Bethlehem',
+    'Jericho',
+    'Jerusalem',
+    'Other',
   ];
 
   @override
@@ -88,6 +104,9 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     _highlights = List<String>.from(s['highlights'] ?? []);
     _packages = List<Map<String, dynamic>>.from(s['packages'] ?? []);
 
+    _longCtrl = TextEditingController(text: s['longitude']?.toString() ?? "");
+    _latCtrl = TextEditingController(text: s['latitude']?.toString() ?? "");
+
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 650),
@@ -107,6 +126,9 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     _categoryCtrl.dispose();
     _priceCtrl.dispose();
     _discountCtrl.dispose();
+    _longCtrl.dispose();
+    _latCtrl.dispose();
+
     super.dispose();
   }
 
@@ -199,6 +221,8 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
       "category": _categoryCtrl.text.trim(),
       "price": double.tryParse(_priceCtrl.text.trim()) ?? 0,
       "discount": _discountCtrl.text.trim(),
+      "longitude": double.tryParse(_longCtrl.text.trim()) ?? 0,
+      "latitude": double.tryParse(_latCtrl.text.trim()) ?? 0,
       "images": _images,
       "highlights": _highlights,
       "packages": _packages,
@@ -277,6 +301,83 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                           setState(() {
                             _categoryCtrl.text = opt.label;
                           });
+                          Navigator.pop(ctx);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openCityPicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Select city",
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: kTextColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _cities.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                    itemBuilder: (context, index) {
+                      final city = _cities[index];
+                      final isSelected = _cityCtrl.text.trim() == city;
+
+                      return ListTile(
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 4),
+                        title: Text(
+                          city,
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight:
+                                isSelected ? FontWeight.w600 : FontWeight.w500,
+                            color: kTextColor,
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? const Icon(Icons.check, color: kPrimaryColor)
+                            : null,
+                        onTap: () {
+                          setState(() => _cityCtrl.text = city);
                           Navigator.pop(ctx);
                         },
                       );
@@ -404,6 +505,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                 children: [
                   _sectionTitle("Location & Category"),
                   const SizedBox(height: 12),
+
                   Row(
                     children: [
                       Expanded(
@@ -411,7 +513,51 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _label("City"),
-                            _textField(_cityCtrl, hint: "Nablus"),
+                            TextFormField(
+                              controller: _cityCtrl,
+                              readOnly: true,
+                              style: GoogleFonts.poppins(
+                                  color: kTextColor, fontSize: 13),
+                              decoration: InputDecoration(
+                                hintText: "Select city",
+                                hintStyle: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade500,
+                                ),
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 12),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey.shade300),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey.shade300),
+                                ),
+                                focusedBorder: const OutlineInputBorder(
+                                  borderRadius:
+                                      BorderRadius.all(Radius.circular(16)),
+                                  borderSide: BorderSide(
+                                    color: kPrimaryColor,
+                                    width: 1.6,
+                                  ),
+                                ),
+                                suffixIcon: const Icon(
+                                  Icons.arrow_drop_down_rounded,
+                                  color: kPrimaryColor,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty)
+                                  return "Required";
+                                return null;
+                              },
+                              onTap: _openCityPicker,
+                            ),
                           ],
                         ),
                       ),
@@ -427,13 +573,52 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 12),
+
                   _label("Address"),
                   _textField(
                     _addressCtrl,
-                    hint: "e.g., Downtown Street 12",
+                    hint: "e.g., Street 15",
                     maxLines: 2,
                     required: false,
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ⭐ هنا أضفناهم داخل نفس الـ box ⭐
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _label("Longitude"),
+                            _textField(
+                              _longCtrl,
+                              hint: "e.g., 35.25478",
+                              keyboardType: TextInputType.number,
+                              required: false,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _label("Latitude"),
+                            _textField(
+                              _latCtrl,
+                              hint: "e.g., 32.22165",
+                              keyboardType: TextInputType.number,
+                              required: false,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -910,7 +1095,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
 
   Widget _miniPill({required IconData icon, required String label}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: kPrimaryColor.withOpacity(0.06),
@@ -954,7 +1139,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                 color: kPrimaryColor,
                 size: 30,
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 16),
               Text(
                 "Add service photos",
                 style: GoogleFonts.poppins(
@@ -1091,7 +1276,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
           _animController.forward(from: 0.7);
         },
         child: Container(
-          height: 56,
+          height: 57,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             gradient: LinearGradient(
@@ -1104,7 +1289,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
               BoxShadow(
                 color: kPrimaryColor.withOpacity(0.45),
                 blurRadius: 20,
-                offset: const Offset(0, 10),
+                offset: const Offset(0, 8),
               ),
             ],
           ),

@@ -245,7 +245,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
+                const SizedBox(height: 6),
                 Text(
                   'Failed to load services',
                   style: GoogleFonts.poppins(

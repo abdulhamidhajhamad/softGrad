@@ -460,7 +460,8 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.grey.shade300),
+              borderSide:
+                  BorderSide(color: const Color.fromARGB(255, 142, 142, 142)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -552,15 +553,16 @@ class _MiniStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return SizedBox(
+      width: 110, // ⭐ حجم مضبوط يمنع تغطية السويتش
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: const Color.fromARGB(213, 1, 1, 85),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -569,20 +571,21 @@ class _MiniStatCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 18, color: kPrimaryColor),
+            Icon(icon, size: 18, color: Colors.white),
             const SizedBox(height: 4),
             Text(
               value,
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
+                color: Colors.white,
               ),
             ),
             Text(
               label,
               style: GoogleFonts.poppins(
                 fontSize: 11,
-                color: Colors.grey.shade600,
+                color: Colors.white70,
               ),
             ),
           ],

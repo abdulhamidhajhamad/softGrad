@@ -1,11 +1,15 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 
 class PackagesProviderScreen extends StatefulWidget {
-  /// قائمة الخدمات القادمة من شاشة الخدمات
-  /// كل عنصر Map فيه على الأقل:  name  , price
   final List<Map<String, dynamic>> services;
 
   const PackagesProviderScreen({
@@ -18,19 +22,16 @@ class PackagesProviderScreen extends StatefulWidget {
 }
 
 class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
-  /// قايمة عامة (static) عشان تضل محتفظة بالباكيجات طول ما الأبلكيشن شغال
   static final List<_BundlePackage> _savedPackages = [];
 
-  /// الباكيجات التي ينشئها البروفايدر (مرتبطة بـ _savedPackages)
   late List<_BundlePackage> _packages;
 
   @override
   void initState() {
     super.initState();
-    _packages = _savedPackages; // نربطها بالليست المشتركة
+    _packages = _savedPackages;
   }
 
-  /// اختصار للخدمات
   List<Map<String, dynamic>> get _services => widget.services;
 
   double _servicePriceAt(int index) {
@@ -65,6 +66,26 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
     return "${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}";
   }
 
+  Future<String?> _pickImageBase64() async {
+    final ImagePicker picker = ImagePicker();
+
+    XFile? picked;
+
+    if (kIsWeb) {
+      picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) return null;
+
+      Uint8List bytes = await picked.readAsBytes();
+      return base64Encode(bytes);
+    } else {
+      picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) return null;
+
+      final bytes = await picked.readAsBytes();
+      return base64Encode(bytes);
+    }
+  }
+
   Future<void> _openPackageSheet({int? editingIndex}) async {
     final editing = (editingIndex != null) ? _packages[editingIndex] : null;
 
@@ -78,6 +99,8 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
     DateTime? startDate = editing?.startDate;
     DateTime? endDate = editing?.endDate;
+
+    String? imageBase64 = editing?.imageBase64;
 
     final result = await showModalBottomSheet<_BundlePackage>(
       context: context,
@@ -163,6 +186,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                         ),
                       ),
                     ),
+
                     Text(
                       editing == null ? "Create new package" : "Edit package",
                       style: GoogleFonts.poppins(
@@ -172,7 +196,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Package name
                     TextField(
                       controller: nameCtrl,
                       decoration: InputDecoration(
@@ -185,22 +208,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                         fillColor: const Color(0xFFF9FAFB),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFE5E7EB),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFE5E7EB),
-                          ),
-                        ),
-                        focusedBorder: const OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(16)),
-                          borderSide: BorderSide(
-                            color: kPrimaryColor,
-                            width: 1.5,
-                          ),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
@@ -208,6 +215,63 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                     ),
 
                     const SizedBox(height: 18),
+
+                    // ---------------------------
+                    // ** IMAGE UPLOAD SECTION **
+                    // ---------------------------
+                    Text(
+                      "Package image",
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    InkWell(
+                      onTap: () async {
+                        final base64 = await _pickImageBase64();
+                        if (base64 != null) {
+                          setSheetState(() => imageBase64 = base64);
+                        }
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        height: 170,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                          image: imageBase64 != null
+                              ? DecorationImage(
+                                  fit: BoxFit.cover,
+                                  image: MemoryImage(
+                                    base64Decode(imageBase64!),
+                                  ),
+                                )
+                              : null,
+                        ),
+                        child: imageBase64 == null
+                            ? Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.camera_alt_outlined,
+                                      size: 32, color: Colors.grey[700]),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    "Upload image",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: Colors.grey[700],
+                                    ),
+                                  )
+                                ],
+                              )
+                            : null,
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
 
                     Text(
                       "Select services to include",
@@ -217,7 +281,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-
                     if (_services.isEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 4, bottom: 16),
@@ -271,7 +334,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
                     const SizedBox(height: 10),
 
-                    // Bundle price
                     TextField(
                       controller: priceCtrl,
                       keyboardType: TextInputType.number,
@@ -285,22 +347,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                         fillColor: const Color(0xFFF9FAFB),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFE5E7EB),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFE5E7EB),
-                          ),
-                        ),
-                        focusedBorder: const OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(16)),
-                          borderSide: BorderSide(
-                            color: kPrimaryColor,
-                            width: 1.5,
-                          ),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
@@ -310,15 +356,16 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
                     const SizedBox(height: 14),
 
-                    // مدة الباكيج (تاريخ البداية والنهاية)
                     Text(
-                      "Package duration (optional)",
+                      "Package duration",
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+
                     const SizedBox(height: 8),
+
                     Row(
                       children: [
                         Expanded(
@@ -431,7 +478,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
                     const SizedBox(height: 12),
 
-                    // Summary: base total + discount
                     if (baseTotal > 0)
                       Container(
                         width: double.infinity,
@@ -517,6 +563,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                             bundlePrice: price,
                             startDate: startDate,
                             endDate: endDate,
+                            imageBase64: imageBase64,
                           );
 
                           Navigator.pop(ctx, package);
@@ -576,7 +623,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Info card
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
@@ -609,18 +655,17 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Select multiple services and create bundle offers with a special price.',
+                      'Select multiple services and create bundle offers with a special price!',
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         color: Colors.grey[800],
-                        height: 1.3,
+                        height: 1.8,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-
             if (!hasPackages)
               _EmptyPackagesCard(services: _services)
             else
@@ -648,7 +693,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 14),
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(18),
@@ -656,14 +701,29 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                         BoxShadow(
                           color: Colors.black.withOpacity(0.03),
                           blurRadius: 8,
-                          offset: const Offset(0, 3),
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // header row
+                        // ------------------
+                        // SHOW IMAGE HERE
+                        // ------------------
+                        if (p.imageBase64 != null) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.memory(
+                              base64Decode(p.imageBase64!),
+                              height: 270,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(height: 19),
+                        ],
+
                         Row(
                           children: [
                             Container(
@@ -683,7 +743,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                               child: Text(
                                 p.name,
                                 style: GoogleFonts.poppins(
-                                  fontSize: 15,
+                                  fontSize: 19,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -691,14 +751,14 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                             Text(
                               "₪${p.bundlePrice.toStringAsFixed(0)}",
                               style: GoogleFonts.poppins(
-                                fontSize: 15,
+                                fontSize: 19,
                                 fontWeight: FontWeight.w700,
                                 color: kPrimaryColor,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 18),
                         if (includedNames.isNotEmpty)
                           Text(
                             "Includes: ${includedNames.join(', ')}",
@@ -708,7 +768,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                             ),
                           ),
                         if (rangeText != null) ...[
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 14),
                           Row(
                             children: [
                               Icon(
@@ -729,7 +789,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                             ],
                           ),
                         ],
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 14),
                         if (baseTotal > 0)
                           Row(
                             children: [
@@ -765,12 +825,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined,
-                                  size: 20, color: Colors.grey),
-                              onPressed: () =>
-                                  _openPackageSheet(editingIndex: index),
-                            ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline,
                                   size: 20, color: Colors.redAccent),
@@ -810,7 +864,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
   }
 }
 
-/// كارت حالة فارغة لما ما يكون في أي باكيجات
 class _EmptyPackagesCard extends StatelessWidget {
   final List<Map<String, dynamic>> services;
 
@@ -892,7 +945,6 @@ class _EmptyPackagesCard extends StatelessWidget {
   }
 }
 
-/// موديل داخلي للباكيج
 class _BundlePackage {
   final String name;
   final List<int> serviceIndices;
@@ -900,11 +952,14 @@ class _BundlePackage {
   final DateTime? startDate;
   final DateTime? endDate;
 
+  final String? imageBase64; // NEW FIELD
+
   _BundlePackage({
     required this.name,
     required this.serviceIndices,
     required this.bundlePrice,
     this.startDate,
     this.endDate,
+    this.imageBase64,
   });
 }

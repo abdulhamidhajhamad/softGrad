@@ -273,7 +273,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => PackagesProviderScreen(
-                       // << HERE: نمرّر الخدمات الحقيقية من شاشة الخدمات
+                        // << HERE: نمرّر الخدمات الحقيقية من شاشة الخدمات
                         services: _services,
                       ),
                     ),
@@ -585,8 +585,9 @@ class _ContactIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return CircleAvatar(
       radius: 25,
-      backgroundColor: kContactCircleColor,
-      child: Icon(icon, color: kContactIconColor, size: 26),
+      backgroundColor: const Color.fromARGB(158, 246, 252, 88),
+      child:
+          Icon(icon, color: const Color.fromARGB(185, 12, 23, 230), size: 26),
     );
   }
 }

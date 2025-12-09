@@ -225,29 +225,6 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
             _card(
               Column(
                 children: [
-                  _iconInfo("Category", s["category"] ?? "-",
-                      Icons.grid_view_rounded),
-                  _divider(),
-                  _iconInfo(
-                      "City", s["city"] ?? "-", Icons.location_on_outlined),
-                  if (s["address"] != null &&
-                      s["address"].toString().trim().isNotEmpty) ...[
-                    _divider(),
-                    _iconInfo("Address", s["address"], Icons.map_outlined),
-                  ]
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // -----------------------
-            // ⭐ القسم: السعر والخصم
-            // -----------------------
-            _sectionTitle("Category & Location"),
-            _card(
-              Column(
-                children: [
                   _iconInfo(
                     "Category",
                     s["category"] ?? "-",
@@ -259,15 +236,18 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                     s["city"] ?? "-",
                     Icons.location_on_outlined,
                   ),
-                  if (s["address"] != null &&
-                      s["address"].toString().trim().isNotEmpty) ...[
-                    _divider(),
-                    _iconInfo("Address", s["address"], Icons.map_outlined),
-                  ],
+                  _divider(),
+                  _iconInfo(
+                    "Address",
+                    (s["address"] == null ||
+                            s["address"].toString().trim().isEmpty)
+                        ? "-"
+                        : s["address"].toString(),
+                    Icons.map_outlined,
+                  ),
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
 
             // -----------------------
@@ -279,6 +259,7 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _textTitle("Description"),
+                  const SizedBox(height: 8),
                   _textBody(
                     s["description"] ?? "-",
                   ),
@@ -286,6 +267,35 @@ class _ShowMoreProviderScreenState extends State<ShowMoreProviderScreen> {
               ),
             ),
 
+            const SizedBox(height: 20),
+
+            _sectionTitle("Pricing Information"),
+
+            _card(
+              Column(
+                children: [
+                  _iconInfo(
+                    "Price",
+                    "₪${finalPrice.toStringAsFixed(0)}",
+                    Icons.attach_money_rounded,
+                  ),
+                  if (hasDiscount) ...[
+                    _divider(),
+                    _iconInfo(
+                      "Discount",
+                      "-${s['discount']}%",
+                      Icons.local_offer_outlined,
+                    ),
+                  ],
+                  _divider(),
+                  _iconInfo(
+                    "Pricing Type",
+                    s["priceType"] ?? "-",
+                    Icons.category_outlined,
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 20),
 
             // -----------------------

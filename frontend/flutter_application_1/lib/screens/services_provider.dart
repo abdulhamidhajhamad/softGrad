@@ -423,8 +423,8 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         const SizedBox(width: 8),
         _MiniStatCard(
           icon: Icons.visibility_outlined,
-          label: 'Active / Hidden',
-          value: '$active / $hidden',
+          label: 'Active ┃ Hidden',
+          value: '$active   ┃   $hidden',
         ),
         const SizedBox(width: 8),
         Expanded(

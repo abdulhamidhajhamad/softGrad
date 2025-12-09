@@ -693,7 +693,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 105, vertical: 12),
+                                horizontal: 100, vertical: 20),
                             decoration: BoxDecoration(
                               color: kPrimaryColor.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(5),
@@ -701,7 +701,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                             child: Text(
                               "Service Details",
                               style: GoogleFonts.poppins(
-                                fontSize: 17,
+                                fontSize: 19,
                                 fontWeight: FontWeight.w700,
                                 color: kPrimaryColor,
                               ),
@@ -709,7 +709,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 16),
                       _buildInput("Name", _nameCtrl),
                     ],
                   ),
@@ -738,7 +738,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                             "Description",
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w600,
-                              fontSize: 14,
+                              fontSize: 15,
                               color: kTextColor,
                             ),
                           ),
@@ -772,38 +772,72 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         "Pricing & Location",
                         style: GoogleFonts.poppins(
                           fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                          fontSize: 15,
                           color: kTextColor,
                         ),
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
+                          // ------- Address -------
                           Expanded(
-                            child: _buildInput("Address", _addressCtrl),
+                            child: Container(
+                              height: 52,
+                              child: TextFormField(
+                                controller: _addressCtrl,
+                                decoration: _inputDecoration("Address"),
+                                style: GoogleFonts.poppins(fontSize: 13),
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 12),
+
+                          // ------- City Dropdown -------
                           Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedCity,
-                              decoration: _inputDecoration("City"),
-                              icon: const Icon(Icons.expand_more_rounded,
-                                  size: 18),
-                              items: kCities
-                                  .map(
-                                    (city) => DropdownMenuItem<String>(
-                                      value: city,
-                                      child: Text(
-                                        city,
-                                        style:
-                                            GoogleFonts.poppins(fontSize: 13),
-                                      ),
+                            child: Container(
+                              height: 52,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade300),
+                                color: Colors.white,
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: (_selectedCity == null ||
+                                          _selectedCity!.isEmpty)
+                                      ? null
+                                      : _selectedCity,
+
+                                  // ⭐ هذا هو الليبل (placeholder)
+                                  hint: Text(
+                                    "City",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade500,
                                     ),
-                                  )
-                                  .toList(),
-                              onChanged: (v) {
-                                setState(() => _selectedCity = v);
-                              },
+                                  ),
+
+                                  icon: const Icon(Icons.expand_more_rounded,
+                                      size: 18),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    color: Colors.black,
+                                  ),
+                                  items: kCities
+                                      .map(
+                                        (city) => DropdownMenuItem<String>(
+                                          value: city,
+                                          child: Text(city),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (v) {
+                                    setState(() => _selectedCity = v);
+                                  },
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -846,16 +880,16 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 13),
                       Text(
                         "Price Type",
                         style: GoogleFonts.poppins(
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: FontWeight.w500,
                           color: kTextColor,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Expanded(
@@ -871,16 +905,16 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 20),
                       Text(
                         "Service Category",
                         style: GoogleFonts.poppins(
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: FontWeight.w500,
                           color: kTextColor,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         value: _selectedCategory,
                         decoration: _inputDecoration("Category"),
@@ -936,7 +970,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         "Gallery",
                         style: GoogleFonts.poppins(
                           fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                          fontSize: 15,
                           color: kTextColor,
                         ),
                       ),
@@ -1070,7 +1104,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                             "Highlights",
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w600,
-                              fontSize: 14,
+                              fontSize: 15,
                               color: kTextColor,
                             ),
                           ),
@@ -1142,15 +1176,15 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                               ),
                           ],
                         ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       const Divider(height: 24),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         title: Text(
                           "Visible in search",
                           style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                             color: kTextColor,
                           ),
                         ),

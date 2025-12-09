@@ -1,37 +1,122 @@
+// lib/screens/packages_provider.dart
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+// 🚀 التأكد من مسار الاستيراد الصحيح
+import 'package:flutter_application_1/services/package_service.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 
-class PackagesProviderScreen extends StatefulWidget {
-  /// قائمة الخدمات القادمة من شاشة الخدمات
-  /// كل عنصر Map فيه على الأقل:  name  , price
-  final List<Map<String, dynamic>> services;
+// 🔄 الموديل الجديد لتمثيل الباقة من الـ Backend
+class BundlePackage {
+  final String id;
+  final String name;
+  final List<String> serviceIds;
+  final List<String> serviceNames;
+  final double bundlePrice;
+  final DateTime? startDate;
+  final DateTime? endDate;
 
-  const PackagesProviderScreen({
-    Key? key,
-    this.services = const [],
-  }) : super(key: key);
+  BundlePackage({
+    required this.id,
+    required this.name,
+    required this.serviceIds,
+    required this.serviceNames,
+    required this.bundlePrice,
+    this.startDate,
+    this.endDate,
+  });
+
+  // 🆕 دالة الإنشاء من JSON المعدلة للتعامل مع الأخطاء الرقمية (newPrice)
+    factory BundlePackage.fromJson(Map<String, dynamic> json) {
+      // 1. معالجة Service Names (للعرض)
+      final List<dynamic> rawServiceNames = json['serviceNames'] as List<dynamic>? ?? [];
+      
+      // 2. معالجة Service IDs (للإرسال في الـ Backend)
+      final serviceIds = (json['serviceIds'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [];
+            
+      // 3. 🎯 الإصلاح الرئيسي للخطأ: التعامل الآمن مع newPrice 
+      // إذا كانت القيمة null، تكون price هي 0.0 بدلاً من الانهيار.
+      final double price = (json['newPrice'] as num?)?.toDouble() ?? 0.0;
+
+      // 4. معالجة التواريخ
+      final startDate = json['startDate'] != null
+          ? DateTime.tryParse(json['startDate'])
+          : null;
+      final endDate = json['endDate'] != null
+          ? DateTime.tryParse(json['endDate'])
+          : null;
+
+      return BundlePackage(
+        id: json['_id'] as String? ?? UniqueKey().toString(),
+        name: json['packageName'] as String? ?? 'Unnamed Package',
+        serviceIds: serviceIds, 
+        serviceNames: rawServiceNames.map((s) => s.toString()).toList(),
+        bundlePrice: price, 
+        startDate: startDate,
+        endDate: endDate,
+      );
+    }
+} 
+
+class PackagesProviderScreen extends StatefulWidget {
+  // ✅ تم التأكد من حذف الباراميتر services
+  const PackagesProviderScreen({Key? key}) : super(key: key);
 
   @override
   State<PackagesProviderScreen> createState() => _PackagesProviderScreenState();
 }
 
 class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
-  /// قايمة عامة (static) عشان تضل محتفظة بالباكيجات طول ما الأبلكيشن شغال
-  static final List<_BundlePackage> _savedPackages = [];
+  List<BundlePackage> _packages = [];
+  List<Map<String, dynamic>> _services = [];
 
-  /// الباكيجات التي ينشئها البروفايدر (مرتبطة بـ _savedPackages)
-  late List<_BundlePackage> _packages;
+  bool _isLoading = true; 
+  String? _error; 
 
   @override
   void initState() {
     super.initState();
-    _packages = _savedPackages; // نربطها بالليست المشتركة
+    _fetchData(); 
   }
 
-  /// اختصار للخدمات
-  List<Map<String, dynamic>> get _services => widget.services;
+  // 🆕 دالة جلب الخدمات والباقات
+ // داخل class _PackagesProviderScreenState
+
+Future<void> _fetchData() async {
+  setState(() {
+    _isLoading = true;
+    _error = null;
+  });
+  
+  try {
+    // 1. جلب الخدمات المتاحة للـ Provider (لأجل الـ Bottom Sheet)
+    final fetchedServices = await PackageService.fetchProviderServicesForCreation();
+
+    // 2. جلب الباقات الموجودة للمزود
+    final fetchedPackagesJson = await PackageService.fetchProviderPackages();
+
+    setState(() {
+      _services = fetchedServices; // ⬅️ تحديث قائمة الخدمات
+      _packages = fetchedPackagesJson
+          .map((json) => BundlePackage.fromJson(json))
+          .toList();
+      _isLoading = false; // ⬅️ إيقاف التحميل بعد النجاح
+    });
+  } catch (e) {
+    print('Error fetching data: $e');
+    setState(() {
+      _error = 'Failed to load data: ${e.toString()}';
+      _isLoading = false; // ⬅️ إيقاف التحميل بعد الفشل
+    });
+  }
+}
+
+  // دوال مساعدة لجلب البيانات من قائمة الخدمات (اللازمة للإنشاء)
+  String _serviceIdAt(int index) => (_services[index]['_id'] ?? '').toString();
 
   double _servicePriceAt(int index) {
     final raw = _services[index]['price'];
@@ -42,17 +127,27 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
   String _serviceNameAt(int index) =>
       (_services[index]['name'] ?? '').toString();
 
-  double _baseTotalForPackage(_BundlePackage p) {
+  double _getServicePriceById(String serviceId) {
+    final service = _services.firstWhere(
+      (s) => s['_id'] == serviceId,
+      orElse: () => {'price': 0},
+    );
+    final raw = service['price'];
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw?.toString() ?? '0') ?? 0;
+  }
+
+  // حساب الإجمالي الأساسي (مجموع أسعار الخدمات)
+  double _baseTotalForPackage(BundlePackage p) {
     double sum = 0;
-    for (final i in p.serviceIndices) {
-      if (i >= 0 && i < _services.length) {
-        sum += _servicePriceAt(i);
-      }
+    // ⚠️ يعتمد هذا الحساب على توفر serviceIds في الـ BundlePackage
+    for (final id in p.serviceIds) {
+      sum += _getServicePriceById(id);
     }
     return sum;
   }
 
-  double _discountPercent(_BundlePackage p) {
+  double _discountPercent(BundlePackage p) {
     final base = _baseTotalForPackage(p);
     if (base <= 0) return 0;
     final diff = base - p.bundlePrice;
@@ -65,21 +160,47 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
     return "${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}";
   }
 
-  Future<void> _openPackageSheet({int? editingIndex}) async {
-    final editing = (editingIndex != null) ? _packages[editingIndex] : null;
+  // دالة الحذف
+Future<void> _deletePackage(String packageId) async {
+  print('Attempting to delete package with ID: $packageId'); 
+  setState(() => _isLoading = true);
+  try {
+    await PackageService.deletePackage(packageId);
+    await _fetchData(); 
+  } catch (e) {
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
 
-    final nameCtrl = TextEditingController(text: editing?.name ?? '');
-    final priceCtrl = TextEditingController(
-      text: editing != null ? editing.bundlePrice.toStringAsFixed(0) : '',
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
     );
-    final selected = <int>{
-      if (editing != null) ...editing.serviceIndices,
+  }
+
+  Future<void> _openPackageSheet({BundlePackage? editingPackage}) async {
+    final selectedServiceIds = <String>{
+      if (editingPackage != null) ...editingPackage.serviceIds,
     };
 
-    DateTime? startDate = editing?.startDate;
-    DateTime? endDate = editing?.endDate;
+    final nameCtrl = TextEditingController(text: editingPackage?.name ?? '');
+    final priceCtrl = TextEditingController(
+      text: editingPackage != null
+          ? editingPackage.bundlePrice.toStringAsFixed(0)
+          : '',
+    );
 
-    final result = await showModalBottomSheet<_BundlePackage>(
+    DateTime? startDate = editingPackage?.startDate;
+    DateTime? endDate = editingPackage?.endDate;
+
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
@@ -97,10 +218,8 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
           child: StatefulBuilder(
             builder: (context, setSheetState) {
               double baseTotal = 0;
-              for (final i in selected) {
-                if (i >= 0 && i < _services.length) {
-                  baseTotal += _servicePriceAt(i);
-                }
+              for (final id in selectedServiceIds) {
+                baseTotal += _getServicePriceById(id);
               }
 
               final bundlePrice = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
@@ -119,6 +238,23 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                   initialDate: startDate ?? now,
                   firstDate: first,
                   lastDate: last,
+                  builder: (context, child) {
+                    return Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: ColorScheme.light(
+                          primary: kPrimaryColor, 
+                          onPrimary: Colors.white, 
+                          onSurface: Colors.black, 
+                        ),
+                        textButtonTheme: TextButtonThemeData(
+                          style: TextButton.styleFrom(
+                            foregroundColor: kPrimaryColor, 
+                          ),
+                        ),
+                      ),
+                      child: child!,
+                    );
+                  },
                 );
                 if (picked != null) {
                   setSheetState(() {
@@ -139,6 +275,23 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                   initialDate: endDate ?? first,
                   firstDate: first,
                   lastDate: last,
+                  builder: (context, child) {
+                    return Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: ColorScheme.light(
+                          primary: kPrimaryColor, 
+                          onPrimary: Colors.white, 
+                          onSurface: Colors.black, 
+                        ),
+                        textButtonTheme: TextButtonThemeData(
+                          style: TextButton.styleFrom(
+                            foregroundColor: kPrimaryColor, 
+                          ),
+                        ),
+                      ),
+                      child: child!,
+                    );
+                  },
                 );
                 if (picked != null) {
                   setSheetState(() {
@@ -146,6 +299,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                   });
                 }
               }
+
 
               return SingleChildScrollView(
                 child: Column(
@@ -164,7 +318,9 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                       ),
                     ),
                     Text(
-                      editing == null ? "Create new package" : "Edit package",
+                      editingPackage == null
+                          ? "Create new package"
+                          : "Edit package",
                       style: GoogleFonts.poppins(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
@@ -234,8 +390,9 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                         children: List.generate(_services.length, (index) {
                           final name = _serviceNameAt(index);
                           final price = _servicePriceAt(index);
+                          final id = _serviceIdAt(index);
 
-                          final isChecked = selected.contains(index);
+                          final isChecked = selectedServiceIds.contains(id);
 
                           return CheckboxListTile(
                             contentPadding: EdgeInsets.zero,
@@ -244,9 +401,10 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                             onChanged: (v) {
                               setSheetState(() {
                                 if (v == true) {
-                                  selected.add(index);
+                                  selectedServiceIds.add(id);
                                 } else {
-                                  selected.remove(index);
+                                  selectedServiceIds
+                                      .remove(id); 
                                 }
                               });
                             },
@@ -310,7 +468,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
                     const SizedBox(height: 14),
 
-                    // مدة الباكيج (تاريخ البداية والنهاية)
+                    // Package duration (Start and End Date)
                     Text(
                       "Package duration (optional)",
                       style: GoogleFonts.poppins(
@@ -497,32 +655,26 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                           final name = nameCtrl.text.trim();
                           final price =
                               double.tryParse(priceCtrl.text.trim()) ?? 0;
-                          if (name.isEmpty || selected.isEmpty || price <= 0) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Text(
-                                    "Please fill name, select at least one service, and set bundle price."),
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            );
+                          if (name.isEmpty ||
+                              selectedServiceIds.isEmpty ||
+                              price <= 0) {
+                            _showSnackBar(
+                                "Please fill name, select at least one service, and set bundle price.");
                             return;
                           }
 
-                          final package = _BundlePackage(
-                            name: name,
-                            serviceIndices: selected.toList()..sort(),
-                            bundlePrice: price,
-                            startDate: startDate,
-                            endDate: endDate,
-                          );
-
-                          Navigator.pop(ctx, package);
+                          Navigator.pop(ctx, {
+                            'packageName': name,
+                            'serviceIds': selectedServiceIds.toList(),
+                            'newPrice': price,
+                            'startDate': startDate,
+                            'endDate': endDate,
+                          });
                         },
                         child: Text(
-                          editing == null ? "Create package" : "Save changes",
+                          editingPackage == null
+                              ? "Create package"
+                              : "Save changes",
                           style: GoogleFonts.poppins(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -540,19 +692,84 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
       },
     );
 
+    // تنفيذ عملية الإضافة
     if (result != null) {
-      setState(() {
-        if (editingIndex != null) {
-          _packages[editingIndex] = result;
-        } else {
-          _packages.add(result);
+      if (editingPackage != null) {
+        _showSnackBar('Update feature not implemented (Missing PUT/PATCH API).');
+      } else {
+        setState(() {
+          _isLoading = true; 
+        });
+        try {
+          await PackageService.createPackage(
+            packageName: result['packageName'],
+            serviceIds: result['serviceIds'].cast<String>(),
+            newPrice: result['newPrice'],
+            startDate: result['startDate'],
+            endDate: result['endDate'],
+          );
+          await _fetchData();
+          _showSnackBar('✅ Package created successfully!');
+        } catch (e) {
+          print('Error creating package: $e');
+          _showSnackBar('❌ Failed to create package: ${e.toString()}');
+        } finally {
+          setState(() {
+            _isLoading = false;
+          });
         }
-      });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF5F5F5),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: kPrimaryColor),
+              SizedBox(height: 16),
+              Text('Loading packages and services...'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF5F5F5),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 40),
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(color: Colors.red),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _fetchData,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: kPrimaryColor),
+                  child: const Text('Try Again'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final hasPackages = _packages.isNotEmpty;
 
     return Scaffold(
@@ -571,226 +788,226 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
         ),
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Info card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE0EAFF),
-                      borderRadius: BorderRadius.circular(14),
+      body: RefreshIndicator( 
+        onRefresh: _fetchData,
+        color: kPrimaryColor,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Info card 
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
                     ),
-                    child: const Icon(
-                      Icons.all_inclusive_rounded,
-                      color: kPrimaryColor,
-                      size: 26,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Select multiple services and create bundle offers with a special price.',
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        color: Colors.grey[800],
-                        height: 1.3,
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0EAFF),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(
+                        Icons.all_inclusive_rounded,
+                        color: kPrimaryColor,
+                        size: 26,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            if (!hasPackages)
-              _EmptyPackagesCard(services: _services)
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: List.generate(_packages.length, (index) {
-                  final p = _packages[index];
-                  final baseTotal = _baseTotalForPackage(p);
-                  final discount = _discountPercent(p);
-
-                  final includedNames = p.serviceIndices
-                      .where((i) => i >= 0 && i < _services.length)
-                      .map(_serviceNameAt)
-                      .toList();
-
-                  String? rangeText;
-                  if (p.startDate != null && p.endDate != null) {
-                    rangeText =
-                        "${_formatDate(p.startDate)}  -  ${_formatDate(p.endDate)}";
-                  } else if (p.startDate != null) {
-                    rangeText = "From ${_formatDate(p.startDate)}";
-                  } else if (p.endDate != null) {
-                    rangeText = "Until ${_formatDate(p.endDate)}";
-                  }
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 14),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Select multiple services and create bundle offers with a special price.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: Colors.grey[800],
+                          height: 1.3,
                         ),
-                      ],
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // header row
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: kPrimaryColor.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Icon(
-                                Icons.inventory_2_rounded,
-                                size: 20,
-                                color: kPrimaryColor,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                p.name,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              "₪${p.bundlePrice.toStringAsFixed(0)}",
-                              style: GoogleFonts.poppins(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: kPrimaryColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        if (includedNames.isNotEmpty)
-                          Text(
-                            "Includes: ${includedNames.join(', ')}",
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: Colors.grey[700],
-                            ),
+                  ],
+                ),
+              ),
+
+              if (!hasPackages)
+                _EmptyPackagesCard(services: _services)
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: List.generate(_packages.length, (index) {
+                    final p = _packages[index];
+                    final baseTotal = _baseTotalForPackage(p);
+                    final discount = _discountPercent(p);
+
+                    final includedNames = p.serviceNames ?? [];
+
+                    String? rangeText;
+                    if (p.startDate != null && p.endDate != null) {
+                      rangeText =
+                          "${_formatDate(p.startDate)}  -  ${_formatDate(p.endDate)}";
+                    } else if (p.startDate != null) {
+                      rangeText = "From ${_formatDate(p.startDate)}";
+                    } else if (p.endDate != null) {
+                      rangeText = "Until ${_formatDate(p.endDate)}";
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
                           ),
-                        if (rangeText != null) ...[
-                          const SizedBox(height: 4),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // header row
                           Row(
                             children: [
-                              Icon(
-                                Icons.schedule_outlined,
-                                size: 16,
-                                color: Colors.grey[700],
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: kPrimaryColor.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Icon(
+                                  Icons.inventory_2_rounded,
+                                  size: 20,
+                                  color: kPrimaryColor,
+                                ),
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  rangeText,
+                                  p.name,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                "₪${p.bundlePrice.toStringAsFixed(0)}",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: kPrimaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          if (includedNames.isNotEmpty)
+                            Text(
+                              "Includes: ${includedNames.join(', ')}",
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                          if (rangeText != null) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.schedule_outlined,
+                                  size: 16,
+                                  color: Colors.grey[700],
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    rangeText,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11.5,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          // عرض السعر الأساسي والخصم
+                          if (baseTotal > 0)
+                            Row(
+                              children: [
+                                Text(
+                                  "Base: ₪${baseTotal.toStringAsFixed(0)}",
                                   style: GoogleFonts.poppins(
                                     fontSize: 11.5,
                                     color: Colors.grey[700],
                                   ),
                                 ),
+                                if (discount > 0) ...[
+                                  const SizedBox(width: 10),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE8F5E9),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      "-${discount.toStringAsFixed(1)}%",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 11,
+                                        color: const Color(0xFF2E7D32),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              // ⚠️ التعديل غير مدعوم حالياً لعدم وجود API
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined,
+                                    size: 20, color: Colors.grey),
+                                onPressed: () =>
+                                    _openPackageSheet(editingPackage: p),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    size: 20, color: Colors.redAccent),
+                                onPressed: () => _deletePackage(p.id),
                               ),
                             ],
                           ),
                         ],
-                        const SizedBox(height: 4),
-                        if (baseTotal > 0)
-                          Row(
-                            children: [
-                              Text(
-                                "Base: ₪${baseTotal.toStringAsFixed(0)}",
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11.5,
-                                  color: Colors.grey[700],
-                                ),
-                              ),
-                              if (discount > 0) ...[
-                                const SizedBox(width: 10),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE8F5E9),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    "-${discount.toStringAsFixed(1)}%",
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 11,
-                                      color: const Color(0xFF2E7D32),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined,
-                                  size: 20, color: Colors.grey),
-                              onPressed: () =>
-                                  _openPackageSheet(editingIndex: index),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline,
-                                  size: 20, color: Colors.redAccent),
-                              onPressed: () {
-                                setState(() {
-                                  _packages.removeAt(index);
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ),
-          ],
+                      ),
+                    );
+                  }),
+                ),
+            ],
+          ),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      // لا تعرض زر الإضافة إذا كانت قائمة الخدمات فارغة
       floatingActionButton: _services.isEmpty
           ? null
           : FloatingActionButton.extended(
@@ -890,21 +1107,4 @@ class _EmptyPackagesCard extends StatelessWidget {
       ),
     );
   }
-}
-
-/// موديل داخلي للباكيج
-class _BundlePackage {
-  final String name;
-  final List<int> serviceIndices;
-  final double bundlePrice;
-  final DateTime? startDate;
-  final DateTime? endDate;
-
-  _BundlePackage({
-    required this.name,
-    required this.serviceIndices,
-    required this.bundlePrice,
-    this.startDate,
-    this.endDate,
-  });
 }

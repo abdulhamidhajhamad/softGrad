@@ -1,5 +1,5 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose'; // ⬅️ تم فصل هذا السطر
 import { Model } from 'mongoose';
 import { Service } from './service.schema';
 import { CreateServiceDto, UpdateServiceDto } from './service.dto';
@@ -7,6 +7,7 @@ import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
 
 @Injectable()
 export class ServiceService {
+  private readonly logger = new Logger(ServiceService.name);
   constructor(
     @InjectModel(Service.name) private serviceModel: Model<Service>,
     private supabaseStorage: SupabaseStorageService,
@@ -130,9 +131,7 @@ export class ServiceService {
     files?: Express.Multer.File[] 
   ): Promise<Service> {
     try {
-      // 1. Find service by ID and ensure it belongs to the provider
       const service = await this.serviceModel.findOne({ _id: serviceId, providerId });
-
       if (!service) {
         throw new HttpException(
           'Service not found or you do not have permission to update it',
@@ -612,5 +611,36 @@ export class ServiceService {
       );
     }
   }
+
+  async getVendorServicesDetails(providerId: string): Promise<any[]> {
+    try {
+        // البحث عن الخدمات التي يكون providerId مساوياً لـ userId الخاص بالبائع
+        const services = await this.serviceModel
+            .find({ providerId: providerId })
+            // 🚨 تحديد الحقول المطلوبة فقط: _id, serviceName, price
+            .select('_id serviceName price') 
+            .lean() // استخدام lean لتحسين الأداء
+            .exec();
+
+        if (!services || services.length === 0) {
+            // يمكن إرجاع مصفوفة فارغة بدلاً من خطأ 404 إذا لم يتم العثور على خدمات
+            return [];
+        }
+
+        // إعادة تسمية الحقل 'serviceName' إلى 'name' ليتطابق مع الـ Response المطلوب
+        return services.map(service => ({
+            _id: service._id.toString(),
+            name: service.serviceName, // تحويل serviceName إلى name
+            price: service.price,
+        }));
+
+    } catch (error) {
+        this.logger.error(`Failed to fetch services for provider ${providerId}: ${error.message}`, error.stack);
+        throw new HttpException(
+            'Failed to fetch vendor services details',
+            HttpStatus.INTERNAL_SERVER_ERROR
+        );
+    }
+}
   
 }

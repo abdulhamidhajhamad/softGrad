@@ -12,7 +12,7 @@ import { AdminModule } from './admin/admin.module';
 import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
 import { ChatModule } from './chatingService/chat.module';
 import { PaymentModule } from './payment/payment.module';
-
+import { PackageModule } from './Package/package.module'; // 💡 يجب استيراد هذه الوحدة
 // ✅ NEW MODULE IMPORTS
 import { NotificationModule } from './notification/notification.module';
 import { PromotionModule } from './promotion/promotion.module';
@@ -52,6 +52,7 @@ import { AiSearchModule } from './ai-search/ai-search.module';
     ServiceModule,
     BookingModule,
     AdminModule,
+    PackageModule,
     ShoppingCartModule,
     ChatModule,
     ReviewModule,
@@ -59,7 +60,6 @@ import { AiSearchModule } from './ai-search/ai-search.module';
     NotificationModule,
     PromotionModule,
     AiSearchModule,
-
   ],
   controllers: [],
   providers: [],

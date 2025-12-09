@@ -316,4 +316,26 @@ export class ServiceController {
       );
     }
   }
+
+  // 🆕 12. Get Vendor Services Details (ID, Name, Price) - محمي للـ Vendor
+@Get('vendor-services-details') // مسار جديد لعدم التعارض
+@UseGuards(JwtAuthGuard)
+async getVendorServicesDetails(@Request() req: any): Promise<any[]> {
+  try {
+    // الـ userId في التوكن هو الـ providerId للخدمات
+    const providerId = req.user.userId; 
+    
+    // يمكنك إضافة تحقق لدور المستخدم هنا (req.user.role !== 'vendor') إذا لزم الأمر
+    
+    // استدعاء الدالة الجديدة التي تم إنشاؤها في الخدمة
+    return await this.serviceService.getVendorServicesDetails(providerId);
+    
+  } catch (error) {
+    // استخدام HttpException لضمان إرجاع أخطاء NestJS القياسية
+    throw new HttpException(
+      error.message || 'Failed to fetch vendor services details',
+      error.status || HttpStatus.INTERNAL_SERVER_ERROR
+    );
+  }
+}
 }

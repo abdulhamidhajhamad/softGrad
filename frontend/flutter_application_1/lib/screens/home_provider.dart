@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
+// ✅ الاستيراد الصحيح لسيرفس الإشعارات
+import 'package:flutter_application_1/services/notification_provider_service.dart'; 
 import 'edit_profile_provider.dart';
 import 'services_provider.dart';
 import 'signin.dart';
@@ -9,6 +11,8 @@ import 'package:flutter_application_1/screens/messages_provider.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
 import 'package:flutter_application_1/screens/reviews_provider.dart';
 import 'package:flutter_application_1/screens/packages_provider.dart';
+// هذا الاستيراد يبدو زائداً ولكنه موجود في الملف الأصلي
+import 'package:flutter_application_1/screens/home_customer.dart'; 
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -20,7 +24,6 @@ class ProviderModel {
   final String brandName;
   final String email;
   final String phone;
-  // تم حذف final String category;
   final String description;
   final String city;
 
@@ -33,7 +36,6 @@ class ProviderModel {
     required this.brandName,
     required this.email,
     required this.phone,
-    // تم حذف required this.category,
     required this.description,
     required this.city,
     this.bookings,
@@ -56,16 +58,24 @@ class HomeProviderScreen extends StatefulWidget {
 class _HomeProviderScreenState extends State<HomeProviderScreen> {
   late ProviderModel provider;
   List<Map<String, dynamic>> _services = [];
-
+  
   @override
   void initState() {
     super.initState();
     provider = widget.provider;
     _loadServices();
+    // ✅ البدء باتصال الـ Realtime بمجرد إنشاء الشاشة
+    NotificationProviderService.initRealtimeNotifications();
+  }
+  
+  @override
+  void dispose() {
+    // ✅ إغلاق اتصال الـ Socket عند مغادرة الشاشة
+    NotificationProviderService.closeRealtimeConnection();
+    super.dispose();
   }
 
   void _loadServices() async {
-    // هذه البيانات المؤقتة يمكنك إزالتها لاحقاً
     _services = [
       {
         "name": "Wedding Photography",
@@ -115,14 +125,16 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
-                    Navigator.push(
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => const NotificationsProviderScreen(),
                       ),
                     );
+                    // 💡 عند العودة، نطلب تحديث الحالة يدوياً للتأكد
+                    NotificationProviderService.updateUnreadCountOnConnect();
                   },
                 ),
                 ListTile(
@@ -344,16 +356,25 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: _QuickAction(
-                          title: "Notifications",
-                          icon: Icons.notifications_none_outlined,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const NotificationsProviderScreen(),
-                              ),
+                        // ✅ استخدام ValueListenableBuilder للاستماع لتغير حالة الإشعارات
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: NotificationProviderService.hasUnreadNotifier,
+                          builder: (context, hasUnread, child) {
+                            return _QuickAction(
+                              title: "Notifications",
+                              icon: Icons.notifications_none_outlined,
+                              showBadge: hasUnread, // استخدام القيمة الفورية
+                              onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const NotificationsProviderScreen(),
+                                  ),
+                                );
+                                // 💡 تحديث الحالة عند العودة
+                                NotificationProviderService.updateUnreadCountOnConnect();
+                              },
                             );
                           },
                         ),
@@ -494,9 +515,7 @@ class _HeaderCard extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                // تم حذف Text(provider.category, ...)
-                // const SizedBox(height: 2),
-                const SizedBox(height: 4), // تم تعديل الارتفاع ليتناسب مع الحذف
+                const SizedBox(height: 4),
                 Row(
                   children: [
                     Icon(Icons.location_on,
@@ -565,9 +584,14 @@ class _QuickAction extends StatelessWidget {
   final String title;
   final IconData icon;
   final VoidCallback onTap;
+  final bool showBadge;
 
-  const _QuickAction(
-      {required this.title, required this.icon, required this.onTap});
+  const _QuickAction({
+    required this.title,
+    required this.icon,
+    required this.onTap,
+    this.showBadge = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -582,7 +606,25 @@ class _QuickAction extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 28, color: kPrimaryColor),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, size: 28, color: kPrimaryColor),
+                if (showBadge)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 6),
             Text(
               title,
@@ -613,7 +655,6 @@ class _ContactIcon extends StatelessWidget {
   }
 }
 
-// Packages teaser card
 class _PackagesTeaserCard extends StatelessWidget {
   final VoidCallback onTap;
 

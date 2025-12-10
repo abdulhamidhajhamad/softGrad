@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+// تأكد من استيراد ملف السيرفس الجديد بشكل صحيح
+import 'package:flutter_application_1/services/notification_provider_service.dart';
 /// Core colors – keep in sync with your app theme
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -37,35 +38,6 @@ class ProviderNotification {
   });
 }
 
-/// Repository / data source – connect this to your backend / Firestore / API.
-class NotificationsRepository {
-  /// Fetch all notifications for a provider.
-  static Future<List<ProviderNotification>> fetchNotificationsForProvider(
-    String providerId,
-  ) async {
-    await Future.delayed(const Duration(milliseconds: 400));
-    // TODO: Replace with real implementation:
-    //  - Call your REST API or Firestore here
-    //  - Map response to List<ProviderNotification>
-    return [];
-  }
-
-  /// Mark a list of notifications as read.
-  static Future<void> markAsRead(List<String> notificationIds) async {
-    // TODO: Implement backend call
-  }
-
-  /// Mark all notifications as read.
-  static Future<void> markAllAsRead(String providerId) async {
-    // TODO: Implement backend call
-  }
-
-  /// Delete a list of notifications.
-  static Future<void> deleteNotifications(List<String> notificationIds) async {
-    // TODO: Implement backend call
-  }
-}
-
 /// Main notifications screen for providers.
 class NotificationsProviderScreen extends StatefulWidget {
   final String? providerId;
@@ -96,25 +68,39 @@ class _NotificationsProviderScreenState
   }
 
   Future<void> _loadNotifications() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final data = await NotificationsRepository.fetchNotificationsForProvider(
-        widget.providerId ?? 'provider-id',
-      );
+      // 1. جلب الإشعارات من الباك إند
+      final data = await NotificationProviderService.fetchNotifications();
+      
       setState(() {
         _notifications = data;
+        _isLoading = false;
       });
+
+      // 2. حسب طلبك: بمجرد فتح الصفحة والنجاح في الجلب، يتم تعليم الكل كمقروء
+      // نقوم بذلك في الخلفية
+      if (data.any((n) => !n.isRead)) {
+         // تحديث الواجهة محلياً أولاً لتبدو سريعة
+         setState(() {
+           for (var n in _notifications) {
+             n.isRead = true;
+           }
+         });
+         // إرسال الطلب للسيرفر
+         await NotificationProviderService.markAllAsRead();
+      }
+
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to load notifications.';
-      });
-    } finally {
       if (mounted) {
         setState(() {
+          _errorMessage = 'Failed to load notifications.';
           _isLoading = false;
         });
       }
@@ -161,6 +147,8 @@ class _NotificationsProviderScreenState
   }
 
   Future<void> _markSelectedAsRead() async {
+    // بما أننا قمنا بتتعليم الكل كمقروء عند الدخول، هذه الدالة قد تكون إضافية
+    // لكن سنبقي المنطق سليماً للواجهة
     final ids = _selectedIds.toList();
     setState(() {
       for (final n in _notifications) {
@@ -169,7 +157,9 @@ class _NotificationsProviderScreenState
         }
       }
     });
-    await NotificationsRepository.markAsRead(ids);
+    // ملاحظة: الـ Backend يدعم حالياً markAllAsRead فقط،
+    // يمكنك إضافة endpoint لتعليم مجموعة محددة لاحقاً إذا أردت
+    // حالياً سنكتفي بالتحديث المحلي لأن الصفحة تعلم الكل كمقروء تلقائياً
     _exitSelectionMode();
   }
 
@@ -179,25 +169,36 @@ class _NotificationsProviderScreenState
         n.isRead = true;
       }
     });
-    await NotificationsRepository.markAllAsRead(
-      widget.providerId ?? 'provider-id',
-    );
+    await NotificationProviderService.markAllAsRead();
   }
 
   Future<void> _deleteSelected() async {
     final ids = _selectedIds.toList();
+    
+    // التحديث المتفائل للواجهة
     setState(() {
       _notifications.removeWhere((n) => ids.contains(n.id));
     });
-    await NotificationsRepository.deleteNotifications(ids);
     _exitSelectionMode();
+
+    // إرسال طلبات الحذف للسيرفر
+    for (String id in ids) {
+      try {
+        await NotificationProviderService.deleteNotification(id);
+      } catch (e) {
+        // يمكن إضافة معالجة خطأ هنا إذا لزم الأمر
+        print("Error deleting $id");
+      }
+    }
   }
 
   Future<void> _deleteSingle(String id) async {
+    // التحديث المتفائل للواجهة
     setState(() {
       _notifications.removeWhere((n) => n.id == id);
     });
-    await NotificationsRepository.deleteNotifications([id]);
+    // إرسال طلب الحذف
+    await NotificationProviderService.deleteNotification(id);
   }
 
   void _toggleFilterUnread() {
@@ -335,7 +336,6 @@ class _NotificationsProviderScreenState
                                     notification.isRead = true;
                                   });
                                   // TODO: Navigate based on notification.type
-                                  // e.g. open chat, booking details, etc.
                                 },
                                 onLongPress: () {
                                   if (!_selectionMode) {

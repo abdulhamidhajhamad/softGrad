@@ -199,7 +199,9 @@ export class AuthService {
     // Generate JWT token
     const token = this.jwtService.sign({ 
       userId: (user._id as Types.ObjectId).toString(), 
-      email: user.email 
+      email: user.email ,
+      username: user.userName // ADD THIS LINE
+
     });
     
     // Return user without sensitive data
@@ -272,7 +274,9 @@ export class AuthService {
     
     const token = this.jwtService.sign({ 
       userId: (user._id as Types.ObjectId).toString(), 
-      email: user.email 
+      email: user.email,
+          username: user.userName // ADD THIS LINE
+ 
     });
     
     const userObject = user.toObject();
@@ -493,7 +497,9 @@ async generateToken(user: any): Promise<string> {
     const payload = { 
         email: user.email, 
         userId: user._id, 
-        role: user.role 
+        role: user.role,
+        username: user.userName // ADD THIS LINE
+
     };
     return this.jwtService.sign(payload);
   }

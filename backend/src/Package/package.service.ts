@@ -4,7 +4,7 @@ import { InjectModel } from '@nestjs/mongoose'; // ✅ تم فصل الاستي�
 import { Model, Types } from 'mongoose';
 import { Package } from './package.entity';
 import { CreatePackageDto } from './package.dto';
-
+import { SupabaseStorageService } from '../subbase/supabaseStorage.service'; // 👈 استيراد الخدمة
 // 2. ✅ تم تغيير اسم الحقل هنا ليتطابق مع ServiceSchema
 interface IService {
   _id: Types.ObjectId;
@@ -17,19 +17,33 @@ export class PackageService {
 
   constructor(  
     @InjectModel(Package.name) private packageModel: Model<Package>,
-    @InjectModel('Service') private serviceModel: Model<IService>,  
+    @InjectModel('Service') private serviceModel: Model<IService>,
+    private supabaseService: SupabaseStorageService, // 👈 حقن الخدمة  
   ) {}
 
-  /**
-   * إنشاء باقة جديدة لـ Vendor
+ /**
+   * إنشاء باقة جديدة لـ Vendor (محدثة لاستقبال الصورة)
    * @param vendorId معرف المستخدم (الـ Vendor) من التوكن
    * @param dto بيانات الباقة
+   * @param file ملف الصورة (اختياري)
    * @returns الباقة التي تم إنشاؤها
    */
-  async createPackage(vendorId: string, dto: CreatePackageDto): Promise<Package> {
+  async createPackage(
+    vendorId: string, 
+    dto: CreatePackageDto,
+    file?: Express.Multer.File,
+  ): Promise<Package> {
+    let imageUrl: string | undefined;
+
     try {
-      this.logger.debug(`Creating package: ${dto.packageName} for vendor: ${vendorId}`);
+      if (file) {
+        // 🚀 رفع الصورة إلى Supabase في مجلد 'packages'
+        // 'packages' 👈  هنا نحدد اسم المجلد المطلوب
+        imageUrl = await this.supabaseService.uploadImage(file, 'packages'); 
+        this.logger.debug(`Image uploaded successfully to 'packages' folder: ${imageUrl}`);
+      }
       
+      // ... (بناء كائن newPackage وحفظه)
       const vendorObjectId = new Types.ObjectId(vendorId);
       
       const newPackage = new this.packageModel({
@@ -39,24 +53,30 @@ export class PackageService {
         newPrice: dto.newPrice,
         startDate: new Date(dto.startDate),
         endDate: new Date(dto.endDate),
+        packageImageUrl: imageUrl, 
       });
       
       const savedPackage = await newPackage.save();
-      this.logger.debug(`Package created successfully: ${savedPackage.packageName}`);
-      
       return savedPackage;
       
     } catch (error) {
-      this.logger.error(`Error creating package: ${error.message}`);
+      this.logger.error(`Error creating package or uploading image: ${error.message}`);
+      
+      // ⚠️ تنظيف: محاولة حذف الصورة من Supabase إذا فشل حفظ الباقة في الداتابيس
+      if (imageUrl) {
+        this.supabaseService.deleteFile(imageUrl).catch(err => {
+            this.logger.error(`Failed to cleanup Supabase file after DB failure: ${err.message}`);
+        });
+      }
+      
       throw error;
     }
   }
 
-
   /**
    * 🆕 دالة جلب الباقات للمستخدم (Vendor) مع أسماء الخدمات
    */
-  async getVendorPackages(vendorId: string): Promise<any[]> {
+ async getVendorPackages(vendorId: string): Promise<any[]> {
     const vendorObjectId = new Types.ObjectId(vendorId);
     
     // 1. جلب الباقات
@@ -76,24 +96,25 @@ export class PackageService {
     // 3. جلب أسماء الخدمات المقابلة لـ IDs
     const services = await this.serviceModel
       .find({ _id: { $in: uniqueServiceIds } })
-      .select('serviceName') // ⬅️ التصحيح: اختيار 'serviceName'
+      .select('serviceName') 
       .lean()
       .exec();
       
     // تحويل الخدمات إلى خريطة ID -> Name لسرعة البحث
     const serviceNameMap = services.reduce((map, service) => {
-      // ⬅️ التصحيح: استخدام service.serviceName
       map[service._id.toString()] = service.serviceName; 
       return map;
     }, {});
     
-    // 4. بناء الرد المطلوب (الـ ID، اسم الباقة، مصفوفة أسماء الخدمات)
+    // 4. بناء الرد المطلوب (بما في ذلك السعر ورابط الصورة)
     return packages.map(pkg => ({
       _id: pkg._id.toString(), 
       packageName: pkg.packageName,
+      newPrice: pkg.newPrice,
+      packageImageUrl: pkg.packageImageUrl, // 🟢 الإضافة الجديدة هنا
       serviceNames: pkg.serviceIds
         .map(id => serviceNameMap[id.toString()])
-        .filter(name => name) // تصفية أي ID لم يعد له خدمة مقابلة
+        .filter(name => name)
     }));
   }
   

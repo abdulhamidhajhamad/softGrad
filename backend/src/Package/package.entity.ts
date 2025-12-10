@@ -24,6 +24,10 @@ export class Package extends Document {
   // تاريخ نهاية العرض، وهو التاريخ الذي سيتم بعده حذف الباقة تلقائياً
   @Prop({ type: Date, required: true, expires: 0 }) 
   endDate: Date; // 💡 الميزة الأهم: "expires: 0" تجعل MongoDB تحذف المستند تلقائياً عند انتهاء صلاحية هذا التاريخ
+
+  @Prop({ required: false, type: String }) 
+  packageImageUrl?: string; // 👈 التعديل هنا
+
 }
 
 export const PackageSchema = SchemaFactory.createForClass(Package);

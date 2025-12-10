@@ -6,13 +6,17 @@ import { User, UserSchema } from '../auth/user.entity';
 import { MailService } from '../auth/mail.service';
 import { NotificationService } from './notification.service';
 import { EmailProcessor, NotificationProcessor } from './notification.processor';
-import { NotificationLog, NotificationLogSchema } from './notification-log.schema';
+import { Notification, NotificationSchema } from './notification.schema';
+import { NotificationsGateway } from './notification.gateway';
+// ✅ 1. استيراد NotificationController
+import { NotificationController } from './notification.controller'; 
+
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
-      { name: NotificationLog.name, schema: NotificationLogSchema },
+      { name: Notification.name, schema: NotificationSchema },
     ]),
     BullModule.registerQueue({
       name: 'email-queue',
@@ -21,11 +25,15 @@ import { NotificationLog, NotificationLogSchema } from './notification-log.schem
       name: 'notification-queue',
     }),
   ],
+  // ✅ 2. إضافة Controller إلى قائمة المتحكمات
+  controllers: [NotificationController], 
+  
   providers: [
     NotificationService,
-    EmailProcessor,        // 👈 Add email processor
-    NotificationProcessor, // 👈 Add notification processor
+    EmailProcessor,
+    NotificationProcessor,
     MailService,
+    NotificationsGateway, 
   ],
   exports: [NotificationService, BullModule],
 })

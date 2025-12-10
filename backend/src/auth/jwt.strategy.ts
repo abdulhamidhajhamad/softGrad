@@ -31,12 +31,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
 
-    // ✅ IMPORTANT: Include role in the returned object
+    // ✅ UPDATED: Include username in the returned object
     return {
       id: (user._id as Types.ObjectId).toString(),
       userId: (user._id as Types.ObjectId).toString(),
       email: user.email,
       role: user.role,
+      username: user.userName, // 🔥 ADD THIS LINE
     };
   }
 }

@@ -18,7 +18,7 @@ export class ShoppingCartController {
       const userRole = req.user.role;
 
       // التأكد أن اليوزر عادي (client) فقط
-      if (userRole !== 'client') {
+      if (userRole !== 'user') {
         throw new HttpException(
           'Only clients can add services to cart',
           HttpStatus.FORBIDDEN

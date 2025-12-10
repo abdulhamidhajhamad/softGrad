@@ -1,24 +1,24 @@
+// src/booking/booking.controller.ts
 import {
   Controller,
   Get,
   Post,
-  Delete,
   Body,
   Param,
   HttpCode,
   HttpStatus,
   UseGuards,
   Request,
-  ForbiddenException, 
+  ForbiddenException,
+  Patch, 
 } from '@nestjs/common';
 import { BookingService } from './booking.service';
-import { CreateBookingDto } from './booking.dto';
 import { Booking } from './booking.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { AdminGuard } from '../admin/admin.guard'; // 👈 يجب استيراد AdminGuard
-class PaymentConfirmationDto {
-    bookingId: string;
-}
+import { AdminGuard } from '../admin/admin.guard';
+import { CreateBookingDto, PaymentConfirmationDto } from './booking.dto';
+
+
 @Controller('bookings')
 export class BookingController {
   constructor(private readonly bookingService: BookingService) {}
@@ -32,58 +32,43 @@ export class BookingController {
     return this.bookingService.findByUser(userId);
   }
 
-  // 2. Create booking from shopping cart 
-@Post('')
+  // 2. Create booking from shopping cart (Sets status to PENDING)
+  @Post('')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   async createPendingBooking(@Request() req): Promise<any> {
     const userId = req.user.userId || req.user.id;
-    // Call the new PENDING creation service
+    // Call the PENDING creation service
     return this.bookingService.createPendingBookingFromCart(userId); 
   }
 
-  // NEW: 3. Endpoint to finalize the booking after successful Stripe payment
-  @Post('confirm-payment')
+  // 3. Endpoint to finalize the booking after successful Stripe payment
+  @Post('confirm-payment') 
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async confirmPayment(
-    @Request() req,
-    @Body() dto: PaymentConfirmationDto
-  ): Promise<any> {
-    // In a real app, you might also pass the Stripe PaymentIntent ID for extra verification
-    return this.bookingService.confirmPaymentAndUpdateBooking(dto.bookingId);
-  }
-/*
-  // 3. Create booking with custom data
-  @Post()
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.CREATED)
-  async create(@Request() req, @Body() dto: CreateBookingDto): Promise<Booking> {
+  async confirmPayment(@Body() paymentDto: PaymentConfirmationDto, @Request() req): Promise<Booking> {
     const userId = req.user.userId || req.user.id;
-    return this.bookingService.create(userId, dto);
-  }
-*/
-  // 4. Cancel booking (remove booking dates from services)
-  @Delete(':bookingId')
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  async cancelBooking(
-    @Request() req,
-    @Param('bookingId') bookingId: string,
-  ): Promise<{ message: string }> {
-    const userId = req.user.userId || req.user.id;
-    return this.bookingService.cancelBooking(userId, bookingId);
+    const userName = req.user.username || 'Customer'; // Now available from JWT
+    
+    console.log('🔍 DEBUG - JWT User Object:', JSON.stringify(req.user, null, 2));
+    console.log('👤 DEBUG - Username from JWT:', userName);
+    
+    return this.bookingService.confirmBookingPayment(
+      paymentDto.bookingId,
+      userId,
+      userName // Pass username from JWT
+    );
   }
 
-  // 5. Get all bookings for all users (admin endpoint)
+  // 4. Get all bookings for all users (admin endpoint)
   @Get('allbooking')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @HttpCode(HttpStatus.OK)
   async findAll(): Promise<Booking[]> {
     return this.bookingService.findAll();
   }
 
-  // 6. Admin Endpoint: Get Total Sales
+  // 5. Admin Endpoint: Get Total Sales
   @Get('admin/sales/total')
   @UseGuards(JwtAuthGuard, AdminGuard)
   @HttpCode(HttpStatus.OK)
@@ -91,7 +76,7 @@ export class BookingController {
     return this.bookingService.getTotalSales();
   }
 
-  // 7. Admin Endpoint: Get Total Bookings and Services Details
+  // 6. Admin Endpoint: Get Total Bookings and Services Details
   @Get('admin/bookings/details')
   @UseGuards(JwtAuthGuard, AdminGuard)
   @HttpCode(HttpStatus.OK)
@@ -99,20 +84,28 @@ export class BookingController {
     return this.bookingService.getTotalBookingsAndServices();
   }
 
-/**
-   * Retrieves all successful bookings associated with the vendor's services and calculates total sales.
-   * Endpoint: GET /bookings/vendor/sales
-   * Protected: Vendor role only.
-   */
+  // 7. Cancel booking (using PATCH)
+  @Patch(':id/cancel') 
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async cancelBooking(@Param('id') bookingId: string, @Request() req): Promise<Booking> {
+    const userId = req.user.userId || req.user.id;
+    const userFullName = req.user.username || 'Customer'; // Now available from JWT
+    
+    console.log('🔍 DEBUG - JWT User Object (Cancel):', JSON.stringify(req.user, null, 2));
+    console.log('👤 DEBUG - Username from JWT (Cancel):', userFullName);
+
+    return this.bookingService.cancelBooking(bookingId, userId, userFullName);
+  }
+
+  // 8. Vendor Endpoint: Get Vendor Sales
   @Get('vendor/sales')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
-  // Updated the return type to reflect the new structure: totalSales and totalBookings
   async getVendorSales(@Request() req): Promise<{ totalSales: number; totalBookings: number }> {
     const vendorId = req.user.userId || req.user.id;
-    const userRole = req.user.role; // Assumed to be available from the JWT payload
+    const userRole = req.user.role; 
 
-    // Role check to ensure only vendors can access this data
     if (userRole !== 'vendor') {
       throw new ForbiddenException('Only vendors can access their sales data.');
     }
@@ -120,4 +113,4 @@ export class BookingController {
     return this.bookingService.getVendorSalesAndBookings(vendorId);
   }
 
-} 
+}

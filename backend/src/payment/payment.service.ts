@@ -41,13 +41,11 @@ export class PaymentService {
       // Stripe requires the amount in the smallest currency unit (e.g., cents)
       const amountInCents = Math.round(amount * 100); 
 
-      const paymentIntent = await this.stripe.paymentIntents.create({
-        amount: amountInCents,
-        currency: currency,
-        // You can add more data here if needed for tracking
-        // metadata: { userId: '...' }, 
-      });
-
+   const paymentIntent = await this.stripe.paymentIntents.create({
+    amount: amountInCents,
+    currency: currency,
+    metadata: { bookingId: 'BOOKING_ID_FROM_REQUEST' }, 
+});
       // FIX 3: Use non-null assertion on client_secret
       // We only return the clientSecret to the frontend (Flutter)
       return { clientSecret: paymentIntent.client_secret! }; 

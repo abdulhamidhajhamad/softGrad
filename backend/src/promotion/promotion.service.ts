@@ -8,7 +8,7 @@ import type { PromotionCode } from './promotion-code.schema';
 import * as UserEntity from '../auth/user.entity';
 import type { User } from '../auth/user.entity';
 import { CreatePromotionCodeDto, BroadcastMessageDto } from './promotion.dto';
-import { NotificationType } from '../notification/notification-log.schema';
+import { NotificationType } from '../notification/notification.schema';
 import type { EmailJob, NotificationJob } from '../notification/notification.processor';
 import { Types } from 'mongoose';
 @Injectable()
@@ -67,7 +67,7 @@ private userModel: Model<User>,
     const emailHtml = this.generateGeneralEmailHtml(dto.title, dto.body);
 
     // Queue the broadcast tasks
-    await this.broadcastToUsers(subject, body, emailHtml, NotificationType.MESSAGE);
+    //await this.broadcastToUsers(subject, body, emailHtml, NotificationType.MESSAGE);
     
     return { message: 'Broadcast jobs successfully added to queues.' };
   }

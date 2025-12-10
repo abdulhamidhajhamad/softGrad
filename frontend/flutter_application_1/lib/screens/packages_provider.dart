@@ -16,7 +16,7 @@ class BundlePackage {
   final double bundlePrice;
   final DateTime? startDate;
   final DateTime? endDate;
-
+final String? packageImageUrl; // 🟢 الإضافة الجديدة هنا
   BundlePackage({
     required this.id,
     required this.name,
@@ -25,6 +25,7 @@ class BundlePackage {
     required this.bundlePrice,
     this.startDate,
     this.endDate,
+    this.packageImageUrl, // 🟢 إضافته للـ Constructor
   });
 
   // 🆕 دالة الإنشاء من JSON المعدلة للتعامل مع الأخطاء الرقمية (newPrice)
@@ -33,31 +34,24 @@ class BundlePackage {
       final List<dynamic> rawServiceNames = json['serviceNames'] as List<dynamic>? ?? [];
       
       // 2. معالجة Service IDs (للإرسال في الـ Backend)
-      final serviceIds = (json['serviceIds'] as List<dynamic>?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            [];
-            
-      // 3. 🎯 الإصلاح الرئيسي للخطأ: التعامل الآمن مع newPrice 
-      // إذا كانت القيمة null، تكون price هي 0.0 بدلاً من الانهيار.
+      final List<dynamic> rawServiceIds = json['serviceIds'] as List<dynamic>? ?? [];
+      
+      // 3. معالجة السعر (يأتي كـ 'newPrice' من الباك إند)
       final double price = (json['newPrice'] as num?)?.toDouble() ?? 0.0;
-
+      
       // 4. معالجة التواريخ
-      final startDate = json['startDate'] != null
-          ? DateTime.tryParse(json['startDate'])
-          : null;
-      final endDate = json['endDate'] != null
-          ? DateTime.tryParse(json['endDate'])
-          : null;
-
+      final DateTime? start = DateTime.tryParse(json['startDate'] as String? ?? '');
+      final DateTime? end = DateTime.tryParse(json['endDate'] as String? ?? '');
+      
       return BundlePackage(
-        id: json['_id'] as String? ?? UniqueKey().toString(),
-        name: json['packageName'] as String? ?? 'Unnamed Package',
-        serviceIds: serviceIds, 
-        serviceNames: rawServiceNames.map((s) => s.toString()).toList(),
-        bundlePrice: price, 
-        startDate: startDate,
-        endDate: endDate,
+          id: json['_id'] as String? ?? '', 
+          name: json['packageName'] as String? ?? 'N/A', // افتراض أن الحقل اسمه packageName
+          serviceIds: rawServiceIds.map((e) => e.toString()).toList(),
+          serviceNames: rawServiceNames.map((e) => e.toString()).toList(),
+          bundlePrice: price,
+          startDate: start,
+          endDate: end,
+          packageImageUrl: json['packageImageUrl'] as String?, // 🟢 قراءة رابط الصورة من الـ JSON
       );
     }
 } 
@@ -883,18 +877,58 @@ Future<void> _deletePackage(String packageId) async {
                           // header row
                           Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: kPrimaryColor.withOpacity(0.08),
+                              // 🟢 الإضافة الجديدة هنا: عرض الصورة أو الأيقونة الافتراضية
+                              if (p.packageImageUrl != null && p.packageImageUrl!.isNotEmpty)
+                                ClipRRect(
                                   borderRadius: BorderRadius.circular(14),
+                                  child: Image.network(
+                                    p.packageImageUrl!,
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Container(
+                                        width: 48,
+                                        height: 48,
+                                        color: Colors.grey.shade200,
+                                        child: const Center(
+                                          child: CircularProgressIndicator(
+                                              color: kPrimaryColor, strokeWidth: 2),
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      width: 48,
+                                      height: 48,
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: kPrimaryColor.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: const Icon(
+                                        Icons.image_not_supported_outlined,
+                                        size: 20,
+                                        color: kPrimaryColor,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              else
+                                // الأيقونة الافتراضية
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: kPrimaryColor.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: const Icon(
+                                    Icons.inventory_2_rounded,
+                                    size: 20,
+                                    color: kPrimaryColor,
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.inventory_2_rounded,
-                                  size: 20,
-                                  color: kPrimaryColor,
-                                ),
-                              ),
+                              // -------------------------------------------------------------
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
@@ -1103,7 +1137,7 @@ class _EmptyPackagesCard extends StatelessWidget {
                 color: Colors.grey[600],
               ),
             ),
-        ],
+        ],  
       ),
     );
   }

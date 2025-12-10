@@ -7,6 +7,7 @@ import { Package, PackageSchema } from './package.entity';
 import { User, UserSchema } from '../auth/user.entity'; 
 import { AuthModule } from '../auth/auth.module'; 
 import { Service, ServiceSchema } from '../service/service.schema';
+import { SupabaseStorageModule } from '../subbase/supabaseStorage.module'; // 👈 استيراد جديد
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -14,7 +15,8 @@ import { Service, ServiceSchema } from '../service/service.schema';
       { name: User.name, schema: UserSchema },
       { name: Service.name, schema: ServiceSchema }, 
     ]),
-    AuthModule, 
+    AuthModule,
+    SupabaseStorageModule, // 👈 إضافة Module 
   ],
   controllers: [PackageController], 
   providers: [PackageService], 

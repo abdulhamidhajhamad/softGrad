@@ -1,477 +1,417 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+// src/booking/booking.service.ts
+
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Request } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model, Types, Document } from 'mongoose';
 import { Booking, BookingDocument, PaymentStatus } from './booking.entity';
-import { CreateBookingDto } from './booking.dto';
-import { Service } from '../service/service.entity';
-import { ShoppingCart } from '../shoppingCart/shoppingCart.schema';
+import { Service } from '../service/service.entity'; 
+import { ShoppingCart } from '../shoppingCart/shoppingCart.schema'; 
+import { User } from '../auth/user.entity'; 
+
+import { NotificationService, CreateNotificationDto } from '../notification/notification.service';
+import { NotificationType, RecipientType } from '../notification/notification.schema'; 
+
+// =============================================================
+// Helper Interfaces (for better Type Safety)
+// =============================================================
 
 interface PreparedService {
-  serviceId: string;
-  bookingDate: Date;
+    serviceId: string;
+    bookingDate: Date;
+}
+
+interface ServiceDocument extends Document {
+    _id: Types.ObjectId;
+    providerId: Types.ObjectId; 
+    serviceName: string; // Changed from 'name' to 'serviceName'
+}
+
+interface UserDocument extends Document {
+    _id: Types.ObjectId;
+    fcmToken?: string;
+    username: string; 
 }
 
 @Injectable()
 export class BookingService {
-  constructor(
-    @InjectModel(Booking.name)
-    private readonly bookingModel: Model<BookingDocument>,
-    @InjectModel(Service.name)
-    private readonly serviceModel: Model<Service & Document>,
-    @InjectModel(ShoppingCart.name)
-    private readonly shoppingCartModel: Model<ShoppingCart & Document>,
-  ) {}
 
-  private extractServiceId(serviceId: any): string {
-    if (!serviceId) {
-      throw new BadRequestException('Invalid service ID');
+    constructor(
+        @InjectModel(Booking.name)
+        private readonly bookingModel: Model<BookingDocument>,
+
+        @InjectModel(ShoppingCart.name)
+        private readonly shoppingCartModel: Model<ShoppingCart & Document>,
+        @InjectModel(User.name)
+        private readonly userModel: Model<UserDocument>,
+        @InjectModel(Service.name)
+        private readonly serviceModel: Model<ServiceDocument>,
+        private readonly notificationService: NotificationService,
+    ) {}
+
+    // =============================================================
+    // Helper function to extract service ID
+    // =============================================================
+
+    private extractServiceId(serviceId: any): string {
+        if (!serviceId) {
+            throw new BadRequestException('Invalid service ID');
+        }
+        if (typeof serviceId === 'string') {
+            if (serviceId.includes('bookedDates') || serviceId.includes('_id: new ObjectId')) {
+                try {
+                    const cleanedString = serviceId
+                        .replace(/new ObjectId\(['"]([^'"]+)['"]\)/g, '"$1"')
+                        .replace(/(\w+):/g, '"$1":') 
+                        .replace(/=/g, ':');
+                    const parsed = JSON.parse(`{${cleanedString}}`);
+                    return parsed._id || parsed.serviceId;
+                } catch (e) {
+                    // Fallback to original string if parsing fails
+                }
+            }
+            return serviceId;
+        }
+        if (serviceId instanceof Types.ObjectId) {
+            return serviceId.toString();
+        }
+        if (serviceId.serviceId) return serviceId.serviceId;
+        if (serviceId._id) return serviceId._id.toString();
+        
+        throw new BadRequestException('Could not parse service ID from input.');
     }
 
-    if (typeof serviceId === 'string') {
-      if (serviceId.includes('bookedDates') || serviceId.includes('_id: new ObjectId')) {
+    // =============================================================
+    // 🌟 UPDATED: Send notifications to vendors (English version)
+    // Groups services by vendor and sends one notification per vendor
+    // =============================================================
+  
+    private async notifyVendors(
+        booking: BookingDocument,
+        notificationType: NotificationType,
+        userFullName: string 
+    ): Promise<void> {
+        
+        // 1. Extract service IDs
+        const serviceIds = booking.services.map(s => this.extractServiceId(s.serviceId));
+
+        // 2. Fetch service data (providerId, serviceName) for all services
+        const servicesData = await this.serviceModel.find(
+            { _id: { $in: serviceIds } },
+            { providerId: 1, serviceName: 1 } // Changed from 'name' to 'serviceName'
+        ).exec();
+        
+        if (servicesData.length === 0) return;
+
+        // 3. Group services by vendor (providerId)
+        const servicesByVendor = new Map<string, Array<{ name: string; date: Date }>>();
+        
+        for (const bookingService of booking.services) {
+            const serviceId = this.extractServiceId(bookingService.serviceId);
+            const serviceData = servicesData.find(s => (s._id as Types.ObjectId).toString() === serviceId);
+            
+            if (serviceData) {
+                const vendorId = serviceData.providerId.toString();
+                
+                if (!servicesByVendor.has(vendorId)) {
+                    servicesByVendor.set(vendorId, []);
+                }
+                
+                servicesByVendor.get(vendorId)!.push({
+                    name: serviceData.serviceName, // Changed from serviceData.name
+                    date: bookingService.bookingDate
+                });
+            }
+        }
+
+        // 4. Get unique vendor IDs
+        const uniqueVendorIds = Array.from(servicesByVendor.keys()).map(id => new Types.ObjectId(id));
+        
+        // 5. Fetch vendor data (fcmToken and username)
+        const vendors = await this.userModel.find(
+            { _id: { $in: uniqueVendorIds } },
+            { fcmToken: 1, username: 1 }
+        ).exec();
+
+        // 6. Send notification to each vendor
+        const isConfirmed = notificationType === NotificationType.BOOKING_CONFIRMED;
+        
+        for (const vendor of vendors) {
+            const vendorId = (vendor._id as Types.ObjectId).toString();
+            const vendorServices = servicesByVendor.get(vendorId);
+            
+            if (!vendorServices || vendorServices.length === 0) continue;
+
+            // Format service details (name and date)
+            const serviceDetails = vendorServices.map(service => {
+                const formattedDate = service.date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                });
+                return `${service.name} (${formattedDate})`;
+            }).join(', ');
+            
+            const title = isConfirmed 
+                ? 'New Booking Confirmed! ✅' 
+                : 'Booking Cancelled! ❌';
+            
+            const body = isConfirmed
+                ? `${userFullName} has booked the following services: ${serviceDetails}.`
+                : `${userFullName} has cancelled the booking for: ${serviceDetails}.`;
+
+            const notificationDto: CreateNotificationDto = {
+                recipientId: vendor._id as Types.ObjectId,
+                recipientType: RecipientType.VENDOR,
+                title: title,
+                body: body, 
+                type: notificationType,
+                metadata: { 
+                    bookingId: (booking._id as Types.ObjectId).toString(), 
+                    userId: booking.userId 
+                }, 
+            };
+            
+            await this.notificationService.createNotification(
+                notificationDto, 
+                vendor.fcmToken || ''
+            );
+        }
+    }
+
+    // =============================================================
+    // Get user bookings
+    // =============================================================
+    async findByUser(userId: string): Promise<BookingDocument[]> {
+        return this.bookingModel.find({ userId }).exec();
+    }
+
+    // =============================================================
+    // 1. Create PENDING booking from shopping cart 
+    // =============================================================
+    async createPendingBookingFromCart(userId: string): Promise<any> {
+        const shoppingCart = await this.shoppingCartModel
+            .findOne({ userId: new Types.ObjectId(userId) })
+            .exec();
+
+        if (!shoppingCart || shoppingCart.services.length === 0) {
+            throw new BadRequestException('Shopping cart is empty');
+        }
+
+        const preparedServices: PreparedService[] = [];
+        for (const cartService of shoppingCart.services) {
+            const serviceId = this.extractServiceId(cartService.serviceId);
+            const service = await this.serviceModel.findById(serviceId).exec();
+            if (!service) {
+                throw new NotFoundException(`Service with ID '${serviceId}' not found`);
+            }
+
+            preparedServices.push({
+                serviceId: serviceId,
+                bookingDate: cartService.bookingDate,
+            });
+        }
+
+        let totalAmount = shoppingCart.totalPrice; 
+        
+        const newBooking = new this.bookingModel({
+            userId,
+            services: preparedServices,
+            totalAmount,
+            paymentStatus: PaymentStatus.PENDING, 
+        });
+
         try {
-          const cleanedString = serviceId
-            .replace(/new ObjectId\(['"]([^'"]+)['"]\)/g, '"$1"')
-            .replace(/(\w+):/g, '"$1":') // إضافة quotes للمفاتيح
-            .replace(/'/g, '"'); // استبدال single quotes بdouble quotes
-          
-          const serviceObj = JSON.parse(cleanedString);
-          return serviceObj._id;
+            const savedBooking = await newBooking.save();
+            await this.shoppingCartModel.deleteOne({ userId }).exec(); 
+            
+            return this.formatBookingResponse(savedBooking);
         } catch (error) {
-          const idMatch = serviceId.match(/_id: new ObjectId\('([^']+)'\)/);
-          if (idMatch && idMatch[1]) {
-            return idMatch[1];
-          }
-          const objectIdMatch = serviceId.match(/'([0-9a-fA-F]{24})'/);
-          if (objectIdMatch && objectIdMatch[1]) {
-            return objectIdMatch[1];
-          }
-          throw new BadRequestException('Invalid service ID format');
+            const errorMessage = error instanceof Error ? error.message : 'Failed to create pending booking';
+            throw new BadRequestException(errorMessage);
         }
-      }
-      return serviceId;
     }
     
-    if (typeof serviceId === 'object') {
-      return serviceId._id?.toString() || serviceId.toString();
-    }
-    
-    return serviceId.toString();
-  }
+    // =============================================================
+    // 2. UPDATED: Confirm payment and finalize booking (with notifications)
+    // Username now comes from JWT token
+    // =============================================================
+    async confirmBookingPayment(
+        bookingId: string, 
+        userId: string,
+        userName: string
+    ): Promise<any> {
+        
+        // 1. Find the booking
+        const booking = await this.bookingModel.findById(bookingId).exec();
 
-  async findByUser(userId: string): Promise<any[]> {
-    const bookings = await this.bookingModel.find({ userId }).exec();
-    
-    return bookings.map(booking => this.formatBookingResponse(booking));
-  }
-
-  async createFromCart(userId: string): Promise<any> {
-    const shoppingCart = await this.shoppingCartModel
-      .findOne({ userId: new Types.ObjectId(userId) })
-      .exec();
-
-    if (!shoppingCart || shoppingCart.services.length === 0) {
-      throw new BadRequestException('Shopping cart is empty');
-    }
-
-    const preparedServices: PreparedService[] = [];
-    
-    for (const cartService of shoppingCart.services) {
-      const serviceId = this.extractServiceId(cartService.serviceId);
-      
-      const service = await this.serviceModel.findById(serviceId).exec();
-      if (!service) {
-        throw new NotFoundException(`Service with ID '${serviceId}' not found`);
-      }
-
-      const serviceDoc = service as any;
-      if (serviceDoc.bookedDates && serviceDoc.bookedDates.includes(cartService.bookingDate)) {
-        throw new BadRequestException(
-          `Date ${cartService.bookingDate} is already booked for service ${serviceDoc.name}`
-        );
-      }
-
-      preparedServices.push({
-        serviceId: serviceId, // تخزين الـ ID فقط
-        bookingDate: cartService.bookingDate,
-      });
-    }
-
-    let totalAmount = 0;
-    for (const service of preparedServices) {
-      const serviceDoc = await this.serviceModel.findById(service.serviceId).exec();
-      if (serviceDoc) {
-        totalAmount += (serviceDoc as any).price || 0;
-      }
-    }
-
-    const newBooking = new this.bookingModel({
-      userId,
-      services: preparedServices, // بيانات مرتبة
-      totalAmount,
-      paymentStatus: PaymentStatus.SUCCESSFUL,
-    });
-
-    try {
-      const savedBooking = await newBooking.save();
-
-      for (const service of preparedServices) {
-        await this.serviceModel.findByIdAndUpdate(
-          service.serviceId,
-          { 
-            $push: { 
-              bookedDates: service.bookingDate 
-            } 
-          }
-        ).exec();
-      }
-
-      await this.shoppingCartModel.findOneAndUpdate(
-        { userId: new Types.ObjectId(userId) },
-        { 
-          $set: { 
-            services: [],
-            totalPrice: 0 
-          } 
-        }
-      ).exec();
-
-      return this.formatBookingResponse(savedBooking);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create booking';
-      throw new BadRequestException(errorMessage);
-    }
-  }
-
-  async create(userId: string, createBookingDto: CreateBookingDto): Promise<any> {
-    const { services, totalAmount } = createBookingDto;
-
-    const preparedServices: PreparedService[] = services.map(service => ({
-      serviceId: service.serviceId, // التأكد من أن الـ ID صحيح
-      bookingDate: new Date(service.bookingDate),
-    }));
-
-    const serviceIds = preparedServices.map(s => s.serviceId);
-    const foundServices = await this.serviceModel.find({ 
-      _id: { $in: serviceIds } 
-    }).exec();
-
-    if (foundServices.length !== serviceIds.length) {
-      throw new NotFoundException('One or more services not found');
-    }
-
-    const newBooking = new this.bookingModel({
-      userId,
-      services: preparedServices,
-      totalAmount,
-      paymentStatus: PaymentStatus.SUCCESSFUL,
-    });
-
-    try {
-      const savedBooking = await newBooking.save();
-
-      for (const service of preparedServices) {
-        await this.serviceModel.findByIdAndUpdate(
-          service.serviceId,
-          { 
-            $push: { 
-              bookedDates: service.bookingDate 
-            } 
-          }
-        ).exec();
-      }
-
-      return this.formatBookingResponse(savedBooking);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create booking';
-      throw new BadRequestException(errorMessage);
-    }
-  }
-
-  async cancelBooking(userId: string, bookingId: string): Promise<{ message: string }> {
-    const booking = await this.bookingModel.findById(bookingId).exec();
-    
-    if (!booking) {
-      throw new NotFoundException(`Booking with ID '${bookingId}' not found`);
-    }
-
-    if (booking.userId !== userId) {
-      throw new ForbiddenException('You can only cancel your own bookings');
-    }
-
-    for (const serviceItem of booking.services) {
-      const serviceId = this.extractServiceId(serviceItem.serviceId);
-      
-      if (serviceId && Types.ObjectId.isValid(serviceId)) {
-        await this.serviceModel.findByIdAndUpdate(
-          serviceId,
-          { 
-            $pull: { 
-              bookedDates: serviceItem.bookingDate 
-            } 
-          }
-        ).exec();
-      }
-    }
-
-    booking.paymentStatus = PaymentStatus.CANCELLED;
-    await booking.save();
-
-    return { 
-      message: `Booking ${bookingId} cancelled successfully and dates removed from services` 
-    };
-  }
-
-  async findAll(): Promise<any[]> {
-    const bookings = await this.bookingModel.find().exec();
-    return bookings.map(booking => this.formatBookingResponse(booking));
-  }
-
-  private formatBookingResponse(booking: any): any {
-    const formattedBooking = booking.toObject ? booking.toObject() : { ...booking };
-    
-    if (formattedBooking.services && Array.isArray(formattedBooking.services)) {
-      formattedBooking.services = formattedBooking.services.map(service => ({
-        serviceId: this.extractServiceId(service.serviceId),
-        bookingDate: service.bookingDate
-      }));
-    }
-
-    delete formattedBooking.__v;
-    
-    return formattedBooking;
-  }
-
-  async fixExistingBookings(): Promise<{ message: string; fixedCount: number }> {
-    const bookings = await this.bookingModel.find().exec();
-    let fixedCount = 0;
-
-    for (const booking of bookings) {
-      let needsUpdate = false;
-      const fixedServices: PreparedService[] = [];
-
-      for (const serviceItem of booking.services) {
-        const originalServiceId = serviceItem.serviceId;
-        const fixedServiceId = this.extractServiceId(originalServiceId);
-
-        if (originalServiceId !== fixedServiceId) {
-          needsUpdate = true;
+        if (!booking) {
+            throw new NotFoundException(`Booking with ID '${bookingId}' not found`);
         }
 
-        fixedServices.push({
-          serviceId: fixedServiceId,
-          bookingDate: serviceItem.bookingDate
-        });
-      }
+        // 2. Security check: ensure the user owns this booking
+        if (booking.userId.toString() !== userId) {
+            throw new ForbiddenException('You are not authorized to confirm this booking.');
+        }
 
-      if (needsUpdate) {
-        await this.bookingModel.findByIdAndUpdate(booking._id, {
-          services: fixedServices
-        }).exec();
-        fixedCount++;
-      }
-    }
+        // 3. Check if already confirmed
+        if (booking.paymentStatus === PaymentStatus.SUCCESSFUL) {
+            return this.formatBookingResponse(booking); 
+        }
 
-    return { 
-      message: `Fixed ${fixedCount} bookings with invalid service IDs`,
-      fixedCount 
-    };
-  }
+        // 4. Update payment status to SUCCESSFUL
+        booking.paymentStatus = PaymentStatus.SUCCESSFUL;
+        const savedBooking = await booking.save();
 
-  async debugServiceId(serviceId: any): Promise<{ original: any; extracted: string; type: string }> {
-    return {
-      original: serviceId,
-      extracted: this.extractServiceId(serviceId),
-      type: typeof serviceId
-    };
-  }
+        // 5. Update all related services (add booked dates)
+        for (const service of booking.services) {
+            const serviceId = this.extractServiceId(service.serviceId); 
+            
+            await this.serviceModel.findByIdAndUpdate(
+                serviceId,
+                { 
+                    $push: { 
+                        bookedDates: service.bookingDate 
+                    } 
+                }
+            ).exec();
+        }
 
-
-  // 1. New Service: Get Total Sales
-  async getTotalSales(): Promise<{ totalSales: number }> {
-    const successfulBookings = await this.bookingModel.find({ 
-      paymentStatus: PaymentStatus.SUCCESSFUL 
-    }).exec();
-
-    const totalSales = successfulBookings.reduce(
-      (sum, booking) => sum + booking.totalAmount,
-      0,
-    );
-
-    return { totalSales };
-  }
-
-  // 2. New Service: Get Total Bookings and Services Details
-  async getTotalBookingsAndServices(): Promise<{ totalBookings: number, bookedServices: { serviceId: string, bookingDate: Date }[] }> {
-    const bookings = await this.bookingModel.find().exec();
-    const totalBookings = bookings.length;
-    
-    let bookedServices: { serviceId: string, bookingDate: Date }[] = [];
-
-    bookings.forEach(booking => {
-      if (Array.isArray(booking.services)) {
-        booking.services.forEach(serviceItem => {
-          const formattedItem = this.formatBookingResponse({ services: [serviceItem] }).services[0];
-          
-          bookedServices.push({
-            serviceId: formattedItem.serviceId,
-            bookingDate: formattedItem.bookingDate,
-          });
-        });
-      }
-    });
-
-    return { 
-      totalBookings, 
-      bookedServices 
-    };
-  }
-
-
-/**
- * Creates a Booking and updates the payment status to PENDING.
- * This should be called BEFORE the actual payment is made in Stripe.
- * @param userId - ID of the user.
- * @returns The newly created booking document.
- */
-async createPendingBookingFromCart(userId: string): Promise<any> {
-    const shoppingCart = await this.shoppingCartModel
-      .findOne({ userId: new Types.ObjectId(userId) })
-      .exec();
-
-    if (!shoppingCart || shoppingCart.services.length === 0) {
-      throw new BadRequestException('Shopping cart is empty');
-    }
-
-    // 1. Prepare services and check availability (Logic is similar to original createFromCart)
-    const preparedServices: PreparedService[] = [];
-    for (const cartService of shoppingCart.services) {
-      // ... (Availability check logic remains here)
-      const serviceId = this.extractServiceId(cartService.serviceId);
-      const service = await this.serviceModel.findById(serviceId).exec();
-      if (!service) {
-        throw new NotFoundException(`Service with ID '${serviceId}' not found`);
-      }
-      // Assuming availability check is done here.
-
-      preparedServices.push({
-        serviceId: serviceId,
-        bookingDate: cartService.bookingDate,
-      });
-    }
-
-    // 2. Calculate Total Amount
-    let totalAmount = shoppingCart.totalPrice; // Assuming total price is calculated in the cart
-    
-    // 3. Create Booking with PENDING status (Crucial change)
-    const newBooking = new this.bookingModel({
-      userId,
-      services: preparedServices,
-      totalAmount,
-      paymentStatus: PaymentStatus.PENDING, // <-- Start as PENDING
-    });
-
-    try {
-      const savedBooking = await newBooking.save();
-      
-      // Do NOT empty the cart or update bookedDates yet.
-      // This is done ONLY after SUCCESSFUL payment confirmation.
-
-      return this.formatBookingResponse(savedBooking);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create pending booking';
-      throw new BadRequestException(errorMessage);
-    }
-}
-
-/**
- * Confirms payment, updates booking status to SUCCESSFUL, and finalizes cart/service dates.
- * This is called AFTER Flutter confirms successful Stripe payment.
- */
-async confirmPaymentAndUpdateBooking(bookingId: string): Promise<any> {
-    const booking = await this.bookingModel.findById(bookingId).exec();
-
-    if (!booking) {
-        throw new NotFoundException(`Booking with ID '${bookingId}' not found`);
-    }
-
-    if (booking.paymentStatus === PaymentStatus.SUCCESSFUL) {
-        return this.formatBookingResponse(booking); // Already processed
-    }
-    
-    // 1. Finalize payment status
-    booking.paymentStatus = PaymentStatus.SUCCESSFUL;
-    const savedBooking = await booking.save();
-
-    // 2. Update all associated services (add bookedDates)
-    for (const service of booking.services) {
-        await this.serviceModel.findByIdAndUpdate(
-            service.serviceId,
+        // 6. Clear shopping cart
+        await this.shoppingCartModel.findOneAndUpdate(
+            { userId: new Types.ObjectId(booking.userId) },
             { 
-              $push: { 
-                bookedDates: service.bookingDate 
-              } 
+                $set: { 
+                    services: [],
+                    totalPrice: 0 
+                } 
             }
         ).exec();
+
+        // 7. 🔥 Send notifications to vendors (ENGLISH version with grouped services)
+        await this.notifyVendors(
+            savedBooking, 
+            NotificationType.BOOKING_CONFIRMED, 
+            userName // Using username from JWT
+        );
+
+        // 8. Return formatted response
+        return this.formatBookingResponse(savedBooking);
     }
 
-    // 3. Clear the user's shopping cart
-    await this.shoppingCartModel.findOneAndUpdate(
-        { userId: new Types.ObjectId(booking.userId) },
-        { 
-          $set: { 
-            services: [],
-            totalPrice: 0 
-          } 
+    // =============================================================
+    // Cancel booking - Username comes from JWT token
+    // =============================================================
+
+    async cancelBooking(bookingId: string, userId: string, userFullName: string): Promise<BookingDocument> {
+        const booking = await this.bookingModel.findOne({ _id: bookingId, userId }).exec();
+
+        if (!booking) {
+            throw new NotFoundException(`Booking with ID ${bookingId} not found or access denied.`);
         }
-    ).exec();
+        
+        if (booking.paymentStatus === PaymentStatus.CANCELLED) {
+            throw new BadRequestException('Booking is already cancelled.');
+        }
+        
+        booking.paymentStatus = PaymentStatus.CANCELLED;
+        const cancelledBooking = await booking.save();
 
-    return this.formatBookingResponse(savedBooking);
-}
-
-/**
-   * Retrieves all successful bookings associated with the vendor's services and calculates total sales.
-   * This is based on the assumption that a booking's totalAmount is attributed to the vendor 
-   * if it contains at least one of their services.
-   * @param vendorId The ID of the authenticated vendor (providerId).
-   * @returns A promise that resolves to an object containing total sales and the total number of bookings.
-   */
-  async getVendorSalesAndBookings(vendorId: string): Promise<{ totalSales: number; totalBookings: number }> {
-    // 1. Find all service IDs owned by the vendor.
-    // We only select the MongoDB ObjectId (_id) from the Service collection.
-    const vendorServices = await this.serviceModel.find({ providerId: vendorId }, { _id: 1 }).exec();
-    const serviceIds = vendorServices.map(service => service._id);
-
-    if (serviceIds.length === 0) {
-        // If the vendor has no services, they have no sales/bookings.
-        return { totalSales: 0, totalBookings: 0 }; // Updated return
+        // Send cancellation notification to vendors
+        await this.notifyVendors(
+            cancelledBooking, 
+            NotificationType.BOOKING_CANCELLED, 
+            userFullName
+        );
+        
+        return cancelledBooking;
+    }
+    
+    // =============================================================
+    // Remaining methods (unchanged)
+    // =============================================================
+    
+    async findAll(): Promise<any[]> {
+        const bookings = await this.bookingModel.find().exec();
+        return bookings.map(booking => this.formatBookingResponse(booking));
     }
 
-    // 2. Find all successful bookings that contain at least one of these service IDs.
-    // We only select totalAmount for aggregation, excluding the full 'services' array for performance if possible.
-    const bookings = await this.bookingModel.find({
-        // Match bookings where the 'services' array contains an item with a 'serviceId' that is in the 'serviceIds' list
-        'services.serviceId': { $in: serviceIds },
-        // Only count successful payments
-        paymentStatus: PaymentStatus.SUCCESSFUL,
-    }).select('totalAmount') // Select only totalAmount for faster retrieval
-      .exec();
+    private formatBookingResponse(booking: any): any {
+        const formattedBooking = booking.toObject ? booking.toObject() : { ...booking };
+        
+        if (formattedBooking.services && Array.isArray(formattedBooking.services)) {
+            formattedBooking.services = formattedBooking.services.map(service => ({
+                serviceId: this.extractServiceId(service.serviceId),
+                bookingDate: service.bookingDate
+            }));
+        }
 
-    // 3. Calculate total sales and total bookings
-    let totalSales = 0;
-    const totalBookings = bookings.length; // Count the number of matched bookings
+        delete formattedBooking.__v;
+        
+        return formattedBooking;
+    }
     
-    bookings.forEach(booking => {
-        // Assuming the entire booking's totalAmount is the sales for this vendor
-        totalSales += booking.totalAmount;
-    });
+    async getTotalSales(): Promise<{ totalSales: number }> {
+        const successfulBookings = await this.bookingModel.find({ 
+            paymentStatus: PaymentStatus.SUCCESSFUL 
+        }).exec();
 
-    // 4. Return results with total sales and total bookings count
-    return { 
-        totalSales, 
-        totalBookings, // Return total count instead of the array
-    };
-  }
+        const totalSales = successfulBookings.reduce(
+            (sum, booking) => sum + booking.totalAmount,
+            0,
+        );
 
-  
+        return { totalSales };
+    }
+
+    async getTotalBookingsAndServices(): Promise<{ totalBookings: number, bookedServices: { serviceId: string, bookingDate: Date }[] }> {
+        const bookings = await this.bookingModel.find().exec();
+        const totalBookings = bookings.length;
+        
+        let bookedServices: { serviceId: string, bookingDate: Date }[] = [];
+
+        bookings.forEach(booking => {
+            if (Array.isArray(booking.services)) {
+                booking.services.forEach(serviceItem => {
+                    const formattedItem = this.formatBookingResponse({ services: [serviceItem] }).services[0];
+                    
+                    bookedServices.push({
+                        serviceId: formattedItem.serviceId,
+                        bookingDate: formattedItem.bookingDate,
+                    });
+                });
+            }
+        });
+
+        return { 
+            totalBookings, 
+            bookedServices 
+        };
+    }
+
+    async getVendorSalesAndBookings(vendorId: string): Promise<{ totalSales: number; totalBookings: number }> {
+        const vendorServices = await this.serviceModel.find({ providerId: vendorId }, { _id: 1 }).exec();
+        const serviceIds = vendorServices.map(service => service._id);
+
+        if (serviceIds.length === 0) {
+            return { totalSales: 0, totalBookings: 0 }; 
+        }
+
+        const bookings = await this.bookingModel.find({
+            'services.serviceId': { $in: serviceIds },
+            paymentStatus: PaymentStatus.SUCCESSFUL,
+        }).select('totalAmount') 
+          .exec();
+
+        let totalSales = 0;
+        const totalBookings = bookings.length; 
+        
+        bookings.forEach(booking => {
+            totalSales += booking.totalAmount;
+        });
+
+        return { 
+            totalSales, 
+            totalBookings, 
+        };
+    }
 }

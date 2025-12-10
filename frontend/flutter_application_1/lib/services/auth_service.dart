@@ -1,5 +1,5 @@
 // auth_service.dart
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,6 +30,15 @@ class AuthService {
     } catch (e) {
       print('❌ Error saving token: $e');
     }
+  }
+  
+  static Future<Map<String, dynamic>?> getUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? userString = prefs.getString('user_data');
+    if (userString != null) {
+      return jsonDecode(userString);
+    }
+    return null;
   }
 
   static Future<String?> getToken() async {

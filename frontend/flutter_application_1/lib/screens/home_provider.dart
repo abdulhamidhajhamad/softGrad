@@ -13,7 +13,7 @@ import 'package:flutter_application_1/screens/reviews_provider.dart';
 import 'package:flutter_application_1/screens/packages_provider.dart';
 // هذا الاستيراد يبدو زائداً ولكنه موجود في الملف الأصلي
 import 'package:flutter_application_1/screens/home_customer.dart'; 
-
+import 'package:flutter_application_1/services/chat_provider_service.dart';
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
@@ -340,20 +340,28 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Expanded(
-                        child: _QuickAction(
-                          title: "Messages",
-                          icon: Icons.chat_bubble_outline,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const MessagesProviderScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+                                Expanded(
+                                  child: ValueListenableBuilder<int>(
+                                    valueListenable: ChatProviderService.unreadGlobalCount,
+                                    builder: (context, unreadCount, child) {
+                                      return _QuickAction(
+                                        title: "Messages",
+                                        icon: Icons.chat_bubble_outline,
+                                        showBadge: unreadCount > 0,
+                                        onTap: () async {
+                                          await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => const MessagesProviderScreen(),
+                                            ),
+                                          );
+                                          // Refresh unread count after returning
+                                          ChatProviderService().fetchUnreadCount();
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
                       const SizedBox(width: 8),
                       Expanded(
                         // ✅ استخدام ValueListenableBuilder للاستماع لتغير حالة الإشعارات

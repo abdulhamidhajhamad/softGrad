@@ -2,25 +2,26 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_application_1/services/chat_provider_service.dart';
 import 'messages_provider.dart'
     show kPrimaryColor, kBackgroundColor, kTextColor;
 
-/// Basic chat message model
 class ChatMessage {
   final String id;
   final String text;
   final DateTime createdAt;
-  final bool isMe; // true = provider (you), false = customer
+  final bool isMe;
+  final bool isRead;
 
   ChatMessage({
     required this.id,
     required this.text,
     required this.createdAt,
     required this.isMe,
+    this.isRead = false,
   });
 }
 
-/// Chat screen for one conversation (provider <-> customer)
 class ChatScreen extends StatefulWidget {
   final String conversationId;
   final String customerName;
@@ -36,8 +37,6 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  /// List of all messages in this conversation.
-  /// Starts empty – you will populate it from backend / sockets.
   final List<ChatMessage> _messages = [];
 
   final TextEditingController _inputController = TextEditingController();
@@ -49,28 +48,70 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeChat();
     _loadInitialMessages();
   }
 
   @override
   void dispose() {
+    ChatProviderService().leaveChatRoom(widget.conversationId);
+    ChatProviderService().onNewMessage = null;
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  /// Load existing conversation history from backend (API / Firebase / Socket).
+  void _initializeChat() {
+    // Join the chat room
+    ChatProviderService().joinChatRoom(widget.conversationId);
+    
+    // Mark messages as read when entering
+    ChatProviderService().markAsRead(widget.conversationId);
+    
+    // Listen for new messages
+    ChatProviderService().onNewMessage = (message) {
+      if (mounted) {
+        setState(() {
+          _messages.add(message);
+        });
+        _scrollToBottom();
+        
+        // Mark as read if received from other user
+        if (!message.isMe) {
+          ChatProviderService().markAsRead(widget.conversationId);
+        }
+      }
+    };
+  }
+
   Future<void> _loadInitialMessages() async {
     setState(() => _isLoadingHistory = true);
     try {
-      // Example of how you might plug in your real service:
-      //
-      // final messages =
-      //     await ChatService.instance.fetchMessages(widget.conversationId);
-      // setState(() {
-      //   _messages.clear();
-      //   _messages.addAll(messages);
-      // });
+      final messages = await ChatProviderService().fetchMessages(widget.conversationId);
+      final currentUserId = ChatProviderService().currentUserId;
+      
+      if (mounted) {
+        setState(() {
+          _messages.clear();
+          for (var msg in messages) {
+            final senderId = msg['sender'] is Map 
+                ? msg['sender']['_id'] ?? msg['sender']['id']
+                : msg['sender'];
+            final isMe = senderId == currentUserId;
+            
+            _messages.add(ChatMessage(
+              id: msg['_id'],
+              text: msg['content'],
+              createdAt: DateTime.parse(msg['createdAt']),
+              isMe: isMe,
+              isRead: msg['isRead'] ?? false,
+            ));
+          }
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      print('Error loading messages: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoadingHistory = false);
@@ -78,8 +119,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// Helper you can call when a new incoming customer message arrives
-  /// from WebSocket / Stream / Listener.
   void addIncomingMessageFromCustomer(String text) {
     final msg = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -93,7 +132,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
   }
 
-  /// Send message from provider to backend and update UI.
   Future<void> _sendMessage() async {
     final text = _inputController.text.trim();
     if (text.isEmpty || _isSending) return;
@@ -115,17 +153,19 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
-      // Call your backend here:
-      //
-      // await ChatService.instance.sendMessage(
-      //   conversationId: widget.conversationId,
-      //   text: text,
-      // );
+      await ChatProviderService().sendMessage(
+        widget.conversationId,
+        text,
+      );
     } catch (e) {
-      // Optionally show error / rollback UI state
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   SnackBar(content: Text('Failed to send message')),
-      // );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send message'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isSending = false);
@@ -185,7 +225,6 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         body: Column(
           children: [
-            // Messages area
             Expanded(
               child: Container(
                 color: const Color(0xFFF7F7F7),
@@ -270,7 +309,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
 
-            // Input bar
             SafeArea(
               top: false,
               child: Container(
@@ -341,7 +379,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// Empty state UI when there is no chat history yet.
   Widget _buildEmptyChatState() {
     return Center(
       child: Padding(

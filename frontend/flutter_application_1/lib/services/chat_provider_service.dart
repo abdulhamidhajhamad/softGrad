@@ -14,37 +14,57 @@ class ChatProviderService {
   factory ChatProviderService() => _instance;
   ChatProviderService._internal();
 
-  // 🚨 عنوان الخادم (يجب تعديله ليتطابق مع إعداداتك)
+  // Base URL - update this to match your network
   static const String _baseUrl = 'http://192.168.110.16:3000';
   
   // Socket
   IO.Socket? _socket;
   
-  // Notifier للإشارة الحمراء في الصفحة الرئيسية (Global Unread Count)
+  // Global unread count notifier
   static final ValueNotifier<int> unreadGlobalCount = ValueNotifier<int>(0);
 
-  // تخزين الـ userId الحالي لمعرفة (isMe)
+  // Current user ID
   String? currentUserId;
 
-  // ✅ Callback for new messages in ChatScreen
+  // Callbacks
   void Function(ChatMessage)? onNewMessage;
-  
-  // ✅ Callback for message read status updates (to refresh messages list)
   void Function()? onMessageStatusUpdate;
 
-  /// تهيئة الاتصال بالسوكت وجلب العدد الأولي
+  // Helper function to clean IDs
+  String _cleanId(dynamic id) {
+    if (id == null) return '';
+    return id.toString()
+        .replaceAll('ObjectId', '')
+        .replaceAll('(', '')
+        .replaceAll(')', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '')
+        .trim();
+  }
+
+  /// Initialize socket connection
   Future<void> initSocket() async {
     final token = await AuthService.getToken();
-    final userMap = await AuthService.getUserData(); 
-    currentUserId = userMap?['id'] ?? userMap?['_id']; 
+    final userMap = await AuthService.getUserData();
+    
+    // Get and clean user ID
+    currentUserId = _cleanId(userMap?['_id'] ?? userMap?['id']);
+    
+    print('🔐 Initialized with User ID: $currentUserId'); // Debug log
 
-    if (token == null || currentUserId == null) return;
+    if (token == null || currentUserId == null || currentUserId!.isEmpty) {
+      print('❌ Cannot initialize socket: token or userId is null');
+      return;
+    }
 
-    // 1. جلب العدد الحالي من الرسائل غير المقروءة عبر API
-    fetchUnreadCount(); 
+    // Fetch initial unread count
+    fetchUnreadCount();
 
-    // 2. تهيئة السوكت والاتصال به
-    if (_socket?.connected == true) return;
+    // Initialize socket if not already connected
+    if (_socket?.connected == true) {
+      print('✅ Socket already connected');
+      return;
+    }
 
     _socket = IO.io(
       _baseUrl,
@@ -58,74 +78,113 @@ class ChatProviderService {
 
     _socket?.connect();
 
-    // 3. الاستماع لأحداث السوكت
-    _socket?.onConnect((_) => print('Socket Connected: ${_socket?.id}'));
-    _socket?.onDisconnect((_) => print('Socket Disconnected'));
-    _socket?.onError((error) => print('Socket Error: $error'));
+    // Socket event listeners
+    _socket?.onConnect((_) {
+      print('✅ Socket Connected: ${_socket?.id}');
+    });
+    
+    _socket?.onDisconnect((_) {
+      print('❌ Socket Disconnected');
+    });
+    
+    _socket?.onError((error) {
+      print('❌ Socket Error: $error');
+    });
 
-    // 4. الاستماع لحدث الرسائل الجديدة
+    // Listen for new messages
     _socket?.on('newMessage', (data) {
-      if (data != null && data['message'] != null) {
-        final messageData = data['message'];
-        final senderId = messageData['sender'] is Map 
-            ? messageData['sender']['_id'] ?? messageData['sender']['id']
-            : messageData['sender'];
+      print('📨 New message received: $data'); // Debug log
+      
+      final messageData = data['message'] ?? data;
+      
+      if (messageData != null) {
+        final senderData = messageData['sender'];
+        String senderId = '';
+        
+        if (senderData is Map) {
+          senderId = _cleanId(senderData['_id'] ?? senderData['id']);
+        } else {
+          senderId = _cleanId(senderData);
+        }
+        
+        // Determine if message is from current user
         final isMe = senderId == currentUserId;
         
+        print('📝 Processing message: senderId=$senderId, currentUserId=$currentUserId, isMe=$isMe');
+        
         final newMessage = ChatMessage(
-          id: messageData['_id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-          text: messageData['content'],
-          createdAt: DateTime.parse(messageData['createdAt']),
+          id: messageData['_id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+          text: messageData['content']?.toString() ?? '',
+          createdAt: DateTime.tryParse(messageData['createdAt']?.toString() ?? '') ?? DateTime.now(),
           isMe: isMe,
           isRead: messageData['isRead'] ?? false,
         );
 
-        // إرسال الرسالة الجديدة إلى الـ ChatScreen الحالية
+        // Send to ChatScreen
         onNewMessage?.call(newMessage);
       }
       
-      // تحديث العدد الإجمالي للرسائل غير المقروءة
+      // Update unread count
       fetchUnreadCount();
-      
-      // تحديث قائمة المحادثات
       onMessageStatusUpdate?.call();
     });
 
-    // 5. الاستماع لحدث تحديث حالة القراءة
+    // Listen for unread count updates
+    _socket?.on('unreadCountUpdated', (data) {
+      print('🔔 Unread count updated: $data');
+      if (data != null && data['count'] != null) {
+        unreadGlobalCount.value = data['count'];
+      } else {
+        fetchUnreadCount();
+      }
+    });
+
+    // Listen for message read status updates
+    _socket?.on('messagesRead', (data) {
+      print('✅ Messages marked as read');
+      fetchUnreadCount();
+      onMessageStatusUpdate?.call();
+    });
+    
     _socket?.on('messageStatusUpdate', (data) {
-       fetchUnreadCount();
-       onMessageStatusUpdate?.call();
+      print('🔄 Message status updated');
+      fetchUnreadCount();
+      onMessageStatusUpdate?.call();
     });
   }
 
   // --------------------------------------------------------------------------
-  // 🚪 Socket Helpers for Chat Screen (Join/Leave Room)
+  // Socket Room Management
   // --------------------------------------------------------------------------
 
-  /// طلب الانضمام إلى غرفة محادثة معينة
   void joinChatRoom(String chatId) {
-    if (_socket?.connected == true) {
-      _socket?.emit('joinChat', chatId);
-      print('Socket: Joined chat room $chatId');
+    if (_socket?.connected == true && currentUserId != null) {
+      _socket?.emit('joinRoom', {
+        'chatId': chatId, 
+        'userId': currentUserId
+      });
+      print('🚪 Joined chat room: $chatId');
+    } else {
+      print('❌ Cannot join room: socket not connected or userId null');
     }
   }
 
-  /// طلب مغادرة غرفة محادثة معينة
   void leaveChatRoom(String chatId) {
     if (_socket?.connected == true) {
       _socket?.emit('leaveChat', chatId);
-      print('Socket: Left chat room $chatId');
+      print('🚪 Left chat room: $chatId');
     }
   }
 
   // --------------------------------------------------------------------------
-  // 📡 API Calls (HTTP)
+  // HTTP API Calls
   // --------------------------------------------------------------------------
 
-  /// API: جلب العدد الإجمالي للرسائل غير المقروءة
+  /// Fetch global unread count
   Future<void> fetchUnreadCount() async {
     final token = await AuthService.getToken();
     if (token == null) return;
+    
     try {
       final response = await http.get(
         Uri.parse('$_baseUrl/chat/unread-count'),
@@ -136,15 +195,14 @@ class ChatProviderService {
         final data = json.decode(response.body);
         final count = data['count'] as int? ?? 0;
         unreadGlobalCount.value = count;
-      } else {
-        print('Failed to fetch unread count: ${response.statusCode}');
+        print('🔔 Unread count: $count');
       }
     } catch (e) {
-      print('Error fetching unread count: $e');
+      print('❌ Error fetching unread count: $e');
     }
   }
 
-  /// API: جلب جميع المحادثات للمستخدم الحالي
+  /// Fetch all user chats
   Future<List<Map<String, dynamic>>> fetchUserChats() async {
     final token = await AuthService.getToken();
     if (token == null) return [];
@@ -159,21 +217,23 @@ class ChatProviderService {
         final List<dynamic> data = json.decode(response.body);
         return data.map((e) => e as Map<String, dynamic>).toList();
       } else {
-        print('Failed to fetch chats: ${response.statusCode}');
+        print('❌ Failed to fetch chats: ${response.statusCode}');
         return [];
       }
     } catch (e) {
-      print('Error fetching chats: $e');
+      print('❌ Error fetching chats: $e');
       return [];
     }
   }
 
-  /// API: جلب رسائل محادثة معينة
+  /// Fetch messages for a specific chat
   Future<List<Map<String, dynamic>>> fetchMessages(String chatId) async {
     final token = await AuthService.getToken();
     if (token == null) return [];
     
     try {
+      print('📡 Fetching messages for chat: $chatId');
+      
       final response = await http.get(
         Uri.parse('$_baseUrl/chat/messages/$chatId'),
         headers: {'Authorization': 'Bearer $token'},
@@ -181,58 +241,81 @@ class ChatProviderService {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
+        print('✅ Fetched ${data.length} messages');
         return data.map((e) => e as Map<String, dynamic>).toList();
       } else {
-        print('Failed to fetch messages: ${response.statusCode}');
+        print('❌ Failed to fetch messages: ${response.statusCode}');
+        print('Response body: ${response.body}');
         return [];
       }
     } catch (e) {
-      print('Error fetching messages: $e');
+      print('❌ Error fetching messages: $e');
       return [];
     }
   }
 
-  /// API: إرسال رسالة
+  /// Send a message
   Future<void> sendMessage(String chatId, String content) async {
     final token = await AuthService.getToken();
     if (token == null) return;
-    try {
-      await http.post(
-        Uri.parse('$_baseUrl/chat/send'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: json.encode({
-          'chatId': chatId,
-          'content': content,
-        }),
-      );
-    } catch (e) {
-      print('Error sending message: $e');
-      rethrow;
+    
+    // Use Socket for real-time sending
+    if (_socket?.connected == true && currentUserId != null) {
+      _socket?.emit('sendMessage', {
+        'chatId': chatId, 
+        'senderId': currentUserId, 
+        'content': content
+      });
+      print('📤 Message sent via socket');
+    } else {
+      // Fallback to HTTP
+      print('📤 Sending message via HTTP (socket not connected)');
+      try {
+        final response = await http.post(
+          Uri.parse('$_baseUrl/chat/send'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: json.encode({
+            'chatId': chatId,
+            'content': content,
+          }),
+        );
+        
+        if (response.statusCode != 200) {
+          print('❌ Failed to send message: ${response.statusCode}');
+          throw Exception('Failed to send message');
+        }
+      } catch (e) {
+        print('❌ Error sending message: $e');
+        rethrow;
+      }
     }
   }
 
-  /// API: تعليم المحادثة كمقروءة
+  /// Mark chat as read
   Future<void> markAsRead(String chatId) async {
     final token = await AuthService.getToken();
     if (token == null) return;
+    
     try {
-      await http.patch(
+      final response = await http.patch(
         Uri.parse('$_baseUrl/chat/mark-read/$chatId'),
         headers: {'Authorization': 'Bearer $token'},
       );
       
-      fetchUnreadCount();
-      onMessageStatusUpdate?.call();
-      
+      if (response.statusCode == 200) {
+        print('✅ Chat marked as read');
+        fetchUnreadCount();
+        onMessageStatusUpdate?.call();
+      }
     } catch (e) {
-      print('Error marking as read: $e');
+      print('❌ Error marking as read: $e');
     }
   }
 
-  /// API: حذف محادثة
+  /// Delete a chat
   Future<bool> deleteChat(String chatId) async {
     final token = await AuthService.getToken();
     if (token == null) return false;
@@ -244,22 +327,24 @@ class ChatProviderService {
       );
 
       if (response.statusCode == 200) {
+        print('✅ Chat deleted');
         fetchUnreadCount();
         onMessageStatusUpdate?.call();
         return true;
       } else {
-        print('Failed to delete chat: ${response.statusCode}');
+        print('❌ Failed to delete chat: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print('Error deleting chat: $e');
+      print('❌ Error deleting chat: $e');
       return false;
     }
   }
   
-  /// إغلاق الاتصال
+  /// Dispose socket connection
   void dispose() {
     _socket?.disconnect();
     _socket?.dispose();
+    print('🔌 Socket disposed');
   }
 }

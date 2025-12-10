@@ -338,30 +338,31 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
+                 Row(
                     children: [
-                                Expanded(
-                                  child: ValueListenableBuilder<int>(
-                                    valueListenable: ChatProviderService.unreadGlobalCount,
-                                    builder: (context, unreadCount, child) {
-                                      return _QuickAction(
-                                        title: "Messages",
-                                        icon: Icons.chat_bubble_outline,
-                                        showBadge: unreadCount > 0,
-                                        onTap: () async {
-                                          await Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => const MessagesProviderScreen(),
-                                            ),
-                                          );
-                                          // Refresh unread count after returning
-                                          ChatProviderService().fetchUnreadCount();
-                                        },
-                                      );
-                                    },
+                      Expanded(
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: ChatProviderService.unreadGlobalCount,
+                          builder: (context, unreadCount, child) {
+                            return _QuickAction(
+                              title: "Messages",
+                              icon: Icons.chat_bubble_outline,
+                              // ✅ تظهر النقطة الحمراء فقط إذا كان هناك رسائل غير مقروءة
+                              showBadge: unreadCount > 0,
+                              onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const MessagesProviderScreen(),
                                   ),
-                                ),
+                                );
+                                // Refresh unread count after returning
+                                ChatProviderService().fetchUnreadCount();
+                              },
+                            );
+                          },
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         // ✅ استخدام ValueListenableBuilder للاستماع لتغير حالة الإشعارات

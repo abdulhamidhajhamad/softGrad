@@ -7,13 +7,13 @@ import { Model, Types } from 'mongoose';
 import { User } from '../auth/user.entity'; 
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType, RecipientType } from '../notification/notification.schema';
-import { ProviderService } from '../providers/provider.service'; // 💡 تأكد من مسار الملف الصحيح!
+import { ProviderService } from '../providers/provider.service'; 
 @Injectable()
 export class ChatService {
   constructor(
     @InjectModel(Chat.name) private chatModel: Model<Chat>,
     @InjectModel(Message.name) private messageModel: Model<Message>,
-  @InjectModel(User.name) private userModel: Model<User>, // 👇 حقن موديل اليوزر
+  @InjectModel(User.name) private userModel: Model<User>, 
     private notificationService: NotificationService,
   private providerService: ProviderService,
   ) 
@@ -39,6 +39,17 @@ export class ChatService {
       });
     }
 
+    // إذا كانت المحادثة موجودة، يجب التأكد من وجود حقل lastRead
+    if (chat && (!chat.lastRead || chat.lastRead.length === 0)) {
+        // إذا كان الموديل قديماً، قم بتهيئته بالقيم الافتراضية
+         chat.lastRead = [
+            { userId: new Types.ObjectId(userId), lastReadAt: new Date() },
+            { userId: new Types.ObjectId(receiverId), lastReadAt: null }, 
+        ];
+        await chat.save();
+    }
+
+
     return chat;
   }
 
@@ -54,12 +65,15 @@ export class ChatService {
     chat.lastMessage = content;
     
     // 1. تحديد هوية المستلم (الطرف الآخر في المحادثة)
+    // ✅ تم تعريفه هنا لمرة واحدة فقط
     const participantObject = chat.participants.find(
       (p) => p.toString() !== senderId.toString()
     );
     const recipientId: string | null = participantObject ? participantObject.toString() : null; 
 
     // 2. ✨ NEW: تحديث حالة القراءة في وثيقة Chat
+    // يتم تعيين lastReadAt للمستلِم إلى null (غير مقروء)
+    // ويتم تحديث آخر وقت للمرسل
     chat.lastRead = chat.lastRead.map(status => {
         if (status.userId.toString() === senderId) {
             // المرسِل: مقروء حالياً
@@ -86,20 +100,19 @@ export class ChatService {
     if (senderRole === 'vendor') {
         // الحالة 1: المرسل مزود خدمة (Vendor)
         try {
-            // نستخدم الخدمة لجلب اسم الشركة من جدول service_provider
             const companyName = await this.providerService.findCompanyNameByUserId(senderId);
-            notificationTitle = `New message from ${companyName}`; // new message from (company name)
+            notificationTitle = `New message from ${companyName}`; 
         } catch (e) {
             console.error('Could not find company name for vendor:', senderId, e.message);
             notificationTitle = `New message from Vendor`;
         }
     } else if (senderRole === 'admin') {
         // الحالة 2: المرسل أدمن (Admin)
-        notificationTitle = `New message from Admin`; // new message from admin
+        notificationTitle = `New message from Admin`; 
     } else {
         // الحالة 3: المرسل مستخدم عادي (User) أو دور آخر
         const userName = sender['userName'] || 'User';
-        notificationTitle = `New message from ${userName}`; // new meesage from (userName)
+        notificationTitle = `New message from ${userName}`; 
     }
 
     let newUnreadCount = 0;
@@ -117,7 +130,7 @@ export class ChatService {
           const notifDto = {
             recipientId: recipient._id as Types.ObjectId, 
             recipientType: targetType,
-            title: notificationTitle, // ✅ استخدام العنوان الديناميكي
+            title: notificationTitle, 
             body: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
             type: NotificationType.NEW_MESSAGE,
             metadata: { chatId: chatId, messageId: message._id as Types.ObjectId }
@@ -143,6 +156,7 @@ export class ChatService {
 
   /**
    * @description جلب جميع محادثات مستخدم معين.
+   * يتم تمرير بيانات حالة القراءة (lastRead) في وثيقة المحادثة ليتمكن الـ Frontend من تحديد ما إذا كانت المحادثة غير مقروءة للمستخدم الحالي.
    */
   async getUserChats(userId: string) {
     return this.chatModel
@@ -203,6 +217,7 @@ export class ChatService {
     const messagesMarkedReadCount = updateResult.modifiedCount;
 
     // 2. ✨ NEW: تحديث حالة القراءة في وثيقة Chat (Mark as read للمستخدم الحالي)
+    // يتم تحديث lastReadAt إلى الوقت الحالي
     chat.lastRead = chat.lastRead.map(status => {
         if (status.userId.equals(userIdObj)) {
             // المستخدم يقرأ المحادثة، تحديث وقت القراءة
@@ -210,6 +225,15 @@ export class ChatService {
         }
         return status;
     });
+    // ✅ التعامل مع الحالة التي لم يكن فيها حقل lastRead موجوداً مسبقاً
+     if (chat.lastRead.length === 0) {
+        const otherParticipantId = chat.participants.find(p => p.toString() !== userId);
+        chat.lastRead = [
+            { userId: userIdObj, lastReadAt: new Date() },
+            { userId: new Types.ObjectId(otherParticipantId), lastReadAt: null }, 
+        ];
+    }
+    
     await chat.save();
 
 
@@ -225,6 +249,8 @@ export class ChatService {
 
   /**
    * @description جلب عدد المحادثات التي تحتوي على رسائل غير مقروءة للمستخدم الحالي.
+   * *ملحوظة*: هذه الدالة ما زالت تعتمد على حقل `isRead` في وثيقة `Message`، 
+   * ولكن المنطق الآن مدعوم بحقل `lastRead` في `Chat` لتحديد حالة "غير مقروءة" في القائمة الرئيسية.
    */
   async getUnreadChatsCount(userId: string): Promise<number> {
     const userIdObj = new Types.ObjectId(userId);

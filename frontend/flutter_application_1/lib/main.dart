@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 
 // Screens
@@ -12,11 +11,15 @@ import 'package:flutter_application_1/screens/home_customer.dart';
 import 'package:flutter_application_1/screens/vendors.dart';
 import 'package:flutter_application_1/screens/templates.dart';
 import 'package:flutter_application_1/screens/template_editor.dart';
-import 'package:flutter_application_1/screens/choose_role.dart'; // NEW SCREEN
-// أضف هذه الاستيرادات في أعلى الملف:
-import 'package:flutter_application_1/screens/home_provider.dart'; // استيراد HomeProviderScreen
+import 'package:flutter_application_1/screens/choose_role.dart';
+import 'package:flutter_application_1/screens/home_provider.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // ❌ DON'T initialize socket here - user might not be logged in yet!
+  // ✅ Socket will be initialized in chat_screen.dart when user opens a chat
+
   runApp(const MyApp());
 }
 
@@ -39,13 +42,10 @@ class MyApp extends StatelessWidget {
           secondary: const Color(0xFF1414D7),
         ),
       ),
-
       home: const SplashScreen(),
-
-      // Static Routes
       routes: {
         '/onboarding': (_) => const OnboardingScreen(),
-        '/choose_role': (_) => const ChooseRoleScreen(), // ADDED
+        '/choose_role': (_) => const ChooseRoleScreen(),
         '/signup': (_) => const SignUpScreen(),
         '/signin': (_) => const SignInScreen(),
         '/verification': (_) => const VerificationScreen(),
@@ -53,25 +53,18 @@ class MyApp extends StatelessWidget {
         '/vendors': (_) => const VendorsListPage(),
         '/templates': (_) => const TemplatesPage(),
       },
-
-      // Dynamic Routes
       onGenerateRoute: (settings) {
-        // Keep explicit case for verification
         if (settings.name == '/verification') {
           return MaterialPageRoute(
             builder: (_) => const VerificationScreen(),
             settings: settings,
           );
         }
-
-        // Template Editor Route
         if (settings.name == '/template_editor') {
           final args = settings.arguments as Map<String, dynamic>?;
-
           final templateName = args?['templateName'] as String? ?? 'Template';
           final imagePath =
               args?['imagePath'] as String? ?? 'assets/images/minimal.png';
-
           return MaterialPageRoute(
             builder: (_) => TemplateEditorPage(
               templateName: templateName,
@@ -80,8 +73,6 @@ class MyApp extends StatelessWidget {
             settings: settings,
           );
         }
-
-        // Home Provider Route
         if (settings.name == '/home_provider') {
           final args = settings.arguments;
           if (args != null && args is ProviderModel) {
@@ -90,7 +81,6 @@ class MyApp extends StatelessWidget {
               settings: settings,
             );
           } else {
-            // إرجاع شاشة خطأ إذا لم يتم تمرير البيانات
             return MaterialPageRoute(
               builder: (_) => Scaffold(
                 appBar: AppBar(title: const Text('Error')),

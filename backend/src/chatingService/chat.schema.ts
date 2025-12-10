@@ -6,7 +6,7 @@ import { Document, Types } from 'mongoose';
 // تعريف الـ TypeScript Interface لحالة القراءة
 export interface LastReadStatus {
   userId: Types.ObjectId;
-  lastReadAt: Date | null; // السماح بقيمة null لتمثيل حالة "غير مقروء"
+  lastReadAt: Date | null; 
 }
 
 // Chat model contains list of participants (user + vendor OR admin)
@@ -19,16 +19,15 @@ export class Chat extends Document {
   @Prop({ default: '' })
   lastMessage: string;
 
-  // ✨ NEW: تتبع آخر وقت قراءة لكل مشارك
-  // يتم تعيين lastReadAt = null عندما يكون هناك رسالة جديدة للمستلِم
+  // ✨ NEW: تتبع آخر وقت قراءة لكل مشارك (يسمح بـ null لـ "غير مقروء")
   @Prop({ 
     type: [{ 
       userId: { type: Types.ObjectId, ref: 'User', required: true },
-      lastReadAt: { type: Date, default: null } // السماح لـ Mongoose بتخزين null
+      lastReadAt: { type: Date, default: null, index: true } // السماح لـ Mongoose بتخزين null
     }], 
-    required: true 
+    default: [], // قيمة افتراضية لتفادي أخطاء الموديل القديم
   })
-  lastRead: LastReadStatus[]; // استخدام الـ Interface الجديد
+  lastRead: LastReadStatus[]; 
 }
 
 export const ChatSchema = SchemaFactory.createForClass(Chat);

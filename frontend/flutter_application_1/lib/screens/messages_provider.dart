@@ -39,7 +39,9 @@ class MessagesRepository {
   ) async {
     try {
       final chats = await ChatProviderService().fetchUserChats();
-      final currentUserId = ChatProviderService().currentUserId;
+      // تأكد من جلب الـ ID الحالي بشكل صحيح
+      final userMap = await AuthService.getUserData();
+      final currentUserId = userMap?['_id']?.toString() ?? userMap?['id']?.toString();
       
       List<ConversationThread> conversations = [];
       
@@ -50,7 +52,7 @@ class MessagesRepository {
         Map<String, dynamic>? otherParticipant;
         for (var p in participants) {
           final participantId = p['_id'] ?? p['id'];
-          if (participantId != currentUserId) {
+          if (participantId.toString() != currentUserId) {
             otherParticipant = p as Map<String, dynamic>;
             break;
           }
@@ -59,12 +61,16 @@ class MessagesRepository {
         if (otherParticipant == null) continue;
         
         // Get unread count for this chat
+        // هنا نقوم بحساب الرسائل غير المقروءة بدقة
         final messages = await ChatProviderService().fetchMessages(chat['_id']);
         int unreadCount = 0;
         for (var msg in messages) {
-          final senderId = msg['sender'] is Map 
-              ? msg['sender']['_id'] ?? msg['sender']['id']
-              : msg['sender'];
+          final senderData = msg['sender'];
+          final senderId = senderData is Map 
+              ? (senderData['_id'] ?? senderData['id']).toString()
+              : senderData.toString();
+              
+          // نعدها فقط إذا لم أكن أنا المرسل وكانت غير مقروءة
           if (senderId != currentUserId && msg['isRead'] == false) {
             unreadCount++;
           }
@@ -74,8 +80,8 @@ class MessagesRepository {
           id: chat['_id'],
           customerName: otherParticipant['userName'] ?? 'Unknown',
           avatarUrl: otherParticipant['imageUrl'],
-          lastMessage: chat['lastMessage'] ?? 'No messages yet',
-          lastMessageTime: DateTime.parse(chat['updatedAt'] ?? chat['createdAt']),
+          lastMessage: chat['lastMessage'] ?? 'Attachment',
+          lastMessageTime: DateTime.tryParse(chat['updatedAt'] ?? chat['createdAt']) ?? DateTime.now(),
           unreadCount: unreadCount,
         ));
       }
@@ -162,10 +168,13 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
   }
 
   Future<void> _loadConversations() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    // لا نعرض اللودينج في كل مرة لتجنب الوميض المزعج عند التحديث التلقائي
+    if (_allConversations.isEmpty) {
+        setState(() {
+            _isLoading = true;
+            _errorMessage = null;
+        });
+    }
 
     try {
       final data = await MessagesRepository.fetchConversationsForProvider(
@@ -174,17 +183,13 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
       if (mounted) {
         setState(() {
           _allConversations = data;
+          _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Failed to load messages.';
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
+          if(_allConversations.isEmpty) _errorMessage = 'Failed to load messages.';
           _isLoading = false;
         });
       }
@@ -202,7 +207,8 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     );
 
     if (selected != null) {
-      Navigator.push(
+      // ✅ عند العودة من البحث والدخول للشات، نحدث القائمة أيضاً
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ChatScreen(
@@ -210,7 +216,9 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
             customerName: selected.customerName,
           ),
         ),
-      ).then((_) => _loadConversations());
+      );
+      _loadConversations();
+      ChatProviderService().fetchUnreadCount();
     }
   }
 
@@ -724,6 +732,7 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
                                 if (_selectionMode) {
                                   _toggleSelection(convo.id);
                                 } else {
+                                  // ✅ هنا التعديل: ننتظر العودة من الشات ثم نحدث القائمة
                                   await Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -733,7 +742,10 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
                                       ),
                                     ),
                                   );
+                                  // تحديث القائمة لإزالة "New"
                                   _loadConversations();
+                                  // تحديث العداد العام أيضاً
+                                  ChatProviderService().fetchUnreadCount();
                                 }
                               },
                               onLongPress: () {

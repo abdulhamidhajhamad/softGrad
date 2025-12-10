@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/chat_provider_service.dart';
+import 'package:flutter_application_1/services/auth_service.dart';
 import 'messages_provider.dart'
     show kPrimaryColor, kBackgroundColor, kTextColor;
 
@@ -44,12 +45,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _isLoadingHistory = false;
   bool _isSending = false;
+  
+  String? _currentUserId; // Store current user ID locally
 
   @override
   void initState() {
     super.initState();
     _initializeChat();
-    _loadInitialMessages();
   }
 
   @override
@@ -61,13 +63,25 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _initializeChat() {
-    // Join the chat room
+  Future<void> _initializeChat() async {
+    // Get current user ID first
+    final userMap = await AuthService.getUserData();
+    _currentUserId = _cleanId(userMap?['_id'] ?? userMap?['id']);
+    
+    print('🔍 Current User ID: $_currentUserId'); // Debug log
+    
+    // Initialize socket and ensure currentUserId is set
+    await ChatProviderService().initSocket();
+    
+    // Join chat room
     ChatProviderService().joinChatRoom(widget.conversationId);
-    
-    // Mark messages as read when entering
+
+    // Mark messages as read
     ChatProviderService().markAsRead(widget.conversationId);
-    
+
+    // Load messages after getting user ID
+    await _loadInitialMessages();
+
     // Listen for new messages
     ChatProviderService().onNewMessage = (message) {
       if (mounted) {
@@ -75,8 +89,8 @@ class _ChatScreenState extends State<ChatScreen> {
           _messages.add(message);
         });
         _scrollToBottom();
-        
-        // Mark as read if received from other user
+
+        // Mark as read if message is not from me
         if (!message.isMe) {
           ChatProviderService().markAsRead(widget.conversationId);
         }
@@ -84,52 +98,81 @@ class _ChatScreenState extends State<ChatScreen> {
     };
   }
 
+  // Helper function to clean and normalize IDs
+  String _cleanId(dynamic id) {
+    if (id == null) return '';
+    return id.toString()
+        .replaceAll('ObjectId', '')
+        .replaceAll('(', '')
+        .replaceAll(')', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '')
+        .trim();
+  }
+
   Future<void> _loadInitialMessages() async {
+    if (_currentUserId == null || _currentUserId!.isEmpty) {
+      print('❌ Cannot load messages: currentUserId is null or empty');
+      return;
+    }
+
     setState(() => _isLoadingHistory = true);
+    
     try {
       final messages = await ChatProviderService().fetchMessages(widget.conversationId);
-      final currentUserId = ChatProviderService().currentUserId;
       
+      print('📨 Loaded ${messages.length} messages'); // Debug log
+
       if (mounted) {
         setState(() {
           _messages.clear();
+          
           for (var msg in messages) {
-            final senderId = msg['sender'] is Map 
-                ? msg['sender']['_id'] ?? msg['sender']['id']
-                : msg['sender'];
-            final isMe = senderId == currentUserId;
+            // Extract sender ID with robust handling
+            final senderData = msg['sender'];
+            String senderId = '';
             
+            if (senderData is Map) {
+              senderId = _cleanId(senderData['_id'] ?? senderData['id']);
+            } else if (senderData is String) {
+              senderId = _cleanId(senderData);
+            } else {
+              senderId = _cleanId(senderData);
+            }
+
+            // Determine if message is from current user
+            final isMe = senderId == _currentUserId;
+            
+            print('📝 Message: senderId=$senderId, currentUserId=$_currentUserId, isMe=$isMe'); // Debug
+
             _messages.add(ChatMessage(
-              id: msg['_id'],
-              text: msg['content'],
-              createdAt: DateTime.parse(msg['createdAt']),
+              id: msg['_id']?.toString() ?? '',
+              text: msg['content']?.toString() ?? '',
+              createdAt: DateTime.tryParse(msg['createdAt']?.toString() ?? '') ?? DateTime.now(),
               isMe: isMe,
               isRead: msg['isRead'] ?? false,
             ));
           }
         });
+        
+        print('✅ Successfully loaded ${_messages.length} messages'); // Debug
         _scrollToBottom();
       }
     } catch (e) {
-      print('Error loading messages: $e');
+      print('❌ Error loading messages: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load messages: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoadingHistory = false);
       }
     }
-  }
-
-  void addIncomingMessageFromCustomer(String text) {
-    final msg = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      text: text,
-      createdAt: DateTime.now(),
-      isMe: false,
-    );
-    setState(() {
-      _messages.add(msg);
-    });
-    _scrollToBottom();
   }
 
   Future<void> _sendMessage() async {
@@ -138,11 +181,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final tempId = DateTime.now().millisecondsSinceEpoch.toString();
 
+    // Create message with isMe: true for the sender
     final message = ChatMessage(
       id: tempId,
       text: text,
       createdAt: DateTime.now(),
-      isMe: true,
+      isMe: true, 
     );
 
     setState(() {
@@ -158,9 +202,10 @@ class _ChatScreenState extends State<ChatScreen> {
         text,
       );
     } catch (e) {
+      print('❌ Error sending message: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Failed to send message'),
             backgroundColor: Colors.redAccent,
           ),
@@ -174,11 +219,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 80), () {
+    Future.delayed(const Duration(milliseconds: 100), () {
       if (!_scrollController.hasClients) return;
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent + 80,
-        duration: const Duration(milliseconds: 250),
+        _scrollController.position.maxScrollExtent + 100,
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     });
@@ -245,10 +290,13 @@ class _ChatScreenState extends State<ChatScreen> {
                             itemBuilder: (context, index) {
                               final msg = _messages[index];
                               final isMe = msg.isMe;
+                              
+                              // Right alignment (purple) for sender's messages
+                              // Left alignment (white) for received messages
                               return Align(
                                 alignment: isMe
-                                    ? Alignment.centerRight
-                                    : Alignment.centerLeft,
+                                    ? Alignment.centerRight // Your messages (purple)
+                                    : Alignment.centerLeft, // Received messages (white)
                                 child: Container(
                                   margin:
                                       const EdgeInsets.symmetric(vertical: 4),

@@ -193,4 +193,35 @@ export class NotificationService implements OnModuleInit {
         this.notificationsGateway.emitToRecipient(recipientId, 'unreadCountUpdated', newCount);
     }
   }
+
+  async debugGetAllNotifications(userId: Types.ObjectId): Promise<any> {
+  const allNotifications = await this.notificationModel.find({}).exec();
+  
+  const userNotificationsAsUser = await this.notificationModel.find({
+    recipientId: userId,
+    recipientType: RecipientType.USER
+  }).exec();
+  
+  const userNotificationsAsVendor = await this.notificationModel.find({
+    recipientId: userId,
+    recipientType: RecipientType.VENDOR
+  }).exec();
+  
+  return {
+    userId: userId.toString(),
+    totalNotificationsInDB: allNotifications.length,
+    notificationsForThisUserAsUser: userNotificationsAsUser.length,
+    notificationsForThisUserAsVendor: userNotificationsAsVendor.length,
+    allNotificationsInDB: allNotifications.map(n => ({
+      _id: n._id,
+      recipientId: n.recipientId.toString(),
+      recipientType: n.recipientType,
+      title: n.title,
+      isRead: n.isRead
+    })),
+    userNotificationsAsUser: userNotificationsAsUser,
+    userNotificationsAsVendor: userNotificationsAsVendor
+  };
 }
+}
+

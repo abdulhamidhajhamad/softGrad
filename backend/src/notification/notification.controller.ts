@@ -1,11 +1,19 @@
 // src/notification/notification.controller.ts
-import { Controller, Get, Patch, Param, Delete, HttpCode, UseGuards } from '@nestjs/common';
+import { 
+  Controller, 
+  Get, 
+  Patch, 
+  Param, 
+  Delete, 
+  HttpCode, 
+  UseGuards,
+  Request 
+} from '@nestjs/common';
 import { NotificationService } from './notification.service';
-import { User } from '../auth/user.decorator'; // Assuming you have a custom user decorator
 import { Types } from 'mongoose';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RecipientType } from './notification.schema';
 
-// Note: You must protect these routes with an AuthGuard
 @Controller('notifications')
 @UseGuards(JwtAuthGuard) 
 export class NotificationController {
@@ -13,42 +21,82 @@ export class NotificationController {
 
   // GET /notifications
   @Get()
-  async getNotifications(
-    @User('id') recipientId: Types.ObjectId,
-    @User('type') recipientType: string, // Assuming 'type' is User/Vendor
-  ) {
-    // Fetches the list of notifications for the logged-in user/vendor
-    return this.notificationService.getNotifications(recipientId, recipientType);
+  async getNotifications(@Request() req) {
+    const userId = req.user.userId || req.user.id;
+    const userRole = req.user.role;
+    
+    // Convert role to RecipientType
+    const recipientType = userRole === 'vendor' ? RecipientType.VENDOR : RecipientType.USER;
+    
+    console.log('🔔 Fetching notifications for:', { userId, userRole, recipientType });
+    
+    return this.notificationService.getNotifications(
+      new Types.ObjectId(userId), 
+      recipientType
+    );
   }
+
   // GET /notifications/unread/count
   @Get('unread/count')
-  async getUnreadCount(
-    @User('id') recipientId: Types.ObjectId,
-    @User('type') recipientType: string,
-  ) {
-    // Fetches the count for the red dot indicator
-    return this.notificationService.getUnreadCount(recipientId, recipientType);
+  async getUnreadCount(@Request() req) {
+    const userId = req.user.userId || req.user.id;
+    const userRole = req.user.role;
+    
+    // Convert role to RecipientType
+    const recipientType = userRole === 'vendor' ? RecipientType.VENDOR : RecipientType.USER;
+    
+    console.log('🔔 Fetching unread count for:', { userId, userRole, recipientType });
+    
+    const count = await this.notificationService.getUnreadCount(
+      new Types.ObjectId(userId), 
+      recipientType
+    );
+    
+    console.log('📊 Unread count:', count);
+    
+    return { count };
   }
 
   // PATCH /notifications/mark-all-read
-  // Implements the feature: "Once they click the page, all become read"
   @Patch('mark-all-read')
   @HttpCode(204)
-  async markAllAsRead(
-    @User('id') recipientId: Types.ObjectId,
-    @User('type') recipientType: string,
-  ) {
-    await this.notificationService.markAllAsRead(recipientId, recipientType);
+  async markAllAsRead(@Request() req) {
+    const userId = req.user.userId || req.user.id;
+    const userRole = req.user.role;
+    
+    // Convert role to RecipientType
+    const recipientType = userRole === 'vendor' ? RecipientType.VENDOR : RecipientType.USER;
+    
+    console.log('✅ Marking all as read for:', { userId, userRole, recipientType });
+    
+    await this.notificationService.markAllAsRead(
+      new Types.ObjectId(userId), 
+      recipientType
+    );
   }
 
   // DELETE /notifications/:id
   @Delete(':notificationId')
   @HttpCode(204)
   async deleteNotification(
-    @Param('notificationId') notificationId: Types.ObjectId,
-    @User('id') recipientId: Types.ObjectId,
+    @Param('notificationId') notificationId: string,
+    @Request() req
   ) {
-    // Deletes the notification, ensuring the recipient owns it
-    await this.notificationService.deleteNotification(notificationId, recipientId);
+    const userId = req.user.userId || req.user.id;
+    
+    console.log('🗑️ Deleting notification:', { notificationId, userId });
+    
+    await this.notificationService.deleteNotification(
+      new Types.ObjectId(notificationId), 
+      new Types.ObjectId(userId)
+    );
+  }
+
+  // 🔍 DEBUG ENDPOINT - Remove this after testing
+  @Get('debug/all')
+  async debugAllNotifications(@Request() req) {
+    const userId = req.user.userId || req.user.id;
+    
+    return this.notificationService.debugGetAllNotifications(new Types.ObjectId(userId));
   }
 }

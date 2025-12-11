@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/chat_provider_service.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'messages_provider.dart'
-    show kPrimaryColor, kBackgroundColor, kTextColor;
+    show kPrimaryColor, kBackgroundColor, kTextColor; // افتراضياً يتم استيراد هذه الألوان من messages_provider.dart
 
 class ChatMessage {
   final String id;
@@ -37,7 +37,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final List<ChatMessage> _messages = [];
 
   final TextEditingController _inputController = TextEditingController();
@@ -45,103 +45,153 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _isLoadingHistory = false;
   bool _isSending = false;
-  
   String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeChat();
   }
 
   @override
   void dispose() {
-    ChatProviderService().leaveChatRoom(widget.conversationId);
-    ChatProviderService().onNewMessage = null;
-    _inputController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    // ✅ الحل: إزالة الاشتراك عند الخروج من الشاشة
+    ChatProviderService().onNewMessage = null; 
+    ChatProviderService().onMessageStatusUpdate = null;
+    ChatProviderService().setActiveChat(null);
+
     _scrollController.dispose();
+    _inputController.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // وضع علامة مقروءة عند العودة إلى التطبيق
+      ChatProviderService().markAsRead(widget.conversationId);
+    }
+  }
+
   Future<void> _initializeChat() async {
-    // Get current user ID first
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingHistory = true;
+      _messages.clear();
+    });
+
+    // 1. جلب ID المستخدم الحالي أولاً
     final userMap = await AuthService.getUserData();
     _currentUserId = _cleanId(userMap?['_id'] ?? userMap?['id']);
     
     print('🔑 Current User ID: $_currentUserId');
     
-    // Set currentUserId in ChatProviderService BEFORE initializing socket
+    // 2. تعيين الدردشة النشطة و ID المستخدم في الـ Service
     ChatProviderService().currentUserId = _currentUserId;
+    ChatProviderService().setActiveChat(widget.conversationId);
     
-    // Initialize socket
+    // 3. تهيئة الـ Socket (يربط إذا لم يكن متصلاً)
     await ChatProviderService().initSocket();
     
-    // Wait a bit for socket to connect
-    await Future.delayed(const Duration(milliseconds: 300));
-    
-    // Join chat room
-    ChatProviderService().joinChatRoom(widget.conversationId);
+    // 4. تحميل الرسائل (باستخدام اسم الدالة الموحد)
+    await _loadChatHistory(); 
 
-    // Load messages first
-    await _loadInitialMessages();
-
-    // Mark messages as read AFTER loading (with retry mechanism)
+    // 5. وضع علامة مقروءة على الرسائل بعد التحميل
     await _markMessagesAsReadWithRetry();
 
-    // Listen for new messages
+    // 6. إعداد مستمعات الـ Socket
+    
+    // ✅ مستمع الرسائل الجديدة (تحديث فوري)
     ChatProviderService().onNewMessage = (message) {
       if (mounted) {
-        setState(() {
-          _messages.add(message);
-        });
-        _scrollToBottom();
-
-        // Mark as read if message is not from me
-        if (!message.isMe) {
-          ChatProviderService().markAsRead(widget.conversationId);
-        }
+        print('📨 New message received: ${message.text}');
+        
+        // التحقق من عدم وجود تكرار
+        final exists = _messages.any((m) => 
+          (m.id == message.id) || 
+          (m.text == message.text && m.createdAt.difference(message.createdAt).abs().inSeconds < 2)
+        );
+        
+        if (!exists) {
+          setState(() {
+            _messages.insert(0, message); // ✅ الحل: إضافة الرسالة في البداية لتظهر في الأسفل
+          });
+          _scrollToBottom();
+          print('✅ Message added to UI');
+        } 
       }
     };
+    
+    // ✅ مستمع تحديث حالة الرسائل (لتحديث علامات القراءة)
+    ChatProviderService().onMessageStatusUpdate = () {
+      if (mounted) {
+        // إعادة تحميل السجل بشكل صامت لتحديث حالة "مقروءة"
+        _loadChatHistory(silent: true); 
+      }
+    };
+
+    if (mounted) {
+      setState(() {
+        _isLoadingHistory = false;
+      });
+    }
   }
 
-  // Robust mark as read with retry mechanism
-  Future<void> _markMessagesAsReadWithRetry() async {
-    int attempts = 0;
-    const maxAttempts = 3;
-    const retryDelay = Duration(milliseconds: 500);
+  // ✨ الحل: توحيد اسم الدالة
+  Future<void> _loadChatHistory({bool silent = false}) async { 
+    if (!mounted || _currentUserId == null || _currentUserId!.isEmpty) return;
 
-    while (attempts < maxAttempts) {
-      try {
-        print('📖 Attempting to mark messages as read (attempt ${attempts + 1})');
-        await ChatProviderService().markAsRead(widget.conversationId);
-        print('✅ Messages marked as read successfully');
-        
-        // Update local state to reflect read status
-        if (mounted) {
-          setState(() {
-            for (int i = 0; i < _messages.length; i++) {
-              if (!_messages[i].isMe) {
-                _messages[i] = ChatMessage(
-                  id: _messages[i].id,
-                  text: _messages[i].text,
-                  createdAt: _messages[i].createdAt,
-                  isMe: _messages[i].isMe,
-                  isRead: true,
-                );
-              }
-            }
-          });
-        }
-        
-        break; // Success, exit loop
-      } catch (e) {
-        attempts++;
-        print('⚠️ Failed to mark as read (attempt $attempts): $e');
-        if (attempts < maxAttempts) {
-          await Future.delayed(retryDelay);
-        }
+    if (!silent) {
+      setState(() {
+        _isLoadingHistory = true;
+      });
+    }
+
+    try {
+      final messages = await ChatProviderService().fetchChatMessages(widget.conversationId);
+      if (mounted) {
+        setState(() {
+          // عرض الرسائل بترتيب عكسي لتظهر الأحدث في الأسفل
+          _messages.clear();
+          _messages.addAll(messages); 
+        });
+        _scrollToBottom(jump: true); // القفز المباشر للأسفل عند التحميل الأولي
+      }
+    } catch (e) {
+      print('❌ Error loading chat history: $e');
+    } finally {
+      if (mounted && !silent) {
+        setState(() {
+          _isLoadingHistory = false;
+        });
       }
     }
+  }
+
+  Future<void> _markMessagesAsReadWithRetry() async {
+    // حاول وضع علامة مقروءة بضمان، مع إعادة المحاولة
+    await Future.delayed(const Duration(milliseconds: 50)); 
+    await ChatProviderService().markAsRead(widget.conversationId);
+  }
+
+  void _scrollToBottom({bool jump = false}) {
+    // التمرير إلى أسفل القائمة لرؤية الرسالة الجديدة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        if (jump) {
+          _scrollController.jumpTo(0.0);
+        } else {
+          _scrollController.animateTo(
+            0.0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      }
+    });
   }
 
   String _cleanId(dynamic id) {
@@ -155,301 +205,184 @@ class _ChatScreenState extends State<ChatScreen> {
         .trim();
   }
 
-  Future<void> _loadInitialMessages() async {
-    if (_currentUserId == null || _currentUserId!.isEmpty) {
-      print('❌ Cannot load messages: currentUserId is null or empty');
-      return;
-    }
+  Future<void> _handleSendMessage() async {
+    if (_inputController.text.trim().isEmpty || _isSending) return;
 
-    setState(() => _isLoadingHistory = true);
-    
-    try {
-      final messages = await ChatProviderService().fetchMessages(widget.conversationId);
-      
-      print('📨 Loaded ${messages.length} messages');
-
-      if (mounted) {
-        setState(() {
-          _messages.clear();
-          
-          for (var msg in messages) {
-            // Extract sender ID with robust handling
-            final senderData = msg['sender'];
-            String senderId = '';
-            
-            if (senderData is Map) {
-              senderId = _cleanId(senderData['_id'] ?? senderData['id']);
-            } else if (senderData is String) {
-              senderId = _cleanId(senderData);
-            } else {
-              senderId = _cleanId(senderData);
-            }
-
-            // Determine if message is from current user
-            final isMe = senderId == _currentUserId;
-            
-            print('📝 Message: senderId=$senderId, currentUserId=$_currentUserId, isMe=$isMe');
-
-            _messages.add(ChatMessage(
-              id: msg['_id']?.toString() ?? '',
-              text: msg['content']?.toString() ?? '',
-              createdAt: DateTime.tryParse(msg['createdAt']?.toString() ?? '') ?? DateTime.now(),
-              isMe: isMe,
-              isRead: msg['isRead'] ?? false,
-            ));
-          }
-        });
-        
-        print('✅ Successfully loaded ${_messages.length} messages');
-        _scrollToBottom();
-      }
-    } catch (e) {
-      print('❌ Error loading messages: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load messages: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingHistory = false);
-      }
-    }
-  }
-
-  Future<void> _sendMessage() async {
-    final text = _inputController.text.trim();
-    if (text.isEmpty || _isSending) return;
-
-    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
-
-    final message = ChatMessage(
-      id: tempId,
-      text: text,
-      createdAt: DateTime.now(),
-      isMe: true, 
-    );
+    final content = _inputController.text.trim();
+    _inputController.clear();
 
     setState(() {
       _isSending = true;
-      _messages.add(message);
+      // إضافة الرسالة إلى الواجهة فوراً (Optimistic UI)
+      final tempMessage = ChatMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(), 
+        text: content,
+        createdAt: DateTime.now(),
+        isMe: true,
+        isRead: false,
+      );
+      _messages.insert(0, tempMessage); 
+      _scrollToBottom();
     });
-    _inputController.clear();
-    _scrollToBottom();
 
     try {
-      await ChatProviderService().sendMessage(
-        widget.conversationId,
-        text,
-      );
+      await ChatProviderService().sendMessage(widget.conversationId, content);
     } catch (e) {
-      print('❌ Error sending message: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to send message'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+      print('❌ Failed to send message: $e');
+      // يمكن إضافة منطق لإظهار خطأ وإزالة الرسالة المؤقتة
     } finally {
       if (mounted) {
-        setState(() => _isSending = false);
+        setState(() {
+          _isSending = false;
+        });
       }
     }
-  }
-
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (!_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent + 100,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    });
-  }
-
-  String _formatTime(DateTime time) {
-    final h = time.hour.toString().padLeft(2, '0');
-    final m = time.minute.toString().padLeft(2, '0');
-    return '$h:$m';
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
+    return Scaffold(
+      backgroundColor: kBackgroundColor,
+      appBar: AppBar(
         backgroundColor: kBackgroundColor,
-        appBar: AppBar(
-          backgroundColor: kBackgroundColor,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: kTextColor),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.customerName,
-                style: GoogleFonts.poppins(
-                  color: kTextColor,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                'Customer chat',
-                style: GoogleFonts.poppins(
-                  color: Colors.grey.shade600,
-                  fontSize: 11,
-                ),
-              ),
-            ],
+        elevation: 0,
+        title: Text(
+          widget.customerName,
+          style: GoogleFonts.poppins(
+            color: kTextColor,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        body: Column(
+        iconTheme: const IconThemeData(color: kTextColor),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: _isLoadingHistory
+                  ? const Center(child: CircularProgressIndicator(color: kPrimaryColor))
+                  : _messages.isEmpty
+                      ? _buildEmptyChatState()
+                      : _buildChatList(),
+            ),
+            _buildMessageInput(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatList() {
+    return ListView.builder(
+      reverse: true, // لعرض الرسائل من الأسفل للأعلى
+      controller: _scrollController,
+      padding: const EdgeInsets.only(top: 10, bottom: 8),
+      itemCount: _messages.length,
+      itemBuilder: (context, index) {
+        return _buildMessageBubble(_messages[index]);
+      },
+    );
+  }
+
+  Widget _buildMessageBubble(ChatMessage message) {
+    final isMe = message.isMe;
+    final borderRadius = BorderRadius.circular(15);
+    final bubbleColor = isMe ? kPrimaryColor : Colors.grey.shade200;
+    final textColor = isMe ? Colors.white : kTextColor;
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+        child: Column(
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: bubbleColor,
+                borderRadius: isMe
+                    ? borderRadius.copyWith(topRight: Radius.zero)
+                    : borderRadius.copyWith(topLeft: Radius.zero),
+              ),
+              child: Text(
+                message.text,
+                style: GoogleFonts.poppins(
+                  color: textColor,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${message.createdAt.hour.toString().padLeft(2, '0')}:${message.createdAt.minute.toString().padLeft(2, '0')}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    color: Colors.grey,
+                  ),
+                ),
+                if (isMe) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    message.isRead ? Icons.done_all : Icons.done,
+                    size: 14,
+                    color: message.isRead ? Colors.blue.shade600 : Colors.grey,
+                  ),
+                ]
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageInput() {
+    return Container(
+      padding: const EdgeInsets.all(8.0),
+      color: kBackgroundColor,
+      child: SafeArea(
+        top: false,
+        child: Row(
           children: [
             Expanded(
               child: Container(
-                color: const Color(0xFFF7F7F7),
-                child: _isLoadingHistory && _messages.isEmpty
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: kPrimaryColor,
-                        ),
-                      )
-                    : _messages.isEmpty
-                        ? _buildEmptyChatState()
-                        : ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 12),
-                            itemCount: _messages.length,
-                            itemBuilder: (context, index) {
-                              final msg = _messages[index];
-                              final isMe = msg.isMe;
-                              
-                              return Align(
-                                alignment: isMe
-                                    ? Alignment.centerRight
-                                    : Alignment.centerLeft,
-                                child: Container(
-                                  margin:
-                                      const EdgeInsets.symmetric(vertical: 4),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                  constraints: BoxConstraints(
-                                    maxWidth:
-                                        MediaQuery.of(context).size.width * 0.7,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isMe ? kPrimaryColor : Colors.white,
-                                    borderRadius: BorderRadius.only(
-                                      topLeft: const Radius.circular(16),
-                                      topRight: const Radius.circular(16),
-                                      bottomLeft:
-                                          Radius.circular(isMe ? 16 : 4),
-                                      bottomRight:
-                                          Radius.circular(isMe ? 4 : 16),
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.05),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: isMe
-                                        ? CrossAxisAlignment.end
-                                        : CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        msg.text,
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 13,
-                                          color: isMe
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _formatTime(msg.createdAt),
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 10,
-                                          color: isMe
-                                              ? Colors.white70
-                                              : Colors.grey.shade500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-              ),
-            ),
-
-            SafeArea(
-              top: false,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    top: BorderSide(color: Color(0xFFE5E5E5)),
-                  ),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(25),
+                  border: Border.all(color: Colors.grey.shade300),
                 ),
                 child: Row(
                   children: [
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F3F3),
-                          borderRadius: BorderRadius.circular(24),
+                      child: TextField(
+                        controller: _inputController,
+                        style: GoogleFonts.poppins(fontSize: 14, color: kTextColor),
+                        decoration: InputDecoration(
+                          hintText: 'Type a message...',
+                          hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
                         ),
-                        child: TextField(
-                          controller: _inputController,
-                          minLines: 1,
-                          maxLines: 4,
-                          decoration: InputDecoration(
-                            isCollapsed: true,
-                            border: InputBorder.none,
-                            hintText: 'Write a message...',
-                            hintStyle: GoogleFonts.poppins(
-                              fontSize: 13,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            color: kTextColor,
-                          ),
-                        ),
+                        onSubmitted: (_) => _handleSendMessage(),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    InkWell(
-                      onTap: _isSending ? null : _sendMessage,
-                      borderRadius: BorderRadius.circular(24),
+                    GestureDetector(
+                      onTap: _handleSendMessage,
                       child: Container(
-                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(right: 8),
+                        height: 40,
+                        width: 40,
                         decoration: BoxDecoration(
-                          color: _isSending
-                              ? kPrimaryColor.withOpacity(0.6)
-                              : kPrimaryColor,
+                          color: kPrimaryColor,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(

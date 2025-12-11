@@ -10,9 +10,10 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from './chat.service';
-import { UseGuards } from '@nestjs/common';
+import { Injectable, UseGuards, forwardRef, Inject } from '@nestjs/common'; // ✨ تم استيراد Injectable
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-
+import { Message } from './message.schema'; // ✨ تم استيراد Message Schema
+@Injectable() // ✨ إضافة @Injectable
 @WebSocketGateway({
   cors: {
     origin: true,
@@ -23,7 +24,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  constructor(private chatService: ChatService) {}
+  constructor(@Inject(forwardRef(() => ChatService))
+    private chatService: ChatService) {}
 
   handleConnection(client: Socket) {
     console.log(`✅ Client connected: ${client.id}`);
@@ -132,4 +134,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       isTyping: data.isTyping,
     });
   }
+
+
+  // ✨ الدالة الجديدة: لإرسال الرسالة عبر السوكيت من الـ Service
+ async sendNewMessageToRoom(chatId: string, message: Message) {
+    console.log(`📡 Gateway: Emitting 'newMessage' to room ${chatId}`);
+
+    // ✅ الحل: تحويل Mongoose Document إلى JavaScript Object باستخدام toJSON(). 
+    // هذا يضمن تحويل ObjectId إلى string وتجنب أخطاء .toString()
+    const messageObject = message.toJSON(); 
+    
+    // يطلق حدث 'newMessage' لجميع العملاء في الغرفة
+    this.server.to(chatId).emit('newMessage', {
+      message: messageObject, 
+    });
+  }
+
 }

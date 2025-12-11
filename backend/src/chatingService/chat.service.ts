@@ -1,5 +1,5 @@
 // chat.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException , forwardRef, Inject} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Chat, LastReadStatus } from './chat.schema';
 import { Message } from './message.schema';
@@ -8,6 +8,7 @@ import { User } from '../auth/user.entity';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType, RecipientType } from '../notification/notification.schema';
 import { ProviderService } from '../providers/provider.service'; 
+import { ChatGateway } from './chat.gateway'; // ✨ تم استيراد ChatGateway
 
 @Injectable()
 export class ChatService {
@@ -17,11 +18,14 @@ export class ChatService {
     @InjectModel(User.name) private userModel: Model<User>, 
     private notificationService: NotificationService,
     private providerService: ProviderService,
+    @Inject(forwardRef(() => ChatGateway))
+    private chatGateway: ChatGateway,
   ) {}
 
   async createChat(userId: string, receiverId: string) {
     let chat = await this.chatModel.findOne({
       participants: { $all: [userId, receiverId] },
+   
     });
 
     if (!chat) {
@@ -46,6 +50,7 @@ export class ChatService {
   }
 
   async sendMessage(senderId: string, chatId: string, content: string): Promise<{ message: Message, recipientId: string | null, newUnreadCount: number }> {
+    
     const chat = await this.chatModel.findById(chatId);
     if (!chat) throw new NotFoundException('Chat not found');
 
@@ -67,7 +72,7 @@ export class ChatService {
     });
 
     await chat.save();
-    
+    this.chatGateway.sendNewMessageToRoom(chatId, message);
     const sender = await this.userModel.findById(senderId).exec();
     if (!sender) {
       throw new NotFoundException('Sender user not found'); 
@@ -117,6 +122,8 @@ export class ChatService {
     
     return { message, recipientId, newUnreadCount };
   }
+
+
 
   async getMessages(chatId: string) {
     // ✅ Use string because chatId is stored as string in database

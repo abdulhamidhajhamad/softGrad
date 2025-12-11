@@ -298,59 +298,57 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                   ),
                   const SizedBox(height: 10),
                  Row(
-                    children: [
-                                Expanded(
-                        child: ValueListenableBuilder<int>(
-                          valueListenable: ChatProviderService.unreadGlobalCount,
-                          builder: (context, unreadCount, child) {
-                            return _QuickAction(
-                              title: "Messages",
-                              icon: Icons.chat_bubble_outline,
-                              showBadge: unreadCount > 0,
-                              onTap: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const MessagesProviderScreen(),
-                                  ),
-                                );
-                                // Refresh unread count after returning
-                                ChatProviderService().fetchUnreadCount();
-                              },
-                            );
-                          },
+                      children: [
+                        // ✅ Messages with real-time unread count badge
+                        Expanded(
+                          child: ValueListenableBuilder<int>(
+                            valueListenable: ChatProviderService.unreadGlobalCount,
+                            builder: (context, unreadCount, child) {
+                              return _QuickAction(
+                                title: "Messages",
+                                icon: Icons.chat_bubble_outline,
+                                showBadge: unreadCount > 0, // ✅ Show red badge if there are unread messages
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const MessagesProviderScreen(),
+                                    ),
+                                  );
+                                  // ✅ Refresh unread count after returning
+                                  ChatProviderService().fetchUnreadCount();
+                                },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        // ✅ استخدام ValueListenableBuilder للاستماع لتغير حالة الإشعارات
-                        child: ValueListenableBuilder<bool>(
-                          valueListenable: NotificationProviderService.hasUnreadNotifier,
-                          builder: (context, hasUnread, child) {
-                            return _QuickAction(
-                              title: "Notifications",
-                              icon: Icons.notifications_none_outlined,
-                              showBadge: hasUnread, // استخدام القيمة الفورية
-                              onTap: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const NotificationsProviderScreen(),
-                                  ),
-                                );
-                                // 💡 تحديث الحالة عند العودة
-                                NotificationProviderService.updateUnreadCountOnConnect();
-                              },
-                            );
-                          },
+                        const SizedBox(width: 8),
+                        // Notifications with hasUnread badge
+                        Expanded(
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: NotificationProviderService.hasUnreadNotifier,
+                            builder: (context, hasUnread, child) {
+                              return _QuickAction(
+                                title: "Notifications",
+                                icon: Icons.notifications_none_outlined,
+                                showBadge: hasUnread,
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const NotificationsProviderScreen(),
+                                    ),
+                                  );
+                                  NotificationProviderService.updateUnreadCountOnConnect();
+                                },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                 ],
               ),
-
               const SizedBox(height: 22),
               Text(
                 "About Your Brand",

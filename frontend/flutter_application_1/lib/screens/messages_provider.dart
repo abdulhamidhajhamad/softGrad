@@ -34,6 +34,8 @@ class ConversationThread {
 }
 
 class MessagesRepository {
+
+
   static Future<List<ConversationThread>> fetchConversationsForProvider(
     String providerId,
   ) async {
@@ -55,21 +57,21 @@ class MessagesRepository {
             otherParticipant = p as Map<String, dynamic>;
             break;
           }
-        }
+        } 
         
         if (otherParticipant == null) continue;
         
-        // ✅ FIXED: Calculate unread count ONLY for messages NOT sent by me
-        final messages = await ChatProviderService().fetchMessages(chat['_id']);
+        // ✅ Calculate unread count ONLY for messages NOT sent by me
+      final messages = await ChatProviderService().fetchChatMessages(chat['_id']); 
+        
         int unreadCount = 0;
+        
+        // 2. (NEW FIX) استخدام خصائص الكائن (.isMe, .isRead) بدلاً من مفاتيح الخريطة (['...'])
         for (var msg in messages) {
-          final senderData = msg['sender'];
-          final senderId = senderData is Map 
-              ? (senderData['_id'] ?? senderData['id']).toString()
-              : senderData.toString();
-              
-          // ✅ Count as unread ONLY if: (1) I'm not the sender AND (2) message is unread
-          if (senderId != currentUserId && msg['isRead'] == false) {
+          // Count as unread ONLY if: 
+          // (1) I'm not the sender (msg.isMe is false) 
+          // AND (2) the message is marked unread (msg.isRead is false).
+          if (!msg.isMe && msg.isRead == false) {
             unreadCount++;
           }
         }
@@ -82,7 +84,7 @@ class MessagesRepository {
           avatarUrl: otherParticipant['imageUrl'],
           lastMessage: chat['lastMessage'] ?? 'Attachment',
           lastMessageTime: DateTime.tryParse(chat['updatedAt'] ?? chat['createdAt']) ?? DateTime.now(),
-          unreadCount: unreadCount, // ✅ This will now be accurate
+          unreadCount: unreadCount,
         ));
       }
       
@@ -149,31 +151,56 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     _initializeChat();
     _loadConversations();
     
-    // ✅ Listen for real-time updates
+    // ✅ Listen for real-time updates (message status changes)
     ChatProviderService().onMessageStatusUpdate = () {
       if (mounted) {
+        print('🔄 Message status update received, refreshing conversations');
         _loadConversations();
       }
     };
+    
+    // ✅ Listen for new messages in real-time
+    ChatProviderService().onNewMessage = (message) {
+      if (mounted) {
+        print('💬 New message received in messages list, refreshing');
+        _loadConversations();
+      }
+    };
+    
+    // ✅ Listen to global unread count changes
+    ChatProviderService.unreadGlobalCount.addListener(_onUnreadCountChanged);
+  }
+  
+  void _onUnreadCountChanged() {
+    if (mounted) {
+      print('🔔 Unread count changed, refreshing conversations');
+      _loadConversations();
+    }
   }
   
   @override
   void dispose() {
     ChatProviderService().onMessageStatusUpdate = null;
+    ChatProviderService().onNewMessage = null;
+    ChatProviderService.unreadGlobalCount.removeListener(_onUnreadCountChanged);
     super.dispose();
   }
 
   Future<void> _initializeChat() async {
     await ChatProviderService().initSocket();
+    // ✅ Fetch initial unread count
+    await ChatProviderService().fetchUnreadCount();
   }
 
   Future<void> _loadConversations() async {
     // Don't show loading spinner on refresh to avoid flashing
-    if (_allConversations.isEmpty) {
-        setState(() {
-            _isLoading = true;
-            _errorMessage = null;
-        });
+    final showLoading = _allConversations.isEmpty;
+    
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
     }
 
     try {
@@ -185,8 +212,10 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
           _allConversations = data;
           _isLoading = false;
         });
+        print('✅ Conversations loaded: ${data.length} chats');
       }
     } catch (e) {
+      print('❌ Error loading conversations: $e');
       if (mounted) {
         setState(() {
           if(_allConversations.isEmpty) _errorMessage = 'Failed to load messages.';
@@ -286,6 +315,8 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     });
     await MessagesRepository.markConversationsAsRead(ids);
     _exitSelectionMode();
+    // ✅ Update global unread count
+    ChatProviderService().fetchUnreadCount();
   }
 
   Future<void> _markSelectedAsUnread() async {
@@ -308,6 +339,8 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     });
     await MessagesRepository.deleteConversations(ids);
     _exitSelectionMode();
+    // ✅ Update global unread count
+    ChatProviderService().fetchUnreadCount();
   }
 
   Future<void> _deleteSingleConversation(ConversationThread conv) async {
@@ -346,6 +379,9 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     if (_selectionMode && _selectedIds.isEmpty) {
       _selectionMode = false;
     }
+    
+    // ✅ Update global unread count
+    ChatProviderService().fetchUnreadCount();
   }
 
   Future<void> _togglePinConversation(ConversationThread conv) async {
@@ -365,6 +401,8 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
 
     if (isCurrentlyUnread) {
       await MessagesRepository.markConversationsAsRead([conv.id]);
+      // ✅ Update global unread count
+      ChatProviderService().fetchUnreadCount();
     } else {
       await MessagesRepository.markConversationsAsUnread([conv.id]);
     }
@@ -570,6 +608,8 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
       }
     });
     await MessagesRepository.markConversationsAsRead(ids);
+    // ✅ Update global unread count
+    ChatProviderService().fetchUnreadCount();
   }
 
   Future<void> _markAllAsUnread() async {
@@ -621,6 +661,8 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
       _selectionMode = false;
     });
     await MessagesRepository.deleteConversations(ids);
+    // ✅ Update global unread count
+    ChatProviderService().fetchUnreadCount();
   }
 
   PreferredSizeWidget _buildAppBar() {
@@ -765,9 +807,6 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     );
   }
 }
-
-// ... (Rest of the code remains exactly the same - ConversationSearchDelegate, _ConversationTile, _Avatar, _LoadingState, _EmptyState, _ErrorState)
-// I'm not including them here to save space, but they remain unchanged
 
 class ConversationSearchDelegate extends SearchDelegate<ConversationThread?> {
   final List<ConversationThread> conversations;
@@ -1039,7 +1078,7 @@ class _ConversationTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  // ✅ FIXED: Only show "new" badge if there are actually unread messages
+                  // ✅ Show "new" badge ONLY if there are unread messages
                   if (hasUnread)
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -1061,7 +1100,7 @@ class _ConversationTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            // ✅ FIXED: Only show red dot if there are unread messages
+            // ✅ Show purple dot ONLY if there are unread messages
             if (hasUnread && !selectionMode)
               Container(
                 width: 10,

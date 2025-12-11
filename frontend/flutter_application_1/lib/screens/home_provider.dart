@@ -236,48 +236,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
             children: [
               _HeaderCard(provider: provider),
               const SizedBox(height: 15),
-
-              // Stats row: Bookings / Messages / Reviews
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatBox(
-                      icon: Icons.event_available_outlined,
-                      title: "Bookings",
-                      value: provider.bookings.toString(),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _StatBox(
-                      icon: Icons.chat_bubble_outline,
-                      title: "Messages",
-                      value: provider.messages.toString(),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ReviewsProviderScreen(),
-                          ),
-                        );
-                      },
-                      child: _StatBox(
-                        icon: Icons.attach_money,
-                        title: "Sales",
-                        value: provider.reviews.toString(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
               const SizedBox(height: 20),
-
               // Packages teaser card
               _PackagesTeaserCard(
                 onTap: () {
@@ -340,14 +299,13 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                   const SizedBox(height: 10),
                  Row(
                     children: [
-                      Expanded(
+                                Expanded(
                         child: ValueListenableBuilder<int>(
                           valueListenable: ChatProviderService.unreadGlobalCount,
                           builder: (context, unreadCount, child) {
                             return _QuickAction(
                               title: "Messages",
                               icon: Icons.chat_bubble_outline,
-                              // ✅ تظهر النقطة الحمراء فقط إذا كان هناك رسائل غير مقروءة
                               showBadge: unreadCount > 0,
                               onTap: () async {
                                 await Navigator.push(

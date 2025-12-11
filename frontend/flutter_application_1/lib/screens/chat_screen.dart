@@ -46,7 +46,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoadingHistory = false;
   bool _isSending = false;
   
-  String? _currentUserId; // Store current user ID locally
+  String? _currentUserId;
 
   @override
   void initState() {
@@ -68,19 +68,25 @@ class _ChatScreenState extends State<ChatScreen> {
     final userMap = await AuthService.getUserData();
     _currentUserId = _cleanId(userMap?['_id'] ?? userMap?['id']);
     
-    print('🔍 Current User ID: $_currentUserId'); // Debug log
+    print('🔑 Current User ID: $_currentUserId');
     
-    // Initialize socket and ensure currentUserId is set
+    // Set currentUserId in ChatProviderService BEFORE initializing socket
+    ChatProviderService().currentUserId = _currentUserId;
+    
+    // Initialize socket
     await ChatProviderService().initSocket();
+    
+    // Wait a bit for socket to connect
+    await Future.delayed(const Duration(milliseconds: 300));
     
     // Join chat room
     ChatProviderService().joinChatRoom(widget.conversationId);
 
-    // Mark messages as read
-    ChatProviderService().markAsRead(widget.conversationId);
-
-    // Load messages after getting user ID
+    // Load messages first
     await _loadInitialMessages();
+
+    // Mark messages as read AFTER loading (with retry mechanism)
+    await _markMessagesAsReadWithRetry();
 
     // Listen for new messages
     ChatProviderService().onNewMessage = (message) {
@@ -98,7 +104,46 @@ class _ChatScreenState extends State<ChatScreen> {
     };
   }
 
-  // Helper function to clean and normalize IDs
+  // Robust mark as read with retry mechanism
+  Future<void> _markMessagesAsReadWithRetry() async {
+    int attempts = 0;
+    const maxAttempts = 3;
+    const retryDelay = Duration(milliseconds: 500);
+
+    while (attempts < maxAttempts) {
+      try {
+        print('📖 Attempting to mark messages as read (attempt ${attempts + 1})');
+        await ChatProviderService().markAsRead(widget.conversationId);
+        print('✅ Messages marked as read successfully');
+        
+        // Update local state to reflect read status
+        if (mounted) {
+          setState(() {
+            for (int i = 0; i < _messages.length; i++) {
+              if (!_messages[i].isMe) {
+                _messages[i] = ChatMessage(
+                  id: _messages[i].id,
+                  text: _messages[i].text,
+                  createdAt: _messages[i].createdAt,
+                  isMe: _messages[i].isMe,
+                  isRead: true,
+                );
+              }
+            }
+          });
+        }
+        
+        break; // Success, exit loop
+      } catch (e) {
+        attempts++;
+        print('⚠️ Failed to mark as read (attempt $attempts): $e');
+        if (attempts < maxAttempts) {
+          await Future.delayed(retryDelay);
+        }
+      }
+    }
+  }
+
   String _cleanId(dynamic id) {
     if (id == null) return '';
     return id.toString()
@@ -121,7 +166,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final messages = await ChatProviderService().fetchMessages(widget.conversationId);
       
-      print('📨 Loaded ${messages.length} messages'); // Debug log
+      print('📨 Loaded ${messages.length} messages');
 
       if (mounted) {
         setState(() {
@@ -143,7 +188,7 @@ class _ChatScreenState extends State<ChatScreen> {
             // Determine if message is from current user
             final isMe = senderId == _currentUserId;
             
-            print('📝 Message: senderId=$senderId, currentUserId=$_currentUserId, isMe=$isMe'); // Debug
+            print('📝 Message: senderId=$senderId, currentUserId=$_currentUserId, isMe=$isMe');
 
             _messages.add(ChatMessage(
               id: msg['_id']?.toString() ?? '',
@@ -155,7 +200,7 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         });
         
-        print('✅ Successfully loaded ${_messages.length} messages'); // Debug
+        print('✅ Successfully loaded ${_messages.length} messages');
         _scrollToBottom();
       }
     } catch (e) {
@@ -181,7 +226,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final tempId = DateTime.now().millisecondsSinceEpoch.toString();
 
-    // Create message with isMe: true for the sender
     final message = ChatMessage(
       id: tempId,
       text: text,
@@ -291,12 +335,10 @@ class _ChatScreenState extends State<ChatScreen> {
                               final msg = _messages[index];
                               final isMe = msg.isMe;
                               
-                              // Right alignment (purple) for sender's messages
-                              // Left alignment (white) for received messages
                               return Align(
                                 alignment: isMe
-                                    ? Alignment.centerRight // Your messages (purple)
-                                    : Alignment.centerLeft, // Received messages (white)
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
                                 child: Container(
                                   margin:
                                       const EdgeInsets.symmetric(vertical: 4),

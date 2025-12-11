@@ -2,7 +2,10 @@
 
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-
+export interface LastReadStatus {
+  userId: Types.ObjectId;
+  lastReadAt: Date | null; 
+}
 // تعريف الـ TypeScript Interface لحالة القراءة
 export interface LastReadStatus {
   userId: Types.ObjectId;

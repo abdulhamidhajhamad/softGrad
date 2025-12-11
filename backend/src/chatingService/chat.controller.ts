@@ -1,5 +1,5 @@
-import { Controller, Post, Body, Get, Param, Req, UseGuards, Delete, Patch } from '@nestjs/common'; // ✨ استيراد Delete و Patch
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // ← عدل المسار حسب مشروعك
+import { Controller, Post, Body, Get, Param, Req, UseGuards, Delete, Patch } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ChatService } from './chat.service';
 import { CreateConversationDto, SendMessageDto } from './chat.dto';
 
@@ -13,10 +13,16 @@ export class ChatController {
     return this.chatService.createChat(req.user.id, dto.receiverId);
   }
   
-  // Send message
+  // ✅ FIXED: Send message - ensure it returns 200/201 status
   @Post('send')
-  sendMessage(@Req() req, @Body() dto: SendMessageDto) {
-    return this.chatService.sendMessage(req.user.id, dto.chatId, dto.content);
+  async sendMessage(@Req() req, @Body() dto: SendMessageDto) {
+    const message = await this.chatService.sendMessage(req.user.id, dto.chatId, dto.content);
+    
+    // ✅ Return the message with 200 status (success)
+    return {
+      success: true,
+      message: message,
+    };
   }
 
   // Get all messages in a chat
@@ -36,20 +42,18 @@ export class ChatController {
     return this.chatService.deleteChat(req.user.id, chatId);
   }
 
-  // ==========================================================
-  // ✨ إضافة مسار تمييز الرسائل كمقروءة (2)
-  // PATCH /chat/mark-read/:chatId
-  // ==========================================================
+ // ✅ Mark messages as read
   @Patch('mark-read/:chatId')
   async markRead(@Req() req, @Param('chatId') chatId: string) {
-    const count = await this.chatService.markMessagesAsRead(req.user.id, chatId);
-    return { messagesMarkedAsRead: count };
+    // 💡 التعديل: استخلاص العدد messagesMarkedReadCount من الكائن المرجع
+    const { messagesMarkedReadCount } = await this.chatService.markMessagesAsRead(req.user.id, chatId);
+    return { 
+      success: true,
+      messagesMarkedAsRead: messagesMarkedReadCount // إرجاع العدد فقط
+    };
   }
 
-  // ==========================================================
-  // ✨ إضافة مسار الحصول على عدد المحادثات غير المقروءة (3)
-  // GET /chat/unread-count
-  // ==========================================================
+  // ✅ Get unread count
   @Get('unread-count')
   async getUnreadCount(@Req() req) {
     const count = await this.chatService.getUnreadChatsCount(req.user.id);

@@ -1,28 +1,24 @@
 // chat.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Chat } from './chat.schema';
+import { Chat, LastReadStatus } from './chat.schema';
 import { Message } from './message.schema';
 import { Model, Types } from 'mongoose';
 import { User } from '../auth/user.entity'; 
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType, RecipientType } from '../notification/notification.schema';
 import { ProviderService } from '../providers/provider.service'; 
+
 @Injectable()
 export class ChatService {
   constructor(
     @InjectModel(Chat.name) private chatModel: Model<Chat>,
     @InjectModel(Message.name) private messageModel: Model<Message>,
-  @InjectModel(User.name) private userModel: Model<User>, 
+    @InjectModel(User.name) private userModel: Model<User>, 
     private notificationService: NotificationService,
-  private providerService: ProviderService,
-  ) 
-  {}
+    private providerService: ProviderService,
+  ) {}
 
-  /**
-   * @description تنشئ أو تجلب محادثة موجودة بين مشاركين.
-   * عند الإنشاء، يتم تهيئة حالة القراءة (lastRead) حيث يُعتبر المرسِل (المُنشِئ) قد قرأ المحادثة، ويُعتبر المستلِم لم يقرأها (lastReadAt: null).
-   */
   async createChat(userId: string, receiverId: string) {
     let chat = await this.chatModel.findOne({
       participants: { $all: [userId, receiverId] },
@@ -31,88 +27,68 @@ export class ChatService {
     if (!chat) {
       chat = await this.chatModel.create({
         participants: [userId, receiverId],
-        // ✨ NEW: تهيئة حالة القراءة للطرفين
         lastRead: [
-          { userId: new Types.ObjectId(userId), lastReadAt: new Date() }, // المرسِل: مقروء
-          { userId: new Types.ObjectId(receiverId), lastReadAt: null }, // المستلِم: غير مقروء
+          { userId: new Types.ObjectId(userId), lastReadAt: new Date() },
+          { userId: new Types.ObjectId(receiverId), lastReadAt: null },
         ]
       });
     }
 
-    // إذا كانت المحادثة موجودة، يجب التأكد من وجود حقل lastRead
     if (chat && (!chat.lastRead || chat.lastRead.length === 0)) {
-        // إذا كان الموديل قديماً، قم بتهيئته بالقيم الافتراضية
-         chat.lastRead = [
-            { userId: new Types.ObjectId(userId), lastReadAt: new Date() },
-            { userId: new Types.ObjectId(receiverId), lastReadAt: null }, 
-        ];
-        await chat.save();
+      chat.lastRead = [
+        { userId: new Types.ObjectId(userId), lastReadAt: new Date() },
+        { userId: new Types.ObjectId(receiverId), lastReadAt: null }, 
+      ];
+      await chat.save();
     }
-
 
     return chat;
   }
 
-  /**
-   * @description يرسل رسالة ويحدث حالة القراءة في وثيقة المحادثة (Chat Document).
-   * يتم تعيين lastReadAt للمرسِل إلى الوقت الحالي، وللمستلِم إلى null (غير مقروء).
-   */
- async sendMessage(senderId: string, chatId: string, content: string): Promise<{ message: Message, recipientId: string | null, newUnreadCount: number }> {
+  async sendMessage(senderId: string, chatId: string, content: string): Promise<{ message: Message, recipientId: string | null, newUnreadCount: number }> {
     const chat = await this.chatModel.findById(chatId);
     if (!chat) throw new NotFoundException('Chat not found');
 
     const message = await this.messageModel.create({ sender: senderId, chatId, content });
     chat.lastMessage = content;
     
-    // 1. تحديد هوية المستلم (الطرف الآخر في المحادثة)
-    // ✅ تم تعريفه هنا لمرة واحدة فقط
     const participantObject = chat.participants.find(
       (p) => p.toString() !== senderId.toString()
     );
     const recipientId: string | null = participantObject ? participantObject.toString() : null; 
 
-    // 2. ✨ NEW: تحديث حالة القراءة في وثيقة Chat
-    // يتم تعيين lastReadAt للمستلِم إلى null (غير مقروء)
-    // ويتم تحديث آخر وقت للمرسل
     chat.lastRead = chat.lastRead.map(status => {
-        if (status.userId.toString() === senderId) {
-            // المرسِل: مقروء حالياً
-            status.lastReadAt = new Date();
-        } else if (recipientId && status.userId.toString() === recipientId) {
-            // المستلِم: رسالة جديدة، وضع "غير مقروء"
-            status.lastReadAt = null;
-        }
-        return status;
+      if (status.userId.toString() === senderId) {
+        status.lastReadAt = new Date();
+      } else if (recipientId && status.userId.toString() === recipientId) {
+        status.lastReadAt = null;
+      }
+      return status;
     });
 
     await chat.save();
     
-    // 3. جلب بيانات المرسل (Sender)
     const sender = await this.userModel.findById(senderId).exec();
     if (!sender) {
-        throw new NotFoundException('Sender user not found'); 
+      throw new NotFoundException('Sender user not found'); 
     }
     
     let notificationTitle: string;
     const senderRole = sender['role'] as string; 
     
-    // 4. ✨ تحديد عنوان الإشعار بناءً على دور المرسل
     if (senderRole === 'vendor') {
-        // الحالة 1: المرسل مزود خدمة (Vendor)
-        try {
-            const companyName = await this.providerService.findCompanyNameByUserId(senderId);
-            notificationTitle = `New message from ${companyName}`; 
-        } catch (e) {
-            console.error('Could not find company name for vendor:', senderId, e.message);
-            notificationTitle = `New message from Vendor`;
-        }
+      try {
+        const companyName = await this.providerService.findCompanyNameByUserId(senderId);
+        notificationTitle = `New message from ${companyName}`; 
+      } catch (e) {
+        console.error('Could not find company name for vendor:', senderId, e.message);
+        notificationTitle = `New message from Vendor`;
+      }
     } else if (senderRole === 'admin') {
-        // الحالة 2: المرسل أدمن (Admin)
-        notificationTitle = `New message from Admin`; 
+      notificationTitle = `New message from Admin`; 
     } else {
-        // الحالة 3: المرسل مستخدم عادي (User) أو دور آخر
-        const userName = sender['userName'] || 'User';
-        notificationTitle = `New message from ${userName}`; 
+      const userName = sender['userName'] || 'User';
+      notificationTitle = `New message from ${userName}`; 
     }
 
     let newUnreadCount = 0;
@@ -123,10 +99,8 @@ export class ChatService {
       if (recipient) {
         const fcmToken = recipient['fcmToken'] as string | undefined;
         if (fcmToken) { 
-          
           const targetType = recipient['role'] === 'vendor' ? RecipientType.VENDOR : RecipientType.USER;
           
-          // 5. استخدام العنوان الديناميكي الجديد
           const notifDto = {
             recipientId: recipient._id as Types.ObjectId, 
             recipientType: targetType,
@@ -144,20 +118,14 @@ export class ChatService {
     return { message, recipientId, newUnreadCount };
   }
 
-  /**
-   * @description جلب جميع رسائل محادثة معينة.
-   */
   async getMessages(chatId: string) {
+    // ✅ Use string because chatId is stored as string in database
     return this.messageModel
-      .find({ chatId })
+      .find({ chatId: chatId })  // Use string, not ObjectId
       .populate('sender', 'userName imageUrl role')
       .sort({ createdAt: 1 });
   }
 
-  /**
-   * @description جلب جميع محادثات مستخدم معين.
-   * يتم تمرير بيانات حالة القراءة (lastRead) في وثيقة المحادثة ليتمكن الـ Frontend من تحديد ما إذا كانت المحادثة غير مقروءة للمستخدم الحالي.
-   */
   async getUserChats(userId: string) {
     return this.chatModel
       .find({ participants: userId })
@@ -165,9 +133,6 @@ export class ChatService {
       .sort({ updatedAt: -1 });
   }
 
-  /**
-   * @description حذف محادثة ورسائلها المرتبطة. يتطلب أن يكون المستخدم مشاركاً في المحادثة.
-   */
   async deleteChat(userId: string, chatId: string): Promise<any> {
     const chat = await this.chatModel.findById(chatId);
 
@@ -175,102 +140,139 @@ export class ChatService {
       throw new NotFoundException('Chat not found');
     }
 
-    // تحقق أمني: فقط المشاركون يمكنهم الحذف
     if (!chat.participants.map(p => p.toString()).includes(userId)) {
-        throw new NotFoundException('Chat not found or access denied');
+      throw new NotFoundException('Chat not found or access denied');
     }
 
-    // حذف جميع الرسائل المرتبطة بالمحادثة أولاً
-    await this.messageModel.deleteMany({ chatId });
-    
-    // ثم حذف المحادثة نفسها
+    // ✅ Use string for deletion too
+    await this.messageModel.deleteMany({ chatId: chatId });
     const result = await this.chatModel.deleteOne({ _id: chatId });
 
     return { deleted: result.deletedCount > 0, chatId };
   }
 
   /**
-   * @description تمييز رسائل محادثة معينة كـ "مقروءة" (isRead: true) في وثائق الرسائل (Message).
-   * كما يقوم بتحديث حقل lastReadAt في وثيقة المحادثة (Chat Document) للمستخدم الحالي إلى الوقت الحالي.
-   * @returns {messagesMarkedReadCount: number, newUnreadCount: number}
+   * ✅ FIXED: Robust mark as read with multiple fallback strategies
    */
-  async markMessagesAsRead(userId: string, chatId: string): Promise<{ messagesMarkedReadCount: number, newUnreadCount: number }> {
-    const userIdObj = new Types.ObjectId(userId);
-    const chatIdObj = new Types.ObjectId(chatId);
+ // chat.service.ts
 
-    // العثور على المحادثة لتحديث حالة القراءة
-    const chat = await this.chatModel.findById(chatIdObj);
-    if (!chat) throw new NotFoundException('Chat not found');
+// ... (بقية الدالة)
 
-    // 1. تحديث الرسائل الفردية كمقروءة (المنطق القديم)
-    const updateResult = await this.messageModel.updateMany(
-      {
-        chatId: chatIdObj,
-        sender: { $ne: userIdObj }, 
-        isRead: false,
-      },
-      {
-        $set: { isRead: true },
-      },
-    );
+async markMessagesAsRead(userId: string, chatId: string): Promise<{ messagesMarkedReadCount: number, newUnreadCount: number }> {
+    console.log(`\n🔵 ===== MARK AS READ DEBUG START (Bulk Update) =====`);
+    
+    // Validate and convert IDs
+    let userIdObj: Types.ObjectId;
+    
+    try {
+      userIdObj = new Types.ObjectId(userId);
+    } catch (error) {
+      throw new Error('Invalid User ID format');
+    }
 
-    const messagesMarkedReadCount = updateResult.modifiedCount;
+    // 1. Find the chat
+    // استخدمنا chatIdObj في findById للحصول على الوثيقة (Chat) بشكل سليم
+    const chat = await this.chatModel.findById(chatId); 
 
-    // 2. ✨ NEW: تحديث حالة القراءة في وثيقة Chat (Mark as read للمستخدم الحالي)
-    // يتم تحديث lastReadAt إلى الوقت الحالي
-    chat.lastRead = chat.lastRead.map(status => {
-        if (status.userId.equals(userIdObj)) {
-            // المستخدم يقرأ المحادثة، تحديث وقت القراءة
-            status.lastReadAt = new Date();
-        }
-        return status;
-    });
-    // ✅ التعامل مع الحالة التي لم يكن فيها حقل lastRead موجوداً مسبقاً
-     if (chat.lastRead.length === 0) {
-        const otherParticipantId = chat.participants.find(p => p.toString() !== userId);
-        chat.lastRead = [
-            { userId: userIdObj, lastReadAt: new Date() },
-            { userId: new Types.ObjectId(otherParticipantId), lastReadAt: null }, 
-        ];
+    // ✅ تصحيح الخطأ الأول: التحقق من وجود 'chat' قبل استخدامها
+    if (!chat) {
+        throw new NotFoundException('Chat not found');
+    }
+
+    // Verify participation
+    const isParticipant = chat.participants.some(p => p.toString() === userId);
+    if (!isParticipant) {
+        throw new NotFoundException('User is not a participant in this chat');
     }
     
-    await chat.save();
+    // 🎯 FIX: Perform BULK UPDATE (Solution for messagesMarkedAsRead: 0)
+    // نستخدم الـ chatId كـ string هنا لضمان التطابق مع قاعدة البيانات
+    const updateResult = await this.messageModel.updateMany(
+      {
+        chatId: chatId, // <<< هنا نستخدم الـ string ID
+        isRead: false,
+        sender: { $ne: userIdObj } 
+      },
+      { $set: { isRead: true } }
+    );
+    
+    const messagesMarkedReadCount = updateResult.modifiedCount;
+    
+    console.log(`✅ Bulk Update executed. Messages marked as read: ${messagesMarkedReadCount}`);
 
-
-    let newUnreadCount = 0;
-
-    if (messagesMarkedReadCount > 0) {
-      newUnreadCount = await this.getUnreadChatsCount(userId);
+    // 2. Update lastRead in Chat document
+    console.log(`📝 Updating lastRead in Chat document...`);
+    
+    let lastReadUpdated = false;
+    for (const status of chat.lastRead) {
+        if (status.userId.equals(userIdObj)) {
+            status.lastReadAt = new Date();
+            lastReadUpdated = true;
+            break;
+        }
     }
 
-    // ✅ إرجاع البيانات
+    if (!lastReadUpdated) {
+        chat.lastRead.push({
+            userId: userIdObj,
+            lastReadAt: new Date(),
+        });
+        lastReadUpdated = true;
+    }
+
+    // ✅ تصحيح الخطأ الثاني: Initializing lastRead array (Type Safety)
+    if (chat.lastRead.length === 0 && chat.participants.length > 0) {
+        const otherParticipantId = chat.participants.find(p => p.toString() !== userId);
+        
+        const initialStatuses: LastReadStatus[] = [
+            { userId: userIdObj, lastReadAt: new Date() }
+        ];
+
+        // نضيف المشارك الآخر فقط إذا وجدناه (نستخدم Types.ObjectId مباشرة)
+        if (otherParticipantId) {
+             initialStatuses.push({ 
+                userId: new Types.ObjectId(otherParticipantId), 
+                lastReadAt: null 
+             });
+        }
+        
+        chat.lastRead = initialStatuses;
+        console.log(`✅ Initialized lastRead array`);
+    }
+    
+    // 🛑 الآن بات آمناً: chat مؤكد أنه ليس null
+    await chat.save(); 
+    console.log(`✅ Chat document saved`);
+
+    // Calculate new unread count
+    const newUnreadCount = await this.getUnreadChatsCount(userId);
+    
+    console.log(`📊 New unread count for user: ${newUnreadCount}`);
+    console.log(`🔵 ===== MARK AS READ DEBUG END (Bulk Update) =====\n`);
+
     return { messagesMarkedReadCount, newUnreadCount };
-  }
+}
 
-  /**
-   * @description جلب عدد المحادثات التي تحتوي على رسائل غير مقروءة للمستخدم الحالي.
-   * *ملحوظة*: هذه الدالة ما زالت تعتمد على حقل `isRead` في وثيقة `Message`، 
-   * ولكن المنطق الآن مدعوم بحقل `lastRead` في `Chat` لتحديد حالة "غير مقروءة" في القائمة الرئيسية.
-   */
   async getUnreadChatsCount(userId: string): Promise<number> {
-    const userIdObj = new Types.ObjectId(userId);
-
-    // نستخدم الـ Aggregate للعثور على عدد المحادثات الفريدة التي تحتوي على رسائل غير مقروءة
+    // ✅ Match both string and ObjectId formats for sender
     const unreadChats = await this.messageModel.aggregate([
       {
         $match: {
-          sender: { $ne: userIdObj }, // الرسائل المرسلة من الطرف الآخر
-          isRead: false, // الرسائل غير المقروءة
+          $expr: {
+            $and: [
+              { $ne: [{ $toString: "$sender" }, userId] },  // Compare as strings
+              { $eq: ["$isRead", false] }
+            ]
+          }
         },
       },
       {
         $group: {
-          _id: '$chatId', // التجميع حسب الـ Chat ID
+          _id: '$chatId',
         },
       },
     ]);
     
-    // عدد المحادثات غير المقروءة هو طول مصفوفة الـ chat IDs الفريدة
     return unreadChats.length;
   }
 }

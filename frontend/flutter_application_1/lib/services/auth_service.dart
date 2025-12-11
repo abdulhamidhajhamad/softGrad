@@ -207,36 +207,43 @@ class AuthService {
   }
 
   /// Sign in user (login)
-  static Future<Map<String, dynamic>> login(String email, String password) async {
+ static Future<Map<String, dynamic>> login(
+    String email, 
+    String password,
+    {String? fcmToken} // ✅ تم إضافة الباراميتر الاختياري
+  ) async {
     try {
       print('📡 Attempting login for: $email');
       
+      final Map<String, dynamic> body = {
+          'email': email,
+          'password': password,
+      };
+
+      if (fcmToken != null) {
+        body['fcmToken'] = fcmToken; // ✅ إضافة الرمز
+        print('💡 Passing FCM Token in login request');
+      }
+
       final response = await http.post(
         Uri.parse('$baseUrl/auth/login'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'email': email,
-          'password': password,
-        }),
+        body: json.encode(body), // ✅ استخدام الماب
       );
 
       print('📥 Response status: ${response.statusCode}');
       print('📥 Response body: ${response.body}');
-
+      
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        
         final token = data['token'];
         final userData = data['user'] ?? data['data'];
-        
         if (token == null) {
           throw Exception('Token not found in response');
         }
-        
         if (userData == null) {
           throw Exception('User data not found in response');
         }
-        
         if (userData['_id'] == null && userData['id'] == null) {
           throw Exception('User ID not found in user data');
         }

@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
+// Services
+import 'package:flutter_application_1/services/fcm_service.dart';
 
 // Screens
 import 'package:flutter_application_1/screens/splash.dart';
@@ -16,10 +21,15 @@ import 'package:flutter_application_1/screens/home_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ❌ DON'T initialize socket here - user might not be logged in yet!
-  // ✅ Socket will be initialized in chat_screen.dart when user opens a chat
-
+  
+  // Initialize Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
+  // Initialize FCM Service
+  await FCMService.initialize();
+  
   runApp(const MyApp());
 }
 

@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/screens/home_customer.dart'; // Import HomePage
 import 'package:flutter_application_1/services/auth_service.dart'; // Import AuthService
 import 'package:flutter_application_1/screens/home_provider.dart';
-
+import 'package:flutter_application_1/services/fcm_service.dart';
 /// Sign In screen for existing users
 class SignInScreen extends StatefulWidget {
   const SignInScreen({Key? key}) : super(key: key);
@@ -37,6 +37,22 @@ class _SignInScreenState extends State<SignInScreen> {
     await AuthService.testConnection();
   }
 
+  // ✅ NEW: دالة حقيقية لجلب رمز FCM Token
+Future<String?> _getFCMToken() async {
+  try {
+    final token = await FCMService.getToken();
+    if (token != null) {
+      print('🚀 Retrieved FCM Token for sign-in: ${token.substring(0, 20)}...');
+    } else {
+      print('⚠️ FCM Token is null');
+    }
+    return token;
+  } catch (e) {
+    print('❌ Error retrieving FCM Token: $e');
+    return null;
+  }
+}
+
   Future<void> _signIn() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
@@ -46,10 +62,26 @@ class _SignInScreenState extends State<SignInScreen> {
       try {
         final email = _emailController.text.trim();
         final password = _passwordController.text;
+        
+        // ✅ Get FCM Token
+        final fcmToken = await _getFCMToken();
+        
+        if (fcmToken != null) {
+          print('📤 Sending FCM token with login request');
+        } else {
+          print('⚠️ Proceeding without FCM token');
+        }
 
-        final response = await AuthService.login(email, password);
+        // ✅ Send login request with FCM token
+        final response = await AuthService.login(
+          email, 
+          password, 
+          fcmToken: fcmToken,
+        );
 
         if (response.containsKey('token') && response.containsKey('user')) {
+          print('✅ Login successful with FCM token saved');
+          
           final userData = response['user'];
           final userName = userData['userName'] ?? 'Guest';
           final userRole = userData['role'] ?? 'user';

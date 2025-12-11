@@ -44,6 +44,11 @@ export class LoginDto {
 
   @IsString()
   password: string;
+
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional({ example: 'fcm-registration-token-from-firebase' })
+  fcmToken?: string;
 }
 
 export class ForgotPasswordDto {

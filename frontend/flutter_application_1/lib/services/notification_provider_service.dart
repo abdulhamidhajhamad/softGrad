@@ -8,8 +8,9 @@ import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class NotificationProviderService {
-  static const String baseUrl = 'http://192.168.110.16:3000';
-  static const String wsUrl = 'http://192.168.110.16:3000'; // استخدم HTTP/WS نفس العنوان 
+  // ✅ تأكد من استخدام نفس الـ IP في كل مكان
+  static const String baseUrl = 'http://10.0.2.2:3000';
+static const String wsUrl = 'http://10.0.2.2:3000';
 
   static final ValueNotifier<bool> hasUnreadNotifier = ValueNotifier<bool>(false);
   static IO.Socket? _socket;
@@ -31,27 +32,33 @@ class NotificationProviderService {
     }
 
     if (_socket != null && _socket!.connected) {
+      debugPrint('✅ Socket already connected');
       updateUnreadCountOnConnect();
       return;
     }
 
     try {
-      debugPrint('🔌 Connecting to WebSocket using Token (Verification in Gateway)...');
+      debugPrint('🔌 Connecting to WebSocket: $wsUrl');
       
       _socket = IO.io(
         wsUrl, 
         IO.OptionBuilder()
           .setTransports(['websocket'])
           .enableForceNewConnection()
-          // ✅ CRITICAL: نرسل التوكن كـ Query Parameter باسم 'token'
-          .setQuery({'token': token}) 
-          // إرسال التوكن في الـ Headers أيضاً
+          .setQuery({'token': token})
           .setExtraHeaders({'Authorization': 'Bearer $token'})
+          .setReconnectionDelay(1000)
+          .setReconnectionAttempts(5)
           .build(),
       );
 
       _socket!.onConnect((_) {
-        debugPrint('✅ Socket connected successfully!');
+        debugPrint('✅ Notification Socket connected successfully!');
+        updateUnreadCountOnConnect();
+      });
+
+      _socket!.on('newNotification', (data) {
+        debugPrint('🔔 New notification received: $data');
         updateUnreadCountOnConnect();
       });
 
@@ -64,7 +71,7 @@ class NotificationProviderService {
         hasUnreadNotifier.value = count > 0;
       });
       
-      _socket!.onDisconnect((_) => debugPrint('❌ Socket disconnected'));
+      _socket!.onDisconnect((_) => debugPrint('❌ Notification Socket disconnected'));
       _socket!.onError((error) => debugPrint('❌ Socket error: $error'));
       _socket!.onConnectError((error) => debugPrint('❌ Socket connection error: $error'));
 
@@ -72,8 +79,6 @@ class NotificationProviderService {
       debugPrint('❌ Failed to establish socket connection: $e');
     }
   }
-
-  // ... (بقية الدوال تبقى كما هي)
   
   /// دالة لإغلاق اتصال الـ Socket عند مغادرة الصفحة
   static void closeRealtimeConnection() {
@@ -97,14 +102,26 @@ class NotificationProviderService {
   // 1. جلب جميع الإشعارات
   static Future<List<ProviderNotification>> fetchNotifications() async {
     try {
+      debugPrint('📥 Fetching notifications from: $baseUrl/notifications');
       final headers = await _getHeaders();
+      
       final response = await http.get(
         Uri.parse('$baseUrl/notifications'),
         headers: headers,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
       );
+
+      debugPrint('📡 Response status: ${response.statusCode}');
+      debugPrint('📡 Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
+        debugPrint('✅ Successfully fetched ${data.length} notifications');
+        
         return data.map((json) {
           return ProviderNotification(
             id: json['_id'],
@@ -116,11 +133,12 @@ class NotificationProviderService {
           );
         }).toList();
       } else {
-        throw Exception('Failed to load notifications');
+        debugPrint('❌ Failed to load notifications: ${response.statusCode}');
+        throw Exception('Failed to load notifications: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ Error fetching notifications: $e');
-      throw e;
+      debugPrint('❌ Error fetching notifications: $e');
+      rethrow;
     }
   }
 
@@ -131,15 +149,17 @@ class NotificationProviderService {
       final response = await http.get(
         Uri.parse('$baseUrl/notifications/unread/count'),
         headers: headers,
-      );
+      ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['count'] ?? 0;
+        final count = data['count'] ?? 0;
+        debugPrint('📊 Unread count: $count');
+        return count;
       }
       return 0;
     } catch (e) {
-      print('❌ Error fetching unread count: $e');
+      debugPrint('❌ Error fetching unread count: $e');
       return 0;
     }
   }
@@ -148,13 +168,17 @@ class NotificationProviderService {
   static Future<void> markAllAsRead() async {
     try {
       final headers = await _getHeaders();
-      await http.patch(
+      final response = await http.patch(
         Uri.parse('$baseUrl/notifications/mark-all-read'),
         headers: headers,
       );
-      hasUnreadNotifier.value = false;
+      
+      if (response.statusCode == 204 || response.statusCode == 200) {
+        debugPrint('✅ All notifications marked as read');
+        hasUnreadNotifier.value = false;
+      }
     } catch (e) {
-      print('❌ Error marking all as read: $e');
+      debugPrint('❌ Error marking all as read: $e');
     }
   }
 
@@ -162,13 +186,17 @@ class NotificationProviderService {
   static Future<void> deleteNotification(String id) async {
     try {
       final headers = await _getHeaders();
-      await http.delete(
+      final response = await http.delete(
         Uri.parse('$baseUrl/notifications/$id'),
         headers: headers,
       );
+      
+      if (response.statusCode == 204 || response.statusCode == 200) {
+        debugPrint('✅ Notification deleted: $id');
+      }
     } catch (e) {
-      print('❌ Error deleting notification: $e');
-      throw e;
+      debugPrint('❌ Error deleting notification: $e');
+      rethrow;
     }
   }
 

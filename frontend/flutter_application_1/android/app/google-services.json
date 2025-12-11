@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "832607352005",
+    "project_id": "weddingplanner-89486",
+    "storage_bucket": "weddingplanner-89486.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:832607352005:android:16dc1dd56497601e46acac",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBijIJ6H8gRSQ05T5GfYrlCMx_35YtwGew"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:832607352005:android:d71582cc16fdafdb46acac",
+        "android_client_info": {
+          "package_name": "com.yourcompany.weddingPlaner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBijIJ6H8gRSQ05T5GfYrlCMx_35YtwGew"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -255,14 +255,14 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto): Promise<{ token: string; user: any }> {
-    const { email, password } = loginDto;
+    const { email, password, fcmToken } = loginDto; // 👈 تم إضافة fcmToken
     
     const user = await this.userModel.findOne({ email }).exec();
     if (!user) {
       throw new UnauthorizedException('Invalid Email/Pass');
     }
 
-    // ✅ Check if email is verified
+    // Check if email is verified
     if (!user.isVerified) {
       throw new UnauthorizedException('Please verify your email before logging in');
     }
@@ -271,11 +271,24 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid Email/Pass');
     }
+
+   if (fcmToken) {
+      // الخطوة 1: حذف الرمز من أي مستخدم آخر يحمله لضمان فرادته (unique)
+      await this.userModel.updateOne(
+        { fcmToken },
+        { $unset: { fcmToken: 1 } }
+      ).exec();
+
+      // الخطوة 2: تحديث رمز المستخدم الحالي
+      user.fcmToken = fcmToken;
+      await user.save();
+      console.log(`FCM Token updated upon login for user: ${user.email}`);
+    }
     
     const token = this.jwtService.sign({ 
       userId: (user._id as Types.ObjectId).toString(), 
       email: user.email,
-          username: user.userName // ADD THIS LINE
+          username: user.userName 
  
     });
     

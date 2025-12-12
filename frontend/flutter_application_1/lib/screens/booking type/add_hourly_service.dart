@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'booking_common_widgets.dart';
+import 'package:flutter_application_1/services/service_service.dart';
+
 
 class AddHourlyService extends StatefulWidget {
   final String category;
@@ -292,89 +294,104 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
 
   String _slotKey(Map<String, String> s) => '${s["start"]}-${s["end"]}';
 
-  void _trySave() {
-    final ok = _formKey.currentState?.validate() ?? false;
-    if (!ok) return;
+  bool _saving = false;
 
-    if (_selectedDays.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text("Select at least one day", style: GoogleFonts.poppins()),
-        ),
-      );
-      return;
-    }
+Future<void> _trySave() async {
+  final ok = _formKey.currentState?.validate() ?? false;
+  if (!ok) return;
 
-    if (_from == null || _to == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Set time range", style: GoogleFonts.poppins())),
-      );
-      return;
-    }
-
-    if (_toMinutes(_to!) <= _toMinutes(_from!)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("End time must be after start time",
-              style: GoogleFonts.poppins()),
-        ),
-      );
-      return;
-    }
-
-    final minH = int.tryParse(minHoursCtrl.text.trim()) ?? 0;
-    final maxH = int.tryParse(maxHoursCtrl.text.trim()) ?? 0;
-
-    if (minH < 1 || maxH < 1 || maxH < minH) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Hours range invalid", style: GoogleFonts.poppins()),
-        ),
-      );
-      return;
-    }
-
-    Navigator.pop(context, {
-      "category": widget.category,
-      "bookingType": widget.bookingType,
-
-      // common
-      "name": nameCtrl.text.trim(),
-      "description": descCtrl.text.trim(),
-      "address": addressCtrl.text.trim(),
-      "city": _selectedCity,
-      "latitude": latitudeCtrl.text.trim(),
-      "longitude": longitudeCtrl.text.trim(),
-      "price": priceCtrl.text.trim(),
-      "discount": discountCtrl.text.trim(),
-      "coverImage": _coverImage,
-      "highlights": _highlights, // ✅ key/value list
-      "visibleInSearch": _visibleInSearch,
-
-      // ✅ optional computed values
-      "finalPrice": _finalPrice?.toStringAsFixed(2),
-      "savedAmount": _savedAmount?.toStringAsFixed(2),
-
-      // hourly
-      "pricingModel": "per_hour",
-      "minHours": minHoursCtrl.text.trim(),
-      "maxHours": maxHoursCtrl.text.trim(),
-      "days": _selectedDays.toList(),
-      "timeFrom": _fmtTime(_from),
-      "timeTo": _fmtTime(_to),
-
-      // daily planner outputs (suggested schedule)
-      "eventDurationHours": _eventHours.toStringAsFixed(1),
-      "gapMinutes": _gapMinutes.round().toString(),
-      "eventsPerDay": _eventsPerDay().toString(),
-      "slotsPreview": _buildSlotsPreview(),
-
-      // ✅ NEW: chosen slots => seats/day count
-      "selectedSuggestedSlots": _selectedSuggestedSlots.toList(),
-      "seatsPerDay": _selectedSuggestedSlots.length.toString(),
-    });
+  if (_selectedDays.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Select at least one day", style: GoogleFonts.poppins())),
+    );
+    return;
   }
+
+  if (_from == null || _to == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Set time range", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  if (_toMinutes(_to!) <= _toMinutes(_from!)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("End time must be after start time", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  if (_selectedCity == null || _selectedCity!.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Select a city", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  if (_coverImage == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Please add a cover image.", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  final form = {
+    "category": widget.category,
+    "bookingType": widget.bookingType,
+
+    "name": nameCtrl.text.trim(),
+    "description": descCtrl.text.trim(),
+
+    "address": addressCtrl.text.trim(),
+    "city": _selectedCity,
+    "latitude": latitudeCtrl.text.trim(),
+    "longitude": longitudeCtrl.text.trim(),
+
+    "price": priceCtrl.text.trim(),
+    "discount": discountCtrl.text.trim(),
+
+    "finalPrice": _finalPrice?.toStringAsFixed(2),
+    "savedAmount": _savedAmount?.toStringAsFixed(2),
+
+    "coverImage": _coverImage,
+    "highlights": _highlights,
+    "visibleInSearch": _visibleInSearch,
+
+    "pricingModel": "per_hour",
+    "minHours": minHoursCtrl.text.trim(),
+    "maxHours": maxHoursCtrl.text.trim(),
+    "days": _selectedDays.toList(),
+    "timeFrom": _fmtTime(_from),
+    "timeTo": _fmtTime(_to),
+
+    "eventDurationHours": _eventHours.toStringAsFixed(1),
+    "gapMinutes": _gapMinutes.round().toString(),
+    "eventsPerDay": _eventsPerDay().toString(),
+    "slotsPreview": _buildSlotsPreview(),
+    "selectedSuggestedSlots": _selectedSuggestedSlots.toList(),
+    "seatsPerDay": _selectedSuggestedSlots.length,
+  };
+
+  setState(() => _saving = true);
+
+  try {
+    await ServiceService.addServiceFromBookingForm(form);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Service created successfully ✅", style: GoogleFonts.poppins())),
+    );
+    Navigator.pop(context, true);
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Failed: $e", style: GoogleFonts.poppins())),
+    );
+  } finally {
+    if (mounted) setState(() => _saving = false);
+  }
+}
+
 
   @override
   void dispose() {

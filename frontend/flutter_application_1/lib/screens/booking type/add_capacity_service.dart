@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'booking_common_widgets.dart';
+import 'package:flutter_application_1/services/service_service.dart';
+
 
 class AddCapacityService extends StatefulWidget {
   final String category;
@@ -370,61 +372,93 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
     );
   }
 
-  void _trySave() {
-    final ok = _formKey.currentState?.validate() ?? false;
-    if (!ok) return;
+bool _saving = false;
 
-    if (_selectedDays.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text("Select at least one day", style: GoogleFonts.poppins())),
-      );
-      return;
-    }
+Future<void> _trySave() async {
+  final ok = _formKey.currentState?.validate() ?? false;
+  if (!ok) return;
 
-    final price = num.tryParse(pricePerPersonCtrl.text.trim());
-    if (price == null || price <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text("Enter a valid price.", style: GoogleFonts.poppins())),
-      );
-      return;
-    }
-
-    Navigator.pop(context, {
-      "category": widget.category,
-      "bookingType": widget.bookingType,
-
-      "name": nameCtrl.text.trim(),
-      "description": descCtrl.text.trim(),
-
-      "address": addressCtrl.text.trim(),
-      "city": _selectedCity,
-      "latitude": latitudeCtrl.text.trim(),
-      "longitude": longitudeCtrl.text.trim(),
-
-      "days": _selectedDays.toList(),
-
-      // ✅ capacity pricing model + unit
-      "pricingModel": _capacityUnit == "piece"
-          ? "per_piece_capacity"
-          : "per_person_capacity",
-      "capacityUnit": _capacityUnit, // "person" | "piece"
-      "maxCapacity": _maxCapacity,
-      "pricePerUnit": price.toDouble(),
-      "discount": discountCtrl.text.trim(),
-
-      // ✅ optional computed values
-      "finalPricePerUnit": _finalPricePerPerson?.toStringAsFixed(2),
-      "savedPerUnit": _savedPerPerson?.toStringAsFixed(2),
-
-      "coverImage": _coverImage,
-      "highlights": _highlights,
-      "visibleInSearch": _visibleInSearch,
-    });
+  if (_selectedDays.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Select at least one day", style: GoogleFonts.poppins())),
+    );
+    return;
   }
+
+  if (_selectedCity == null || _selectedCity!.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Select a city", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  final price = num.tryParse(pricePerPersonCtrl.text.trim());
+  if (price == null || price <= 0) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Enter a valid price.", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  if (_coverImage == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Please add a cover image.", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  final form = {
+    "category": widget.category,
+    "bookingType": widget.bookingType,
+
+    "name": nameCtrl.text.trim(),
+    "description": descCtrl.text.trim(),
+
+    "address": addressCtrl.text.trim(),
+    "city": _selectedCity,
+    "latitude": latitudeCtrl.text.trim(),
+    "longitude": longitudeCtrl.text.trim(),
+
+    "days": _selectedDays.toList(),
+
+    // capacity
+    "pricingModel": "capacity",
+    "capacityUnit": _capacityUnit, // "person" | "piece"
+    "maxCapacity": _maxCapacity,
+
+    "pricePerUnit": price.toDouble(),
+    "discount": discountCtrl.text.trim(),
+
+    "finalPricePerUnit": _finalPricePerPerson?.toStringAsFixed(2),
+    "savedPerUnit": _savedPerPerson?.toStringAsFixed(2),
+
+    "coverImage": _coverImage,
+    "highlights": _highlights,
+    "visibleInSearch": _visibleInSearch,
+  };
+
+  setState(() => _saving = true);
+
+  try {
+    await ServiceService.addServiceFromBookingForm(form);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Service created successfully ✅", style: GoogleFonts.poppins())),
+    );
+
+    // ✅ هذا اللي AddServiceProviderScreen مستنيه
+    Navigator.pop(context, true);
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Failed: $e", style: GoogleFonts.poppins())),
+    );
+  } finally {
+    if (mounted) setState(() => _saving = false);
+  }
+}
+
 
   @override
   void initState() {

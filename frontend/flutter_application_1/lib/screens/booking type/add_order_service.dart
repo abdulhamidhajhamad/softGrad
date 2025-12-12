@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'booking_common_widgets.dart';
+import 'package:flutter_application_1/services/service_service.dart';
 
 class AddOrderService extends StatefulWidget {
   final String category;
@@ -159,89 +160,95 @@ class _AddOrderServiceState extends State<AddOrderService> {
     );
   }
 
-  void _trySave() {
-    final ok = _formKey.currentState?.validate() ?? false;
-    if (!ok) return;
+  bool _saving = false;
 
-    // ✅ hard rules
-    if (_availableQty < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Available quantity must be at least 1.",
-            style: GoogleFonts.poppins(),
-          ),
-        ),
-      );
-      return;
-    }
+Future<void> _trySave() async {
+  final ok = _formKey.currentState?.validate() ?? false;
+  if (!ok) return;
 
-    if (_processingDays < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Processing days can't be negative.",
-            style: GoogleFonts.poppins(),
-          ),
-        ),
-      );
-      return;
-    }
-
-    final minQty = int.tryParse(minOrderQtyCtrl.text.trim()) ?? 1;
-    if (_availableQty < minQty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Available quantity must be ≥ minimum order quantity.",
-            style: GoogleFonts.poppins(),
-          ),
-        ),
-      );
-      return;
-    }
-
-    Navigator.pop(context, {
-      "category": widget.category,
-      "bookingType": widget.bookingType,
-
-      // common
-      "name": nameCtrl.text.trim(),
-      "description": descCtrl.text.trim(),
-
-      // location
-      "address": addressCtrl.text.trim(),
-      "city": _selectedCity,
-      "latitude": latitudeCtrl.text.trim(),
-      "longitude": longitudeCtrl.text.trim(),
-
-      // pricing
-      "price": priceCtrl.text.trim(),
-      "discount": discountCtrl.text.trim(),
-
-      // computed pricing
-      "finalPrice": _finalPrice?.toStringAsFixed(2),
-      "savedAmount": _savedAmount?.toStringAsFixed(2),
-
-      // media + visibility
-      "coverImage": _coverImage,
-      "highlights": _highlights,
-      "visibleInSearch": _visibleInSearch,
-
-      // order-specific
-      "pricingModel": "per_item",
-      "minOrderQty": minOrderQtyCtrl.text.trim(),
-
-      // inventory + processing
-      "availableQty": _availableQty.toString(),
-      "processingDays": _processingDays.toString(),
-
-      "customizationAvailable": _customization,
-      "customizationFee": customizationFeeCtrl.text.trim(),
-      "deliveryAvailable": _delivery,
-      "deliveryFee": deliveryFeeCtrl.text.trim(),
-    });
+  if (_selectedCity == null || _selectedCity!.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Select a city", style: GoogleFonts.poppins())),
+    );
+    return;
   }
+
+  if (_coverImage == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Please add a cover image.", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  if (_availableQty < 1) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Available quantity must be at least 1.", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  final minQty = int.tryParse(minOrderQtyCtrl.text.trim()) ?? 1;
+  if (_availableQty < minQty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Available quantity must be ≥ minimum order quantity.", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  final form = {
+    "category": widget.category,
+    "bookingType": widget.bookingType,
+
+    "name": nameCtrl.text.trim(),
+    "description": descCtrl.text.trim(),
+
+    "address": addressCtrl.text.trim(),
+    "city": _selectedCity,
+    "latitude": latitudeCtrl.text.trim(),
+    "longitude": longitudeCtrl.text.trim(),
+
+    "price": priceCtrl.text.trim(),
+    "discount": discountCtrl.text.trim(),
+
+    "finalPrice": _finalPrice?.toStringAsFixed(2),
+    "savedAmount": _savedAmount?.toStringAsFixed(2),
+
+    "coverImage": _coverImage,
+    "highlights": _highlights,
+    "visibleInSearch": _visibleInSearch,
+
+    "pricingModel": "per_item",
+    "minOrderQty": minOrderQtyCtrl.text.trim(),
+
+    "availableQty": _availableQty,
+    "processingDays": _processingDays,
+
+    "customizationAvailable": _customization,
+    "customizationFee": customizationFeeCtrl.text.trim(),
+    "deliveryAvailable": _delivery,
+    "deliveryFee": deliveryFeeCtrl.text.trim(),
+  };
+
+  setState(() => _saving = true);
+
+  try {
+    await ServiceService.addServiceFromBookingForm(form);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Service created successfully ✅", style: GoogleFonts.poppins())),
+    );
+    Navigator.pop(context, true);
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Failed: $e", style: GoogleFonts.poppins())),
+    );
+  } finally {
+    if (mounted) setState(() => _saving = false);
+  }
+}
+
 
   @override
   void initState() {

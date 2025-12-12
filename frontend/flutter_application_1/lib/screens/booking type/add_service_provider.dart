@@ -124,7 +124,7 @@ String _bookingTypeLabel(String key) {
 class AddServiceProviderScreen extends StatelessWidget {
   const AddServiceProviderScreen({Key? key}) : super(key: key);
 
-  void _openBookingPage(BuildContext context, String category) {
+  Future<void> _openBookingPage(BuildContext context, String category) async {
     final typeKey = _bookingTypeKey(category);
     final typeLabel = _bookingTypeLabel(typeKey);
 
@@ -160,10 +160,21 @@ class AddServiceProviderScreen extends StatelessWidget {
         break;
     }
 
-    Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => page),
     );
+
+    // ✅ NEW: صفحات الإضافة رح ترجع bool (true) بعد الحفظ
+    if (result == true) {
+      Navigator.pop(context, true);
+      return;
+    }
+
+    // ✅ OLD support: إذا كان عندك مكان ثاني بيرجع Map
+    if (result is Map && result["created"] == true) {
+      Navigator.pop(context, result);
+    }
   }
 
   @override

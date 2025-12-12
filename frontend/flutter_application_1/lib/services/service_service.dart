@@ -1,49 +1,67 @@
 // lib/services/service_service.dart
 
 import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:http/http.dart' as http;
-// تأكد من تحديث المسار الصحيح لـ AuthService
 import 'package:flutter_application_1/services/auth_service.dart';
-import 'dart:io';
+
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 class ServiceService {
-  static final String baseUrl = AuthService.getBaseUrl();
+  static const String _envBaseUrl = String.fromEnvironment('API_BASE_URL');
 
-  // ====================== 1. جلب خدمات المزود (GET /services/my) =========================
-  // تستخدم لجلب قائمة الخدمات التي أنشأها المستخدم الموثق (المزود)
+  // ✅ Localhost logic داخل ServiceService
+  static String getBaseUrl() {
+    if (_envBaseUrl.trim().isNotEmpty) return _envBaseUrl.trim();
+
+    if (kIsWeb) {
+      // Web (Chrome)
+      return 'http://localhost:3000';
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      // Android Emulator
+      return 'http://localhost:3000';
+    } else {
+      // iOS / Desktop / غيره
+      return 'http://localhost:3000';
+    }
+  }
+
+  // ✅ baseUrl صار من هون
+  static final String baseUrl = getBaseUrl();
+
+  // ====================== 1. GET my services =========================
   static Future<List<dynamic>> fetchMyServices() async {
     try {
       final token = await AuthService.getToken();
-      if (token == null) {
-        throw Exception('Authentication token not found.');
-      }
+      if (token == null) throw Exception('Authentication token not found.');
 
-      final response = await http.get(
-        Uri.parse(
-            '$baseUrl/services/my-services'), // الـ Endpoint لجلب خدمات المستخدم الموثق
+      final res = await http.get(
+        Uri.parse('$baseUrl/services/my-services'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
 
-      if (response.statusCode == 200) {
-        // ✅ النجاح: فك تشفير الـ JSON وإرجاع قائمة الخدمات
-        return jsonDecode(response.body);
-      } else {
-        // ❌ فشل: التعامل مع رسالة الخطأ
-        final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? 'Failed to fetch services.');
+      final data = _decodeJsonSafe(res.body);
+
+      if (res.statusCode == 200) {
+        if (data is List) return data;
+        // أحيانًا الباك إند يرجّع object بدل list
+        if (data is Map && data['data'] is List) return data['data'];
+        return [];
       }
+
+      throw Exception(_extractMessage(data) ?? 'Failed to fetch services.');
     } catch (e) {
       print('❌ Error in fetchMyServices: $e');
       rethrow;
     }
   }
 
-  // --------------------------------------------------------------------------
-
-  // ====================== 2. إضافة خدمة جديدة مع دعم الصور (POST /services) =========================
+  // ====================== 2. POST create service (multipart) =========================
   static Future<Map<String, dynamic>> addService({
     required String title,
     required String description,
@@ -52,34 +70,26 @@ class ServiceService {
     required List<Map<String, dynamic>> imageFilesData,
     required String category,
     required String priceType,
-    double? latitude, // القيمة المتوفرة من شاشة الإدخال
-    double? longitude, // القيمة المتوفرة من شاشة الإدخال
+    double? latitude,
+    double? longitude,
     required String address,
     required String city,
     required String companyName,
   }) async {
     try {
       final token = await AuthService.getToken();
-      if (token == null) {
-        throw Exception('Authentication token not found.');
-      }
+      if (token == null) throw Exception('Authentication token not found.');
 
       final url = Uri.parse('$baseUrl/services');
       final request = http.MultipartRequest('POST', url);
 
-      // 1. إضافة الـ Headers
-      request.headers.addAll({
-        'Authorization': 'Bearer $token',
-      });
+      request.headers.addAll({'Authorization': 'Bearer $token'});
 
-      // 2. إعداد حقول النص وإرسالها كـ JSON في حقل 'data'
-
-      // ✅ تجهيز كائن الموقع (location object) بناءً على Schema الجديد
       final Map<String, dynamic> locationData = {
         'latitude': latitude ?? 0.0,
         'longitude': longitude ?? 0.0,
-        'address': address, // يرسل لتحديد الموقع لاحقاً
-        'city': city, // يرسل
+        'address': address,
+        'city': city,
       };
 
       final createServiceDtoForJson = {
@@ -88,15 +98,20 @@ class ServiceService {
         'price': price,
         'category': category,
         'priceType': priceType,
-        'location': locationData, // تمرير كائن الموقع المجهز
+        'location': locationData,
         'highlights': highlights,
-        "companyName": companyName,
+        'companyName': companyName,
       };
+
       request.fields['data'] = jsonEncode(createServiceDtoForJson);
 
-      for (var fileData in imageFilesData) {
-        final List<int> fileBytes = fileData['bytes'] as List<int>;
-        final String fileName = fileData['name'] as String;
+      for (final fileData in imageFilesData) {
+        final bytesAny = fileData['bytes'];
+        final String fileName = (fileData['name'] as String?) ?? 'image.jpg';
+
+        List<int> fileBytes = [];
+        if (bytesAny is Uint8List) fileBytes = bytesAny.toList();
+        if (bytesAny is List<int>) fileBytes = bytesAny;
 
         if (fileBytes.isNotEmpty) {
           request.files.add(
@@ -109,73 +124,130 @@ class ServiceService {
         }
       }
 
-      // 4. إرسال الطلب واستقبال الرد
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      final streamed = await request.send();
+      final res = await http.Response.fromStream(streamed);
 
-      final responseBody = jsonDecode(response.body);
+      final data = _decodeJsonSafe(res.body);
 
-      if (response.statusCode == 201) {
-        return responseBody;
-      } else {
-        final errorMessage =
-            responseBody['message'] ?? 'Failed to create service.';
-        throw Exception(errorMessage);
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        if (data is Map<String, dynamic>) return data;
+        if (data is Map) return Map<String, dynamic>.from(data);
+        return {'success': true};
       }
+
+      throw Exception(_extractMessage(data) ?? 'Failed to create service.');
     } catch (e) {
       print('❌ Error in addService with file upload: $e');
       rethrow;
     }
   }
 
-  // --------------------------------------------------------------------------
+  // ====================== ✅ one method for ALL Add screens =========================
+  static Future<Map<String, dynamic>> addServiceFromBookingForm(
+      Map<String, dynamic> form) async {
+    final String category = (form['category'] ?? '').toString();
+    final String title = (form['name'] ?? form['serviceName'] ?? '').toString();
+    final String description = (form['description'] ?? '').toString();
 
-  // ====================== 3. حذف خدمة (DELETE /services/:id) =========================
+    final double price = _pickFirstDouble(
+          form['price'],
+          form['pricePerUnit'],
+          form['finalPrice'],
+          form['finalPricePerUnit'],
+        ) ??
+        0.0;
+
+    String priceType = (form['priceType'] ?? '').toString().trim();
+    if (priceType.isEmpty) {
+      final String bookingType = (form['bookingType'] ?? '').toString();
+      final String pricingModel = (form['pricingModel'] ?? '').toString();
+
+      if (pricingModel == 'per_hour' ||
+          bookingType.toLowerCase().contains('hour')) {
+        priceType = 'per_hour';
+      } else if (pricingModel == 'per_day' ||
+          bookingType.toLowerCase().contains('full')) {
+        priceType = 'per_day';
+      } else if (pricingModel.contains('capacity')) {
+        final unit = (form['capacityUnit'] ?? '').toString(); // person|piece
+        priceType = unit == 'piece' ? 'per_piece' : 'per_person';
+      } else if (pricingModel == 'per_item' ||
+          bookingType.toLowerCase().contains('order')) {
+        priceType = 'per_item';
+      } else {
+        priceType = 'per_service';
+      }
+    }
+
+    final String address = (form['address'] ?? '').toString();
+    final String city = (form['city'] ?? '').toString();
+
+    final double? latitude = _toDoubleOrNull(form['latitude']);
+    final double? longitude = _toDoubleOrNull(form['longitude']);
+
+    final highlights = _normalizeHighlights(form['highlights']);
+    final imageFilesData = _normalizeImages(form['coverImage'], form['images']);
+
+    String companyName = (form['companyName'] ?? '').toString().trim();
+    if (companyName.isEmpty) {
+      companyName = (await fetchCompanyName()) ?? '';
+    }
+
+    if (category.isEmpty) throw Exception('Category is required.');
+    if (title.trim().isEmpty) throw Exception('Service name is required.');
+    if (description.trim().isEmpty) throw Exception('Description is required.');
+    if (address.trim().isEmpty) throw Exception('Address is required.');
+    if (city.trim().isEmpty) throw Exception('City is required.');
+    if (price <= 0) throw Exception('Price must be > 0.');
+
+    return addService(
+      title: title.trim(),
+      description: description.trim(),
+      price: price,
+      highlights: highlights,
+      imageFilesData: imageFilesData,
+      category: category,
+      priceType: priceType,
+      latitude: latitude,
+      longitude: longitude,
+      address: address.trim(),
+      city: city.trim(),
+      companyName: companyName,
+    );
+  }
+
+  // ====================== 3. DELETE =========================
   static Future<void> deleteService(String serviceId) async {
     try {
-      final token = await AuthService.getToken(); // 🔑 جلب رمز المصادقة
-      if (token == null) {
-        throw Exception('Authentication token not found.');
-      }
+      final token = await AuthService.getToken();
+      if (token == null) throw Exception('Authentication token not found.');
 
-      final response = await http.delete(
-        Uri.parse('$baseUrl/services/id/$serviceId'), // الـ Endpoint للحذف
+      final res = await http.delete(
+        Uri.parse('$baseUrl/services/id/$serviceId'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization':
-              'Bearer $token', // ✅ إضافة رمز المصادقة للتحقق من الإذن
+          'Authorization': 'Bearer $token',
         },
       );
 
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        // 200/204: نجاح الحذف
-        return;
-      } else {
-        // ❌ فشل: التعامل مع رسالة الخطأ
-        final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? 'Failed to delete service.');
-      }
+      if (res.statusCode == 200 || res.statusCode == 204) return;
+
+      final data = _decodeJsonSafe(res.body);
+      throw Exception(_extractMessage(data) ?? 'Failed to delete service.');
     } catch (e) {
       print('❌ Error in deleteService: $e');
       rethrow;
     }
   }
 
-  // --------------------------------------------------------------------------
-
-  // ====================== 4. تحديث خدمة جزئياً (PATCH /services/:id) =========================
-  // تُستخدم لتحديث أي حقل، وغالباً ما تستخدم لتغيير حالة isActive
-
+  // ====================== 4. PATCH =========================
   static Future<Map<String, dynamic>> updateService(
       String serviceId, Map<String, dynamic> updateData) async {
     try {
       final token = await AuthService.getToken();
-      if (token == null) {
-        throw Exception('Authentication token not found.');
-      }
+      if (token == null) throw Exception('Authentication token not found.');
 
-      // يُفضل استخدام http.patch للتحديث الجزئي
-      final response = await http.patch(
+      final res = await http.patch(
         Uri.parse('$baseUrl/services/$serviceId'),
         headers: {
           'Content-Type': 'application/json',
@@ -184,28 +256,28 @@ class ServiceService {
         body: jsonEncode(updateData),
       );
 
-      final responseBody = jsonDecode(response.body);
+      final data = _decodeJsonSafe(res.body);
 
-      if (response.statusCode == 200) {
-        return responseBody;
-      } else {
-        throw Exception(responseBody['message'] ?? 'Failed to update service.');
+      if (res.statusCode == 200) {
+        if (data is Map<String, dynamic>) return data;
+        if (data is Map) return Map<String, dynamic>.from(data);
+        return {'success': true};
       }
+
+      throw Exception(_extractMessage(data) ?? 'Failed to update service.');
     } catch (e) {
       print('❌ Error in updateService: $e');
       rethrow;
     }
   }
 
+  // ====================== Company name =========================
   static Future<String?> fetchCompanyName() async {
     try {
       final token = await AuthService.getToken();
-      if (token == null) {
-        throw Exception('Authentication token not found.');
-      }
+      if (token == null) throw Exception('Authentication token not found.');
 
-      final response = await http.get(
-        // استخدام نهاية النقطة التي حددتها
+      final res = await http.get(
         Uri.parse('$baseUrl/providers/my-company-name'),
         headers: {
           'Content-Type': 'application/json',
@@ -213,98 +285,190 @@ class ServiceService {
         },
       );
 
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        // نفترض أن بنية الرد هي { "companyName": "اسم الشركة" }
-        return responseData['companyName'] as String?;
-      } else if (response.statusCode == 404) {
-        // التعامل مع حالة عدم العثور على اسم الشركة
-        print('Company name not found for this provider (404).');
+      final data = _decodeJsonSafe(res.body);
+
+      if (res.statusCode == 200 && data is Map) {
+        return data['companyName'] as String?;
+      } else if (res.statusCode == 404) {
+        print('Company name not found (404).');
         return null;
-      } else {
-        // التعامل مع رسائل الخطأ الأخرى
-        final errorData = jsonDecode(response.body);
-        print('Failed to fetch company name: ${errorData['message']}');
-        throw Exception(
-            errorData['message'] ?? 'Failed to fetch company name.');
       }
+
+      throw Exception(_extractMessage(data) ?? 'Failed to fetch company name.');
     } catch (e) {
       print('Error fetching company name: $e');
-      // لا ترمي خطأ لعدم إيقاف عملية إضافة الخدمة بالكامل، بل أعد القيمة Null
       return null;
     }
   }
 
-  // --------------------------------------------------------------------------
-
-  // ====================== 5. جلب تفاصيل خدمة معينة (GET /services/:id) =========================
-  // يستخدمه العميل لعرض شاشة تفاصيل خدمة
+  // ====================== 5. GET service by id =========================
   static Future<Map<String, dynamic>> getServiceById(String serviceId) async {
     try {
-      // لا نحتاج لـ token لأن هذه نقطة وصول عامة للعملاء
-      final response = await http.get(
+      final res = await http.get(
         Uri.parse('$baseUrl/services/$serviceId'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
-      if (response.statusCode == 200) {
-        // ✅ النجاح: فك تشفير الـ JSON وإرجاع تفاصيل الخدمة
-        return jsonDecode(response.body);
-      } else {
-        // ❌ فشل: التعامل مع رسالة الخطأ
-        final errorData = jsonDecode(response.body);
-        throw Exception(
-            errorData['message'] ?? 'Failed to fetch service details.');
+      final data = _decodeJsonSafe(res.body);
+
+      if (res.statusCode == 200) {
+        if (data is Map<String, dynamic>) return data;
+        if (data is Map) return Map<String, dynamic>.from(data);
+        return {};
       }
+
+      throw Exception(
+          _extractMessage(data) ?? 'Failed to fetch service details.');
     } catch (e) {
       print('❌ Error in getServiceById: $e');
       rethrow;
     }
   }
 
-  static Future<String> uploadImageFile(String filePath) async {
+  // ====================== ✅ Upload service image (Web + Mobile) =========================
+  static Future<String> uploadServiceImage({
+    String? filePath,
+    Uint8List? fileBytes,
+    String? fileName,
+  }) async {
     try {
       final token = await AuthService.getToken();
-      if (token == null) {
-        throw Exception('Authentication token not found.');
-      }
+      if (token == null) throw Exception('Authentication token not found.');
 
-      // ⚠️ يجب التأكد من أن هذا هو الـ Endpoint الصحيح لرفع الملفات لديك
-      // الـ Backend هو من يقوم بالتعامل مع Supabase الآن.
       final url = Uri.parse('$baseUrl/upload/service-image');
       final request = http.MultipartRequest('POST', url);
-      request.headers.addAll({
-        'Authorization': 'Bearer $token',
-      });
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'file', // ⚠️ هذا هو اسم الحقل الذي يتوقعه الـ Backend (تحقق من الـ NestJS لديك)
-          filePath,
-        ),
-      );
+      request.headers.addAll({'Authorization': 'Bearer $token'});
 
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        // ⚠️ يجب التأكد من أن الخادم يعيد الرابط في هذا المفتاح (نستخدم 'url' كافتراض)
-        final imageUrl = responseData['url'];
-        if (imageUrl != null) {
-          return imageUrl;
-        } else {
-          throw Exception(
-              'Image upload succeeded, but URL not returned by server.');
-        }
+      if (filePath != null && !kIsWeb) {
+        request.files.add(await http.MultipartFile.fromPath('file', filePath));
+      } else if (fileBytes != null && fileName != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes('file', fileBytes, filename: fileName),
+        );
       } else {
-        final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? 'Failed to upload image.');
+        throw Exception(
+            'Image data is missing (requires filePath or fileBytes+fileName).');
       }
+
+      final streamed = await request.send();
+      final res = await http.Response.fromStream(streamed);
+
+      final data = _decodeJsonSafe(res.body);
+
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        final urlVal = (data is Map)
+            ? (data['url'] ?? data['imageUrl'] ?? data['data'])
+            : null;
+        if (urlVal is String && urlVal.trim().isNotEmpty) return urlVal.trim();
+        throw Exception('Image upload succeeded but URL not returned.');
+      }
+
+      throw Exception(_extractMessage(data) ??
+          'Failed to upload image. Status: ${res.statusCode}');
     } catch (e) {
-      print('❌ Error in uploadImageFile: $e');
-      rethrow;
+      throw Exception('Failed to upload service image: $e');
     }
+  }
+
+  // ✅ (اختياري) إذا عندك كود قديم بينادي uploadImageFile
+  static Future<String> uploadImageFile(String filePath) async {
+    return uploadServiceImage(filePath: filePath);
+  }
+
+  // --------------------- helpers ---------------------
+  static dynamic _decodeJsonSafe(String body) {
+    try {
+      final b = body.trim();
+      if (b.isEmpty) return null;
+      return jsonDecode(b);
+    } catch (_) {
+      // لو السيرفر رجّع نص مش JSON
+      return {'message': body};
+    }
+  }
+
+  static String? _extractMessage(dynamic data) {
+    if (data == null) return null;
+
+    // بعض السيرفرات ترجع message كـ String أو List<String>
+    if (data is Map) {
+      final m = data['message'] ?? data['error'] ?? data['msg'];
+      if (m is String) return m;
+      if (m is List) return m.join(', ');
+    }
+    if (data is String) return data;
+
+    return null;
+  }
+
+  static double? _toDoubleOrNull(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    final s = v.toString().trim();
+    if (s.isEmpty) return null;
+    return double.tryParse(s);
+  }
+
+  static double? _pickFirstDouble(dynamic a, dynamic b, dynamic c, dynamic d) {
+    final list = [a, b, c, d];
+    for (final x in list) {
+      final v = _toDoubleOrNull(x);
+      if (v != null) return v;
+    }
+    return null;
+  }
+
+  static List<Map<String, String>> _normalizeHighlights(dynamic raw) {
+    if (raw == null) return [];
+    if (raw is List) {
+      final out = <Map<String, String>>[];
+      for (final item in raw) {
+        if (item is Map) {
+          final k = (item['key'] ?? '').toString();
+          final v = (item['value'] ?? '').toString();
+          if (k.trim().isNotEmpty && v.trim().isNotEmpty) {
+            out.add({'key': k.trim(), 'value': v.trim()});
+          }
+        }
+      }
+      return out;
+    }
+    return [];
+  }
+
+  static List<Map<String, dynamic>> _normalizeImages(
+      dynamic cover, dynamic images) {
+    final out = <Map<String, dynamic>>[];
+
+    void addBytes(Uint8List bytes, {String name = 'cover.jpg'}) {
+      if (bytes.isEmpty) return;
+      out.add({'bytes': bytes.toList(), 'name': name});
+    }
+
+    if (cover is Uint8List) {
+      addBytes(cover, name: 'cover.jpg');
+    } else if (cover is Map) {
+      final b = cover['bytes'];
+      final n = (cover['name'] ?? 'cover.jpg').toString();
+      if (b is Uint8List) addBytes(b, name: n);
+      if (b is List<int>) out.add({'bytes': b, 'name': n});
+    }
+
+    if (images is List) {
+      int i = 0;
+      for (final item in images) {
+        i++;
+        if (item is Uint8List) {
+          addBytes(item, name: 'image_$i.jpg');
+        } else if (item is Map) {
+          final bytes = item['bytes'];
+          final name = (item['name'] ?? 'image_$i.jpg').toString();
+          if (bytes is Uint8List) addBytes(bytes, name: name);
+          if (bytes is List<int>) out.add({'bytes': bytes, 'name': name});
+        }
+      }
+    }
+
+    return out;
   }
 }

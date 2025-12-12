@@ -95,10 +95,17 @@ class _AfterBookingTypeScreenState extends State<AfterBookingTypeScreen> {
         return _hourlyUI();
       case "Full-Day Booking":
         return _fullDayUI();
+
+      // ✅ دعم الاسمَين (حسب اللي عندك بباقي الشاشات)
+      case "Capacity Booking":
       case "Capacity-based Booking":
         return _capacityUI();
+
+      // ✅ دعم الاسمَين (حسب اللي عندك بباقي الشاشات)
+      case "Order-Based Booking":
       case "Order-based Booking":
         return _orderUI();
+
       default:
         return Text("Unknown booking type");
     }
@@ -306,7 +313,61 @@ class _AfterBookingTypeScreenState extends State<AfterBookingTypeScreen> {
             ),
           ),
           onPressed: () {
-            Navigator.pop(context);
+            // ✅ Validations حسب نوع البوكينغ
+            if (widget.bookingType == "Hourly Booking") {
+              if (selectedDate == null || startTime == null || endTime == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Please select date + time range")),
+                );
+                return;
+              }
+            }
+
+            if (widget.bookingType == "Full-Day Booking") {
+              if (selectedDate == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Please select event date")),
+                );
+                return;
+              }
+            }
+
+            if (widget.bookingType == "Capacity Booking" ||
+                widget.bookingType == "Capacity-based Booking") {
+              if (peopleCtrl.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Please enter people count")),
+                );
+                return;
+              }
+            }
+
+            if (widget.bookingType == "Order-Based Booking" ||
+                widget.bookingType == "Order-based Booking") {
+              if (quantityCtrl.text.trim().isEmpty || selectedDate == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Please enter quantity + delivery date")),
+                );
+                return;
+              }
+            }
+
+            // ✅ رجّعي payload موحد
+            Navigator.pop(context, {
+              "ok": true,
+              "bookingType": widget.bookingType,
+              "category": widget.category,
+              "date": selectedDate?.toIso8601String(),
+              "startTime": startTime == null
+                  ? null
+                  : "${startTime!.hour}:${startTime!.minute}",
+              "endTime":
+                  endTime == null ? null : "${endTime!.hour}:${endTime!.minute}",
+              "people": int.tryParse(peopleCtrl.text.trim()),
+              "quantity": int.tryParse(quantityCtrl.text.trim()),
+              "notes": notesCtrl.text.trim(),
+              "designImageBytes": uploadedImage,
+            });
           },
           child: Text(
             "Save & Continue",

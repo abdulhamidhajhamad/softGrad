@@ -42,12 +42,14 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
   late TextEditingController _latCtrl;
 
   List<String> _images = [];
-  List<String> _highlights = [];
+
+  // ✅ highlights صارت Key/Value من الداتا بيس
+  List<Map<String, String>> _highlights = [];
+
   List<Map<String, dynamic>> _packages = [];
 
   late AnimationController _animController;
 
-  // Category options with icons for the bottom sheet
   final List<_CategoryOption> _categoryOptions = const [
     _CategoryOption('Venues', Icons.apartment_rounded),
     _CategoryOption('Photographers', Icons.photo_camera_outlined),
@@ -77,35 +79,115 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     'Other',
   ];
 
+  // ----------------- helpers (DB normalize) -----------------
+
+  Map<String, dynamic> _locFromDb(Map<String, dynamic> s) {
+    final loc = s['location'];
+    if (loc is Map) return Map<String, dynamic>.from(loc);
+    return {};
+  }
+
+  double? _toDoubleOrNull(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    final s = v.toString().trim();
+    if (s.isEmpty) return null;
+    return double.tryParse(s);
+  }
+
+  List<Map<String, String>> _normalizeHighlights(dynamic raw) {
+    // expected: [ {key:'Website', value:'...'}, ... ]
+    final out = <Map<String, String>>[];
+
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is Map) {
+          final m = Map<String, dynamic>.from(item);
+          final k = (m['key'] ?? '').toString().trim();
+          final v = (m['value'] ?? '').toString().trim();
+          if (k.isNotEmpty || v.isNotEmpty) {
+            out.add({'key': k, 'value': v});
+          }
+        } else if (item is String) {
+          // fallback لو كان مخزن كنص
+          final s = item.trim();
+          if (s.isEmpty) continue;
+
+          // دعم "key • value"
+          if (s.contains('•')) {
+            final parts = s.split('•');
+            final k = parts.first.trim();
+            final v = parts.length > 1 ? parts.sublist(1).join('•').trim() : '';
+            out.add({'key': k, 'value': v});
+          } else if (s.contains(':')) {
+            final parts = s.split(':');
+            final k = parts.first.trim();
+            final v = parts.length > 1 ? parts.sublist(1).join(':').trim() : '';
+            out.add({'key': k, 'value': v});
+          } else {
+            out.add({'key': s, 'value': ''});
+          }
+        }
+      }
+    }
+
+    return out;
+  }
+
+  String _highlightLabel(Map<String, String> h) {
+    final k = (h['key'] ?? '').trim();
+    final v = (h['value'] ?? '').trim();
+    if (k.isNotEmpty && v.isNotEmpty) return '$k • $v';
+    if (k.isNotEmpty) return k;
+    return v.isNotEmpty ? v : '-';
+  }
+
   @override
   void initState() {
     super.initState();
 
     final s = widget.existingData;
+    final loc = _locFromDb(s);
 
-    _nameCtrl = TextEditingController(text: s['name'] ?? "");
-    _brandCtrl = TextEditingController(text: s['brand'] ?? "");
-    _taglineCtrl = TextEditingController(text: s['tagline'] ?? "");
-    _addressCtrl = TextEditingController(text: s['address'] ?? "");
+    // ✅ DB keys
+    final serviceName = (s['serviceName'] ?? s['name'] ?? '').toString();
+    final companyName =
+        (s['companyName'] ?? s['brand'] ?? s['providerName'] ?? '').toString();
+    final tagline = (s['tagline'] ?? '').toString();
 
-    // وصف واحد موحّد
-    final descText =
-        (s['fullDescription'] ?? s['shortDescription'] ?? "").toString();
+    final descText = (s['description'] ??
+            s['fullDescription'] ??
+            s['shortDescription'] ??
+            '')
+        .toString();
+
+    final city = (loc['city'] ?? s['city'] ?? '').toString();
+    final address = (loc['address'] ?? s['address'] ?? '').toString();
+
+    final longitude =
+        _toDoubleOrNull(loc['longitude'] ?? s['longitude'])?.toString() ?? '';
+    final latitude =
+        _toDoubleOrNull(loc['latitude'] ?? s['latitude'])?.toString() ?? '';
+
+    _nameCtrl = TextEditingController(text: serviceName);
+    _brandCtrl = TextEditingController(text: companyName);
+    _taglineCtrl = TextEditingController(text: tagline);
+    _addressCtrl = TextEditingController(text: address);
+
     _shortDescCtrl = TextEditingController(text: descText);
     _fullDescCtrl = TextEditingController(text: descText);
 
-    _cityCtrl = TextEditingController(text: s['city'] ?? "");
-    _categoryCtrl = TextEditingController(text: s['category'] ?? "");
-    _priceCtrl = TextEditingController(text: s['price']?.toString() ?? "");
-    _discountCtrl =
-        TextEditingController(text: s['discount']?.toString() ?? "");
+    _cityCtrl = TextEditingController(text: city);
+    _categoryCtrl = TextEditingController(text: (s['category'] ?? '').toString());
+    _priceCtrl = TextEditingController(text: (s['price'] ?? '').toString());
+    _discountCtrl = TextEditingController(text: (s['discount'] ?? '').toString());
 
     _images = List<String>.from(s['images'] ?? []);
-    _highlights = List<String>.from(s['highlights'] ?? []);
+    _highlights = _normalizeHighlights(s['highlights']);
     _packages = List<Map<String, dynamic>>.from(s['packages'] ?? []);
 
-    _longCtrl = TextEditingController(text: s['longitude']?.toString() ?? "");
-    _latCtrl = TextEditingController(text: s['latitude']?.toString() ?? "");
+    _longCtrl = TextEditingController(text: longitude);
+    _latCtrl = TextEditingController(text: latitude);
 
     _animController = AnimationController(
       vsync: this,
@@ -128,7 +210,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     _discountCtrl.dispose();
     _longCtrl.dispose();
     _latCtrl.dispose();
-
     super.dispose();
   }
 
@@ -142,6 +223,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     }
   }
 
+  // ✅ add highlight صار يضيف Map {key,value}
   void _addHighlight() {
     final keyCtrl = TextEditingController();
     final valueCtrl = TextEditingController();
@@ -185,9 +267,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
               final key = keyCtrl.text.trim();
               final value = valueCtrl.text.trim();
               if (key.isNotEmpty || value.isNotEmpty) {
-                final combined =
-                    value.isNotEmpty ? "$key • $value" : key; // نص واحد
-                setState(() => _highlights.add(combined));
+                setState(() => _highlights.add({'key': key, 'value': value}));
               }
               Navigator.pop(context);
             },
@@ -209,29 +289,49 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
 
     final desc = _fullDescCtrl.text.trim();
 
+    // ✅ رجّع بيانات DB Keys + location + highlights key/value
     final updatedData = {
+      // keep both for compatibility
+      "serviceName": _nameCtrl.text.trim(),
       "name": _nameCtrl.text.trim(),
+
+      "companyName": _brandCtrl.text.trim(),
       "brand": _brandCtrl.text.trim(),
+
       "tagline": _taglineCtrl.text.trim(),
-      "address": _addressCtrl.text.trim(),
-      // وصف واحد يُخزّن في الاثنين
+
+      "description": desc,
       "shortDescription": desc,
       "fullDescription": desc,
-      "city": _cityCtrl.text.trim(),
+
       "category": _categoryCtrl.text.trim(),
       "price": double.tryParse(_priceCtrl.text.trim()) ?? 0,
       "discount": _discountCtrl.text.trim(),
-      "longitude": double.tryParse(_longCtrl.text.trim()) ?? 0,
+
+      "location": {
+        "address": _addressCtrl.text.trim(),
+        "city": _cityCtrl.text.trim(),
+        "latitude": double.tryParse(_latCtrl.text.trim()) ?? 0,
+        "longitude": double.tryParse(_longCtrl.text.trim()) ?? 0,
+      },
+
+      // optional top-level (لو مشروعك بستعملهم)
+      "address": _addressCtrl.text.trim(),
+      "city": _cityCtrl.text.trim(),
       "latitude": double.tryParse(_latCtrl.text.trim()) ?? 0,
+      "longitude": double.tryParse(_longCtrl.text.trim()) ?? 0,
+
       "images": _images,
+
+      // ✅ highlights كـ List<Map(key,value)>
       "highlights": _highlights,
+
       "packages": _packages,
     };
 
     Navigator.pop(context, updatedData);
   }
 
-  // Open bottom sheet with category list + icons
   Future<void> _openCategoryPicker() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -281,10 +381,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                       return ListTile(
                         contentPadding:
                             const EdgeInsets.symmetric(horizontal: 4),
-                        leading: Icon(
-                          opt.icon,
-                          color: kPrimaryColor,
-                        ),
+                        leading: Icon(opt.icon, color: kPrimaryColor),
                         title: Text(
                           opt.label,
                           style: GoogleFonts.poppins(
@@ -298,9 +395,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                             ? const Icon(Icons.check, color: kPrimaryColor)
                             : null,
                         onTap: () {
-                          setState(() {
-                            _categoryCtrl.text = opt.label;
-                          });
+                          setState(() => _categoryCtrl.text = opt.label);
                           Navigator.pop(ctx);
                         },
                       );
@@ -398,7 +493,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
       backgroundColor: kBackgroundColor,
       body: Stack(
         children: [
-          // plain white background (no gradients / waves)
           Container(color: kBackgroundColor),
           SafeArea(
             child: AnimatedBuilder(
@@ -416,9 +510,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
               child: Column(
                 children: [
                   _buildAppBar(),
-                  Expanded(
-                    child: _buildFormScroll(),
-                  ),
+                  Expanded(child: _buildFormScroll()),
                 ],
               ),
             ),
@@ -433,8 +525,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
       ),
     );
   }
-
-  // ===================== APP BAR =====================
 
   Widget _buildAppBar() {
     return Padding(
@@ -469,13 +559,10 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
               ],
             ),
           ),
-          // removed extra white icon button (sparkles)
         ],
       ),
     );
   }
-
-  // ===================== FORM BODY =====================
 
   Widget _buildFormScroll() {
     return SingleChildScrollView(
@@ -494,7 +581,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                   const SizedBox(height: 12),
                   _label("Service Name"),
                   _textField(_nameCtrl, hint: "e.g., Luxe Wedding Photography"),
-                  // تم الإبقاء على الكود، لكن تم إزالة حقول Brand و Tagline من الواجهة فقط
                 ],
               ),
             ),
@@ -505,7 +591,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                 children: [
                   _sectionTitle("Location & Category"),
                   const SizedBox(height: 12),
-
                   Row(
                     children: [
                       Expanded(
@@ -573,9 +658,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 12),
-
                   _label("Address"),
                   _textField(
                     _addressCtrl,
@@ -583,10 +666,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                     maxLines: 2,
                     required: false,
                   ),
-
                   const SizedBox(height: 12),
-
-                  // ⭐ هنا أضفناهم داخل نفس الـ box ⭐
                   Row(
                     children: [
                       Expanded(
@@ -682,6 +762,8 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
               ),
             ),
             const SizedBox(height: 16),
+
+            // ✅ Highlights (Dynamic key/value)
             _glassCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -695,14 +777,12 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                       ..._highlights.map(
                         (h) => Chip(
                           backgroundColor: Colors.white,
-                          side: const BorderSide(
-                            color: Color(0xFFE0E7FF),
-                          ),
+                          side: const BorderSide(color: Color(0xFFE0E7FF)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
                           ),
                           label: Text(
-                            h,
+                            _highlightLabel(h),
                             style: GoogleFonts.poppins(
                               fontSize: 11,
                               color: kTextColor,
@@ -733,11 +813,8 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                Icons.add_rounded,
-                                size: 18,
-                                color: kPrimaryColor,
-                              ),
+                              Icon(Icons.add_rounded,
+                                  size: 18, color: kPrimaryColor),
                               const SizedBox(width: 4),
                               Text(
                                 "Add highlight",
@@ -756,6 +833,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                 ],
               ),
             ),
+
             const SizedBox(height: 16),
             _glassCard(
               child: Column(
@@ -807,8 +885,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     );
   }
 
-  // ===================== HERO / IMAGE HEADER =====================
-
   Widget _heroImageCard() {
     final hasImage = _images.isNotEmpty;
     return TweenAnimationBuilder<double>(
@@ -816,10 +892,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
       duration: const Duration(milliseconds: 600),
       curve: Curves.easeOutBack,
       builder: (context, value, child) {
-        return Transform.scale(
-          scale: value,
-          child: child,
-        );
+        return Transform.scale(scale: value, child: child);
       },
       child: ClipRRect(
         borderRadius: BorderRadius.circular(26),
@@ -830,9 +903,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.9),
-              border: Border.all(
-                color: Colors.grey.shade200,
-              ),
+              border: Border.all(color: Colors.grey.shade200),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.08),
@@ -877,9 +948,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _nameCtrl.text.isEmpty
-                            ? "Your Service"
-                            : _nameCtrl.text,
+                        _nameCtrl.text.isEmpty ? "Your Service" : _nameCtrl.text,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.poppins(
@@ -907,9 +976,8 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                         children: [
                           _miniPill(
                             icon: Icons.location_on_rounded,
-                            label: _cityCtrl.text.isEmpty
-                                ? "City"
-                                : _cityCtrl.text,
+                            label:
+                                _cityCtrl.text.isEmpty ? "City" : _cityCtrl.text,
                           ),
                           _miniPill(
                             icon: Icons.category_rounded,
@@ -944,9 +1012,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.9),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: Colors.grey.shade200,
-            ),
+            border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
@@ -1033,10 +1099,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
         ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(16)),
-          borderSide: BorderSide(
-            color: kPrimaryColor,
-            width: 1.6,
-          ),
+          borderSide: BorderSide(color: kPrimaryColor, width: 1.6),
         ),
       ),
       validator: (v) {
@@ -1044,9 +1107,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
         if (v == null || v.trim().isEmpty) return "Required";
         return null;
       },
-      onChanged: (_) {
-        setState(() {});
-      },
+      onChanged: (_) => setState(() {}),
     );
   }
 
@@ -1075,20 +1136,12 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
         ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(16)),
-          borderSide: BorderSide(
-            color: kPrimaryColor,
-            width: 1.6,
-          ),
+          borderSide: BorderSide(color: kPrimaryColor, width: 1.6),
         ),
-        suffixIcon: const Icon(
-          Icons.arrow_drop_down_rounded,
-          color: kPrimaryColor,
-        ),
+        suffixIcon: const Icon(Icons.arrow_drop_down_rounded,
+            color: kPrimaryColor),
       ),
-      validator: (v) {
-        if (v == null || v.trim().isEmpty) return "Required";
-        return null;
-      },
+      validator: (v) => (v == null || v.trim().isEmpty) ? "Required" : null,
       onTap: _openCategoryPicker,
     );
   }
@@ -1108,10 +1161,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
           const SizedBox(width: 4),
           Text(
             label,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              color: kTextColor,
-            ),
+            style: GoogleFonts.poppins(fontSize: 11, color: kTextColor),
           ),
         ],
       ),
@@ -1121,42 +1171,36 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
   // ===================== IMAGES =====================
 
   Widget _emptyImagesState() {
-    return GestureDetector(
-      onTap: _pickImages,
-      child: Container(
-        height: 120,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.grey.shade300),
-          color: Colors.white,
-        ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.add_photo_alternate_outlined,
-                color: kPrimaryColor,
-                size: 30,
+    return Container(
+      height: 120,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade300),
+        color: Colors.white,
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add_photo_alternate_outlined,
+                color: kPrimaryColor, size: 30),
+            const SizedBox(height: 16),
+            Text(
+              "Add service photos",
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: kTextColor,
+                fontWeight: FontWeight.w500,
               ),
-              const SizedBox(height: 16),
-              Text(
-                "Add service photos",
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: kTextColor,
-                  fontWeight: FontWeight.w500,
-                ),
+            ),
+            Text(
+              "Tap to upload images",
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                color: Colors.grey.shade600,
               ),
-              Text(
-                "Tap to upload images",
-                style: GoogleFonts.poppins(
-                  fontSize: 11,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1174,11 +1218,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
           border: Border.all(color: Colors.grey.shade300),
           color: Colors.grey.shade100,
         ),
-        child: Icon(
-          Icons.add_rounded,
-          color: kPrimaryColor,
-          size: 30,
-        ),
+        child: Icon(Icons.add_rounded, color: kPrimaryColor, size: 30),
       ),
     );
   }
@@ -1200,19 +1240,14 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                 ),
               ],
             ),
-            child: Image.network(
-              _images.first,
-              fit: BoxFit.cover,
-            ),
+            child: _buildImageWidget(path),
           ),
         ),
         Positioned(
           top: 4,
           right: 4,
           child: GestureDetector(
-            onTap: () {
-              setState(() => _images.remove(path));
-            },
+            onTap: () => setState(() => _images.remove(path)),
             child: Container(
               width: 24,
               height: 24,
@@ -1220,11 +1255,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
                 color: Colors.black.withOpacity(0.65),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.close,
-                size: 16,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.close, size: 16, color: Colors.white),
             ),
           ),
         ),
@@ -1233,21 +1264,21 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
   }
 
   Widget _buildImageWidget(String path) {
-    // إذا كانت الصورة من الجهاز
-    if (File(path).existsSync()) {
-      return Image.file(
-        File(path),
-        fit: BoxFit.cover,
-      );
-    }
+    // local file
+    try {
+      if (path.isNotEmpty && File(path).existsSync()) {
+        return Image.file(File(path), fit: BoxFit.cover);
+      }
+    } catch (_) {}
 
-    // وإلا فهي من السيرفر (Network)
+    // network
     return Image.network(
       path,
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 40),
     );
   }
+
   // ===================== SAVE BUTTON =====================
 
   Widget _buildSaveButton() {
@@ -1265,25 +1296,18 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
         );
       },
       child: GestureDetector(
-        onTapDown: (_) {
-          _animController.reverse(from: 1.0);
-        },
+        onTapDown: (_) => _animController.reverse(from: 1.0),
         onTapUp: (_) {
           _animController.forward(from: 0.7);
           _save();
         },
-        onTapCancel: () {
-          _animController.forward(from: 0.7);
-        },
+        onTapCancel: () => _animController.forward(from: 0.7),
         child: Container(
           height: 57,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            gradient: LinearGradient(
-              colors: [
-                kPrimaryColor,
-                const Color(0xFF1414D7),
-              ],
+            gradient: const LinearGradient(
+              colors: [kPrimaryColor, Color(0xFF1414D7)],
             ),
             boxShadow: [
               BoxShadow(
@@ -1308,8 +1332,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
     );
   }
 
-  // ===================== GLASS ICON BUTTON =====================
-
   Widget _glassIconButton(
       {required IconData icon, required VoidCallback onTap}) {
     return ClipRRect(
@@ -1324,15 +1346,9 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               color: Colors.white,
-              border: Border.all(
-                color: Colors.grey.shade300,
-              ),
+              border: Border.all(color: Colors.grey.shade300),
             ),
-            child: Icon(
-              icon,
-              size: 22,
-              color: kTextColor,
-            ),
+            child: Icon(icon, size: 22, color: kTextColor),
           ),
         ),
       ),
@@ -1340,7 +1356,6 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen>
   }
 }
 
-// Small model for category option
 class _CategoryOption {
   final String label;
   final IconData icon;

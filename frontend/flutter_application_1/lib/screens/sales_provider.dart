@@ -4,9 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 
 // موجودين عندك وممكن تحتاجهم لاحقاً
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_application_1/screens/add_service_provider.dart';
-import 'showMore_provider.dart';
+import 'package:flutter_application_1/screens/booking%20type/add_service_provider.dart';
+import 'show more/showMore_provider.dart';
 import 'edit_service_provider.dart';
+
 
 class SalesProviderScreen extends StatefulWidget {
   const SalesProviderScreen({Key? key}) : super(key: key);

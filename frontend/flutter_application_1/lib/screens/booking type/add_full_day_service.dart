@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'booking_common_widgets.dart';
+import 'package:flutter_application_1/services/service_service.dart';
 
 class AddFullDayService extends StatefulWidget {
   final String category;
@@ -364,63 +365,82 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
     );
   }
 
-  void _trySave() {
-    final ok = _formKey.currentState?.validate() ?? false;
-    if (!ok) return;
+  bool _saving = false;
 
-    if (_selectedDays.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text("Select at least one day", style: GoogleFonts.poppins()),
-        ),
-      );
-      return;
-    }
+Future<void> _trySave() async {
+  final ok = _formKey.currentState?.validate() ?? false;
+  if (!ok) return;
 
-    if (_maxEventsPerDay < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Max events per day must be at least 1",
-              style: GoogleFonts.poppins()),
-        ),
-      );
-      return;
-    }
-
-    Navigator.pop(context, {
-      "category": widget.category,
-      "bookingType": widget.bookingType,
-
-      // common
-      "name": nameCtrl.text.trim(),
-      "description": descCtrl.text.trim(),
-      "address": addressCtrl.text.trim(),
-      "city": _selectedCity,
-      "latitude": latitudeCtrl.text.trim(),
-      "longitude": longitudeCtrl.text.trim(),
-
-      // pricing
-      "price": priceCtrl.text.trim(),
-      "discount": discountCtrl.text.trim(),
-
-      // ✅ computed final price
-      "finalPrice": _finalPrice?.toStringAsFixed(2),
-      "savedAmount": _savedAmount?.toStringAsFixed(2),
-
-      "coverImage": _coverImage,
-      "highlights": _highlights, // ✅ key/value
-      "visibleInSearch": _visibleInSearch,
-
-      "days": _selectedDays.toList(),
-
-      // full-day
-      "pricingModel": "per_day",
-      "allDay": true,
-      "maxEventsPerDay": _maxEventsPerDay.toString(), // ✅ editable now
-      "extraDayPrice": extraDayPriceCtrl.text.trim(),
-    });
+  if (_selectedDays.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Select at least one day", style: GoogleFonts.poppins())),
+    );
+    return;
   }
+
+  if (_selectedCity == null || _selectedCity!.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Select a city", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  if (_coverImage == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Please add a cover image.", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  final form = {
+    "category": widget.category,
+    "bookingType": widget.bookingType,
+
+    "name": nameCtrl.text.trim(),
+    "description": descCtrl.text.trim(),
+
+    "address": addressCtrl.text.trim(),
+    "city": _selectedCity,
+    "latitude": latitudeCtrl.text.trim(),
+    "longitude": longitudeCtrl.text.trim(),
+
+    "price": priceCtrl.text.trim(),
+    "discount": discountCtrl.text.trim(),
+
+    "finalPrice": _finalPrice?.toStringAsFixed(2),
+    "savedAmount": _savedAmount?.toStringAsFixed(2),
+
+    "coverImage": _coverImage,
+    "highlights": _highlights,
+    "visibleInSearch": _visibleInSearch,
+
+    "days": _selectedDays.toList(),
+
+    "pricingModel": "per_day",
+    "allDay": true,
+    "maxEventsPerDay": _maxEventsPerDay,
+    "extraDayPrice": extraDayPriceCtrl.text.trim(),
+  };
+
+  setState(() => _saving = true);
+
+  try {
+    await ServiceService.addServiceFromBookingForm(form);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Service created successfully ✅", style: GoogleFonts.poppins())),
+    );
+    Navigator.pop(context, true);
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Failed: $e", style: GoogleFonts.poppins())),
+    );
+  } finally {
+    if (mounted) setState(() => _saving = false);
+  }
+}
 
   @override
   void initState() {
@@ -708,7 +728,7 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              "Final price",
+                              "Final price (after discount)",
                               style: GoogleFonts.poppins(
                                   fontSize: 12, fontWeight: FontWeight.w700),
                             ),

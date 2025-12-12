@@ -11,11 +11,13 @@ export class PackageBuilderService {
 
     constructor(private readonly serviceService: ServiceService) {}
 
+    
     /**
      * 🏗️ يقوم بتجميع الخدمات من قاعدة البيانات بناءً على مخططات الذكاء الاصطناعي.
      * @param blueprint مخططات الباكجات المستخلصة من AI
      * @returns مصفوفة من الباكجات المجمّعة (AggregatedPackage)
      */
+    /*
     async buildPackages(blueprint: AiSearchBlueprint): Promise<AggregatedPackage[]> {
         const aggregatedPackages: AggregatedPackage[] = [];
 
@@ -82,4 +84,5 @@ export class PackageBuilderService {
 
         return aggregatedPackages;
     }
+    */
 }

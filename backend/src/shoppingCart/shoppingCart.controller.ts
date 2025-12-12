@@ -1,5 +1,5 @@
 import { 
-  Controller, Get, Post, Delete, Body, 
+  Controller, Get, Post, Delete, Body, Query,
   UseGuards, Request, HttpException, HttpStatus 
 } from '@nestjs/common';
 import { ShoppingCartService } from './shoppingCart.service';
@@ -17,8 +17,8 @@ export class ShoppingCartController {
       const userId = req.user.userId;
       const userRole = req.user.role;
 
-      // التأكد أن اليوزر عادي (client) فقط
-      if (userRole !== 'user') {
+      // تصحيح: استخدام 'user' بدلاً من 'client'
+      if (userRole !== 'user' && userRole !== 'client') {
         throw new HttpException(
           'Only clients can add services to cart',
           HttpStatus.FORBIDDEN
@@ -40,7 +40,7 @@ export class ShoppingCartController {
       const userId = req.user.userId;
       const userRole = req.user.role;
 
-      if (userRole !== 'client') {
+      if (userRole !== 'user' && userRole !== 'client') {
         throw new HttpException(
           'Only clients can remove services from cart',
           HttpStatus.FORBIDDEN
@@ -56,14 +56,13 @@ export class ShoppingCartController {
     }
   }
 
-   @Delete('clear')
+  @Delete('clear')
   async clearCart(@Request() req: any) {
     try {
       const userId = req.user.userId;
       const userRole = req.user.role;
 
-      // التأكد أن اليوزر عادي (client) فقط
-      if (userRole !== 'client') {
+      if (userRole !== 'user' && userRole !== 'client') {
         throw new HttpException(
           'Only clients can clear cart',
           HttpStatus.FORBIDDEN
@@ -92,6 +91,38 @@ export class ShoppingCartController {
     }
   }
 
+  /**
+   * 🆕 فحص التوافر الشامل
+   */
+  @Post('check-availability')
+  async checkAvailability(
+    @Body('serviceId') serviceId: string,
+    @Body('bookingDate') bookingDate: Date,
+    @Body('startHour') startHour?: number,
+    @Body('endHour') endHour?: number,
+    @Body('numberOfPeople') numberOfPeople?: number,
+    @Body('isFullVenueBooking') isFullVenueBooking?: boolean
+  ) {
+    try {
+      return await this.shoppingCartService.checkAvailability(
+        serviceId,
+        bookingDate,
+        startHour,
+        endHour,
+        numberOfPeople,
+        isFullVenueBooking
+      );
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to check availability',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * للتوافق مع الكود القديم
+   */
   @Post('check-date')
   async checkDateAvailability(
     @Body('serviceId') serviceId: string,

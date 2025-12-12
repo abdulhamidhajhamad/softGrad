@@ -8,6 +8,25 @@ export class CartService {
 
   @Prop({ type: Date, required: true })
   bookingDate: Date;
+
+  // 🆕 للحجوزات بالساعة
+  @Prop({ type: Number, min: 0, max: 23 })
+  startHour?: number;
+
+  @Prop({ type: Number, min: 0, max: 23 })
+  endHour?: number;
+
+  // 🆕 للحجوزات حسب السعة
+  @Prop({ type: Number, min: 1 })
+  numberOfPeople?: number;
+
+  // 🆕 للحجوزات المختلطة - هل هو حجز كامل للمكان؟
+  @Prop({ type: Boolean, default: false })
+  isFullVenueBooking?: boolean;
+
+  // 🆕 حفظ السعر المحسوب عند الإضافة
+  @Prop({ type: Number, default: 0 })
+  calculatedPrice?: number;
 }
 
 @Schema({ timestamps: true })

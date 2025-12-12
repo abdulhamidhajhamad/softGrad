@@ -12,17 +12,24 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 @Controller('services')
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
-  //test
+  
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 10)) 
   async addService(
-    @Body('data') data: string,
+    @Body('data') data: string, // ⬅️ يتوقع 'data' من form-data
     @Request() req: any,
     @UploadedFiles() files?: Express.Multer.File[] 
   ) {
     try {
-      const createServiceDto: CreateServiceDto = JSON.parse(data);
+      // 🆕 التحقق من data لتجنب خطأ JSON.parse
+      if (!data) {
+        throw new HttpException(
+          'Missing required field: "data" (JSON string of CreateServiceDto)',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const createServiceDto: CreateServiceDto = JSON.parse(data); //
       const userId = req.user.userId;
       const userRole = req.user.role
       if (userRole !== 'vendor') {
@@ -41,16 +48,25 @@ export class ServiceController {
   }
 
   // 🆕 3. Update Service by ID - Protected (Vendor)
-  @Put('id/:serviceId') // ⬅️ Changed endpoint to use ID
+  @Put('id/:serviceId')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 10)) 
-  async updateServiceById( // ⬅️ Changed function name
-    @Param('serviceId') serviceId: string, // ⬅️ Using serviceId
-    @Body() updateServiceDto: UpdateServiceDto,
+  async updateServiceById( 
+    @Param('serviceId') serviceId: string, 
+    @Body('data') data: string, // ⬅️ تم التعديل لاستقبال 'data' كـ string
     @Request() req: any,
     @UploadedFiles() files?: Express.Multer.File[]
   ) {
     try {
+      // 🆕 يجب تحليل JSON يدوياً هنا أيضاً
+      if (!data) {
+        throw new HttpException(
+          'Missing required field: "data" (JSON string of UpdateServiceDto)',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const updateServiceDto: UpdateServiceDto = JSON.parse(data);
+      
       const userId = req.user.userId;
       const userRole = req.user.role;
 
@@ -61,7 +77,7 @@ export class ServiceController {
         );
       }
 
-      return await this.serviceService.updateServiceById( // ⬅️ Calling new service function
+      return await this.serviceService.updateServiceById( 
         serviceId,
         userId,
         updateServiceDto,
@@ -76,9 +92,9 @@ export class ServiceController {
   }
 
   // 🆕 4. Delete Service by ID - Protected (Vendor)
-  @Delete('id/:serviceId') // ⬅️ Changed endpoint to use ID
+  @Delete('id/:serviceId') //
   @UseGuards(JwtAuthGuard)
-  async deleteServiceById(@Param('serviceId') serviceId: string, @Request() req: any) { // ⬅️ Changed function name and parameter
+  async deleteServiceById(@Param('serviceId') serviceId: string, @Request() req: any) { //
     try {
       const userId = req.user.userId;
       const userRole = req.user.role;
@@ -90,7 +106,7 @@ export class ServiceController {
         );
       }
 
-      return await this.serviceService.deleteServiceById(serviceId, userId); // ⬅️ Calling new service function
+      return await this.serviceService.deleteServiceById(serviceId, userId); //
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to delete service',
@@ -104,11 +120,20 @@ export class ServiceController {
   @UseInterceptors(FilesInterceptor('images', 10)) 
   async updateServiceByName(
     @Param('serviceName') serviceName: string,
-    @Body() updateServiceDto: UpdateServiceDto,
+    @Body('data') data: string, // ⬅️ تم التعديل لاستقبال 'data' كـ string
     @Request() req: any,
     @UploadedFiles() files?: Express.Multer.File[]
   ) {
     try {
+      // 🆕 يجب تحليل JSON يدوياً هنا أيضاً
+      if (!data) {
+        throw new HttpException(
+          'Missing required field: "data" (JSON string of UpdateServiceDto)',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const updateServiceDto: UpdateServiceDto = JSON.parse(data);
+      
       const userId = req.user.userId;
       const userRole = req.user.role;
 
@@ -132,155 +157,94 @@ export class ServiceController {
       );
     }
   }
-  
+
+  // 5. Delete Service By Name
+  @Delete('name/:serviceName')
+  @UseGuards(JwtAuthGuard)
+  async deleteServiceByName(
+    @Param('serviceName') serviceName: string,
+    @Request() req: any
+  ) {
+    try {
+      const providerId = req.user.userId;
+      return await this.serviceService.deleteServiceByName(serviceName, providerId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to delete service by name',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // 6. Get All Services (Public)
   @Get()
   async getAllServices() {
     try {
       return await this.serviceService.getAllServices();
     } catch (error) {
       throw new HttpException(
-        error.message || 'Failed to fetch services',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-
-  // 2. Delete Service - محمي بالـ JWT
-  @Delete('/:serviceName')
-  @UseGuards(JwtAuthGuard)
-  async deleteServiceByName(@Param('serviceName') serviceName: string, @Request() req: any) {
-    try {
-      const userId = req.user.userId;
-      const userRole = req.user.role;
-
-      if (userRole !== 'vendor') {
-        throw new HttpException(
-          'Only vendors can delete services',
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      return await this.serviceService.deleteServiceByName(serviceName, userId);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to delete service',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  // 6. Get Services by Vendor Name - مفتوح للجميع
-  @Get('vendor/:companyName')
-  async getServicesByVendor(@Param('companyName') companyName: string) {
-    try {
-      return await this.serviceService.getServicesByVendorName(companyName);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to fetch vendor services',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  // API جديد: يحصل على خدمات المزود الحالي المسجل دخولاً
-  @Get('my-services')
-  @UseGuards(JwtAuthGuard)
-  async getMyServices(@Request() req: any) {
-    try {
-      const userId = req.user.userId;
-      const userRole = req.user.role;
-      
-      if (userRole !== 'vendor') {
-        throw new HttpException(
-          'Only vendors can access their services',
-          HttpStatus.FORBIDDEN
-        );
-      }
-      return await this.serviceService.getServicesByVendorId(userId);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to fetch your services',
+        error.message || 'Failed to fetch all services',
         error.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
   
-  // 7. Get Services by Vendor ID - مفتوح للجميع
-  @Get('vendor/id/:vendorId')
-  async getServicesByVendorId(@Param('vendorId') vendorId: string) {
+  // 7. Get Services By Vendor Company Name (Public)
+  @Get('vendor/name/:companyName')
+  async getServicesByVendorName(@Param('companyName') companyName: string) {
     try {
-      return await this.serviceService.getServicesByVendorId(vendorId);
+      return await this.serviceService.getServicesByVendorName(companyName); // ✅ تم التأكد من وجود هذه الدالة في الـ Service
     } catch (error) {
       throw new HttpException(
-        error.message || 'Failed to fetch vendor services',
+        error.message || 'Failed to fetch services by vendor name',
         error.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
 
-  // 8. Search services with multiple filters - مفتوح للجميع
-  @Get('search')
-  async searchServices(
-    @Query('city') city: string,
-    @Query('minPrice') minPrice: string,
-    @Query('maxPrice') maxPrice: string,
-    @Query('category') category: string,
-    @Query('serviceName') serviceName: string,
-    @Query('companyName') companyName: string,
-    @Query('lat') lat: string,
-    @Query('lng') lng: string,
-    @Query('radius') radius: string
-  ) {
+  // 8. Get Services By Vendor ID (Protected)
+  @Get('my-services') 
+  @UseGuards(JwtAuthGuard)
+  async getMyServices(@Request() req: any) {
     try {
-      const filters: any = {};
-      if (city && city.trim() !== '') {
-        filters.city = city.trim();
-      }
-      if (minPrice || maxPrice) {
-        filters.priceRange = {
-          min: minPrice ? parseFloat(minPrice) : 0,
-          max: maxPrice ? parseFloat(maxPrice) : Number.MAX_SAFE_INTEGER
-        };
-      }
-      if (category && category.trim() !== '') {
-        filters.category = category.trim();
-      }
+      const userId = req.user.userId;
+      // 🚨 تم تعديل الاستدعاء من getServicesByVendorId إلى getServicesByVendor
+      return await this.serviceService.getServicesByVendor(userId); 
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch my services',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
-      if (serviceName && serviceName.trim() !== '') {
-        filters.serviceName = serviceName.trim();
-      }
+  // 9. Get Services By Vendor ID (Public - used for profile viewing)
+  @Get('vendor/:vendorId') 
+  async getServicesByVendorId(@Param('vendorId') vendorId: string) {
+    try {
+       // 🚨 تم تعديل الاستدعاء من getServicesByVendorId إلى getServicesByVendor
+      return await this.serviceService.getServicesByVendor(vendorId); 
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch services by vendor ID',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
-      if (companyName && companyName.trim() !== '') {
-        filters.companyName = companyName.trim();
-      }
-
-      if (lat && lng) {
-        const latitude = parseFloat(lat);
-        const longitude = parseFloat(lng);
-        const radiusInKm = radius ? parseFloat(radius) : 50;
-
-        if (isNaN(latitude) || isNaN(longitude)) {
-          throw new HttpException(
-            'Invalid latitude or longitude',
-            HttpStatus.BAD_REQUEST
-          );
+  // 10. Search Services (Public)
+  @Get('search')
+  async searchServices(@Query() query: any) {
+    try {
+      // تحويل سلاسل JSON في الـ Query إلى كائنات
+      const filters = {};
+      for (const key in query) {
+        try {
+          filters[key] = JSON.parse(query[key]);
+        } catch (e) {
+          filters[key] = query[key];
         }
-
-        filters.location = {
-          lat: latitude,
-          lng: longitude,
-          radius: radiusInKm
-        };
       }
-
-      if (Object.keys(filters).length === 0) {
-        throw new HttpException(
-          'At least one search filter is required',
-          HttpStatus.BAD_REQUEST
-        );
-      }
-
       return await this.serviceService.searchServices(filters);
     } catch (error) {
       throw new HttpException(
@@ -289,11 +253,12 @@ export class ServiceController {
       );
     }
   }
-  // 10. Get services by category - مفتوح للجميع
+
+  // 11. Get Services By Category (Public)
   @Get('category/:category')
   async getServicesByCategory(@Param('category') category: string) {
     try {
-      return await this.serviceService.getServicesByCategory(category);
+      return await this.serviceService.getServicesByCategory(category); // ✅ تم التأكد من وجود هذه الدالة في الـ Service
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to fetch services by category',
@@ -303,11 +268,10 @@ export class ServiceController {
   }
 
 
-  // 🆕 11. Get Service Details by ID - مفتوح للجميع ويرجع حقول محددة
+  // 12. Get Service Details by ID - مفتوح للجميع ويرجع حقول محددة
   @Get('id/:serviceId') // ⬅️ استخدام مسار محدد لتجنب التعارض مع Get()
   async getServiceDetailsById(@Param('serviceId') serviceId: string) {
     try {
-      // الدالة في service.service.ts تم تعديلها لتنفيذ SELECT والحقول المرجعة
       return await this.serviceService.getServiceById(serviceId); 
     } catch (error) {
       throw new HttpException(
@@ -317,25 +281,19 @@ export class ServiceController {
     }
   }
 
-  // 🆕 12. Get Vendor Services Details (ID, Name, Price) - محمي للـ Vendor
-@Get('vendor-services-details') // مسار جديد لعدم التعارض
-@UseGuards(JwtAuthGuard)
-async getVendorServicesDetails(@Request() req: any): Promise<any[]> {
-  try {
-    // الـ userId في التوكن هو الـ providerId للخدمات
-    const providerId = req.user.userId; 
-    
-    // يمكنك إضافة تحقق لدور المستخدم هنا (req.user.role !== 'vendor') إذا لزم الأمر
-    
-    // استدعاء الدالة الجديدة التي تم إنشاؤها في الخدمة
-    return await this.serviceService.getVendorServicesDetails(providerId);
-    
-  } catch (error) {
-    // استخدام HttpException لضمان إرجاع أخطاء NestJS القياسية
-    throw new HttpException(
-      error.message || 'Failed to fetch vendor services details',
-      error.status || HttpStatus.INTERNAL_SERVER_ERROR
-    );
+  // 13. Get Vendor Services Details (ID, Name, Price) - محمي للـ Vendor
+  @Get('vendor-services-details') // مسار جديد لعدم التعارض
+  @UseGuards(JwtAuthGuard)
+  async getVendorServicesDetails(@Request() req: any): Promise<any[]> {
+    try {
+      const providerId = req.user.userId; 
+      // استدعاء الدالة التي تم إنشاؤها في الخدمة
+      return await this.serviceService.getVendorServicesDetails(providerId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch vendor services details',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
-}
 }

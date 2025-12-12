@@ -17,6 +17,7 @@ export class AiSearchController {
     /**
      * POST /ai-search
      */
+/*
     @Post()
     @HttpCode(HttpStatus.OK) 
     async aiPackageSearch(@Body() dto: AiSearchDto): Promise<AggregatedPackage[]> {
@@ -39,4 +40,5 @@ export class AiSearchController {
 
         return aggregatedPackages;
     }
+*/
 }

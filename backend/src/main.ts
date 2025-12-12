@@ -15,9 +15,9 @@ async function bootstrap() {
 
   // Global validation pipe
   app.useGlobalPipes(new ValidationPipe({
-    transform: true,  // ← هذا يحول النصوص إلى أرقام تلقائياً
-    whitelist: true,  // ← يسمح فقط بالحقول المحددة في DTO
-    forbidNonWhitelisted: true,  // ← يرفض الحقول الإضافية
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
   }));
   // Listen on all network interfaces with explicit configuration
   const port = 3000;

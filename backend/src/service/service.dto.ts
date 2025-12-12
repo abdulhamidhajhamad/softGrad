@@ -1,151 +1,209 @@
-import { IsString,IsEnum, IsNumber, IsArray, IsOptional,IsBoolean, IsObject, IsNotEmpty, Min, IsDate, MinLength, Max } from 'class-validator';
-import { Transform, Type } from 'class-transformer'; // ← أضف هذا
-export enum PayType { // 🆕 تعريف الـ Enum لاستخدامه مع class-validator
-  PerEvent = 'per event',
-  PerHour = 'per hour',
-  PerPerson = 'per person',
+import { 
+  IsString, IsNumber, IsOptional, IsArray, IsObject, 
+  IsEnum, IsBoolean, ValidateNested, Min, Max 
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { BookingType, PayType } from './service.schema';
+
+export class PricingOptionsDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  perHour?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  perDay?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  perPerson?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fullVenue?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  basePrice?: number;
 }
+
 export class LocationDto {
   @IsNumber()
-  @IsNotEmpty()
   latitude: number;
 
   @IsNumber()
-  @IsNotEmpty()
   longitude: number;
 
-  @IsString()
   @IsOptional()
+  @IsString()
   address?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
   city?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
   country?: string;
 }
 
 export class CreateServiceDto {
   @IsString()
-  @IsNotEmpty()
   serviceName: string;
 
-  @IsArray()
   @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   images?: string[];
 
-  @IsObject()
-  @IsNotEmpty()
-  @Type(() => LocationDto) // ← مهم جداً
+  @IsEnum(BookingType)
+  bookingType: BookingType;
+
+  @ValidateNested()
+  @Type(() => LocationDto)
   location: LocationDto;
 
-  @IsNumber()
-  @Min(0)
-  @Transform(({ value }) => parseFloat(value)) // ← أضف هذا
-  price: number;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PricingOptionsDto)
+  price?: PricingOptionsDto;
 
-@IsEnum(PayType)
-  @IsNotEmpty()
-  payType: PayType;
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
+  externalLink?: string;
+
+  @IsString()
   category: string;
 
+  @IsEnum(PayType)
+  payType: PayType;
+
   @IsOptional()
+  @IsObject()
   additionalInfo?: any;
 
-  @IsString()
   @IsOptional()
-  companyName?: string;
-
-  @IsArray()
-  @IsOptional()
-  @IsDate({ each: true })
-  bookedDates?: Date[];
-
   @IsNumber()
   @Min(0)
   @Max(5)
-  @IsOptional()
-  @Transform(({ value }) => value ? parseFloat(value) : 0) // ← أضف هذا
   rating?: number;
-  
-@IsBoolean()
+
+  // 🆕 حقول خاصة بأنواع الحجز المختلفة
   @IsOptional()
-  @Transform(({ value }) => { 
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-    return value;
-  })
-  isActive?: boolean;
+  @IsNumber()
+  @Min(0)
+  maxCapacity?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minBookingHours?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxBookingHours?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  availableHours?: number[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  cleanupTimeMinutes?: number; // 🆕 وقت التنظيف بين الحجوزات
+
+  @IsOptional()
+  @IsBoolean()
+  allowFullVenueBooking?: boolean;
 }
 
 export class UpdateServiceDto {
-  @IsString()
   @IsOptional()
+  @IsString()
   serviceName?: string;
 
-  @IsArray()
   @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   images?: string[];
 
-  @IsObject()
   @IsOptional()
+  @IsEnum(BookingType)
+  bookingType?: BookingType;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LocationDto)
   location?: LocationDto;
 
-  @IsEnum(PayType)
   @IsOptional()
-  payType?: PayType;
+  @ValidateNested()
+  @Type(() => PricingOptionsDto)
+  price?: PricingOptionsDto;
 
-  @IsNumber()
-  @Min(0)
   @IsOptional()
-  price?: number;
-
   @IsString()
+  externalLink?: string;
+
   @IsOptional()
+  @IsString()
   category?: string;
 
   @IsOptional()
+  @IsEnum(PayType)
+  payType?: PayType;
+
+  @IsOptional()
+  @IsObject()
   additionalInfo?: any;
 
-  @IsString()
   @IsOptional()
-  companyName?: string;
-
-  @IsArray()
-  @IsOptional()
-  @IsDate({ each: true })
-  bookedDates?: Date[];
-
-  // ✅ إضافة الرايتنج للتحديث
   @IsNumber()
   @Min(0)
   @Max(5)
-  @IsOptional()
   rating?: number;
 
-  @IsBoolean()
   @IsOptional()
-  isActive?: boolean;
-}
+  @IsNumber()
+  @Min(0)
+  maxCapacity?: number;
 
-export class ServiceResponseDto {
-  _id: string;
-  providerId: string;
-  serviceName: string;
-  images: string[];
-  reviews: any[];
-  payType: PayType; 
-  location: any;
-  price: number;
-  category: string;
-  additionalInfo?: any;
-  createdAt: Date;
-  updatedAt: Date;
-  companyName?: string;
-  bookedDates: Date[];
-  rating: number; 
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minBookingHours?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxBookingHours?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  availableHours?: number[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  cleanupTimeMinutes?: number; // 🆕 وقت التنظيف
+
+  @IsOptional()
+  @IsBoolean()
+  allowFullVenueBooking?: boolean;
 }

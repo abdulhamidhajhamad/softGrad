@@ -435,22 +435,6 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: kPrimaryColor.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: kPrimaryColor.withOpacity(0.18)),
-            ),
-            child: Text(
-              widget.bookingType,
-              style: GoogleFonts.poppins(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: kPrimaryColor,
-              ),
-            ),
-          ),
         ],
       ),
     );

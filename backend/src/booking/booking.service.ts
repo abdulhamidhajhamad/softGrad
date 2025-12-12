@@ -1,417 +1,355 @@
-// src/booking/booking.service.ts
-
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Request } from '@nestjs/common';
+// booking.service.ts
+import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types, Document } from 'mongoose';
-import { Booking, BookingDocument, PaymentStatus } from './booking.entity';
-import { Service } from '../service/service.entity'; 
-import { ShoppingCart } from '../shoppingCart/shoppingCart.schema'; 
-import { User } from '../auth/user.entity'; 
-
-import { NotificationService, CreateNotificationDto } from '../notification/notification.service';
-import { NotificationType, RecipientType } from '../notification/notification.schema'; 
-
-// =============================================================
-// Helper Interfaces (for better Type Safety)
-// =============================================================
-
-interface PreparedService {
-    serviceId: string;
-    bookingDate: Date;
-}
-
-interface ServiceDocument extends Document {
-    _id: Types.ObjectId;
-    providerId: Types.ObjectId; 
-    serviceName: string; // Changed from 'name' to 'serviceName'
-}
-
-interface UserDocument extends Document {
-    _id: Types.ObjectId;
-    fcmToken?: string;
-    username: string; 
-}
+import { Model, Types } from 'mongoose';
+import { Booking, BookingStatus } from './booking.entity';
+import { Service, BookingType } from '../service/service.schema';
+import { Cart } from '../shoppingCart/shoppingCart.schema';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType, RecipientType } from '../notification/notification.schema';
+import { User } from '../auth/user.entity';
+import Stripe from 'stripe';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class BookingService {
+  private readonly logger = new Logger(BookingService.name);
+  private stripe: Stripe;
 
-    constructor(
-        @InjectModel(Booking.name)
-        private readonly bookingModel: Model<BookingDocument>,
-
-        @InjectModel(ShoppingCart.name)
-        private readonly shoppingCartModel: Model<ShoppingCart & Document>,
-        @InjectModel(User.name)
-        private readonly userModel: Model<UserDocument>,
-        @InjectModel(Service.name)
-        private readonly serviceModel: Model<ServiceDocument>,
-        private readonly notificationService: NotificationService,
-    ) {}
-
-    // =============================================================
-    // Helper function to extract service ID
-    // =============================================================
-
-    private extractServiceId(serviceId: any): string {
-        if (!serviceId) {
-            throw new BadRequestException('Invalid service ID');
-        }
-        if (typeof serviceId === 'string') {
-            if (serviceId.includes('bookedDates') || serviceId.includes('_id: new ObjectId')) {
-                try {
-                    const cleanedString = serviceId
-                        .replace(/new ObjectId\(['"]([^'"]+)['"]\)/g, '"$1"')
-                        .replace(/(\w+):/g, '"$1":') 
-                        .replace(/=/g, ':');
-                    const parsed = JSON.parse(`{${cleanedString}}`);
-                    return parsed._id || parsed.serviceId;
-                } catch (e) {
-                    // Fallback to original string if parsing fails
-                }
-            }
-            return serviceId;
-        }
-        if (serviceId instanceof Types.ObjectId) {
-            return serviceId.toString();
-        }
-        if (serviceId.serviceId) return serviceId.serviceId;
-        if (serviceId._id) return serviceId._id.toString();
-        
-        throw new BadRequestException('Could not parse service ID from input.');
+  constructor(
+    @InjectModel(Booking.name) private bookingModel: Model<Booking>,
+    @InjectModel(Service.name) private serviceModel: Model<Service>,
+    @InjectModel(Cart.name) private cartModel: Model<Cart>,
+    @InjectModel(User.name) private userModel: Model<User>,
+    private notificationService: NotificationService,
+    private configService: ConfigService,
+  ) {
+    const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
+    if (!secretKey) {
+      throw new Error('STRIPE_SECRET_KEY is not set');
     }
+    this.stripe = new Stripe(secretKey!, { apiVersion: '2025-11-17.clover' });
+  }
 
-    // =============================================================
-    // 🌟 UPDATED: Send notifications to vendors (English version)
-    // Groups services by vendor and sends one notification per vendor
-    // =============================================================
-  
-    private async notifyVendors(
-        booking: BookingDocument,
-        notificationType: NotificationType,
-        userFullName: string 
-    ): Promise<void> {
-        
-        // 1. Extract service IDs
-        const serviceIds = booking.services.map(s => this.extractServiceId(s.serviceId));
+  async createBookingsFromCart(userId: string, paymentIntentId: string): Promise<Booking[]> {
+    try {
+      const cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
+      
+      if (!cart || cart.items.length === 0) {
+        throw new HttpException('Cart is empty', HttpStatus.BAD_REQUEST);
+      }
 
-        // 2. Fetch service data (providerId, serviceName) for all services
-        const servicesData = await this.serviceModel.find(
-            { _id: { $in: serviceIds } },
-            { providerId: 1, serviceName: 1 } // Changed from 'name' to 'serviceName'
-        ).exec();
-        
-        if (servicesData.length === 0) return;
+      const bookings: Booking[] = [];
+      const serviceUpdates: Map<string, any> = new Map();
 
-        // 3. Group services by vendor (providerId)
-        const servicesByVendor = new Map<string, Array<{ name: string; date: Date }>>();
-        
-        for (const bookingService of booking.services) {
-            const serviceId = this.extractServiceId(bookingService.serviceId);
-            const serviceData = servicesData.find(s => (s._id as Types.ObjectId).toString() === serviceId);
-            
-            if (serviceData) {
-                const vendorId = serviceData.providerId.toString();
-                
-                if (!servicesByVendor.has(vendorId)) {
-                    servicesByVendor.set(vendorId, []);
-                }
-                
-                servicesByVendor.get(vendorId)!.push({
-                    name: serviceData.serviceName, // Changed from serviceData.name
-                    date: bookingService.bookingDate
-                });
-            }
+      for (const item of cart.items) {
+        const service = await this.serviceModel.findById(item.serviceId);
+        if (!service) {
+          this.logger.warn(`Service ${item.serviceId} not found, skipping`);
+          continue;
         }
 
-        // 4. Get unique vendor IDs
-        const uniqueVendorIds = Array.from(servicesByVendor.keys()).map(id => new Types.ObjectId(id));
-        
-        // 5. Fetch vendor data (fcmToken and username)
-        const vendors = await this.userModel.find(
-            { _id: { $in: uniqueVendorIds } },
-            { fcmToken: 1, username: 1 }
-        ).exec();
+        // Create booking
+        const booking = await this.bookingModel.create({
+          userId: new Types.ObjectId(userId),
+          serviceId: item.serviceId,
+          serviceName: item.serviceName,
+          providerId: item.providerId,
+          companyName: item.companyName,
+          bookingType: item.bookingType,
+          bookingDetails: item.bookingDetails,
+          price: item.price,
+          status: BookingStatus.CONFIRMED,
+          paymentIntentId,
+        });
 
-        // 6. Send notification to each vendor
-        const isConfirmed = notificationType === NotificationType.BOOKING_CONFIRMED;
-        
-        for (const vendor of vendors) {
-            const vendorId = (vendor._id as Types.ObjectId).toString();
-            const vendorServices = servicesByVendor.get(vendorId);
-            
-            if (!vendorServices || vendorServices.length === 0) continue;
+        bookings.push(booking);
 
-            // Format service details (name and date)
-            const serviceDetails = vendorServices.map(service => {
-                const formattedDate = service.date.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                });
-                return `${service.name} (${formattedDate})`;
-            }).join(', ');
-            
-            const title = isConfirmed 
-                ? 'New Booking Confirmed! ✅' 
-                : 'Booking Cancelled! ❌';
-            
-            const body = isConfirmed
-                ? `${userFullName} has booked the following services: ${serviceDetails}.`
-                : `${userFullName} has cancelled the booking for: ${serviceDetails}.`;
-
-            const notificationDto: CreateNotificationDto = {
-                recipientId: vendor._id as Types.ObjectId,
-                recipientType: RecipientType.VENDOR,
-                title: title,
-                body: body, 
-                type: notificationType,
-                metadata: { 
-                    bookingId: (booking._id as Types.ObjectId).toString(), 
-                    userId: booking.userId 
-                }, 
-            };
-            
-            await this.notificationService.createNotification(
-                notificationDto, 
-                vendor.fcmToken || ''
-            );
+        // Update service booking slots
+        if (!serviceUpdates.has(item.serviceId.toString())) {
+          serviceUpdates.set(item.serviceId.toString(), {
+            service,
+            updates: []
+          });
         }
+
+        const serviceData = serviceUpdates.get(item.serviceId.toString());
+        serviceData.updates.push(item);
+
+        // Send notification to vendor
+        await this.sendBookingNotificationToVendor(booking, item.providerId);
+      }
+
+      // Apply all service updates
+      for (const [serviceId, data] of serviceUpdates) {
+        await this.updateServiceBookingSlots(data.service, data.updates);
+      }
+
+      // Clear cart
+      await this.cartModel.findOneAndDelete({ userId: new Types.ObjectId(userId) });
+
+      return bookings;
+
+    } catch (error) {
+      this.logger.error('Failed to create bookings:', error.stack);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Failed to create bookings', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
 
-    // =============================================================
-    // Get user bookings
-    // =============================================================
-    async findByUser(userId: string): Promise<BookingDocument[]> {
-        return this.bookingModel.find({ userId }).exec();
-    }
+  private async updateServiceBookingSlots(service: Service, updates: any[]): Promise<void> {
+    for (const update of updates) {
+      const date = new Date(update.bookingDetails.date);
+      
+      switch (service.bookingType) {
+        case BookingType.Hourly:
+          if (!service.bookingSlots) {
+            service.bookingSlots = { dailyBookings: [], hourlyBookings: [], capacityBookings: [] };
+          }
+          service.bookingSlots.hourlyBookings.push({
+            date,
+            startHour: update.bookingDetails.startHour,
+            endHour: update.bookingDetails.endHour,
+          });
+          break;
 
-    // =============================================================
-    // 1. Create PENDING booking from shopping cart 
-    // =============================================================
-    async createPendingBookingFromCart(userId: string): Promise<any> {
-        const shoppingCart = await this.shoppingCartModel
-            .findOne({ userId: new Types.ObjectId(userId) })
-            .exec();
+        case BookingType.Daily:
+          if (!service.bookingSlots) {
+            service.bookingSlots = { dailyBookings: [], hourlyBookings: [], capacityBookings: [] };
+          }
+          service.bookingSlots.dailyBookings.push(date);
+          break;
 
-        if (!shoppingCart || shoppingCart.services.length === 0) {
-            throw new BadRequestException('Shopping cart is empty');
-        }
-
-        const preparedServices: PreparedService[] = [];
-        for (const cartService of shoppingCart.services) {
-            const serviceId = this.extractServiceId(cartService.serviceId);
-            const service = await this.serviceModel.findById(serviceId).exec();
-            if (!service) {
-                throw new NotFoundException(`Service with ID '${serviceId}' not found`);
-            }
-
-            preparedServices.push({
-                serviceId: serviceId,
-                bookingDate: cartService.bookingDate,
+        case BookingType.Capacity:
+          if (!service.bookingSlots) {
+            service.bookingSlots = { dailyBookings: [], hourlyBookings: [], capacityBookings: [] };
+          }
+          const existingCapacity = service.bookingSlots.capacityBookings.find(
+            cb => new Date(cb.date).getTime() === date.getTime()
+          );
+          if (existingCapacity) {
+            existingCapacity.bookedCount += update.bookingDetails.numberOfPeople;
+          } else {
+            service.bookingSlots.capacityBookings.push({
+              date,
+              bookedCount: update.bookingDetails.numberOfPeople,
             });
-        }
+          }
+          break;
 
-        let totalAmount = shoppingCart.totalPrice; 
-        
-        const newBooking = new this.bookingModel({
-            userId,
-            services: preparedServices,
-            totalAmount,
-            paymentStatus: PaymentStatus.PENDING, 
-        });
-
-        try {
-            const savedBooking = await newBooking.save();
-            await this.shoppingCartModel.deleteOne({ userId }).exec(); 
-            
-            return this.formatBookingResponse(savedBooking);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to create pending booking';
-            throw new BadRequestException(errorMessage);
-        }
-    }
-    
-    // =============================================================
-    // 2. UPDATED: Confirm payment and finalize booking (with notifications)
-    // Username now comes from JWT token
-    // =============================================================
-    async confirmBookingPayment(
-        bookingId: string, 
-        userId: string,
-        userName: string
-    ): Promise<any> {
-        
-        // 1. Find the booking
-        const booking = await this.bookingModel.findById(bookingId).exec();
-
-        if (!booking) {
-            throw new NotFoundException(`Booking with ID '${bookingId}' not found`);
-        }
-
-        // 2. Security check: ensure the user owns this booking
-        if (booking.userId.toString() !== userId) {
-            throw new ForbiddenException('You are not authorized to confirm this booking.');
-        }
-
-        // 3. Check if already confirmed
-        if (booking.paymentStatus === PaymentStatus.SUCCESSFUL) {
-            return this.formatBookingResponse(booking); 
-        }
-
-        // 4. Update payment status to SUCCESSFUL
-        booking.paymentStatus = PaymentStatus.SUCCESSFUL;
-        const savedBooking = await booking.save();
-
-        // 5. Update all related services (add booked dates)
-        for (const service of booking.services) {
-            const serviceId = this.extractServiceId(service.serviceId); 
-            
-            await this.serviceModel.findByIdAndUpdate(
-                serviceId,
-                { 
-                    $push: { 
-                        bookedDates: service.bookingDate 
-                    } 
-                }
-            ).exec();
-        }
-
-        // 6. Clear shopping cart
-        await this.shoppingCartModel.findOneAndUpdate(
-            { userId: new Types.ObjectId(booking.userId) },
-            { 
-                $set: { 
-                    services: [],
-                    totalPrice: 0 
-                } 
+        case BookingType.Mixed:
+          if (!service.bookingSlots) {
+            service.bookingSlots = { dailyBookings: [], hourlyBookings: [], capacityBookings: [] };
+          }
+          if (update.bookingDetails.isFullVenue) {
+            service.bookingSlots.dailyBookings.push(date);
+          } else {
+            const existingCapacity = service.bookingSlots.capacityBookings.find(
+              cb => new Date(cb.date).getTime() === date.getTime()
+            );
+            if (existingCapacity) {
+              existingCapacity.bookedCount += update.bookingDetails.numberOfPeople;
+            } else {
+              service.bookingSlots.capacityBookings.push({
+                date,
+                bookedCount: update.bookingDetails.numberOfPeople,
+              });
             }
-        ).exec();
-
-        // 7. 🔥 Send notifications to vendors (ENGLISH version with grouped services)
-        await this.notifyVendors(
-            savedBooking, 
-            NotificationType.BOOKING_CONFIRMED, 
-            userName // Using username from JWT
-        );
-
-        // 8. Return formatted response
-        return this.formatBookingResponse(savedBooking);
+          }
+          break;
+      }
     }
 
-    // =============================================================
-    // Cancel booking - Username comes from JWT token
-    // =============================================================
+    await service.save();
+  }
 
-    async cancelBooking(bookingId: string, userId: string, userFullName: string): Promise<BookingDocument> {
-        const booking = await this.bookingModel.findOne({ _id: bookingId, userId }).exec();
+  private async sendBookingNotificationToVendor(booking: Booking, providerId: string): Promise<void> {
+    try {
+      const vendor = await this.userModel.findById(providerId);
+      if (!vendor || !vendor['fcmToken']) {
+        this.logger.warn(`Vendor ${providerId} not found or no FCM token`);
+        return;
+      }
 
-        if (!booking) {
-            throw new NotFoundException(`Booking with ID ${bookingId} not found or access denied.`);
+      const dateStr = booking.bookingDetails.date.toLocaleDateString();
+      let timeStr = '';
+      
+      if (booking.bookingType === BookingType.Hourly) {
+        timeStr = ` from ${booking.bookingDetails.startHour}:00 to ${booking.bookingDetails.endHour}:00`;
+      }
+
+      const notificationDto = {
+        recipientId: new Types.ObjectId(providerId),
+        recipientType: RecipientType.VENDOR,
+        title: 'New Booking Confirmed',
+        body: `New booking for ${booking.serviceName} on ${dateStr}${timeStr}. Amount: $${booking.price}`,
+        type: NotificationType.BOOKING_CONFIRMED,
+        metadata: {
+          bookingId: booking._id,
+          serviceId: booking.serviceId,
+          userId: booking.userId,
         }
-        
-        if (booking.paymentStatus === PaymentStatus.CANCELLED) {
-            throw new BadRequestException('Booking is already cancelled.');
-        }
-        
-        booking.paymentStatus = PaymentStatus.CANCELLED;
-        const cancelledBooking = await booking.save();
+      };
 
-        // Send cancellation notification to vendors
-        await this.notifyVendors(
-            cancelledBooking, 
-            NotificationType.BOOKING_CANCELLED, 
-            userFullName
-        );
-        
-        return cancelledBooking;
+      await this.notificationService.createNotification(
+        notificationDto,
+        vendor['fcmToken'] as string
+      );
+
+    } catch (error) {
+      this.logger.error('Failed to send notification to vendor:', error);
     }
-    
-    // =============================================================
-    // Remaining methods (unchanged)
-    // =============================================================
-    
-    async findAll(): Promise<any[]> {
-        const bookings = await this.bookingModel.find().exec();
-        return bookings.map(booking => this.formatBookingResponse(booking));
+  }
+
+  async cancelBookingByVendor(
+    bookingId: string,
+    vendorId: string,
+    reason?: string
+  ): Promise<{ booking: Booking; refund: any }> {
+    try {
+      const booking = await this.bookingModel.findById(bookingId);
+      
+      if (!booking) {
+        throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
+      }
+
+      if (booking.providerId !== vendorId) {
+        throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
+      }
+
+      if (booking.status === BookingStatus.CANCELLED) {
+        throw new HttpException('Booking already cancelled', HttpStatus.BAD_REQUEST);
+      }
+
+      // Process refund
+      const refund = await this.stripe.refunds.create({
+        payment_intent: booking.paymentIntentId,
+        amount: Math.round(booking.price * 100), // Convert to cents
+      });
+
+      // Update booking
+      booking.status = BookingStatus.CANCELLED;
+      booking.cancellationReason = reason || 'We apologize, but we are unable to provide this service at the requested time. Your payment has been refunded.';
+      booking.cancelledAt = new Date();
+      booking.cancelledBy = 'vendor';
+      booking.refunded = true;
+      booking.refundId = refund.id;
+
+      await booking.save();
+
+      // Update service booking slots (remove the booking)
+      await this.removeBookingFromService(booking);
+
+      // Send notification to user
+      await this.sendCancellationNotificationToUser(booking);
+
+      return { booking, refund };
+
+    } catch (error) {
+      this.logger.error('Failed to cancel booking:', error.stack);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Failed to cancel booking', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
 
-    private formatBookingResponse(booking: any): any {
-        const formattedBooking = booking.toObject ? booking.toObject() : { ...booking };
-        
-        if (formattedBooking.services && Array.isArray(formattedBooking.services)) {
-            formattedBooking.services = formattedBooking.services.map(service => ({
-                serviceId: this.extractServiceId(service.serviceId),
-                bookingDate: service.bookingDate
-            }));
-        }
+  private async removeBookingFromService(booking: Booking): Promise<void> {
+    try {
+      const service = await this.serviceModel.findById(booking.serviceId);
+      if (!service || !service.bookingSlots) return;
 
-        delete formattedBooking.__v;
-        
-        return formattedBooking;
-    }
-    
-    async getTotalSales(): Promise<{ totalSales: number }> {
-        const successfulBookings = await this.bookingModel.find({ 
-            paymentStatus: PaymentStatus.SUCCESSFUL 
-        }).exec();
+      const date = new Date(booking.bookingDetails.date);
+      date.setHours(0, 0, 0, 0);
 
-        const totalSales = successfulBookings.reduce(
-            (sum, booking) => sum + booking.totalAmount,
-            0,
-        );
+      switch (booking.bookingType) {
+        case BookingType.Hourly:
+          service.bookingSlots.hourlyBookings = service.bookingSlots.hourlyBookings.filter(
+            hb => !(
+              new Date(hb.date).getTime() === date.getTime() &&
+              hb.startHour === booking.bookingDetails.startHour &&
+              hb.endHour === booking.bookingDetails.endHour
+            )
+          );
+          break;
 
-        return { totalSales };
-    }
+        case BookingType.Daily:
+          service.bookingSlots.dailyBookings = service.bookingSlots.dailyBookings.filter(
+            db => new Date(db).getTime() !== date.getTime()
+          );
+          break;
 
-    async getTotalBookingsAndServices(): Promise<{ totalBookings: number, bookedServices: { serviceId: string, bookingDate: Date }[] }> {
-        const bookings = await this.bookingModel.find().exec();
-        const totalBookings = bookings.length;
-        
-        let bookedServices: { serviceId: string, bookingDate: Date }[] = [];
-
-        bookings.forEach(booking => {
-            if (Array.isArray(booking.services)) {
-                booking.services.forEach(serviceItem => {
-                    const formattedItem = this.formatBookingResponse({ services: [serviceItem] }).services[0];
-                    
-                    bookedServices.push({
-                        serviceId: formattedItem.serviceId,
-                        bookingDate: formattedItem.bookingDate,
-                    });
-                });
+        case BookingType.Capacity:
+        case BookingType.Mixed:
+          const capacityBooking = service.bookingSlots.capacityBookings.find(
+            cb => new Date(cb.date).getTime() === date.getTime()
+          );
+          if (capacityBooking) {
+            capacityBooking.bookedCount -= booking.bookingDetails.numberOfPeople || 0;
+            if (capacityBooking.bookedCount <= 0) {
+              service.bookingSlots.capacityBookings = service.bookingSlots.capacityBookings.filter(
+                cb => new Date(cb.date).getTime() !== date.getTime()
+              );
             }
-        });
+          }
+          break;
+      }
 
-        return { 
-            totalBookings, 
-            bookedServices 
-        };
+      await service.save();
+    } catch (error) {
+      this.logger.error('Failed to remove booking from service:', error);
     }
+  }
 
-    async getVendorSalesAndBookings(vendorId: string): Promise<{ totalSales: number; totalBookings: number }> {
-        const vendorServices = await this.serviceModel.find({ providerId: vendorId }, { _id: 1 }).exec();
-        const serviceIds = vendorServices.map(service => service._id);
+  private async sendCancellationNotificationToUser(booking: Booking): Promise<void> {
+    try {
+      const user = await this.userModel.findById(booking.userId);
+      if (!user || !user['fcmToken']) {
+        this.logger.warn(`User ${booking.userId} not found or no FCM token`);
+        return;
+      }
 
-        if (serviceIds.length === 0) {
-            return { totalSales: 0, totalBookings: 0 }; 
+      const notificationDto = {
+        recipientId: booking.userId,
+        recipientType: RecipientType.USER,
+        title: 'Booking Cancelled',
+        body: `Your booking for ${booking.serviceName} has been cancelled. ${booking.cancellationReason}`,
+        type: NotificationType.BOOKING_CANCELLED,
+        metadata: {
+          bookingId: booking._id,
+          serviceId: booking.serviceId,
+          refunded: booking.refunded,
+          refundAmount: booking.price,
         }
+      };
 
-        const bookings = await this.bookingModel.find({
-            'services.serviceId': { $in: serviceIds },
-            paymentStatus: PaymentStatus.SUCCESSFUL,
-        }).select('totalAmount') 
-          .exec();
+      await this.notificationService.createNotification(
+        notificationDto,
+        user['fcmToken'] as string
+      );
 
-        let totalSales = 0;
-        const totalBookings = bookings.length; 
-        
-        bookings.forEach(booking => {
-            totalSales += booking.totalAmount;
-        });
-
-        return { 
-            totalSales, 
-            totalBookings, 
-        };
+    } catch (error) {
+      this.logger.error('Failed to send cancellation notification:', error);
     }
+  }
+
+  async getUserBookings(userId: string): Promise<Booking[]> {
+    return this.bookingModel
+      .find({ userId: new Types.ObjectId(userId) })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
+  async getVendorBookings(vendorId: string): Promise<Booking[]> {
+    return this.bookingModel
+      .find({ providerId: vendorId })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
+  async getBookingById(bookingId: string): Promise<Booking> {
+    const booking = await this.bookingModel.findById(bookingId);
+    if (!booking) {
+      throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
+    }
+    return booking;
+  }
 }

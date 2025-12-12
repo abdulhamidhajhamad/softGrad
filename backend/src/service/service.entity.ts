@@ -2,7 +2,7 @@ import { BookingType, PricingOptions } from './service.schema'; // Import from s
 
 export type PayType = 'per event' | 'per hour' | 'per person'; 
 
-export class Service {
+  export class Service {
   serviceId: number;
   providerId: string;
   serviceName: string;

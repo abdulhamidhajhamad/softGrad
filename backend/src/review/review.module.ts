@@ -1,3 +1,4 @@
+/*
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ReviewController } from './review.controller';
@@ -19,3 +20,4 @@ import { Booking, BookingSchema } from '../booking/booking.entity';
   exports: [ReviewService],
 })
 export class ReviewModule {}
+*/

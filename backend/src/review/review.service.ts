@@ -1,3 +1,4 @@
+/*
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Document, Types } from 'mongoose';
@@ -15,12 +16,13 @@ export class ReviewService {
     @InjectModel(Booking.name) private readonly bookingModel: Model<BookingDocument>,
     private readonly aiAnalysisService: AiAnalysisService,
   ) {}
-
+*/
   /**
    * 1. Check if the user is authorized to review (Booking status and date).
    * 2. Save the review to the Service document.
    * 3. Trigger the asynchronous AI analysis.
    */
+  /*
   async createReviewAndAnalyze(
     userId: string,
     dto: CreateReviewDto,
@@ -94,6 +96,7 @@ return { reviewId: newReviewId.toString() };
   /**
    * 🧠 دالة مساعدة لمعالجة تحليل الذكاء الاصطناعي وتحديث DB بشكل غير متزامن.
    */
+  /*
   private async processAiAnalysis(serviceId: string, newComment: string): Promise<void> {
     try {
       // 💡 جلب البيانات السابقة
@@ -128,4 +131,6 @@ return { reviewId: newReviewId.toString() };
       this.logger.warn(`Skipping AI analysis update for ${serviceId} due to error: ${error.message}`);
     }
   }
+
 }
+  */

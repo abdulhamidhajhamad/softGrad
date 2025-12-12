@@ -1,21 +1,21 @@
+// cart.module.ts
+// ============================================
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { ShoppingCartController } from './shoppingCart.controller';
-import { ShoppingCartService } from './shoppingCart.service';
-import { ShoppingCart, ShoppingCartSchema } from './shoppingCart.schema';
+import { CartController } from './shoppingCart.controller';
+import { CartService } from './shoppingCart.service';
+import { Cart, CartSchema } from './shoppingCart.schema';
 import { Service, ServiceSchema } from '../service/service.schema';
-import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: ShoppingCart.name, schema: ShoppingCartSchema },
-      { name: Service.name, schema: ServiceSchema }
+      { name: Cart.name, schema: CartSchema },
+      { name: Service.name, schema: ServiceSchema },
     ]),
-    AuthModule 
   ],
-  controllers: [ShoppingCartController],
-  providers: [ShoppingCartService],
-  exports: [ShoppingCartService]
+  controllers: [CartController],
+  providers: [CartService],
+  exports: [CartService, MongooseModule],
 })
-export class ShoppingCartModule {}
+export class CartModule {}

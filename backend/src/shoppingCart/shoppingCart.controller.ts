@@ -1,140 +1,40 @@
-import { 
-  Controller, Get, Post, Delete, Body, Query,
-  UseGuards, Request, HttpException, HttpStatus 
-} from '@nestjs/common';
-import { ShoppingCartService } from './shoppingCart.service';
-import { AddToCartDto, RemoveFromCartDto } from './shoppingCart.dto';
+// cart.controller.ts
+import { Controller, Post, Get, Delete, Body, UseGuards, Request, HttpCode, HttpStatus, Patch } from '@nestjs/common';
+import { CartService } from './shoppingCart.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AddToCartDto, RemoveFromCartDto, UpdateCartItemDto } from './shoppingCart.dto';
 
-@Controller('shoppingCart') 
+@Controller('cart')
 @UseGuards(JwtAuthGuard)
-export class ShoppingCartController {
-  constructor(private readonly shoppingCartService: ShoppingCartService) {}
+export class CartController {
+  constructor(private readonly cartService: CartService) {}
 
-  @Post()
-  async addToCart(@Body() addToCartDto: AddToCartDto, @Request() req: any) {
-    try {
-      const userId = req.user.userId;
-      const userRole = req.user.role;
-
-      // تصحيح: استخدام 'user' بدلاً من 'client'
-      if (userRole !== 'user' && userRole !== 'client') {
-        throw new HttpException(
-          'Only clients can add services to cart',
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      return await this.shoppingCartService.addToCart(userId, addToCartDto);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to add to cart',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
+  @Post('add')
+  @HttpCode(HttpStatus.OK)
+  async addToCart(@Request() req, @Body() addToCartDto: AddToCartDto) {
+    return this.cartService.addToCart(req.user.userId, addToCartDto);
   }
 
-  @Delete()
-  async removeFromCart(@Body() removeFromCartDto: RemoveFromCartDto, @Request() req: any) {
-    try {
-      const userId = req.user.userId;
-      const userRole = req.user.role;
-
-      if (userRole !== 'user' && userRole !== 'client') {
-        throw new HttpException(
-          'Only clients can remove services from cart',
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      return await this.shoppingCartService.removeFromCart(userId, removeFromCartDto);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to remove from cart',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
+  @Delete('remove')
+  @HttpCode(HttpStatus.OK)
+  async removeFromCart(@Request() req, @Body() removeFromCartDto: RemoveFromCartDto) {
+    return this.cartService.removeFromCart(req.user.userId, removeFromCartDto);
   }
 
-  @Delete('clear')
-  async clearCart(@Request() req: any) {
-    try {
-      const userId = req.user.userId;
-      const userRole = req.user.role;
-
-      if (userRole !== 'user' && userRole !== 'client') {
-        throw new HttpException(
-          'Only clients can clear cart',
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      return await this.shoppingCartService.clearCart(userId);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to clear cart',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
+  @Patch('update')
+  @HttpCode(HttpStatus.OK)
+  async updateCartItem(@Request() req, @Body() updateCartItemDto: UpdateCartItemDto) {
+    return this.cartService.updateCartItem(req.user.userId, updateCartItemDto);
   }
 
   @Get()
-  async getCart(@Request() req: any) {
-    try {
-      const userId = req.user.userId;
-      return await this.shoppingCartService.getCartByUserId(userId);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to get cart',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
+  async getCart(@Request() req) {
+    return this.cartService.getCart(req.user.userId);
   }
 
-  /**
-   * 🆕 فحص التوافر الشامل
-   */
-  @Post('check-availability')
-  async checkAvailability(
-    @Body('serviceId') serviceId: string,
-    @Body('bookingDate') bookingDate: Date,
-    @Body('startHour') startHour?: number,
-    @Body('endHour') endHour?: number,
-    @Body('numberOfPeople') numberOfPeople?: number,
-    @Body('isFullVenueBooking') isFullVenueBooking?: boolean
-  ) {
-    try {
-      return await this.shoppingCartService.checkAvailability(
-        serviceId,
-        bookingDate,
-        startHour,
-        endHour,
-        numberOfPeople,
-        isFullVenueBooking
-      );
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to check availability',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  /**
-   * للتوافق مع الكود القديم
-   */
-  @Post('check-date')
-  async checkDateAvailability(
-    @Body('serviceId') serviceId: string,
-    @Body('bookingDate') bookingDate: Date
-  ) {
-    try {
-      return await this.shoppingCartService.checkDateAvailability(serviceId, bookingDate);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to check date availability',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
+  @Delete('clear')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async clearCart(@Request() req) {
+    await this.cartService.clearCart(req.user.userId);
   }
 }

@@ -1,15 +1,21 @@
-import { IsArray, IsDate, IsMongoId, IsOptional, IsNumber, IsBoolean, Min, Max, ValidateNested } from 'class-validator';
+// cart.dto.ts
+import { IsString, IsNumber, IsOptional, IsBoolean, IsDateString, ValidateNested, Min, Max, IsArray, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export class CartServiceDto {
-  @IsMongoId()
-  serviceId: string;
+export enum DayOfWeek {
+  SUNDAY = 'sunday',
+  MONDAY = 'monday',
+  TUESDAY = 'tuesday',
+  WEDNESDAY = 'wednesday',
+  THURSDAY = 'thursday',
+  FRIDAY = 'friday',
+  SATURDAY = 'saturday'
+}
 
-  @IsDate()
-  @Type(() => Date)
-  bookingDate: Date;
+export class BookingDetailsDto {
+  @IsDateString()
+  date: string;
 
-  // 🆕 للحجوزات بالساعة
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -22,73 +28,35 @@ export class CartServiceDto {
   @Max(23)
   endHour?: number;
 
-  // 🆕 للحجوزات حسب السعة
   @IsOptional()
   @IsNumber()
   @Min(1)
   numberOfPeople?: number;
 
-  // 🆕 للحجوزات المختلطة - هل هو حجز كامل للمكان؟
   @IsOptional()
   @IsBoolean()
-  isFullVenueBooking?: boolean;
+  isFullVenue?: boolean;
 }
 
 export class AddToCartDto {
-  @IsMongoId()
+  @IsString()
   serviceId: string;
 
-  @IsDate()
-  @Type(() => Date)
-  bookingDate: Date;
-
-  // 🆕 للحجوزات بالساعة
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(23)
-  startHour?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Max(23)
-  endHour?: number;
-
-  // 🆕 للحجوزات حسب السعة
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  numberOfPeople?: number;
-
-  // 🆕 للحجوزات المختلطة
-  @IsOptional()
-  @IsBoolean()
-  isFullVenueBooking?: boolean;
+  @ValidateNested()
+  @Type(() => BookingDetailsDto)
+  bookingDetails: BookingDetailsDto;
 }
 
 export class RemoveFromCartDto {
-  @IsMongoId()
+  @IsString()
   serviceId: string;
-
-  @IsDate()
-  @Type(() => Date)
-  bookingDate: Date;
-
-  @IsOptional()
-  @IsNumber()
-  startHour?: number;
-
-  @IsOptional()
-  @IsNumber()
-  endHour?: number;
 }
 
-export class ShoppingCartResponseDto {
-  _id: string;
-  userId: string;
-  services: CartServiceDto[];
-  totalPrice: number;
-  createdAt: Date;
-  updatedAt: Date;
+export class UpdateCartItemDto {
+  @IsString()
+  serviceId: string;
+
+  @ValidateNested()
+  @Type(() => BookingDetailsDto)
+  bookingDetails: BookingDetailsDto;
 }

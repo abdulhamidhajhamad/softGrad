@@ -9,14 +9,14 @@ import { ProviderModule } from './providers/provider.module';
 import { ServiceModule } from './service/service.module';
 import { BookingModule } from './booking/booking.module';
 import { AdminModule } from './admin/admin.module';
-import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
+import { CartModule } from './shoppingCart/shoppingCart.module';
 import { ChatModule } from './chatingService/chat.module';
 import { PaymentModule } from './payment/payment.module';
 import { PackageModule } from './Package/package.module'; // 💡 يجب استيراد هذه الوحدة
 // ✅ NEW MODULE IMPORTS
 import { NotificationModule } from './notification/notification.module';
 import { PromotionModule } from './promotion/promotion.module';
-import { ReviewModule } from './review/review.module';
+//import { ReviewModule } from './review/review.module';
 import { AiSearchModule } from './ai-search/ai-search.module';
 @Module({
   imports: [
@@ -53,9 +53,9 @@ import { AiSearchModule } from './ai-search/ai-search.module';
     BookingModule,
     AdminModule,
     PackageModule,
-    ShoppingCartModule,
+    CartModule,
     ChatModule,
-    ReviewModule,
+    //ReviewModule,
     PaymentModule,
     NotificationModule,
     PromotionModule,

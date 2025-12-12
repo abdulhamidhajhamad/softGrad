@@ -1,45 +1,45 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose'; 
+import { Document } from 'mongoose'; 
 
-// 🆕 تعريف أنواع الحجز الجديدة
+// تعريف أنواع الحجز
 export enum BookingType {
-    Hourly = 'hourly',       // قاعات (ساعات)
-    Daily = 'daily',         // سيارات، فنادق (يوم كامل)
-    Capacity = 'capacity',   // كيترينج، مطاعم (حسب عدد الأشخاص)
-    Display = 'display',     // مجوهرات (عرض ورابط خارجي فقط)
-    Mixed = 'mixed'          // مطاعم (يقبل حجز كامل، أو طلبات، أو حجز طاولة)
+    Hourly = 'hourly',       
+    Daily = 'daily',         
+    Capacity = 'capacity',   
+    Display = 'display',     
+    Mixed = 'mixed'          
 }
 
-// 🆕 تعريف هيكلية السعر الجديد (يقبل خيارات متعددة)
+// تعريف هيكلية السعر
 @Schema({ _id: false })
 export class PricingOptions {
     @Prop({ type: Number })
-    perHour?: number;        // سعر الساعة (للقاعات)
+    perHour?: number;        
 
     @Prop({ type: Number })
-    perDay?: number;         // سعر اليوم (للسيارات/الفنادق)
+    perDay?: number;         
 
     @Prop({ type: Number })
-    perPerson?: number;      // سعر الشخص (للكيترينج/المطاعم)
+    perPerson?: number;      
 
     @Prop({ type: Number })
-    fullVenue?: number;      // سعر حجز المكان بالكامل (للمطاعم)
+    fullVenue?: number;      
     
     @Prop({ type: Number })
-    basePrice?: number;      // سعر ثابت عام (لأي غرض آخر)
+    basePrice?: number;      
 }
 
-// 🆕 هيكلية لحفظ الحجوزات حسب النوع
+// هياكل الحجوزات
 @Schema({ _id: false })
 export class HourlyBooking {
     @Prop({ type: Date, required: true })
     date: Date;
     
     @Prop({ type: Number, required: true })
-    startHour: number; // 0-23
+    startHour: number; 
     
     @Prop({ type: Number, required: true })
-    endHour: number; // 0-23
+    endHour: number; 
 }
 
 @Schema({ _id: false })
@@ -48,22 +48,21 @@ export class CapacityBooking {
     date: Date;
     
     @Prop({ type: Number, required: true })
-    bookedCount: number; // عدد الأشخاص المحجوزين
+    bookedCount: number; 
 }
 
 @Schema({ _id: false })
 export class BookingSlots {
     @Prop({ type: [Date], default: [] })
-    dailyBookings: Date[]; // للحجوزات اليومية الكاملة
+    dailyBookings: Date[]; 
     
     @Prop({ type: [HourlyBooking], default: [] })
-    hourlyBookings: HourlyBooking[]; // للحجوزات بالساعة
+    hourlyBookings: HourlyBooking[]; 
     
     @Prop({ type: [CapacityBooking], default: [] })
-    capacityBookings: CapacityBooking[]; // للحجوزات حسب السعة
+    capacityBookings: CapacityBooking[]; 
 }
 
-// PayType القديم (تم الاحتفاظ به للـ Review)
 export enum PayType { 
     PerEvent = 'per event',
     PerHour = 'per hour',
@@ -78,6 +77,8 @@ export class Review {
     @Prop({ type: String })
     userName: string;
     
+    // ❌ تمت إزالة workingDays من هنا لأن مكانها غير صحيح في التقييمات
+
     @Prop({ type: Number, required: true, min: 1, max: 5 })
     rating: number; 
     
@@ -111,7 +112,6 @@ export class Service extends Document {
     @Prop({ type: [String], default: [] })
     images: string[];
 
-    // 🆕 نوع الحجز 
     @Prop({ 
         type: String, 
         required: true, 
@@ -120,10 +120,18 @@ export class Service extends Document {
     })
     bookingType: BookingType;
 
+    // ✅ تمت إضافة workingDays هنا (المكان الصحيح)
+    @Prop({ 
+        type: [String], 
+        default: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
+        enum: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+    })
+    workingDays: string[]; 
+
     @Prop({
         type: {
-            latitude: { type: Number, required: true },
-            longitude: { type: Number, required: true },
+            latitude: { type: Number, required: false },
+            longitude: { type: Number, required: false },
             address: { type: String },
             city: { type: String },
             country: { type: String }
@@ -138,11 +146,9 @@ export class Service extends Document {
         country?: string;
     };
 
-    // 🆕 السعر أصبح Object
     @Prop({ type: PricingOptions, default: {} })
     price: PricingOptions;
 
-    // 🆕 رابط خارجي 
     @Prop({ type: String })
     externalLink?: string;
 
@@ -165,28 +171,26 @@ export class Service extends Document {
     @Prop({ required: false })
     companyName: string;
 
-    // 🆕 استبدال bookedDates بنظام أكثر مرونة
     @Prop({ type: BookingSlots, default: { dailyBookings: [], hourlyBookings: [], capacityBookings: [] } })
     bookingSlots: BookingSlots;
 
-    // 🆕 حقول خاصة بأنواع الحجز المختلفة
     @Prop({ type: Number, min: 0 })
-    maxCapacity?: number; // الحد الأقصى للسعة (للـ Capacity و Mixed)
+    maxCapacity?: number; 
 
     @Prop({ type: Number, min: 0 })
-    minBookingHours?: number; // الحد الأدنى لساعات الحجز (للـ Hourly)
+    minBookingHours?: number; 
 
     @Prop({ type: Number, min: 0 })
-    maxBookingHours?: number; // الحد الأقصى لساعات الحجز (للـ Hourly)
+    maxBookingHours?: number; 
 
     @Prop({ type: [Number], default: [] })
-    availableHours?: number[]; // الساعات المتاحة للحجز (للـ Hourly) مثال: [8,9,10,11,12,13,14,15,16,17,18,19,20]
+    availableHours?: number[]; 
 
     @Prop({ type: Number, default: 0, min: 0 })
-    cleanupTimeMinutes?: number; // وقت التنظيف بين الحجوزات بالدقائق (للقاعات والأماكن التي تحتاج تنظيف)
+    cleanupTimeMinutes?: number; 
 
     @Prop({ type: Boolean, default: false })
-    allowFullVenueBooking?: boolean; // هل يسمح بحجز المكان كاملاً (للـ Mixed)
+    allowFullVenueBooking?: boolean; 
 
     @Prop({ type: Number, default: 0, min: 0, max: 5 })
     rating: number;

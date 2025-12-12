@@ -33,12 +33,15 @@ export class PricingOptionsDto {
 }
 
 export class LocationDto {
+  // ✅ بعد التعديل (أصبحت اختيارية في الـ DTO)
+  @IsOptional()
   @IsNumber()
-  latitude: number;
-
+  latitude?: number; // ⬅️ إضافة علامة ? وجعلها اختيارية
+  
+  @IsOptional()
   @IsNumber()
-  longitude: number;
-
+  longitude?: number; // ⬅️ إضافة علامة ? وجعلها اختيارية
+  
   @IsOptional()
   @IsString()
   address?: string;
@@ -126,6 +129,11 @@ export class CreateServiceDto {
   @IsOptional()
   @IsBoolean()
   allowFullVenueBooking?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  workingDays?: string[]; // ['sunday', 'monday', 'tuesday', etc.]
 }
 
 export class UpdateServiceDto {

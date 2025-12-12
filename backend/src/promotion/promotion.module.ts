@@ -15,9 +15,10 @@ import { NotificationModule } from '../notification/notification.module';
       { name: User.name, schema: UserSchema },
     ]),
     AuthModule,
-    NotificationModule, // This already provides Bull queues if configured properly
+    NotificationModule,
   ],
   controllers: [PromotionController],
   providers: [PromotionService],
+  exports: [PromotionService],
 })
-export class PromotionModule {}
+export class PromotionModule {} 

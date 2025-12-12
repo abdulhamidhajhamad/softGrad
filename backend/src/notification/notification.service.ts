@@ -183,7 +183,7 @@ export class NotificationService implements OnModuleInit {
       throw new NotFoundException('Notification not found or access denied.');
     }
 
-    const wasUnread = !notification.isRead;
+const wasUnread = !notification.read;
 
     await this.notificationModel.deleteOne({ _id: notificationId }).exec();
 
@@ -217,7 +217,7 @@ export class NotificationService implements OnModuleInit {
       recipientId: n.recipientId.toString(),
       recipientType: n.recipientType,
       title: n.title,
-      isRead: n.isRead
+read: n.read
     })),
     userNotificationsAsUser: userNotificationsAsUser,
     userNotificationsAsVendor: userNotificationsAsVendor

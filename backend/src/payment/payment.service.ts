@@ -1,4 +1,4 @@
-// payment.service.ts (Updated)
+// payment.service.ts (Final Integration with Promotion Service)
 import { Injectable, BadRequestException, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
@@ -6,14 +6,11 @@ import { Model, Types } from 'mongoose';
 import Stripe from 'stripe';
 import { Cart } from '../shoppingCart/shoppingCart.schema';
 import { BookingService } from '../booking/booking.service';
-
-interface CreatePaymentIntentDto {
-  amount?: number;
-  currency: string;
-}
+import { PromotionService } from '../promotion/promotion.service';
 
 interface CheckoutDto {
   currency: string;
+  promoCode?: string;
 }
 
 @Injectable()
@@ -25,6 +22,7 @@ export class PaymentService {
     private configService: ConfigService,
     @InjectModel(Cart.name) private cartModel: Model<Cart>,
     private bookingService: BookingService,
+    private promotionService: PromotionService,
   ) {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (!secretKey) {
@@ -36,32 +34,62 @@ export class PaymentService {
   }
 
   /**
-   * Create payment intent from user's cart
+   * Create payment intent from cart with optional promo code
    */
-  async createPaymentIntentFromCart(userId: string, dto: CheckoutDto): Promise<{ clientSecret: string; amount: number }> {
+  async createPaymentIntentFromCart(
+    userId: string, 
+    dto: CheckoutDto
+  ): Promise<{ 
+    clientSecret: string; 
+    originalAmount: number;
+    discount?: number;
+    finalAmount: number;
+    promoCodeApplied?: string;
+  }> {
     try {
-      this.logger.log(`Searching cart for user: ${userId}`); 
+      this.logger.log(`Creating payment intent for user: ${userId}`); 
 
-      // معالجة مشكلة الـ Type Mismatch (ObjectId vs String)
+      // Find cart
       let cart = await this.cartModel.findOne({ userId: userId });
       
       if (!cart && Types.ObjectId.isValid(userId)) {
          cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
       }
       
-      // التحقق من وجود الكارت ومحتوياته
       if (!cart || !cart.items || cart.items.length === 0) {
         this.logger.warn(`Cart not found or empty for userId: ${userId}`);
         throw new BadRequestException('Cart is empty');
       }
 
-      const amount = cart.totalAmount;
-      
-      if (amount <= 0) {
-        throw new BadRequestException('Payment amount must be positive.');
+      const originalAmount = cart.totalAmount;
+      let finalAmount = originalAmount;
+      let discount = 0;
+      let promoCodeApplied = '';
+
+      // Apply promo code if provided
+      if (dto.promoCode) {
+        const validation = await this.promotionService.validatePromoCode(
+          userId,
+          dto.promoCode,
+          originalAmount
+        );
+
+        if (validation.valid && validation.discount && validation.finalAmount) {
+          discount = validation.discount;
+          finalAmount = validation.finalAmount;
+          promoCodeApplied = dto.promoCode.toUpperCase();
+          
+          this.logger.log(`Promo code ${promoCodeApplied} applied: -$${discount}`);
+        } else {
+          throw new BadRequestException(validation.message || 'Invalid promo code');
+        }
       }
 
-      const amountInCents = Math.round(amount * 100);
+      if (finalAmount <= 0) {
+        throw new BadRequestException('Payment amount must be positive after discount');
+      }
+
+      const amountInCents = Math.round(finalAmount * 100);
 
       const paymentIntent = await this.stripe.paymentIntents.create({
         amount: amountInCents,
@@ -69,8 +97,10 @@ export class PaymentService {
         metadata: { 
           userId: userId,
           cartItemCount: cart.items.length.toString(),
+          originalAmount: originalAmount.toString(),
+          discount: discount.toString(),
+          promoCode: promoCodeApplied,
         },
-        // **[التعديل الجديد لحل مشكلة return_url عند الإنشاء]**
         automatic_payment_methods: {
             enabled: true,
             allow_redirects: 'never',
@@ -83,18 +113,21 @@ export class PaymentService {
 
       return { 
         clientSecret: paymentIntent.client_secret,
-        amount: amount
+        originalAmount,
+        discount: discount > 0 ? discount : undefined,
+        finalAmount,
+        promoCodeApplied: promoCodeApplied || undefined,
       };
 
     } catch (error) {
-      this.logger.error('Stripe Payment Intent Creation Error:', error);
+      this.logger.error('Payment Intent Creation Error:', error);
       
       if (error && (error as any).type === 'StripeInvalidRequestError') {
         throw new BadRequestException(`Stripe Request Failed: ${(error as any).message}`);
       }
       
       if (error instanceof HttpException) throw error;
-      throw new BadRequestException('Failed to process payment request with Stripe.');
+      throw new BadRequestException('Failed to process payment request');
     }
   }
 
@@ -103,33 +136,33 @@ export class PaymentService {
    */
   async confirmPaymentAndCreateBookings(userId: string, paymentIntentId: string): Promise<any> {
     try {
-      // 1. تنظيف الـ ID
       const validPaymentIntentId = paymentIntentId.split('_secret_')[0];
-
       this.logger.log(`Verifying PaymentIntent: ${validPaymentIntentId}`); 
 
-      // 2. استرجاع حالة الدفع الحالية
       let paymentIntent = await this.stripe.paymentIntents.retrieve(validPaymentIntentId);
       
-      // 3. [FIX] معالجة حالة الاختبار: إذا كان يتطلب دفعاً أو إجراء (بما في ذلك 3D Secure)
-      // **(تم تعديل الشرط ليشمل 'requires_action')**
+      // Handle payment confirmation if needed
       if (paymentIntent.status === 'requires_payment_method' || paymentIntent.status === 'requires_action') {
-        this.logger.warn(`PaymentIntent ${validPaymentIntentId} requires payment method or action. Attempting auto-confirm with test card...`);
+        this.logger.warn(`PaymentIntent requires action, attempting confirm...`);
         
-        // نقوم بتأكيد الدفع باستخدام بطاقة فيزا للاختبار (pm_card_visa)
         paymentIntent = await this.stripe.paymentIntents.confirm(validPaymentIntentId, {
           payment_method: 'pm_card_visa', 
-          // **[التعديل الجديد لحل مشكلة return_url عند التأكيد]**
           return_url: 'http://localhost:3000/payment/stripe-callback',
         });
       }
 
-      // 4. التحقق النهائي من نجاح الدفع
       if (paymentIntent.status !== 'succeeded') {
-        throw new BadRequestException(`Payment not successful. Current Status: ${paymentIntent.status}`);
+        throw new BadRequestException(`Payment not successful. Status: ${paymentIntent.status}`);
       }
 
-      // 5. إنشاء الحجوزات (المنطق الأصلي)
+      // Mark promo code as used if it was applied
+      const promoCode = paymentIntent.metadata?.promoCode;
+      if (promoCode) {
+        await this.promotionService.markPromoCodeAsUsed(promoCode, userId);
+        this.logger.log(`Promo code ${promoCode} marked as used by user ${userId}`);
+      }
+
+      // Create bookings
       const bookings = await this.bookingService.createBookingsFromCart(userId, validPaymentIntentId);
 
       return {
@@ -139,6 +172,9 @@ export class PaymentService {
         paymentIntent: {
           id: paymentIntent.id,
           amount: paymentIntent.amount / 100,
+          originalAmount: parseFloat(paymentIntent.metadata?.originalAmount || '0'),
+          discount: parseFloat(paymentIntent.metadata?.discount || '0'),
+          promoCode: paymentIntent.metadata?.promoCode,
           status: paymentIntent.status,
         }
       };
@@ -146,7 +182,6 @@ export class PaymentService {
     } catch (error) {
       this.logger.error('Failed to confirm payment:', error);
       
-      // تحسين رسالة الخطأ لمعرفة السبب الدقيق
       if ((error as any).type === 'StripeInvalidRequestError') {
          throw new BadRequestException(`Stripe Error: ${(error as any).message}`);
       }
@@ -156,10 +191,10 @@ export class PaymentService {
     }
   }
 
-  async createPaymentIntent(dto: CreatePaymentIntentDto): Promise<{ clientSecret: string }> {
+  async createPaymentIntent(dto: any): Promise<{ clientSecret: string }> {
       const { amount, currency } = dto;
       if (!amount || amount <= 0) {
-        throw new BadRequestException('Payment amount must be positive.');
+        throw new BadRequestException('Payment amount must be positive');
       }
       try {
         const amountInCents = Math.round(amount * 100); 
@@ -167,7 +202,6 @@ export class PaymentService {
           amount: amountInCents,
           currency: currency,
           metadata: { bookingId: 'BOOKING_ID_FROM_REQUEST' }, 
-          // **[التعديل الجديد لحل مشكلة return_url عند الإنشاء (هنا أيضاً)]**
           automatic_payment_methods: {
               enabled: true,
               allow_redirects: 'never',
@@ -175,11 +209,11 @@ export class PaymentService {
         });
         return { clientSecret: paymentIntent.client_secret! }; 
       } catch (error) {
-        this.logger.error('Stripe Payment Intent Creation Error:', error);
+        this.logger.error('Stripe Payment Intent Error:', error);
         if (error && (error as any).type === 'StripeInvalidRequestError') {
-          throw new BadRequestException(`Stripe Request Failed: ${(error as any).message}`);
+          throw new BadRequestException(`Stripe Failed: ${(error as any).message}`);
         }
-        throw new BadRequestException('Failed to process payment request with Stripe.');
+        throw new BadRequestException('Failed to process payment');
       }
   }
 }

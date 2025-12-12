@@ -1,35 +1,36 @@
-// src/notification/notification.schema.ts
+// notification.schema.ts
+// Just add NEW_MESSAGE to your existing NotificationType enum
+
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-// Full list of notification types, separated by recipient for clarity
 export enum NotificationType {
-  // User Notifications
-  PROMO_CODE = 'PROMO_CODE',
-  USER_MESSAGE = 'USER_MESSAGE',
-
-  // Vendor Notifications (Based on image and requirements)
-  NEW_MESSAGE = 'NEW_MESSAGE',
-  BOOKING_CONFIRMED = 'BOOKING_CONFIRMED',
-  BOOKING_CANCELLED = 'BOOKING_CANCELLED',
-  REVIEW_ADDED = 'REVIEW_ADDED',
-  PAYOUT_SENT = 'PAYOUT_SENT',
-  SERVICE_FAVOURITED = 'SERVICE_FAVOURITED',
+  BOOKING_CONFIRMED = 'booking_confirmed',
+  BOOKING_CANCELLED = 'booking_cancelled',
+  BOOKING_REMINDER = 'booking_reminder',
+  PAYMENT_SUCCESS = 'payment_success',
+  PAYMENT_FAILED = 'payment_failed',
+  PROMO_CODE = 'promo_code',
+  NEW_MESSAGE = 'new_message',  // ← Add this single line
+  GENERAL = 'general',
 }
 
 export enum RecipientType {
-  USER = 'User',
-  VENDOR = 'Vendor',
+  USER = 'user',
+  VENDOR = 'vendor',
+  ADMIN = 'admin',
 }
 
-@Schema({ collection: 'notifications', timestamps: true })
+@Schema({ timestamps: true })
 export class Notification extends Document {
-  // The ID of the User or Vendor who is the recipient
-  @Prop({ type: Types.ObjectId, required: true, index: true })
+  @Prop({ type: Types.ObjectId, required: true })
   recipientId: Types.ObjectId;
 
-  // Type of the recipient (to support polymorphic logic)
-  @Prop({ required: true, enum: RecipientType })
+  @Prop({ 
+    type: String, 
+    enum: Object.values(RecipientType), 
+    required: true 
+  })
   recipientType: RecipientType;
 
   @Prop({ required: true })
@@ -38,16 +39,28 @@ export class Notification extends Document {
   @Prop({ required: true })
   body: string;
 
-  @Prop({ required: true, enum: NotificationType })
+  @Prop({ 
+    type: String, 
+    enum: Object.values(NotificationType), 
+    required: true 
+  })
   type: NotificationType;
 
-  // NEW: State for the 'red dot' feature
-  @Prop({ default: false })
-  isRead: boolean;
+  @Prop({ type: Object })
+  metadata?: Record<string, any>;
 
-  // NEW: Optional field for dynamic data (e.g., bookingId, senderName)
-  @Prop({ type: Object, default: {} })
-  metadata: Record<string, any>;
+  @Prop({ type: Boolean, default: false })
+  read: boolean;
+
+  @Prop({ type: Date })
+  readAt?: Date;
+
+  @Prop({ type: Date, default: Date.now })
+  createdAt: Date;
 }
 
 export const NotificationSchema = SchemaFactory.createForClass(Notification);
+
+// Indexes
+NotificationSchema.index({ recipientId: 1, createdAt: -1 });
+NotificationSchema.index({ recipientId: 1, read: 1 });

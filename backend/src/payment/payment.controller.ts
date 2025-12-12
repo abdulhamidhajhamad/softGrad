@@ -2,16 +2,15 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { IsString } from 'class-validator';
-
-class CreatePaymentIntentRequestDto {
-  amount: number;
-  currency: string;
-}
+import { IsString, IsOptional } from 'class-validator';
 
 class CheckoutDto {
   @IsString()
   currency: string;
+
+  @IsString()
+  @IsOptional()
+  promoCode?: string;
 }
 
 class ConfirmPaymentDto {
@@ -24,7 +23,8 @@ export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
   /**
-   * Create payment intent from cart
+   * Create payment intent from cart with optional promo code
+   * User can apply promo code at this stage
    */
   @Post('checkout')
   @UseGuards(JwtAuthGuard)
@@ -32,7 +32,13 @@ export class PaymentController {
   async checkout(
     @Request() req,
     @Body() dto: CheckoutDto,
-  ): Promise<{ clientSecret: string; amount: number }> {
+  ): Promise<{ 
+    clientSecret: string; 
+    originalAmount: number;
+    discount?: number;
+    finalAmount: number;
+    promoCodeApplied?: string;
+  }> {
     return this.paymentService.createPaymentIntentFromCart(req.user.userId, dto);
   }
 
@@ -58,7 +64,7 @@ export class PaymentController {
   @Post('create-payment-intent')
   @HttpCode(HttpStatus.OK)
   async createPaymentIntent(
-    @Body() dto: CreatePaymentIntentRequestDto,
+    @Body() dto: any,
   ): Promise<{ clientSecret: string }> {
     return this.paymentService.createPaymentIntent(dto);
   }

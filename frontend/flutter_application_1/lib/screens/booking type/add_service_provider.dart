@@ -1,67 +1,169 @@
-// lib/screens/after_booking_type.dart
-import 'dart:typed_data';
+// lib/screens/add_service_provider.dart
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
+
+// انتبه لمسار الملفات: لأنهم داخل مجلد booking
+import 'add_hourly_service.dart';
+import 'add_full_day_service.dart';
+import 'add_capacity_service.dart';
+import 'add_order_service.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
-const Color kTextColor = Color(0xFF111827);
 const Color kBackgroundColor = Color(0xFFF3F4F6);
+const Color kTextColor = Color(0xFF111827);
 
-class AfterBookingTypeScreen extends StatefulWidget {
-  final String bookingType;
-  final String category;
+// ----------------------------------------------------------------------
+// 🔥 Service Categories (نفس الـ 12 كاتيجوري)
+// ----------------------------------------------------------------------
 
-  const AfterBookingTypeScreen({
-    Key? key,
-    required this.bookingType,
-    required this.category,
-  }) : super(key: key);
+const List<Map<String, dynamic>> kServiceCategories = [
+  {'value': 'Venues', 'label': 'Venues', 'icon': Icons.apartment_rounded},
+  {
+    'value': 'Photographers',
+    'label': 'Photographers',
+    'icon': Icons.photo_camera_outlined
+  },
+  {
+    'value': 'Catering',
+    'label': 'Catering',
+    'icon': Icons.restaurant_menu_rounded
+  },
+  {'value': 'Cake', 'label': 'Cake', 'icon': Icons.cake_outlined},
+  {
+    'value': 'Flower Shops',
+    'label': 'Flower Shops',
+    'icon': Icons.local_florist_outlined
+  },
+  {
+    'value': 'Decor & Lighting',
+    'label': 'Decor & Lighting',
+    'icon': Icons.lightbulb_outline_rounded
+  },
+  {
+    'value': 'Music & Entertainment',
+    'label': 'Music',
+    'icon': Icons.music_note_rounded
+  },
+  {
+    'value': 'Wedding Planners & Coordinators',
+    'label': 'Wedding Planners',
+    'icon': Icons.event_available_rounded
+  },
+  {
+    'value': 'Card Printing',
+    'label': 'Card Printing',
+    'icon': Icons.mail_outline_rounded
+  },
+  {
+    'value': 'Jewelry & Accessories',
+    'label': 'Jewelry & Accessories',
+    'icon': Icons.diamond_outlined
+  },
+  {
+    'value': 'Car Rental & Transportation',
+    'label': 'Car Rental',
+    'icon': Icons.directions_car_filled_outlined
+  },
+  {
+    'value': 'Gift & Souvenir',
+    'label': 'Gift & Souvenir',
+    'icon': Icons.card_giftcard_outlined
+  },
+];
 
-  @override
-  State<AfterBookingTypeScreen> createState() => _AfterBookingTypeScreenState();
+// ----------------------------------------------------------------------
+// 🔥 mapping: category → نوع البوكينغ (key + label)
+// ----------------------------------------------------------------------
+
+String _bookingTypeKey(String category) {
+  switch (category) {
+    case 'Venues':
+    case 'Photographers':
+    case 'Music & Entertainment':
+    case 'Wedding Planners & Coordinators':
+      return 'hourly';
+
+    case 'Decor & Lighting':
+    case 'Car Rental & Transportation':
+      return 'full-day';
+
+    case 'Catering':
+    case 'Cake':
+      return 'capacity';
+
+    case 'Flower Shops':
+    case 'Card Printing':
+    case 'Jewelry & Accessories':
+    case 'Gift & Souvenir':
+      return 'order';
+
+    default:
+      return 'hourly';
+  }
 }
 
-class _AfterBookingTypeScreenState extends State<AfterBookingTypeScreen> {
-  DateTime? selectedDate;
-  TimeOfDay? startTime;
-  TimeOfDay? endTime;
+String _bookingTypeLabel(String key) {
+  switch (key) {
+    case 'hourly':
+      return 'Hourly Booking';
+    case 'full-day':
+      return 'Full-Day Booking';
+    case 'capacity':
+      return 'Capacity Booking';
+    case 'order':
+    default:
+      return 'Order-Based Booking';
+  }
+}
 
-  final TextEditingController notesCtrl = TextEditingController();
-  final TextEditingController peopleCtrl = TextEditingController();
-  final TextEditingController quantityCtrl = TextEditingController();
+// ----------------------------------------------------------------------
+// 🔥 الشاشة الرئيسية: بس اختيار كاتيجوري
+// ----------------------------------------------------------------------
 
-  Uint8List? uploadedImage;
+class AddServiceProviderScreen extends StatelessWidget {
+  const AddServiceProviderScreen({Key? key}) : super(key: key);
 
-  Future<void> pickDate() async {
-    final pick = await showDatePicker(
-      context: context,
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2030),
+  void _openBookingPage(BuildContext context, String category) {
+    final typeKey = _bookingTypeKey(category);
+    final typeLabel = _bookingTypeLabel(typeKey);
+
+    Widget page;
+    switch (typeKey) {
+      case 'hourly':
+        page = AddHourlyService(
+          category: category,
+          bookingType: typeLabel,
+        );
+        break;
+
+      case 'full-day':
+        page = AddFullDayService(
+          category: category,
+          bookingType: typeLabel,
+        );
+        break;
+
+      case 'capacity':
+        page = AddCapacityService(
+          category: category,
+          bookingType: typeLabel,
+        );
+        break;
+
+      case 'order':
+      default:
+        page = AddOrderService(
+          category: category,
+          bookingType: typeLabel,
+        );
+        break;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => page),
     );
-    if (pick != null) setState(() => selectedDate = pick);
-  }
-
-  Future<void> pickTime(bool isStart) async {
-    final pick =
-        await showTimePicker(context: context, initialTime: TimeOfDay.now());
-    if (pick != null) {
-      setState(() {
-        if (isStart)
-          startTime = pick;
-        else
-          endTime = pick;
-      });
-    }
-  }
-
-  Future<void> pickImage() async {
-    final picker = ImagePicker();
-    final img = await picker.pickImage(source: ImageSource.gallery);
-    if (img != null) {
-      uploadedImage = await img.readAsBytes();
-      setState(() {});
-    }
   }
 
   @override
@@ -70,252 +172,80 @@ class _AfterBookingTypeScreenState extends State<AfterBookingTypeScreen> {
       backgroundColor: kBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0.3,
+        elevation: 0.5,
+        centerTitle: true,
         title: Text(
-          widget.category,
-          style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600),
+          "Choose Service Category",
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w700,
+            fontSize: 17,
+            color: kTextColor,
+          ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              size: 18, color: kTextColor),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 18,
+            color: kTextColor,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SingleChildScrollView(
+      body: Padding(
         padding: const EdgeInsets.all(16),
-        child: _buildDynamicUI(),
-      ),
-      bottomNavigationBar: _buildSaveButton(),
-    );
-  }
-
-  Widget _buildDynamicUI() {
-    switch (widget.bookingType) {
-      case "Hourly Booking":
-        return _hourlyUI();
-      case "Full-Day Booking":
-        return _fullDayUI();
-      case "Capacity-based Booking":
-        return _capacityUI();
-      case "Order-based Booking":
-        return _orderUI();
-      default:
-        return Text("Unknown booking type");
-    }
-  }
-
-  Widget _hourlyUI() {
-    return Column(
-      children: [
-        _sectionLabel("Select Date"),
-        _datePickerTile(),
-        const SizedBox(height: 16),
-        _sectionLabel("Time Range"),
-        _timePickerRow("Start Time", startTime, () => pickTime(true)),
-        _timePickerRow("End Time", endTime, () => pickTime(false)),
-        const SizedBox(height: 16),
-        _notesField(),
-      ],
-    );
-  }
-
-  Widget _fullDayUI() {
-    return Column(
-      children: [
-        _sectionLabel("Event Date"),
-        _datePickerTile(),
-        const SizedBox(height: 16),
-        _notesField(),
-      ],
-    );
-  }
-
-  Widget _capacityUI() {
-    return Column(
-      children: [
-        _sectionLabel("Number of People"),
-        _roundedInput("People Count", peopleCtrl),
-        const SizedBox(height: 16),
-        _notesField(),
-      ],
-    );
-  }
-
-  Widget _orderUI() {
-    return Column(
-      children: [
-        _sectionLabel("Quantity"),
-        _roundedInput("Quantity", quantityCtrl),
-        const SizedBox(height: 16),
-        _sectionLabel("Design Image (Optional)"),
-        _imagePicker(),
-        const SizedBox(height: 16),
-        _sectionLabel("Delivery Date"),
-        _datePickerTile(),
-        const SizedBox(height: 16),
-        _notesField(),
-      ],
-    );
-  }
-
-  Widget _sectionLabel(String title) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        title,
-        style: GoogleFonts.poppins(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: kTextColor,
-        ),
-      ),
-    );
-  }
-
-  Widget _timePickerRow(String label, TimeOfDay? time, VoidCallback tap) {
-    return GestureDetector(
-      onTap: tap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        margin: const EdgeInsets.only(top: 10),
-        decoration: _boxDecoration(),
-        child: Row(
-          children: [
-            Text(label, style: GoogleFonts.poppins(fontSize: 13)),
-            const Spacer(),
-            Text(
-              time == null ? "Select" : time.format(context),
-              style: GoogleFonts.poppins(fontSize: 13, color: kPrimaryColor),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _roundedInput(String label, TextEditingController ctrl) {
-    return Container(
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: _boxDecoration(),
-      child: TextField(
-        controller: ctrl,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(
-          hintText: label,
-          border: InputBorder.none,
-        ),
-        style: GoogleFonts.poppins(fontSize: 13),
-      ),
-    );
-  }
-
-  Widget _datePickerTile() {
-    return GestureDetector(
-      onTap: pickDate,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        margin: const EdgeInsets.only(top: 10),
-        decoration: _boxDecoration(),
-        child: Row(
-          children: [
-            const Icon(Icons.calendar_today_outlined, size: 18),
-            const SizedBox(width: 12),
-            Text(
-              selectedDate == null
-                  ? "Select Date"
-                  : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-              style: GoogleFonts.poppins(fontSize: 13),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _imagePicker() {
-    return GestureDetector(
-      onTap: pickImage,
-      child: Container(
-        height: 130,
-        decoration: _boxDecoration(),
-        child: uploadedImage == null
-            ? Center(
-                child: Text(
-                  "Upload Image",
-                  style: GoogleFonts.poppins(color: Colors.grey),
-                ),
-              )
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Image.memory(uploadedImage!, fit: BoxFit.cover),
-              ),
-      ),
-    );
-  }
-
-  Widget _notesField() {
-    return Column(
-      children: [
-        _sectionLabel("Notes (Optional)"),
-        Container(
-          margin: const EdgeInsets.only(top: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: _boxDecoration(),
-          child: TextField(
-            maxLines: 3,
-            controller: notesCtrl,
-            decoration: const InputDecoration(
-              hintText: "Add additional notes...",
-              border: InputBorder.none,
-            ),
-            style: GoogleFonts.poppins(fontSize: 13),
+        child: GridView.builder(
+          itemCount: kServiceCategories.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 11,
+            childAspectRatio: 1.62,
           ),
-        ),
-      ],
-    );
-  }
-
-  BoxDecoration _boxDecoration() {
-    return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: const Color(0xFFE5E7EB)),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.03),
-          blurRadius: 7,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSaveButton() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.white,
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: kPrimaryColor,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
+          itemBuilder: (context, index) {
+            final cat = kServiceCategories[index];
+            return InkWell(
               borderRadius: BorderRadius.circular(18),
-            ),
-          ),
-          onPressed: () {
-            Navigator.pop(context);
+              onTap: () => _openBookingPage(
+                context,
+                cat['value'] as String,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      cat['icon'] as IconData,
+                      size: 26, // 👈 صغّرنا الأيقونات
+                      color: kPrimaryColor,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      cat['label'] as String,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: kTextColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
           },
-          child: Text(
-            "Save & Continue",
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-          ),
         ),
       ),
     );

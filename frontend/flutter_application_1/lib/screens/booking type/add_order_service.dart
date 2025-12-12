@@ -1,270 +1,67 @@
-// lib/screens/booking type/add_full_day_service.dart
+// lib/screens/booking type/add_order_service.dart
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'booking_common_widgets.dart';
 
-class AddFullDayService extends StatefulWidget {
+class AddOrderService extends StatefulWidget {
   final String category;
   final String bookingType;
 
-  const AddFullDayService({
+  const AddOrderService({
     super.key,
     required this.category,
     required this.bookingType,
   });
 
   @override
-  State<AddFullDayService> createState() => _AddFullDayServiceState();
+  State<AddOrderService> createState() => _AddOrderServiceState();
 }
 
-class _AddFullDayServiceState extends State<AddFullDayService> {
+class _AddOrderServiceState extends State<AddOrderService> {
   final _formKey = GlobalKey<FormState>();
 
   // common
   final nameCtrl = TextEditingController();
   final descCtrl = TextEditingController();
+
+  // location
   final addressCtrl = TextEditingController();
   final latitudeCtrl = TextEditingController();
   final longitudeCtrl = TextEditingController();
+  String? _selectedCity;
 
-  final priceCtrl = TextEditingController(); // per day
+  // pricing
+  final priceCtrl = TextEditingController(); // base item price
   final discountCtrl = TextEditingController();
 
-  // ✅ live final price preview
+  // live pricing preview (after discount)
   double? _finalPrice;
   double? _savedAmount;
 
-  String? _selectedCity;
   bool _visibleInSearch = true;
 
   Uint8List? _coverImage;
 
-  // ✅ highlights key/value
+  // highlights key/value
   final List<Map<String, String>> _highlights = [];
 
-  // ✅ Days - store full words internally
-  final List<String> _weekdays = const [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-  ];
-  final Set<String> _selectedDays = {"Friday", "Saturday", "Sunday"};
+  // order-specific
+  final minOrderQtyCtrl = TextEditingController(text: "1");
 
-  // ✅ full-day specific (editable now)
-  int _maxEventsPerDay = 1; // min 1
-  final extraDayPriceCtrl = TextEditingController();
+  // ✅ inventory + processing days (steppers)
+  int _availableQty = 10; // default
+  int _processingDays = 3; // default (0 allowed)
+
+  bool _customization = false;
+  final customizationFeeCtrl = TextEditingController();
+
+  bool _delivery = false;
+  final deliveryFeeCtrl = TextEditingController();
 
   // -----------------------------
-  // Helpers (days UI like hourly)
-  // -----------------------------
-  String _day3(String d) => d.length <= 3 ? d : d.substring(0, 3);
-
-  String _daysSummary() {
-    if (_selectedDays.isEmpty) return "No days selected";
-    if (_selectedDays.length == _weekdays.length) return "Every day";
-    final ordered = _weekdays.where(_selectedDays.contains).toList();
-    return ordered.map(_day3).join(", ");
-  }
-
-  Widget _miniTitle(String t) => Text(
-        t,
-        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700),
-      );
-
-  Widget _summaryRow({
-    required IconData icon,
-    required String title,
-    required String value,
-    bool smallValue = false,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: kPrimaryColor),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            title,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: GoogleFonts.poppins(
-            fontSize: smallValue ? 11 : 12,
-            fontWeight: smallValue ? FontWeight.w600 : FontWeight.w700,
-            color: smallValue ? Colors.grey.shade800 : Colors.black,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _dayChip(String d) {
-    final selected = _selectedDays.contains(d);
-
-    return ChoiceChip(
-      selected: selected,
-      showCheckmark: false,
-      selectedColor: kPrimaryColor.withOpacity(0.14),
-      backgroundColor: const Color(0xFFF9FAFB),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-      labelPadding: const EdgeInsets.symmetric(horizontal: 10),
-      label: SizedBox(
-        height: 20,
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              _day3(d),
-              maxLines: 1,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ),
-      onSelected: (_) {
-        setState(() {
-          if (selected) {
-            _selectedDays.remove(d);
-          } else {
-            _selectedDays.add(d);
-          }
-        });
-      },
-    );
-  }
-
-  Widget _daysTwoRowsNeat() {
-    final row1 = _weekdays.take(4).toList();
-    final row2 = _weekdays.skip(4).take(3).toList();
-
-    Widget buildRow(List<String> days, {bool addEmptyLast = false}) {
-      return Row(
-        children: [
-          for (int i = 0; i < days.length; i++) ...[
-            Expanded(child: SizedBox(height: 36, child: _dayChip(days[i]))),
-            if (i != days.length - 1) const SizedBox(width: 8),
-          ],
-          if (addEmptyLast) ...[
-            const SizedBox(width: 8),
-            const Expanded(child: SizedBox(height: 36)),
-          ],
-        ],
-      );
-    }
-
-    return Column(
-      children: [
-        buildRow(row1),
-        const SizedBox(height: 8),
-        buildRow(row2, addEmptyLast: true),
-      ],
-    );
-  }
-
-  // -----------------------------
-  // ✅ Max events stepper
-  // -----------------------------
-  void _decMaxEvents() {
-    setState(() {
-      if (_maxEventsPerDay > 1) _maxEventsPerDay--;
-    });
-  }
-
-  void _incMaxEvents() {
-    setState(() {
-      if (_maxEventsPerDay < 50) _maxEventsPerDay++; // safety
-    });
-  }
-
-  Widget _roundIconBtn({required IconData icon, required VoidCallback onTap}) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        height: 42,
-        width: 42,
-        decoration: BoxDecoration(
-          color: kPrimaryColor.withOpacity(0.10),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: kPrimaryColor.withOpacity(0.16)),
-        ),
-        child: Icon(icon, color: kPrimaryColor, size: 20),
-      ),
-    );
-  }
-
-  Widget _maxEventsCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 36,
-            width: 36,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.event_repeat_rounded,
-                color: kPrimaryColor, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              "Max events per day",
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          _roundIconBtn(icon: Icons.remove_rounded, onTap: _decMaxEvents),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Text(
-              "$_maxEventsPerDay",
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          _roundIconBtn(icon: Icons.add_rounded, onTap: _incMaxEvents),
-        ],
-      ),
-    );
-  }
-
-  // -----------------------------
-  // ✅ Live final price calc (per day)
+  // Live final price calc
   // -----------------------------
   void _recalcFinalPrice() {
     final base = double.tryParse(priceCtrl.text.trim());
@@ -304,7 +101,7 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
     setState(() => _coverImage = bytes);
   }
 
-  // ✅ highlights dialog: Key + Value
+  // highlights dialog: Key + Value
   Future<void> _addHighlight() async {
     final keyCtrl = TextEditingController();
     final valCtrl = TextEditingController();
@@ -323,7 +120,7 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
             TextField(
               controller: keyCtrl,
               decoration: InputDecoration(
-                hintText: "Key (e.g. Includes, Style, Setup...)",
+                hintText: "Key (e.g. Color, Material, Size...)",
                 hintStyle: GoogleFonts.poppins(fontSize: 13),
               ),
             ),
@@ -331,7 +128,7 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
             TextField(
               controller: valCtrl,
               decoration: InputDecoration(
-                hintText: "Value (e.g. Lighting, Premium, Free...)",
+                hintText: "Value (e.g. Gold, Handmade, A4...)",
                 hintStyle: GoogleFonts.poppins(fontSize: 13),
               ),
             ),
@@ -354,10 +151,8 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
               }
               Navigator.pop(context);
             },
-            child: Text(
-              "Add",
-              style: GoogleFonts.poppins(color: kPrimaryColor),
-            ),
+            child:
+                Text("Add", style: GoogleFonts.poppins(color: kPrimaryColor)),
           ),
         ],
       ),
@@ -368,21 +163,39 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
 
-    if (_selectedDays.isEmpty) {
+    // ✅ hard rules
+    if (_availableQty < 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text("Select at least one day", style: GoogleFonts.poppins()),
+          content: Text(
+            "Available quantity must be at least 1.",
+            style: GoogleFonts.poppins(),
+          ),
         ),
       );
       return;
     }
 
-    if (_maxEventsPerDay < 1) {
+    if (_processingDays < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Max events per day must be at least 1",
-              style: GoogleFonts.poppins()),
+          content: Text(
+            "Processing days can't be negative.",
+            style: GoogleFonts.poppins(),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final minQty = int.tryParse(minOrderQtyCtrl.text.trim()) ?? 1;
+    if (_availableQty < minQty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Available quantity must be ≥ minimum order quantity.",
+            style: GoogleFonts.poppins(),
+          ),
         ),
       );
       return;
@@ -395,6 +208,8 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
       // common
       "name": nameCtrl.text.trim(),
       "description": descCtrl.text.trim(),
+
+      // location
       "address": addressCtrl.text.trim(),
       "city": _selectedCity,
       "latitude": latitudeCtrl.text.trim(),
@@ -404,31 +219,41 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
       "price": priceCtrl.text.trim(),
       "discount": discountCtrl.text.trim(),
 
-      // ✅ computed final price
+      // computed pricing
       "finalPrice": _finalPrice?.toStringAsFixed(2),
       "savedAmount": _savedAmount?.toStringAsFixed(2),
 
+      // media + visibility
       "coverImage": _coverImage,
-      "highlights": _highlights, // ✅ key/value
+      "highlights": _highlights,
       "visibleInSearch": _visibleInSearch,
 
-      "days": _selectedDays.toList(),
+      // order-specific
+      "pricingModel": "per_item",
+      "minOrderQty": minOrderQtyCtrl.text.trim(),
 
-      // full-day
-      "pricingModel": "per_day",
-      "allDay": true,
-      "maxEventsPerDay": _maxEventsPerDay.toString(), // ✅ editable now
-      "extraDayPrice": extraDayPriceCtrl.text.trim(),
+      // inventory + processing
+      "availableQty": _availableQty.toString(),
+      "processingDays": _processingDays.toString(),
+
+      "customizationAvailable": _customization,
+      "customizationFee": customizationFeeCtrl.text.trim(),
+      "deliveryAvailable": _delivery,
+      "deliveryFee": deliveryFeeCtrl.text.trim(),
     });
   }
 
   @override
   void initState() {
     super.initState();
-    // ✅ live calc listeners
+    // live calc listeners
     priceCtrl.addListener(_recalcFinalPrice);
     discountCtrl.addListener(_recalcFinalPrice);
     _recalcFinalPrice();
+
+    // ✅ ensure starting values match rules
+    if (_availableQty < 1) _availableQty = 1;
+    if (_processingDays < 0) _processingDays = 0;
   }
 
   @override
@@ -438,17 +263,185 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
 
     nameCtrl.dispose();
     descCtrl.dispose();
+
     addressCtrl.dispose();
     latitudeCtrl.dispose();
     longitudeCtrl.dispose();
+
     priceCtrl.dispose();
     discountCtrl.dispose();
-    extraDayPriceCtrl.dispose();
+
+    minOrderQtyCtrl.dispose();
+    customizationFeeCtrl.dispose();
+    deliveryFeeCtrl.dispose();
+
     super.dispose();
   }
 
   // -----------------------------
-  // UI
+  // UI helpers
+  // -----------------------------
+  Widget _prettyHeader() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(255, 255, 255, 100),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            height: 60,
+            width: 44,
+            decoration: BoxDecoration(
+              color: kPrimaryColor.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.shopping_bag_rounded, color: kPrimaryColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Order Booking!",
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.category,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepperTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required int value,
+    required int min,
+    required int max,
+    required VoidCallback onMinus,
+    required VoidCallback onPlus,
+    String? badgeSuffix,
+  }) {
+    final canMinus = value > min;
+    final canPlus = value < max;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            height: 36,
+            width: 36,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: kPrimaryColor, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: canMinus ? onMinus : null,
+                  icon: Icon(
+                    Icons.remove_rounded,
+                    size: 18,
+                    color: canMinus ? kPrimaryColor : Colors.grey.shade400,
+                  ),
+                  splashRadius: 18,
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    badgeSuffix == null ? "$value" : "$value $badgeSuffix",
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: canPlus ? onPlus : null,
+                  icon: Icon(
+                    Icons.add_rounded,
+                    size: 18,
+                    color: canPlus ? kPrimaryColor : Colors.grey.shade400,
+                  ),
+                  splashRadius: 18,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // -----------------------------
+  // Build
   // -----------------------------
   @override
   Widget build(BuildContext context) {
@@ -457,8 +450,10 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.2,
-        title: Text("Add Service",
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+        title: Text(
+          "Add Service",
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+        ),
         leading: const BackButton(color: kTextColor),
       ),
       bottomNavigationBar: saveButton(_trySave),
@@ -468,62 +463,9 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
           key: _formKey,
           child: Column(
             children: [
-              // pretty header
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 255, 255, 100),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.grey.shade200),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 14,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      height: 60,
-                      width: 44,
-                      decoration: BoxDecoration(
-                        color: kPrimaryColor.withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(Icons.calendar_month_rounded,
-                          color: kPrimaryColor),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Full-Day Booking!",
-                            style: GoogleFonts.poppins(
-                                fontSize: 20, fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            widget.category,
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _prettyHeader(),
 
+              // Service Details
               sectionLabel("Service Details"),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -537,6 +479,7 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                 ),
               ),
 
+              // Description
               sectionLabel("Description"),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -548,49 +491,6 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                   decoration: inputStyle("Describe your service"),
                   validator: (v) =>
                       (v == null || v.trim().isEmpty) ? "Required" : null,
-                ),
-              ),
-
-              // Availability (Days)
-              sectionLabel("Availability"),
-              Container(
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: cardDecoration(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _miniTitle("Choose days"),
-                    const SizedBox(height: 10),
-                    _daysTwoRowsNeat(),
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: kPrimaryColor.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(16),
-                        border:
-                            Border.all(color: kPrimaryColor.withOpacity(0.12)),
-                      ),
-                      child: Column(
-                        children: [
-                          _summaryRow(
-                            icon: Icons.event_available_rounded,
-                            title: "Days",
-                            value: _daysSummary(),
-                            smallValue: true,
-                          ),
-                          const SizedBox(height: 8),
-                          _summaryRow(
-                            icon: Icons.access_time_rounded,
-                            title: "Time",
-                            value: "All day",
-                            smallValue: true,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
 
@@ -621,9 +521,11 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                             items: kCities
                                 .map((c) => DropdownMenuItem(
                                       value: c,
-                                      child: Text(c,
-                                          style: GoogleFonts.poppins(
-                                              fontSize: 13)),
+                                      child: Text(
+                                        c,
+                                        style:
+                                            GoogleFonts.poppins(fontSize: 13),
+                                      ),
                                     ))
                                 .toList(),
                             onChanged: (v) => setState(() => _selectedCity = v),
@@ -640,7 +542,8 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                           child: TextFormField(
                             controller: latitudeCtrl,
                             keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
+                              decimal: true,
+                            ),
                             decoration: inputStyle("Latitude (optional)"),
                           ),
                         ),
@@ -649,7 +552,8 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                           child: TextFormField(
                             controller: longitudeCtrl,
                             keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
+                              decimal: true,
+                            ),
                             decoration: inputStyle("Longitude (optional)"),
                           ),
                         ),
@@ -659,7 +563,7 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                 ),
               ),
 
-              // Pricing + Final price
+              // Pricing
               sectionLabel("Pricing"),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -673,7 +577,7 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                           child: TextFormField(
                             controller: priceCtrl,
                             keyboardType: TextInputType.number,
-                            decoration: inputStyle("Price per day (₪)"),
+                            decoration: inputStyle("Base item price (₪)"),
                             validator: (v) {
                               final n = num.tryParse(v?.trim() ?? "");
                               if (n == null || n <= 0)
@@ -738,20 +642,42 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                 ),
               ),
 
-              // Full-Day Rules (max events editable)
-              sectionLabel("Full-Day Rules"),
+              // Order Rules
+              sectionLabel("Order Rules"),
               Container(
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(22),
+                margin: const EdgeInsets.only(bottom: 22),
                 decoration: cardDecoration(),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _maxEventsCard(),
+                    _stepperTile(
+                      icon: Icons.inventory_2_rounded,
+                      title: "Available quantity",
+                      subtitle: "How many pieces are available right now",
+                      value: _availableQty,
+                      min: 1, // ✅ at least 1
+                      max: 1000,
+                      onMinus: () => setState(() => _availableQty--),
+                      onPlus: () => setState(() => _availableQty++),
+                      badgeSuffix: "pcs",
+                    ),
+                    const SizedBox(height: 12),
+                    _stepperTile(
+                      icon: Icons.timelapse_rounded,
+                      title: "Processing days",
+                      subtitle: "Preparation time before the order is ready",
+                      value: _processingDays,
+                      min: 0, // ✅ 0 allowed
+                      max: 60,
+                      onMinus: () => setState(() => _processingDays--),
+                      onPlus: () => setState(() => _processingDays++),
+                      badgeSuffix: "days",
+                    ),
                   ],
                 ),
               ),
 
+              // Gallery
               sectionLabel("Gallery"),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -760,6 +686,7 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                 child: CoverImageBox(bytes: _coverImage, onPick: _pickImage),
               ),
 
+              // Highlights + Visibility
               sectionLabel("Highlights"),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -772,13 +699,17 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                         Text(
                           "Highlights",
                           style: GoogleFonts.poppins(
-                              fontSize: 14, fontWeight: FontWeight.w700),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         const Spacer(),
                         IconButton(
                           onPressed: _addHighlight,
-                          icon: const Icon(Icons.add_circle_outline_rounded,
-                              color: kPrimaryColor),
+                          icon: const Icon(
+                            Icons.add_circle_outline_rounded,
+                            color: kPrimaryColor,
+                          ),
                         ),
                       ],
                     ),
@@ -788,7 +719,9 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                         child: Text(
                           "Add points that make your service special.",
                           style: GoogleFonts.poppins(
-                              fontSize: 11, color: Colors.grey.shade600),
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       )
                     else
@@ -807,7 +740,8 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                               ),
                               backgroundColor: const Color(0xFFF9FAFB),
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18)),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
                             );
                           }).toList(),
                         ),
@@ -822,12 +756,16 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
                       title: Text(
                         "Visible in search",
                         style: GoogleFonts.poppins(
-                            fontSize: 13, fontWeight: FontWeight.w600),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       subtitle: Text(
                         "Turn off if temporarily unavailable.",
                         style: GoogleFonts.poppins(
-                            fontSize: 11, color: Colors.grey.shade600),
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ),
                   ],

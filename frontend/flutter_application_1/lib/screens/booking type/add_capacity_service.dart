@@ -38,9 +38,19 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
   final pricePerPersonCtrl = TextEditingController();
   final discountCtrl = TextEditingController();
 
+  // ✅ NEW: unit type before price (person vs piece)
+  String _capacityUnit = "person"; // "person" | "piece"
+
+  // ✅ live pricing preview
+  double? _finalPricePerPerson;
+  double? _savedPerPerson;
+
   // Gallery + highlights + visibility
   Uint8List? _coverImage;
-  final List<String> _highlights = [];
+
+  // ✅ highlights now key/value
+  final List<Map<String, String>> _highlights = [];
+
   bool _visibleInSearch = true;
 
   // -----------------------------
@@ -203,6 +213,9 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
   }
 
   Widget _capacityCard() {
+    // ✅ label adapts
+    final unitLabel = _capacityUnit == "piece" ? "pieces" : "people";
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -228,7 +241,7 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Maximum capacity",
+                  "Maximum $unitLabel",
                   style: GoogleFonts.poppins(
                       fontSize: 11.5, fontWeight: FontWeight.w600),
                 ),
@@ -264,6 +277,35 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
   }
 
   // -----------------------------
+  // ✅ Live final price calc (per unit)
+  // -----------------------------
+  void _recalcPrice() {
+    final price = double.tryParse(pricePerPersonCtrl.text.trim());
+    final disc = double.tryParse(discountCtrl.text.trim());
+
+    if (price == null || price <= 0) {
+      if (_finalPricePerPerson != null || _savedPerPerson != null) {
+        setState(() {
+          _finalPricePerPerson = null;
+          _savedPerPerson = null;
+        });
+      }
+      return;
+    }
+
+    final d = (disc ?? 0).clamp(0, 100);
+    final finalP = price * (1 - d / 100.0);
+    final saved = price - finalP;
+
+    if (_finalPricePerPerson == finalP && _savedPerPerson == saved) return;
+
+    setState(() {
+      _finalPricePerPerson = finalP;
+      _savedPerPerson = saved;
+    });
+  }
+
+  // -----------------------------
   // Actions
   // -----------------------------
   Future<void> _pickImage() async {
@@ -274,20 +316,36 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
     setState(() => _coverImage = bytes);
   }
 
+  // ✅ highlights dialog: Key + Value
   Future<void> _addHighlight() async {
-    final ctrl = TextEditingController();
+    final keyCtrl = TextEditingController();
+    final valCtrl = TextEditingController();
+
     await showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text("Add highlight",
             style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
-        content: TextField(
-          controller: ctrl,
-          decoration: InputDecoration(
-            hintText: "e.g. Vegan options, Outdoor seating...",
-            hintStyle: GoogleFonts.poppins(fontSize: 13),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: keyCtrl,
+              decoration: InputDecoration(
+                hintText: "Key (e.g. Menu, Seating, Delivery...)",
+                hintStyle: GoogleFonts.poppins(fontSize: 13),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: valCtrl,
+              decoration: InputDecoration(
+                hintText: "Value (e.g. Vegan, 200 seats, Free...)",
+                hintStyle: GoogleFonts.poppins(fontSize: 13),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -297,8 +355,11 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
           ),
           TextButton(
             onPressed: () {
-              final t = ctrl.text.trim();
-              if (t.isNotEmpty) setState(() => _highlights.add(t));
+              final k = keyCtrl.text.trim();
+              final v = valCtrl.text.trim();
+              if (k.isNotEmpty && v.isNotEmpty) {
+                setState(() => _highlights.add({"key": k, "value": v}));
+              }
               Navigator.pop(context);
             },
             child:
@@ -326,8 +387,8 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
     if (price == null || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text("Enter a valid price per person.",
-                style: GoogleFonts.poppins())),
+            content:
+                Text("Enter a valid price.", style: GoogleFonts.poppins())),
       );
       return;
     }
@@ -346,11 +407,18 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
 
       "days": _selectedDays.toList(),
 
-      // ✅ new capacity pricing model
-      "pricingModel": "per_person_capacity",
+      // ✅ capacity pricing model + unit
+      "pricingModel": _capacityUnit == "piece"
+          ? "per_piece_capacity"
+          : "per_person_capacity",
+      "capacityUnit": _capacityUnit, // "person" | "piece"
       "maxCapacity": _maxCapacity,
-      "pricePerPerson": price.toDouble(),
+      "pricePerUnit": price.toDouble(),
       "discount": discountCtrl.text.trim(),
+
+      // ✅ optional computed values
+      "finalPricePerUnit": _finalPricePerPerson?.toStringAsFixed(2),
+      "savedPerUnit": _savedPerPerson?.toStringAsFixed(2),
 
       "coverImage": _coverImage,
       "highlights": _highlights,
@@ -359,7 +427,19 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // ✅ live calc listeners
+    pricePerPersonCtrl.addListener(_recalcPrice);
+    discountCtrl.addListener(_recalcPrice);
+    _recalcPrice();
+  }
+
+  @override
   void dispose() {
+    pricePerPersonCtrl.removeListener(_recalcPrice);
+    discountCtrl.removeListener(_recalcPrice);
+
     nameCtrl.dispose();
     descCtrl.dispose();
 
@@ -381,7 +461,7 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color.fromARGB(255, 255, 255, 100),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
@@ -395,7 +475,7 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
       child: Row(
         children: [
           Container(
-            height: 44,
+            height: 60,
             width: 44,
             decoration: BoxDecoration(
               color: kPrimaryColor.withOpacity(0.10),
@@ -409,9 +489,9 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Capacity Booking",
+                  "Capacity Booking!",
                   style: GoogleFonts.poppins(
-                      fontSize: 14, fontWeight: FontWeight.w800),
+                      fontSize: 20, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -432,8 +512,56 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
     );
   }
 
+  // ✅ NEW: unit picker UI
+  Widget _unitPicker() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.straighten_rounded, color: kPrimaryColor, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "Charge per",
+              style: GoogleFonts.poppins(
+                  fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+          ChoiceChip(
+            selected: _capacityUnit == "person",
+            showCheckmark: false,
+            selectedColor: kPrimaryColor.withOpacity(0.14),
+            backgroundColor: Colors.white,
+            label: Text("Person",
+                style: GoogleFonts.poppins(
+                    fontSize: 12, fontWeight: FontWeight.w600)),
+            onSelected: (_) => setState(() => _capacityUnit = "person"),
+          ),
+          const SizedBox(width: 8),
+          ChoiceChip(
+            selected: _capacityUnit == "piece",
+            showCheckmark: false,
+            selectedColor: kPrimaryColor.withOpacity(0.14),
+            backgroundColor: Colors.white,
+            label: Text("Piece",
+                style: GoogleFonts.poppins(
+                    fontSize: 12, fontWeight: FontWeight.w600)),
+            onSelected: (_) => setState(() => _capacityUnit = "piece"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final unitLabel = _capacityUnit == "piece" ? "piece" : "person";
+
     return Scaffold(
       backgroundColor: kBackgroundColor,
       appBar: AppBar(
@@ -600,7 +728,7 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
                 ),
               ),
 
-              // ✅ Pricing (Capacity + price per person)
+              // ✅ Pricing (Unit + Capacity + price per unit)
               sectionLabel("Pricing"),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -625,7 +753,12 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
                     ),
                     const SizedBox(height: 6),
                     _hint(
-                        "Customers will see your max capacity and your price per person."),
+                        "Choose if you charge per person (catering) or per piece (cake)."),
+                    const SizedBox(height: 12),
+
+                    // ✅ NEW FIELD (before price)
+                    _unitPicker(),
+
                     const SizedBox(height: 12),
                     _capacityCard(),
                     const SizedBox(height: 12),
@@ -633,7 +766,7 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
                       controller: pricePerPersonCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
-                      decoration: inputStyle("Price per person (₪)"),
+                      decoration: inputStyle("Price per $unitLabel (₪)"),
                       validator: (v) {
                         final n = num.tryParse(v?.trim() ?? "");
                         if (n == null || n <= 0) return "Enter valid price";
@@ -645,6 +778,51 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
                       controller: discountCtrl,
                       keyboardType: TextInputType.number,
                       decoration: inputStyle("Discount % (optional)"),
+                    ),
+
+                    // ✅ live result
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: kPrimaryColor.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(16),
+                        border:
+                            Border.all(color: kPrimaryColor.withOpacity(0.12)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calculate_rounded,
+                              color: kPrimaryColor, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Final price / $unitLabel",
+                              style: GoogleFonts.poppins(
+                                  fontSize: 12, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          Text(
+                            _finalPricePerPerson == null
+                                ? "--"
+                                : "${_finalPricePerPerson!.toStringAsFixed(2)} ₪",
+                            style: GoogleFonts.poppins(
+                                fontSize: 12, fontWeight: FontWeight.w800),
+                          ),
+                          if (_savedPerPerson != null &&
+                              _savedPerPerson! > 0) ...[
+                            const SizedBox(width: 10),
+                            Text(
+                              "(-${_savedPerPerson!.toStringAsFixed(2)} ₪)",
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -700,18 +878,20 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
                         child: Wrap(
                           spacing: 6,
                           runSpacing: 6,
-                          children: _highlights
-                              .map(
-                                (h) => Chip(
-                                  label: Text(h,
-                                      style: GoogleFonts.poppins(fontSize: 11)),
-                                  backgroundColor: const Color(0xFFF9FAFB),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                ),
-                              )
-                              .toList(),
+                          children: _highlights.map((h) {
+                            final k = (h["key"] ?? "").trim();
+                            final v = (h["value"] ?? "").trim();
+                            return Chip(
+                              label: Text(
+                                "$k: $v",
+                                style: GoogleFonts.poppins(fontSize: 11),
+                              ),
+                              backgroundColor: const Color(0xFFF9FAFB),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            );
+                          }).toList(),
                         ),
                       ),
                     const SizedBox(height: 8),

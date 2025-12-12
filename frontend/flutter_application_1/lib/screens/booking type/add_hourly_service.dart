@@ -35,7 +35,13 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
   bool _visibleInSearch = true;
 
   Uint8List? _coverImage;
-  final List<String> _highlights = [];
+
+  // ✅ highlights now key/value
+  final List<Map<String, String>> _highlights = [];
+
+  // ✅ live pricing preview
+  double? _finalPrice;
+  double? _savedAmount;
 
   // hourly-specific (min must allow 1 hour)
   final minHoursCtrl = TextEditingController(text: "1");
@@ -63,6 +69,9 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
   double _eventHours = 2.0; // each event duration (hours)
   double _gapMinutes = 30; // time between events (minutes)
 
+  // ✅ NEW: choose suggested slots (count = seats per day)
+  final Set<String> _selectedSuggestedSlots = {};
+
   @override
   void initState() {
     super.initState();
@@ -81,6 +90,39 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     // sensible defaults
     _eventHours = _hoursRange.start.clamp(1, 12);
     _gapMinutes = 30;
+
+    // ✅ live price calc
+    priceCtrl.addListener(_recalcPrice);
+    discountCtrl.addListener(_recalcPrice);
+    _recalcPrice();
+  }
+
+  // ✅ compute final price as user types
+  void _recalcPrice() {
+    final price = double.tryParse(priceCtrl.text.trim());
+    final disc = double.tryParse(discountCtrl.text.trim());
+
+    if (price == null || price <= 0) {
+      if (_finalPrice != null || _savedAmount != null) {
+        setState(() {
+          _finalPrice = null;
+          _savedAmount = null;
+        });
+      }
+      return;
+    }
+
+    final d = (disc ?? 0).clamp(0, 100);
+    final finalP = price * (1 - d / 100.0);
+    final saved = price - finalP;
+
+    // reduce useless rebuilds
+    if (_finalPrice == finalP && _savedAmount == saved) return;
+
+    setState(() {
+      _finalPrice = finalP;
+      _savedAmount = saved;
+    });
   }
 
   Future<void> _pickImage() async {
@@ -92,20 +134,36 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     setState(() => _coverImage = bytes);
   }
 
+  // ✅ highlights dialog: Key + Value
   Future<void> _addHighlight() async {
-    final ctrl = TextEditingController();
+    final keyCtrl = TextEditingController();
+    final valCtrl = TextEditingController();
+
     await showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text("Add highlight",
             style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
-        content: TextField(
-          controller: ctrl,
-          decoration: InputDecoration(
-            hintText: "e.g. Extra speakers, Fast setup...",
-            hintStyle: GoogleFonts.poppins(fontSize: 13),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: keyCtrl,
+              decoration: InputDecoration(
+                hintText: "Key (e.g. Equipment, Delivery, Setup...)",
+                hintStyle: GoogleFonts.poppins(fontSize: 13),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: valCtrl,
+              decoration: InputDecoration(
+                hintText: "Value (e.g. Included, 2 hours, Free...)",
+                hintStyle: GoogleFonts.poppins(fontSize: 13),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -115,8 +173,11 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
           ),
           TextButton(
             onPressed: () {
-              final t = ctrl.text.trim();
-              if (t.isNotEmpty) setState(() => _highlights.add(t));
+              final k = keyCtrl.text.trim();
+              final v = valCtrl.text.trim();
+              if (k.isNotEmpty && v.isNotEmpty) {
+                setState(() => _highlights.add({"key": k, "value": v}));
+              }
               Navigator.pop(context);
             },
             child:
@@ -229,6 +290,8 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     return slots;
   }
 
+  String _slotKey(Map<String, String> s) => '${s["start"]}-${s["end"]}';
+
   void _trySave() {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
@@ -286,8 +349,12 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
       "price": priceCtrl.text.trim(),
       "discount": discountCtrl.text.trim(),
       "coverImage": _coverImage,
-      "highlights": _highlights,
+      "highlights": _highlights, // ✅ key/value list
       "visibleInSearch": _visibleInSearch,
+
+      // ✅ optional computed values
+      "finalPrice": _finalPrice?.toStringAsFixed(2),
+      "savedAmount": _savedAmount?.toStringAsFixed(2),
 
       // hourly
       "pricingModel": "per_hour",
@@ -302,11 +369,18 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
       "gapMinutes": _gapMinutes.round().toString(),
       "eventsPerDay": _eventsPerDay().toString(),
       "slotsPreview": _buildSlotsPreview(),
+
+      // ✅ NEW: chosen slots => seats/day count
+      "selectedSuggestedSlots": _selectedSuggestedSlots.toList(),
+      "seatsPerDay": _selectedSuggestedSlots.length.toString(),
     });
   }
 
   @override
   void dispose() {
+    priceCtrl.removeListener(_recalcPrice);
+    discountCtrl.removeListener(_recalcPrice);
+
     nameCtrl.dispose();
     descCtrl.dispose();
     addressCtrl.dispose();
@@ -329,7 +403,6 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
         style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600),
       );
 
-  // ✅ added: smallValue for Days summary line
   Widget _summaryRow({
     required IconData icon,
     required String title,
@@ -389,7 +462,7 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color.fromARGB(255, 255, 255, 100),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
@@ -403,7 +476,7 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
       child: Row(
         children: [
           Container(
-            height: 44,
+            height: 60,
             width: 44,
             decoration: BoxDecoration(
               color: kPrimaryColor.withOpacity(0.10),
@@ -417,9 +490,9 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Hourly Booking",
+                  "Hourly Booking!",
                   style: GoogleFonts.poppins(
-                      fontSize: 14, fontWeight: FontWeight.w800),
+                      fontSize: 20, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -440,7 +513,6 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     );
   }
 
-  // ✅ Days chips: show 3 letters
   Widget _dayChip(String d) {
     final selected = _selectedDays.contains(d);
 
@@ -459,7 +531,7 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
-              _day3(d), // ✅ Mon Tue Wed...
+              _day3(d),
               maxLines: 1,
               style: GoogleFonts.poppins(
                 fontSize: 12,
@@ -489,9 +561,7 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
       return Row(
         children: [
           for (int i = 0; i < days.length; i++) ...[
-            Expanded(
-              child: SizedBox(height: 36, child: _dayChip(days[i])),
-            ),
+            Expanded(child: SizedBox(height: 36, child: _dayChip(days[i]))),
             if (i != days.length - 1) const SizedBox(width: 8),
           ],
           if (addEmptyLast) ...[
@@ -512,6 +582,10 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
   }
 
   Widget _dailyCapacityCard(int eventsCount, List<Map<String, String>> slots) {
+    // ✅ if user changes schedule settings, some selected keys might disappear
+    final validKeys = slots.map(_slotKey).toSet();
+    _selectedSuggestedSlots.removeWhere((k) => !validKeys.contains(k));
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -691,27 +765,82 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
                     fontSize: 12, fontWeight: FontWeight.w600),
               ),
             )
-          else
+          else ...[
             Wrap(
               spacing: 10,
               runSpacing: 10,
               children: slots.take(12).map((s) {
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.white.withOpacity(0.9)),
-                  ),
-                  child: Text(
-                    '${s["start"]} - ${s["end"]}',
-                    style: GoogleFonts.poppins(
-                        fontSize: 11, fontWeight: FontWeight.w800),
+                final key = _slotKey(s);
+                final selected = _selectedSuggestedSlots.contains(key);
+
+                return InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: () {
+                    setState(() {
+                      if (selected) {
+                        _selectedSuggestedSlots.remove(key);
+                      } else {
+                        _selectedSuggestedSlots.add(key);
+                      }
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? kPrimaryColor.withOpacity(0.10)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: selected
+                            ? kPrimaryColor.withOpacity(0.35)
+                            : Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                    child: Text(
+                      '${s["start"]} - ${s["end"]}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: selected ? kPrimaryColor : Colors.black,
+                      ),
+                    ),
                   ),
                 );
               }).toList(),
             ),
+
+            // ✅ seats per day = number of selected slots
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.event_seat_rounded,
+                      color: kPrimaryColor, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "Seats per day",
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  Text(
+                    "${_selectedSuggestedSlots.length}",
+                    style: GoogleFonts.poppins(
+                        fontSize: 13, fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -855,8 +984,8 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
                           _summaryRow(
                             icon: Icons.event_available_rounded,
                             title: "Days",
-                            value: _daysSummary(), // ✅ 3 letters
-                            smallValue: true, // ✅ smaller font
+                            value: _daysSummary(),
+                            smallValue: true,
                           ),
                           const SizedBox(height: 8),
                           _summaryRow(
@@ -1114,6 +1243,48 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: kPrimaryColor.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(16),
+                        border:
+                            Border.all(color: kPrimaryColor.withOpacity(0.12)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calculate_rounded,
+                              color: kPrimaryColor, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Final price",
+                              style: GoogleFonts.poppins(
+                                  fontSize: 12, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          Text(
+                            _finalPrice == null
+                                ? "--"
+                                : "${_finalPrice!.toStringAsFixed(2)} ₪",
+                            style: GoogleFonts.poppins(
+                                fontSize: 12, fontWeight: FontWeight.w800),
+                          ),
+                          if (_savedAmount != null && _savedAmount! > 0) ...[
+                            const SizedBox(width: 10),
+                            Text(
+                              "(-${_savedAmount!.toStringAsFixed(2)} ₪)",
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1160,9 +1331,13 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
                           spacing: 6,
                           runSpacing: 6,
                           children: _highlights.map((h) {
+                            final k = (h["key"] ?? "").trim();
+                            final v = (h["value"] ?? "").trim();
                             return Chip(
-                              label: Text(h,
-                                  style: GoogleFonts.poppins(fontSize: 11)),
+                              label: Text(
+                                "$k: $v",
+                                style: GoogleFonts.poppins(fontSize: 11),
+                              ),
                               backgroundColor: const Color(0xFFF9FAFB),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(18)),

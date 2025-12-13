@@ -53,7 +53,7 @@ export class NotificationController {
     );
     
     console.log('📊 Unread count:', count);
-    
+      
     return { count };
   }
 

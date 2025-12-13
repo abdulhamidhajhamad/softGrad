@@ -20,15 +20,17 @@ class ServiceService {
       // Web (Chrome)
       return 'http://localhost:3000';
     } else if (defaultTargetPlatform == TargetPlatform.android) {
-      // Android Emulator
+      // ✅ Android Emulator يستخدم 10.0.2.2 للوصول لـ localhost على الجهاز
+      return 'http://10.0.2.2:3000';
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      // iOS Simulator يستخدم localhost عادي
       return 'http://localhost:3000';
     } else {
-      // iOS / Desktop / غيره
+      // Desktop / Other
       return 'http://localhost:3000';
     }
   }
 
-  // ✅ baseUrl صار من هون
   static final String baseUrl = getBaseUrl();
 
   // ====================== 1. GET my services =========================
@@ -48,9 +50,15 @@ class ServiceService {
       final data = _decodeJsonSafe(res.body);
 
       if (res.statusCode == 200) {
-        if (data is List) return data;
-        // أحيانًا الباك إند يرجّع object بدل list
-        if (data is Map && data['data'] is List) return data['data'];
+        if (data is List) {
+          // ✅ نورمالايز البيانات لتتوافق مع UI
+          return data.map((service) => _normalizeServiceFromBackend(service)).toList();
+        }
+        if (data is Map && data['data'] is List) {
+          return (data['data'] as List)
+              .map((service) => _normalizeServiceFromBackend(service))
+              .toList();
+        }
         return [];
       }
 
@@ -59,6 +67,105 @@ class ServiceService {
       print('❌ Error in fetchMyServices: $e');
       rethrow;
     }
+  }
+
+  // ✅ نورمالايز البيانات من Backend لتتوافق مع UI
+  static Map<String, dynamic> _normalizeServiceFromBackend(dynamic service) {
+    if (service is! Map) return {};
+
+    final Map<String, dynamic> normalized = {};
+
+    // _id → serviceId
+    normalized['_id'] = (service['_id'] ?? '').toString();
+    normalized['serviceId'] = (service['_id'] ?? '').toString();
+
+    // serviceName → name
+    normalized['serviceName'] = (service['serviceName'] ?? '').toString();
+    normalized['name'] = (service['serviceName'] ?? '').toString();
+
+    // category
+    normalized['category'] = (service['category'] ?? '').toString();
+
+    // ✅ معالجة price (قد يكون object أو number)
+    final priceData = service['price'];
+    double finalPrice = 0.0;
+
+    if (priceData is num) {
+      finalPrice = priceData.toDouble();
+    } else if (priceData is Map) {
+      // PricingOptions object
+      finalPrice = _pickFirstDouble(
+            priceData['perHour'],
+            priceData['perDay'],
+            priceData['perPerson'],
+            priceData['fullVenue'],
+            priceData['basePrice'],
+          ) ??
+          0.0;
+    } else if (priceData is String) {
+      finalPrice = double.tryParse(priceData) ?? 0.0;
+    }
+
+    normalized['price'] = finalPrice;
+
+    // discount
+    normalized['discount'] = (service['discount'] ?? '').toString();
+
+    // ✅ images - أول صورة من المصفوفة
+    final images = service['images'];
+    if (images is List && images.isNotEmpty) {
+      normalized['images'] = List<String>.from(images.map((img) => img.toString()));
+      normalized['image'] = images.first.toString(); // أول صورة
+    } else {
+      normalized['images'] = <String>[];
+      normalized['image'] = '';
+    }
+
+    // isActive
+    normalized['isActive'] = service['isActive'] ?? true;
+
+    // location
+    final location = service['location'];
+    if (location is Map) {
+      normalized['address'] = (location['address'] ?? '').toString();
+      normalized['city'] = (location['city'] ?? '').toString();
+      normalized['latitude'] = location['latitude'];
+      normalized['longitude'] = location['longitude'];
+    }
+
+    // additionalInfo
+    final additionalInfo = service['additionalInfo'];
+    if (additionalInfo is Map) {
+      normalized['additionalInfo'] = additionalInfo;
+      normalized['fullDescription'] = (additionalInfo['description'] ?? '').toString();
+      normalized['shortDescription'] = (additionalInfo['description'] ?? '').toString();
+    } else {
+      normalized['additionalInfo'] = {};
+      normalized['fullDescription'] = '';
+      normalized['shortDescription'] = '';
+    }
+
+    // bookingType
+    normalized['bookingType'] = (service['bookingType'] ?? '').toString();
+
+    // externalLink
+    normalized['externalLink'] = (service['externalLink'] ?? '').toString();
+
+    // payType
+    normalized['payType'] = (service['payType'] ?? '').toString();
+
+    // rating
+    normalized['rating'] = service['rating'] ?? 0.0;
+
+    // createdAt, updatedAt
+    normalized['createdAt'] = (service['createdAt'] ?? '').toString();
+    normalized['updatedAt'] = (service['updatedAt'] ?? '').toString();
+
+    // bookings, likes (stats - افتراضي 0 إذا مش موجودين)
+    normalized['bookings'] = service['bookings'] ?? 0;
+    normalized['likes'] = service['likes'] ?? 0;
+
+    return normalized;
   }
 
   // ====================== 2. POST create service (multipart) =========================
@@ -92,19 +199,28 @@ class ServiceService {
         'city': city,
       };
 
+      // ✅ تحديد bookingType بناءً على category
+      final String bookingType = _mapCategoryToBookingType(category);
+
+      // ✅ additionalInfo
+      final Map<String, dynamic> additionalInfo = {
+        'description': description,
+      };
+
       final createServiceDtoForJson = {
         'serviceName': title,
-        'description': description,
-        'price': price,
         'category': category,
-        'priceType': priceType,
         'location': locationData,
-        'highlights': highlights,
-        'companyName': companyName,
+        'price': {'basePrice': price}, // PricingOptions object
+        'bookingType': bookingType,
+        'payType': priceType,
+        'additionalInfo': additionalInfo,
+        'isActive': true,
       };
 
       request.fields['data'] = jsonEncode(createServiceDtoForJson);
 
+      // ✅ رفع الصور
       for (final fileData in imageFilesData) {
         final bytesAny = fileData['bytes'];
         final String fileName = (fileData['name'] as String?) ?? 'image.jpg';
@@ -142,6 +258,34 @@ class ServiceService {
     }
   }
 
+  // ✅ helper: map category إلى bookingType
+  static String _mapCategoryToBookingType(String category) {
+    switch (category) {
+      case 'Venues':
+      case 'Photographers':
+      case 'Music & Entertainment':
+      case 'Wedding Planners & Coordinators':
+        return 'Hourly';
+
+      case 'Decor & Lighting':
+      case 'Car Rental & Transportation':
+        return 'Full-Day';
+
+      case 'Catering':
+      case 'Cake':
+        return 'Capacity';
+
+      case 'Flower Shops':
+      case 'Card Printing':
+      case 'Jewelry & Accessories':
+      case 'Gift & Souvenir':
+        return 'Order';
+
+      default:
+        return 'Hourly';
+    }
+  }
+
   // ====================== ✅ one method for ALL Add screens =========================
   static Future<Map<String, dynamic>> addServiceFromBookingForm(
       Map<String, dynamic> form) async {
@@ -164,18 +308,18 @@ class ServiceService {
 
       if (pricingModel == 'per_hour' ||
           bookingType.toLowerCase().contains('hour')) {
-        priceType = 'per_hour';
+        priceType = 'per hour';
       } else if (pricingModel == 'per_day' ||
           bookingType.toLowerCase().contains('full')) {
-        priceType = 'per_day';
+        priceType = 'per event';
       } else if (pricingModel.contains('capacity')) {
-        final unit = (form['capacityUnit'] ?? '').toString(); // person|piece
-        priceType = unit == 'piece' ? 'per_piece' : 'per_person';
+        final unit = (form['capacityUnit'] ?? '').toString();
+        priceType = unit == 'piece' ? 'per_piece' : 'per person';
       } else if (pricingModel == 'per_item' ||
           bookingType.toLowerCase().contains('order')) {
         priceType = 'per_item';
       } else {
-        priceType = 'per_service';
+        priceType = 'per event';
       }
     }
 
@@ -240,31 +384,79 @@ class ServiceService {
     }
   }
 
-  // ====================== 4. PATCH =========================
+  // ====================== 4. UPDATE service (multipart) =========================
   static Future<Map<String, dynamic>> updateService(
-      String serviceId, Map<String, dynamic> updateData) async {
+    String serviceId,
+    Map<String, dynamic> updateData, {
+    List<Map<String, dynamic>>? newImages,
+  }) async {
     try {
       final token = await AuthService.getToken();
       if (token == null) throw Exception('Authentication token not found.');
 
-      final res = await http.patch(
-        Uri.parse('$baseUrl/services/$serviceId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(updateData),
-      );
+      // ✅ إذا في صور جديدة، استخدم multipart
+      if (newImages != null && newImages.isNotEmpty) {
+        final url = Uri.parse('$baseUrl/services/id/$serviceId');
+        final request = http.MultipartRequest('PUT', url);
 
-      final data = _decodeJsonSafe(res.body);
+        request.headers.addAll({'Authorization': 'Bearer $token'});
 
-      if (res.statusCode == 200) {
-        if (data is Map<String, dynamic>) return data;
-        if (data is Map) return Map<String, dynamic>.from(data);
-        return {'success': true};
+        // بيانات التحديث
+        request.fields['data'] = jsonEncode(updateData);
+
+        // رفع الصور الجديدة
+        for (final fileData in newImages) {
+          final bytesAny = fileData['bytes'];
+          final String fileName = (fileData['name'] as String?) ?? 'image.jpg';
+
+          List<int> fileBytes = [];
+          if (bytesAny is Uint8List) fileBytes = bytesAny.toList();
+          if (bytesAny is List<int>) fileBytes = bytesAny;
+
+          if (fileBytes.isNotEmpty) {
+            request.files.add(
+              http.MultipartFile.fromBytes(
+                'images',
+                fileBytes,
+                filename: fileName,
+              ),
+            );
+          }
+        }
+
+        final streamed = await request.send();
+        final res = await http.Response.fromStream(streamed);
+
+        final data = _decodeJsonSafe(res.body);
+
+        if (res.statusCode == 200) {
+          if (data is Map<String, dynamic>) return data;
+          if (data is Map) return Map<String, dynamic>.from(data);
+          return {'success': true};
+        }
+
+        throw Exception(_extractMessage(data) ?? 'Failed to update service.');
+      } else {
+        // ✅ تحديث بدون صور - استخدم PATCH
+        final res = await http.patch(
+          Uri.parse('$baseUrl/services/id/$serviceId'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(updateData),
+        );
+
+        final data = _decodeJsonSafe(res.body);
+
+        if (res.statusCode == 200) {
+          if (data is Map<String, dynamic>) return data;
+          if (data is Map) return Map<String, dynamic>.from(data);
+          return {'success': true};
+        }
+
+        throw Exception(_extractMessage(data) ?? 'Failed to update service.');
       }
-
-      throw Exception(_extractMessage(data) ?? 'Failed to update service.');
     } catch (e) {
       print('❌ Error in updateService: $e');
       rethrow;
@@ -305,15 +497,19 @@ class ServiceService {
   static Future<Map<String, dynamic>> getServiceById(String serviceId) async {
     try {
       final res = await http.get(
-        Uri.parse('$baseUrl/services/$serviceId'),
+        Uri.parse('$baseUrl/services/id/$serviceId'),
         headers: {'Content-Type': 'application/json'},
       );
 
       final data = _decodeJsonSafe(res.body);
 
       if (res.statusCode == 200) {
-        if (data is Map<String, dynamic>) return data;
-        if (data is Map) return Map<String, dynamic>.from(data);
+        if (data is Map<String, dynamic>) {
+          return _normalizeServiceFromBackend(data);
+        }
+        if (data is Map) {
+          return _normalizeServiceFromBackend(Map<String, dynamic>.from(data));
+        }
         return {};
       }
 
@@ -325,56 +521,6 @@ class ServiceService {
     }
   }
 
-  // ====================== ✅ Upload service image (Web + Mobile) =========================
-  static Future<String> uploadServiceImage({
-    String? filePath,
-    Uint8List? fileBytes,
-    String? fileName,
-  }) async {
-    try {
-      final token = await AuthService.getToken();
-      if (token == null) throw Exception('Authentication token not found.');
-
-      final url = Uri.parse('$baseUrl/upload/service-image');
-      final request = http.MultipartRequest('POST', url);
-      request.headers.addAll({'Authorization': 'Bearer $token'});
-
-      if (filePath != null && !kIsWeb) {
-        request.files.add(await http.MultipartFile.fromPath('file', filePath));
-      } else if (fileBytes != null && fileName != null) {
-        request.files.add(
-          http.MultipartFile.fromBytes('file', fileBytes, filename: fileName),
-        );
-      } else {
-        throw Exception(
-            'Image data is missing (requires filePath or fileBytes+fileName).');
-      }
-
-      final streamed = await request.send();
-      final res = await http.Response.fromStream(streamed);
-
-      final data = _decodeJsonSafe(res.body);
-
-      if (res.statusCode == 201 || res.statusCode == 200) {
-        final urlVal = (data is Map)
-            ? (data['url'] ?? data['imageUrl'] ?? data['data'])
-            : null;
-        if (urlVal is String && urlVal.trim().isNotEmpty) return urlVal.trim();
-        throw Exception('Image upload succeeded but URL not returned.');
-      }
-
-      throw Exception(_extractMessage(data) ??
-          'Failed to upload image. Status: ${res.statusCode}');
-    } catch (e) {
-      throw Exception('Failed to upload service image: $e');
-    }
-  }
-
-  // ✅ (اختياري) إذا عندك كود قديم بينادي uploadImageFile
-  static Future<String> uploadImageFile(String filePath) async {
-    return uploadServiceImage(filePath: filePath);
-  }
-
   // --------------------- helpers ---------------------
   static dynamic _decodeJsonSafe(String body) {
     try {
@@ -382,7 +528,6 @@ class ServiceService {
       if (b.isEmpty) return null;
       return jsonDecode(b);
     } catch (_) {
-      // لو السيرفر رجّع نص مش JSON
       return {'message': body};
     }
   }
@@ -390,7 +535,6 @@ class ServiceService {
   static String? _extractMessage(dynamic data) {
     if (data == null) return null;
 
-    // بعض السيرفرات ترجع message كـ String أو List<String>
     if (data is Map) {
       final m = data['message'] ?? data['error'] ?? data['msg'];
       if (m is String) return m;
@@ -409,8 +553,9 @@ class ServiceService {
     return double.tryParse(s);
   }
 
-  static double? _pickFirstDouble(dynamic a, dynamic b, dynamic c, dynamic d) {
-    final list = [a, b, c, d];
+  static double? _pickFirstDouble(dynamic a, dynamic b, dynamic c, dynamic d,
+      [dynamic e]) {
+    final list = [a, b, c, d, e];
     for (final x in list) {
       final v = _toDoubleOrNull(x);
       if (v != null) return v;

@@ -14,8 +14,22 @@ class ServiceService {
 
   // ✅ Localhost logic داخل ServiceService
   static String getBaseUrl() {
+    // 🔥 PRIORITY 1: Environment Variable (للـ Production)
+    // flutter build apk --dart-define=API_BASE_URL=https://your-api.com
     if (_envBaseUrl.trim().isNotEmpty) return _envBaseUrl.trim();
 
+    // 🔥 PRIORITY 2: Check if running in Debug/Profile mode
+    // في Production بيرجع false، في Development بيرجع true
+    const bool isProduction = bool.fromEnvironment('dart.vm.product');
+    
+    if (isProduction) {
+      // 🌐 Production URL - عدّلها لما تعمل deploy
+      return 'https://your-production-api.com';
+      // مثال: return 'https://api.wedding-app.com';
+      // أو: return 'https://wedding-backend.herokuapp.com';
+    }
+
+    // 🛠️ Development URLs (للتطوير فقط)
     if (kIsWeb) {
       // Web (Chrome)
       return 'http://localhost:3000';

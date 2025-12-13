@@ -2,12 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-// 🚀 التأكد من مسار الاستيراد الصحيح
 import 'package:flutter_application_1/services/package_service.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 
-// 🔄 الموديل الجديد لتمثيل الباقة من الـ Backend
 class BundlePackage {
   final String id;
   final String name;
@@ -16,7 +14,8 @@ class BundlePackage {
   final double bundlePrice;
   final DateTime? startDate;
   final DateTime? endDate;
-final String? packageImageUrl; // 🟢 الإضافة الجديدة هنا
+  final String? packageImageUrl;
+
   BundlePackage({
     required this.id,
     required this.name,
@@ -25,39 +24,33 @@ final String? packageImageUrl; // 🟢 الإضافة الجديدة هنا
     required this.bundlePrice,
     this.startDate,
     this.endDate,
-    this.packageImageUrl, // 🟢 إضافته للـ Constructor
+    this.packageImageUrl,
   });
 
-  // 🆕 دالة الإنشاء من JSON المعدلة للتعامل مع الأخطاء الرقمية (newPrice)
-    factory BundlePackage.fromJson(Map<String, dynamic> json) {
-      // 1. معالجة Service Names (للعرض)
-      final List<dynamic> rawServiceNames = json['serviceNames'] as List<dynamic>? ?? [];
-      
-      // 2. معالجة Service IDs (للإرسال في الـ Backend)
-      final List<dynamic> rawServiceIds = json['serviceIds'] as List<dynamic>? ?? [];
-      
-      // 3. معالجة السعر (يأتي كـ 'newPrice' من الباك إند)
-      final double price = (json['newPrice'] as num?)?.toDouble() ?? 0.0;
-      
-      // 4. معالجة التواريخ
-      final DateTime? start = DateTime.tryParse(json['startDate'] as String? ?? '');
-      final DateTime? end = DateTime.tryParse(json['endDate'] as String? ?? '');
-      
-      return BundlePackage(
-          id: json['_id'] as String? ?? '', 
-          name: json['packageName'] as String? ?? 'N/A', // افتراض أن الحقل اسمه packageName
-          serviceIds: rawServiceIds.map((e) => e.toString()).toList(),
-          serviceNames: rawServiceNames.map((e) => e.toString()).toList(),
-          bundlePrice: price,
-          startDate: start,
-          endDate: end,
-          packageImageUrl: json['packageImageUrl'] as String?, // 🟢 قراءة رابط الصورة من الـ JSON
-      );
-    }
-} 
+  factory BundlePackage.fromJson(Map<String, dynamic> json) {
+    final List<dynamic> rawServiceNames =
+        json['serviceNames'] as List<dynamic>? ?? [];
+    final List<dynamic> rawServiceIds =
+        json['serviceIds'] as List<dynamic>? ?? [];
+    final double price = (json['newPrice'] as num?)?.toDouble() ?? 0.0;
+    final DateTime? start =
+        DateTime.tryParse(json['startDate'] as String? ?? '');
+    final DateTime? end = DateTime.tryParse(json['endDate'] as String? ?? '');
+
+    return BundlePackage(
+      id: json['_id'] as String? ?? '',
+      name: json['packageName'] as String? ?? 'N/A',
+      serviceIds: rawServiceIds.map((e) => e.toString()).toList(),
+      serviceNames: rawServiceNames.map((e) => e.toString()).toList(),
+      bundlePrice: price,
+      startDate: start,
+      endDate: end,
+      packageImageUrl: json['packageImageUrl'] as String?,
+    );
+  }
+}
 
 class PackagesProviderScreen extends StatefulWidget {
-  // ✅ تم التأكد من حذف الباراميتر services
   const PackagesProviderScreen({Key? key}) : super(key: key);
 
   @override
@@ -68,55 +61,64 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
   List<BundlePackage> _packages = [];
   List<Map<String, dynamic>> _services = [];
 
-  bool _isLoading = true; 
-  String? _error; 
+  // ✅ لحفظ الكميات المدخلة لكل خدمة (serviceId -> quantity)
+  final Map<String, int> _serviceQuantities = {};
+
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _fetchData(); 
+    _fetchData();
   }
 
-  // 🆕 دالة جلب الخدمات والباقات
- // داخل class _PackagesProviderScreenState
-
-Future<void> _fetchData() async {
-  setState(() {
-    _isLoading = true;
-    _error = null;
-  });
-  
-  try {
-    // 1. جلب الخدمات المتاحة للـ Provider (لأجل الـ Bottom Sheet)
-    final fetchedServices = await PackageService.fetchProviderServicesForCreation();
-
-    // 2. جلب الباقات الموجودة للمزود
-    final fetchedPackagesJson = await PackageService.fetchProviderPackages();
-
+  Future<void> _fetchData() async {
     setState(() {
-      _services = fetchedServices; // ⬅️ تحديث قائمة الخدمات
-      _packages = fetchedPackagesJson
-          .map((json) => BundlePackage.fromJson(json))
-          .toList();
-      _isLoading = false; // ⬅️ إيقاف التحميل بعد النجاح
+      _isLoading = true;
+      _error = null;
     });
-  } catch (e) {
-    print('Error fetching data: $e');
-    setState(() {
-      _error = 'Failed to load data: ${e.toString()}';
-      _isLoading = false; // ⬅️ إيقاف التحميل بعد الفشل
-    });
+
+    try {
+      final fetchedServices =
+          await PackageService.fetchProviderServicesForCreation();
+      final fetchedPackagesJson = await PackageService.fetchProviderPackages();
+
+      setState(() {
+        _services = fetchedServices;
+        _packages = fetchedPackagesJson
+            .map((json) => BundlePackage.fromJson(json))
+            .toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching data: $e');
+      setState(() {
+        _error = 'Failed to load data: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
   }
-}
 
-  // دوال مساعدة لجلب البيانات من قائمة الخدمات (اللازمة للإنشاء)
+  // ✅ حساب السعر النهائي للخدمة بناءً على النوع والكمية
+  double _calculateServicePrice(Map<String, dynamic> service) {
+    final String priceType = service['priceType'] ?? 'fixed';
+    final String serviceId = service['_id'] ?? '';
+    final int quantity = _serviceQuantities[serviceId] ?? 1;
+
+    if (priceType == 'hourly') {
+      final double perHour = service['perHour'] ?? 0.0;
+      return perHour * quantity;
+    } else if (priceType == 'capacity') {
+      final double perPerson = service['perPerson'] ?? 0.0;
+      return perPerson * quantity;
+    } else {
+      // fixed price
+      return service['basePrice'] ?? 0.0;
+    }
+  }
+
   String _serviceIdAt(int index) => (_services[index]['_id'] ?? '').toString();
-
-  double _servicePriceAt(int index) {
-    final raw = _services[index]['price'];
-    if (raw is num) return raw.toDouble();
-    return double.tryParse(raw?.toString() ?? '0') ?? 0;
-  }
 
   String _serviceNameAt(int index) =>
       (_services[index]['name'] ?? '').toString();
@@ -124,17 +126,13 @@ Future<void> _fetchData() async {
   double _getServicePriceById(String serviceId) {
     final service = _services.firstWhere(
       (s) => s['_id'] == serviceId,
-      orElse: () => {'price': 0},
+      orElse: () => {},
     );
-    final raw = service['price'];
-    if (raw is num) return raw.toDouble();
-    return double.tryParse(raw?.toString() ?? '0') ?? 0;
+    return _calculateServicePrice(service);
   }
 
-  // حساب الإجمالي الأساسي (مجموع أسعار الخدمات)
   double _baseTotalForPackage(BundlePackage p) {
     double sum = 0;
-    // ⚠️ يعتمد هذا الحساب على توفر serviceIds في الـ BundlePackage
     for (final id in p.serviceIds) {
       sum += _getServicePriceById(id);
     }
@@ -154,18 +152,17 @@ Future<void> _fetchData() async {
     return "${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}";
   }
 
-  // دالة الحذف
-Future<void> _deletePackage(String packageId) async {
-  print('Attempting to delete package with ID: $packageId'); 
-  setState(() => _isLoading = true);
-  try {
-    await PackageService.deletePackage(packageId);
-    await _fetchData(); 
-  } catch (e) {
-  } finally {
-    setState(() => _isLoading = false);
+  Future<void> _deletePackage(String packageId) async {
+    print('Attempting to delete package with ID: $packageId');
+    setState(() => _isLoading = true);
+    try {
+      await PackageService.deletePackage(packageId);
+      await _fetchData();
+    } catch (e) {
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
-}
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -183,6 +180,9 @@ Future<void> _deletePackage(String packageId) async {
     final selectedServiceIds = <String>{
       if (editingPackage != null) ...editingPackage.serviceIds,
     };
+
+    // ✅ إعادة تعيين الكميات عند فتح الـ Sheet
+    _serviceQuantities.clear();
 
     final nameCtrl = TextEditingController(text: editingPackage?.name ?? '');
     final priceCtrl = TextEditingController(
@@ -213,13 +213,20 @@ Future<void> _deletePackage(String packageId) async {
             builder: (context, setSheetState) {
               double baseTotal = 0;
               for (final id in selectedServiceIds) {
-                baseTotal += _getServicePriceById(id);
+                final service = _services.firstWhere(
+                  (s) => s['_id'] == id,
+                  orElse: () => {},
+                );
+                baseTotal += _calculateServicePrice(service);
               }
 
-              final bundlePrice = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
+              final bundlePrice =
+                  double.tryParse(priceCtrl.text.trim()) ?? 0.0;
 
               double discount = 0;
-              if (baseTotal > 0 && bundlePrice > 0 && bundlePrice < baseTotal) {
+              if (baseTotal > 0 &&
+                  bundlePrice > 0 &&
+                  bundlePrice < baseTotal) {
                 discount = (1 - (bundlePrice / baseTotal)) * 100;
               }
 
@@ -236,13 +243,13 @@ Future<void> _deletePackage(String packageId) async {
                     return Theme(
                       data: Theme.of(context).copyWith(
                         colorScheme: ColorScheme.light(
-                          primary: kPrimaryColor, 
-                          onPrimary: Colors.white, 
-                          onSurface: Colors.black, 
+                          primary: kPrimaryColor,
+                          onPrimary: Colors.white,
+                          onSurface: Colors.black,
                         ),
                         textButtonTheme: TextButtonThemeData(
                           style: TextButton.styleFrom(
-                            foregroundColor: kPrimaryColor, 
+                            foregroundColor: kPrimaryColor,
                           ),
                         ),
                       ),
@@ -273,13 +280,13 @@ Future<void> _deletePackage(String packageId) async {
                     return Theme(
                       data: Theme.of(context).copyWith(
                         colorScheme: ColorScheme.light(
-                          primary: kPrimaryColor, 
-                          onPrimary: Colors.white, 
-                          onSurface: Colors.black, 
+                          primary: kPrimaryColor,
+                          onPrimary: Colors.white,
+                          onSurface: Colors.black,
                         ),
                         textButtonTheme: TextButtonThemeData(
                           style: TextButton.styleFrom(
-                            foregroundColor: kPrimaryColor, 
+                            foregroundColor: kPrimaryColor,
                           ),
                         ),
                       ),
@@ -293,7 +300,6 @@ Future<void> _deletePackage(String packageId) async {
                   });
                 }
               }
-
 
               return SingleChildScrollView(
                 child: Column(
@@ -382,41 +388,171 @@ Future<void> _deletePackage(String packageId) async {
                     else
                       Column(
                         children: List.generate(_services.length, (index) {
+                          final service = _services[index];
                           final name = _serviceNameAt(index);
-                          final price = _servicePriceAt(index);
                           final id = _serviceIdAt(index);
-
+                          final String priceType =
+                              service['priceType'] ?? 'fixed';
                           final isChecked = selectedServiceIds.contains(id);
 
-                          return CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            value: isChecked,
-                            onChanged: (v) {
-                              setSheetState(() {
-                                if (v == true) {
-                                  selectedServiceIds.add(id);
-                                } else {
-                                  selectedServiceIds
-                                      .remove(id); 
-                                }
-                              });
-                            },
-                            title: Text(
-                              name,
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                          // ✅ الكمية الحالية
+                          final int currentQty =
+                              _serviceQuantities[id] ?? 1;
+
+                          // حساب السعر الحالي
+                          final double currentPrice =
+                              _calculateServicePrice(service);
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: isChecked
+                                  ? kPrimaryColor.withOpacity(0.05)
+                                  : const Color(0xFFF9FAFB),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isChecked
+                                    ? kPrimaryColor.withOpacity(0.3)
+                                    : Colors.grey.shade200,
                               ),
                             ),
-                            subtitle: Text(
-                              "₪${price.toStringAsFixed(0)}",
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: Colors.grey[700],
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // الصف الأول: Checkbox + الاسم + السعر
+                                Row(
+                                  children: [
+                                    Checkbox(
+                                      value: isChecked,
+                                      onChanged: (v) {
+                                        setSheetState(() {
+                                          if (v == true) {
+                                            selectedServiceIds.add(id);
+                                            // تعيين كمية افتراضية
+                                            if (!_serviceQuantities
+                                                .containsKey(id)) {
+                                              _serviceQuantities[id] = 1;
+                                            }
+                                          } else {
+                                            selectedServiceIds.remove(id);
+                                            _serviceQuantities.remove(id);
+                                          }
+                                        });
+                                      },
+                                      activeColor: kPrimaryColor,
+                                    ),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            name,
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                          Text(
+                                            service['priceLabel'] ?? '',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 11,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      "₪${currentPrice.toStringAsFixed(0)}",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: kPrimaryColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                // ✅ الصف الثاني: حقل إدخال الكمية (إذا كان السعر ديناميكي)
+                                if (isChecked &&
+                                    (priceType == 'hourly' ||
+                                        priceType == 'capacity'))
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                        left: 48, top: 6),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            priceType == 'hourly'
+                                                ? "Number of hours:"
+                                                : "Number of people:",
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 12,
+                                              color: Colors.grey[700],
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          width: 90,
+                                          height: 36,
+                                          child: TextField(
+                                            keyboardType: TextInputType.number,
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                            decoration: InputDecoration(
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 8),
+                                              filled: true,
+                                              fillColor: Colors.white,
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                borderSide: BorderSide(
+                                                  color: Colors.grey.shade300,
+                                                ),
+                                              ),
+                                              enabledBorder: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                borderSide: BorderSide(
+                                                  color: Colors.grey.shade300,
+                                                ),
+                                              ),
+                                              focusedBorder: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                borderSide: const BorderSide(
+                                                  color: kPrimaryColor,
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                            ),
+                                            onChanged: (v) {
+                                              final qty =
+                                                  int.tryParse(v.trim()) ?? 1;
+                                              setSheetState(() {
+                                                _serviceQuantities[id] =
+                                                    qty > 0 ? qty : 1;
+                                              });
+                                            },
+                                            controller: TextEditingController(
+                                              text: currentQty.toString(),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             ),
-                            activeColor: kPrimaryColor,
                           );
                         }),
                       ),
@@ -462,7 +598,7 @@ Future<void> _deletePackage(String packageId) async {
 
                     const SizedBox(height: 14),
 
-                    // Package duration (Start and End Date)
+                    // Package duration
                     Text(
                       "Package duration (optional)",
                       style: GoogleFonts.poppins(
@@ -583,7 +719,7 @@ Future<void> _deletePackage(String packageId) async {
 
                     const SizedBox(height: 12),
 
-                    // Summary: base total + discount
+                    // Summary
                     if (baseTotal > 0)
                       Container(
                         width: double.infinity,
@@ -686,13 +822,13 @@ Future<void> _deletePackage(String packageId) async {
       },
     );
 
-    // تنفيذ عملية الإضافة
     if (result != null) {
       if (editingPackage != null) {
-        _showSnackBar('Update feature not implemented (Missing PUT/PATCH API).');
+        _showSnackBar(
+            'Update feature not implemented (Missing PUT/PATCH API).');
       } else {
         setState(() {
-          _isLoading = true; 
+          _isLoading = true;
         });
         try {
           await PackageService.createPackage(
@@ -782,7 +918,7 @@ Future<void> _deletePackage(String packageId) async {
         ),
         iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: RefreshIndicator( 
+      body: RefreshIndicator(
         onRefresh: _fetchData,
         color: kPrimaryColor,
         child: SingleChildScrollView(
@@ -790,7 +926,6 @@ Future<void> _deletePackage(String packageId) async {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Info card 
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
@@ -874,11 +1009,10 @@ Future<void> _deletePackage(String packageId) async {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // header row
                           Row(
                             children: [
-                              // 🟢 الإضافة الجديدة هنا: عرض الصورة أو الأيقونة الافتراضية
-                              if (p.packageImageUrl != null && p.packageImageUrl!.isNotEmpty)
+                              if (p.packageImageUrl != null &&
+                                  p.packageImageUrl!.isNotEmpty)
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(14),
                                   child: Image.network(
@@ -886,7 +1020,8 @@ Future<void> _deletePackage(String packageId) async {
                                     width: 48,
                                     height: 48,
                                     fit: BoxFit.cover,
-                                    loadingBuilder: (context, child, loadingProgress) {
+                                    loadingBuilder:
+                                        (context, child, loadingProgress) {
                                       if (loadingProgress == null) return child;
                                       return Container(
                                         width: 48,
@@ -894,11 +1029,14 @@ Future<void> _deletePackage(String packageId) async {
                                         color: Colors.grey.shade200,
                                         child: const Center(
                                           child: CircularProgressIndicator(
-                                              color: kPrimaryColor, strokeWidth: 2),
+                                              color: kPrimaryColor,
+                                              strokeWidth: 2),
                                         ),
                                       );
                                     },
-                                    errorBuilder: (context, error, stackTrace) => Container(
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            Container(
                                       width: 48,
                                       height: 48,
                                       padding: const EdgeInsets.all(8),
@@ -915,7 +1053,6 @@ Future<void> _deletePackage(String packageId) async {
                                   ),
                                 )
                               else
-                                // الأيقونة الافتراضية
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
@@ -928,7 +1065,6 @@ Future<void> _deletePackage(String packageId) async {
                                     color: kPrimaryColor,
                                   ),
                                 ),
-                              // -------------------------------------------------------------
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
@@ -981,7 +1117,6 @@ Future<void> _deletePackage(String packageId) async {
                             ),
                           ],
                           const SizedBox(height: 4),
-                          // عرض السعر الأساسي والخصم
                           if (baseTotal > 0)
                             Row(
                               children: [
@@ -1017,7 +1152,6 @@ Future<void> _deletePackage(String packageId) async {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              // ⚠️ التعديل غير مدعوم حالياً لعدم وجود API
                               IconButton(
                                 icon: const Icon(Icons.edit_outlined,
                                     size: 20, color: Colors.grey),
@@ -1041,7 +1175,6 @@ Future<void> _deletePackage(String packageId) async {
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      // لا تعرض زر الإضافة إذا كانت قائمة الخدمات فارغة
       floatingActionButton: _services.isEmpty
           ? null
           : FloatingActionButton.extended(
@@ -1061,7 +1194,6 @@ Future<void> _deletePackage(String packageId) async {
   }
 }
 
-/// كارت حالة فارغة لما ما يكون في أي باكيجات
 class _EmptyPackagesCard extends StatelessWidget {
   final List<Map<String, dynamic>> services;
 
@@ -1137,8 +1269,8 @@ class _EmptyPackagesCard extends StatelessWidget {
                 color: Colors.grey[600],
               ),
             ),
-        ],  
+        ],
       ),
     );
   }
-} 
+}

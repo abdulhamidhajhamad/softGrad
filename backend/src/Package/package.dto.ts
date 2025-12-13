@@ -1,5 +1,5 @@
 // package.dto.ts
-import { IsString,IsArray, IsNotEmpty, IsNumber, IsDateString, IsMongoId, ArrayMinSize } from 'class-validator';
+import { IsString,IsOptional,IsArray, IsNotEmpty, IsNumber, IsDateString, IsMongoId, ArrayMinSize } from 'class-validator';
 
 import { Transform } from 'class-transformer'; // 👈 استيراد جديد وحيوي
 
@@ -10,20 +10,17 @@ export class CreatePackageDto {
 
   @IsNotEmpty()
   @IsArray()
-  @ArrayMinSize(1)
-  // 1. 🆕 التحويل من نص JSON إلى مصفوفة قبل التحقق
-  @Transform(({ value }) => JSON.parse(value)) // 👈 التعديل هنا
-  @IsMongoId({ each: true }) 
-  serviceIds: string[]; 
+  serviceIds: string[];
 
-  // 🟢 الإضافة الجديدة هنا: الوصف
-  @IsNotEmpty()
-  @IsString()
-  description: string; // 👈 تمت الإضافة
+  // 🟢 التعديلات للوصف: جعله اختياريًا وضمان القيمة الفارغة
   
+  @IsOptional() // 👈 1. الآن يمكنك عدم إرساله
+  @Transform(({ value }) => value ?? '') // 👈 2. إذا لم يتم إرساله (undefined/null)، يصبح ""
+  @IsString()
+  description: string; 
+
   @IsNotEmpty()
-  // 2. 🆕 التحويل من نص إلى رقم قبل التحقق
-  @Transform(({ value }) => parseFloat(value)) // 👈 التعديل هنا
+  @Transform(({ value }) => parseFloat(value)) 
   @IsNumber()
   newPrice: number; 
 

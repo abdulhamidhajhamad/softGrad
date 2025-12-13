@@ -28,6 +28,9 @@ export class Package extends Document {
   @Prop({ required: false, type: String }) 
   packageImageUrl?: string; // 👈 التعديل هنا
 
+  @Prop({ required: false, trim: true })
+  description: string; // 👈 تمت الإضافة
+
 }
 
 export const PackageSchema = SchemaFactory.createForClass(Package);

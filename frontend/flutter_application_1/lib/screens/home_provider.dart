@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
-// ✅ الاستيراد الصحيح لسيرفس الإشعارات
 import 'package:flutter_application_1/services/notification_provider_service.dart'; 
 import 'edit_profile_provider.dart';
 import 'services_provider.dart';
@@ -11,9 +10,9 @@ import 'package:flutter_application_1/screens/messages_provider.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
 import 'package:flutter_application_1/screens/reviews_provider.dart';
 import 'package:flutter_application_1/screens/packages_provider.dart';
-// هذا الاستيراد يبدو زائداً ولكنه موجود في الملف الأصلي
 import 'package:flutter_application_1/screens/home_customer.dart'; 
 import 'package:flutter_application_1/services/chat_provider_service.dart';
+
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
@@ -55,7 +54,7 @@ class HomeProviderScreen extends StatefulWidget {
   State<HomeProviderScreen> createState() => _HomeProviderScreenState();
 }
 
-class _HomeProviderScreenState extends State<HomeProviderScreen> {
+class _HomeProviderScreenState extends State<HomeProviderScreen> with WidgetsBindingObserver {
   late ProviderModel provider;
   List<Map<String, dynamic>> _services = [];
   
@@ -64,14 +63,80 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
     super.initState();
     provider = widget.provider;
     _loadServices();
+    
+    // ✅ مراقبة حالة التطبيق
+    WidgetsBinding.instance.addObserver(this);
+    
     // ✅ البدء باتصال الـ Realtime بمجرد إنشاء الشاشة
-    NotificationProviderService.initRealtimeNotifications();
+    _initializeConnections();
+  }
+  
+  /// ✅ دالة موحدة لتهيئة جميع الاتصالات
+  Future<void> _initializeConnections() async {
+    debugPrint('🚀 Initializing real-time connections...');
+    
+    // اتصال الإشعارات
+    await NotificationProviderService.initRealtimeNotifications();
+    
+    // تحديث العداد الأولي
+    await _updateUnreadCount();
+    
+    // التحقق من حالة الاتصال بعد ثانية
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        final isConnected = NotificationProviderService.isConnected();
+        debugPrint('📊 Connection status after init: $isConnected');
+        
+        if (!isConnected) {
+          debugPrint('⚠️ Not connected, retrying...');
+          NotificationProviderService.reconnect();
+        }
+      }
+    });
+  }
+  
+  /// ✅ معالجة تغييرات حالة التطبيق
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    debugPrint('📱 App lifecycle changed: $state');
+    
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // التطبيق عاد للواجهة
+        debugPrint('✅ App resumed, reconnecting...');
+        _initializeConnections();
+        break;
+      case AppLifecycleState.paused:
+        // التطبيق في الخلفية
+        debugPrint('⏸️ App paused');
+        break;
+      case AppLifecycleState.inactive:
+        // التطبيق غير نشط مؤقتاً
+        debugPrint('💤 App inactive');
+        break;
+      case AppLifecycleState.detached:
+        // التطبيق سيغلق
+        debugPrint('🔴 App detached');
+        break;
+      default:
+        break;
+    }
+  }
+  
+  /// ✅ دالة لتحديث عداد الإشعارات
+  Future<void> _updateUnreadCount() async {
+    if (!mounted) return;
+    await NotificationProviderService.updateUnreadCountOnConnect();
   }
   
   @override
   void dispose() {
-    // ✅ إغلاق اتصال الـ Socket عند مغادرة الشاشة
-    NotificationProviderService.closeRealtimeConnection();
+    // ✅ إزالة المراقب
+    WidgetsBinding.instance.removeObserver(this);
+    
+    // ✅ لا نغلق الاتصال هنا لأننا نريده يبقى نشط
     super.dispose();
   }
 
@@ -134,7 +199,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                       ),
                     );
                     // 💡 عند العودة، نطلب تحديث الحالة يدوياً للتأكد
-                    NotificationProviderService.updateUnreadCountOnConnect();
+                    _updateUnreadCount();
                   },
                 ),
                 ListTile(
@@ -173,6 +238,8 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                   ),
                   onTap: () async {
                     Navigator.pop(context);
+                    // ✅ إغلاق الاتصال عند تسجيل الخروج
+                    NotificationProviderService.closeRealtimeConnection();
                     await AuthService.deleteToken();
                     Navigator.pushAndRemoveUntil(
                       context,
@@ -237,7 +304,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
               _HeaderCard(provider: provider),
               const SizedBox(height: 15),
               const SizedBox(height: 20),
-              // Packages teaser card
               _PackagesTeaserCard(
                 onTap: () {
                   Navigator.push(
@@ -299,7 +365,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                   const SizedBox(height: 10),
                  Row(
                       children: [
-                        // ✅ Messages with real-time unread count badge
                         Expanded(
                           child: ValueListenableBuilder<int>(
                             valueListenable: ChatProviderService.unreadGlobalCount,
@@ -307,7 +372,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                               return _QuickAction(
                                 title: "Messages",
                                 icon: Icons.chat_bubble_outline,
-                                showBadge: unreadCount > 0, // ✅ Show red badge if there are unread messages
+                                showBadge: unreadCount > 0,
                                 onTap: () async {
                                   await Navigator.push(
                                     context,
@@ -315,7 +380,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                                       builder: (_) => const MessagesProviderScreen(),
                                     ),
                                   );
-                                  // ✅ Refresh unread count after returning
                                   ChatProviderService().fetchUnreadCount();
                                 },
                               );
@@ -323,7 +387,6 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // Notifications with hasUnread badge
                         Expanded(
                           child: ValueListenableBuilder<bool>(
                             valueListenable: NotificationProviderService.hasUnreadNotifier,
@@ -339,7 +402,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                                       builder: (_) => const NotificationsProviderScreen(),
                                     ),
                                   );
-                                  NotificationProviderService.updateUnreadCountOnConnect();
+                                  _updateUnreadCount();
                                 },
                               );
                             },
@@ -577,14 +640,18 @@ class _QuickAction extends StatelessWidget {
                 Icon(icon, size: 28, color: kPrimaryColor),
                 if (showBadge)
                   Positioned(
-                    right: 0,
-                    top: 0,
+                    right: -2,
+                    top: -2,
                     child: Container(
                       width: 10,
                       height: 10,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: Colors.redAccent,
                         shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFFF3F2FF),
+                          width: 1.5,
+                        ),
                       ),
                     ),
                   ),

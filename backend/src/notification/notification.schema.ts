@@ -1,5 +1,4 @@
 // notification.schema.ts
-// Just add NEW_MESSAGE to your existing NotificationType enum
 
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
@@ -11,14 +10,15 @@ export enum NotificationType {
   PAYMENT_SUCCESS = 'payment_success',
   PAYMENT_FAILED = 'payment_failed',
   PROMO_CODE = 'promo_code',
-  NEW_MESSAGE = 'new_message',  // ← Add this single line
+  NEW_MESSAGE = 'new_message',
   GENERAL = 'general',
 }
 
+// ✅ FIX: تأكد من أن القيم بحروف صغيرة تماماً كما في user.role
 export enum RecipientType {
-  USER = 'user',
-  VENDOR = 'vendor',
-  ADMIN = 'admin',
+  USER = 'user',      // بحروف صغيرة
+  VENDOR = 'vendor',  // بحروف صغيرة
+  ADMIN = 'admin',    // بحروف صغيرة
 }
 
 @Schema({ timestamps: true })
@@ -49,11 +49,11 @@ export class Notification extends Document {
   @Prop({ type: Object })
   metadata?: Record<string, any>;
 
+  // 🔴 FIX: العودة إلى isRead
   @Prop({ type: Boolean, default: false })
-  read: boolean;
+  isRead: boolean;
 
-  @Prop({ type: Date })
-  readAt?: Date;
+  // 🔴 تم حذف readAt لأنها غير مستخدمة الآن
 
   @Prop({ type: Date, default: Date.now })
   createdAt: Date;
@@ -63,4 +63,5 @@ export const NotificationSchema = SchemaFactory.createForClass(Notification);
 
 // Indexes
 NotificationSchema.index({ recipientId: 1, createdAt: -1 });
-NotificationSchema.index({ recipientId: 1, read: 1 });
+// 🔴 FIX: تحديث الـ index لـ isRead
+NotificationSchema.index({ recipientId: 1, isRead: 1 });

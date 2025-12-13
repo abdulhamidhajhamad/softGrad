@@ -8,12 +8,15 @@ import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class NotificationProviderService {
-  // ✅ تأكد من استخدام نفس الـ IP في كل مكان
   static const String baseUrl = 'http://10.0.2.2:3000';
-static const String wsUrl = 'http://10.0.2.2:3000';
+  static const String wsUrl = 'http://10.0.2.2:3000';
 
   static final ValueNotifier<bool> hasUnreadNotifier = ValueNotifier<bool>(false);
+  static final ValueNotifier<List<ProviderNotification>> notificationsNotifier = 
+      ValueNotifier<List<ProviderNotification>>([]);
+  
   static IO.Socket? _socket;
+  static bool _isConnecting = false;
 
   static Future<Map<String, String>> _getHeaders() async {
     final token = await AuthService.getToken();
@@ -23,80 +26,194 @@ static const String wsUrl = 'http://10.0.2.2:3000';
     };
   }
 
-  /// دالة لإنشاء اتصال الـ Socket.IO
+  /// دالة لإنشاء اتصال الـ Socket.IO مع معالجة أفضل للأخطاء
   static Future<void> initRealtimeNotifications() async {
-    final token = await AuthService.getToken();
-    if (token == null) {
-      debugPrint('❌ Realtime connection failed: No auth token found.');
+    if (_isConnecting) {
+      debugPrint('⏳ Connection already in progress, skipping...');
       return;
     }
 
     if (_socket != null && _socket!.connected) {
       debugPrint('✅ Socket already connected');
-      updateUnreadCountOnConnect();
       return;
     }
 
+    _isConnecting = true;
+
     try {
-      debugPrint('🔌 Connecting to WebSocket: $wsUrl');
+      final token = await AuthService.getToken();
+      if (token == null) {
+        debugPrint('❌ Realtime connection failed: No auth token found.');
+        _isConnecting = false;
+        return;
+      }
+
+      // ✅ إغلاق أي اتصال سابق
+      if (_socket != null) {
+        _socket!.disconnect();
+        _socket!.dispose();
+        _socket = null;
+      }
+
+      debugPrint('🔌 Connecting to WebSocket: $wsUrl with token: ${token.substring(0, 20)}...');
       
       _socket = IO.io(
         wsUrl, 
         IO.OptionBuilder()
           .setTransports(['websocket'])
+          .disableAutoConnect()
           .enableForceNewConnection()
           .setQuery({'token': token})
           .setExtraHeaders({'Authorization': 'Bearer $token'})
-          .setReconnectionDelay(1000)
-          .setReconnectionAttempts(5)
+          .setReconnectionDelay(2000)
+          .setReconnectionDelayMax(5000)
+          .setReconnectionAttempts(10)
           .build(),
       );
 
+      // ✅ معالجة الاتصال الناجح
       _socket!.onConnect((_) {
-        debugPrint('✅ Notification Socket connected successfully!');
+        debugPrint('✅✅✅ Notification Socket CONNECTED successfully!');
+        _isConnecting = false;
         updateUnreadCountOnConnect();
       });
 
+      // ✅ معالجة تأكيد الاتصال من السيرفر
+      _socket!.on('connected', (data) {
+        debugPrint('✅ Server confirmed connection: $data');
+      });
+
+      // 🔥 استقبال إشعار جديد في الوقت الفعلي
       _socket!.on('newNotification', (data) {
-        debugPrint('🔔 New notification received: $data');
-        updateUnreadCountOnConnect();
+        debugPrint('\n🔔🔔🔔 NEW NOTIFICATION RECEIVED 🔔🔔🔔');
+        debugPrint('📦 Data type: ${data.runtimeType}');
+        debugPrint('📦 Data content: $data');
+        
+        try {
+          final newNotification = ProviderNotification(
+            id: data['_id'] ?? '',
+            title: data['title'] ?? 'No Title',
+            body: data['body'] ?? '',
+            createdAt: DateTime.parse(data['createdAt'] ?? DateTime.now().toIso8601String()),
+            isRead: data['isRead'] ?? false,
+            type: _mapBackendTypeToUiType(data['type']),
+          );
+          
+          debugPrint('✅ Notification object created: ${newNotification.title}');
+          
+          // إضافة في البداية
+          final currentList = List<ProviderNotification>.from(notificationsNotifier.value);
+          currentList.insert(0, newNotification);
+          notificationsNotifier.value = currentList;
+          
+          debugPrint('✅ Added to list. Total notifications: ${currentList.length}');
+          
+          // ✅ تحديث العداد فوراً
+          hasUnreadNotifier.value = true;
+          debugPrint('✅ Updated hasUnread badge to TRUE\n');
+          
+        } catch (e, stackTrace) {
+          debugPrint('❌ Error processing new notification: $e');
+          debugPrint('Stack trace: $stackTrace');
+        }
       });
 
+      // 🔥 تحديث عداد غير المقروءة
       _socket!.on('unreadCountUpdated', (data) {
-        final int count = data is int 
-            ? data 
-            : (data is Map && data.containsKey('count') ? data['count'] : 0);
+        debugPrint('🔔 UNREAD COUNT UPDATE EVENT: $data');
         
-        debugPrint('🔔 Realtime unread count updated: $count');
-        hasUnreadNotifier.value = count > 0;
+        try {
+          final int count = data is int 
+              ? data 
+              : (data is Map && data.containsKey('count') ? data['count'] : 0);
+          
+          debugPrint('📊 Setting hasUnread to: ${count > 0} (count: $count)');
+          hasUnreadNotifier.value = count > 0;
+        } catch (e) {
+          debugPrint('❌ Error processing unread count: $e');
+        }
       });
       
-      _socket!.onDisconnect((_) => debugPrint('❌ Notification Socket disconnected'));
-      _socket!.onError((error) => debugPrint('❌ Socket error: $error'));
-      _socket!.onConnectError((error) => debugPrint('❌ Socket connection error: $error'));
+      // ✅ معالجة قطع الاتصال
+      _socket!.onDisconnect((reason) {
+        debugPrint('❌ Notification Socket disconnected. Reason: $reason');
+        _isConnecting = false;
+      });
 
-    } catch (e) {
+      // ✅ معالجة الأخطاء
+      _socket!.onError((error) {
+        debugPrint('❌ Socket error: $error');
+        _isConnecting = false;
+      });
+
+      _socket!.onConnectError((error) {
+        debugPrint('❌ Socket connection error: $error');
+        _isConnecting = false;
+      });
+
+      // ✅ معالجة إعادة الاتصال
+      _socket!.onReconnect((attempt) {
+        debugPrint('🔄 Reconnected after $attempt attempts');
+        updateUnreadCountOnConnect();
+      });
+
+      _socket!.onReconnectAttempt((attempt) {
+        debugPrint('🔄 Reconnection attempt $attempt...');
+      });
+
+      _socket!.onReconnectError((error) {
+        debugPrint('❌ Reconnection error: $error');
+      });
+
+      _socket!.onReconnectFailed((_) {
+        debugPrint('❌ Reconnection failed after all attempts');
+        _isConnecting = false;
+      });
+
+      // ✅ بدء الاتصال
+      _socket!.connect();
+      debugPrint('📡 Socket connection initiated...\n');
+
+    } catch (e, stackTrace) {
       debugPrint('❌ Failed to establish socket connection: $e');
+      debugPrint('Stack trace: $stackTrace');
+      _isConnecting = false;
     }
   }
   
   /// دالة لإغلاق اتصال الـ Socket عند مغادرة الصفحة
   static void closeRealtimeConnection() {
-    _socket?.disconnect();
-    _socket?.dispose();
-    _socket = null;
-    debugPrint('🔌 Socket connection closed.');
+    if (_socket != null) {
+      _socket!.disconnect();
+      _socket!.dispose();
+      _socket = null;
+      _isConnecting = false;
+      debugPrint('🔌 Socket connection closed.');
+    }
+  }
+
+  /// دالة للتحقق من حالة الاتصال
+  static bool isConnected() {
+    return _socket != null && _socket!.connected;
+  }
+
+  /// دالة لإعادة الاتصال يدوياً
+  static Future<void> reconnect() async {
+    debugPrint('🔄 Manual reconnection requested...');
+    closeRealtimeConnection();
+    await Future.delayed(const Duration(milliseconds: 500));
+    await initRealtimeNotifications();
   }
 
   /// دالة لجلب العدد يدوياً وتحديث الـ Notifier
   static Future<void> updateUnreadCountOnConnect() async {
-     try {
-        final count = await getUnreadCount();
-        hasUnreadNotifier.value = count > 0;
-        debugPrint('🔄 Manual count update: $count (hasUnread: ${count > 0})');
-      } catch(e) {
-        debugPrint('❌ Error manual update count: $e');
-      }
+    try {
+      final count = await getUnreadCount();
+      hasUnreadNotifier.value = count > 0;
+      debugPrint('🔄 Manual count update: $count (hasUnread: ${count > 0})');
+    } catch(e) {
+      debugPrint('❌ Error manual update count: $e');
+    }
   }
   
   // 1. جلب جميع الإشعارات
@@ -116,13 +233,12 @@ static const String wsUrl = 'http://10.0.2.2:3000';
       );
 
       debugPrint('📡 Response status: ${response.statusCode}');
-      debugPrint('📡 Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         debugPrint('✅ Successfully fetched ${data.length} notifications');
         
-        return data.map((json) {
+        final notifications = data.map((json) {
           return ProviderNotification(
             id: json['_id'],
             title: json['title'] ?? 'No Title',
@@ -132,6 +248,11 @@ static const String wsUrl = 'http://10.0.2.2:3000';
             type: _mapBackendTypeToUiType(json['type']),
           );
         }).toList();
+        
+        // تحديث القائمة العامة
+        notificationsNotifier.value = notifications;
+        
+        return notifications;
       } else {
         debugPrint('❌ Failed to load notifications: ${response.statusCode}');
         throw Exception('Failed to load notifications: ${response.statusCode}');
@@ -154,7 +275,7 @@ static const String wsUrl = 'http://10.0.2.2:3000';
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final count = data['count'] ?? 0;
-        debugPrint('📊 Unread count: $count');
+        debugPrint('📊 Unread count from API: $count');
         return count;
       }
       return 0;
@@ -167,15 +288,32 @@ static const String wsUrl = 'http://10.0.2.2:3000';
   // 3. تعليم الكل كمقروء
   static Future<void> markAllAsRead() async {
     try {
+      debugPrint('📖 Starting markAllAsRead...');
+      
+      // ✅ تحديث محلي أولاً
+      hasUnreadNotifier.value = false;
+      debugPrint('✅ Updated hasUnreadNotifier to false');
+      
       final headers = await _getHeaders();
       final response = await http.patch(
         Uri.parse('$baseUrl/notifications/mark-all-read'),
         headers: headers,
       );
       
+      debugPrint('📡 Response status: ${response.statusCode}');
+      
       if (response.statusCode == 204 || response.statusCode == 200) {
-        debugPrint('✅ All notifications marked as read');
-        hasUnreadNotifier.value = false;
+        debugPrint('✅ Server confirmed: All notifications marked as read');
+        
+        // تحديث القائمة المحلية
+        final updatedList = List<ProviderNotification>.from(notificationsNotifier.value);
+        for (var n in updatedList) {
+          n.isRead = true;
+        }
+        notificationsNotifier.value = updatedList;
+        debugPrint('✅ Updated local notification list - all marked as read');
+      } else {
+        debugPrint('⚠️ Mark as read returned unexpected status: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('❌ Error marking all as read: $e');
@@ -193,6 +331,15 @@ static const String wsUrl = 'http://10.0.2.2:3000';
       
       if (response.statusCode == 204 || response.statusCode == 200) {
         debugPrint('✅ Notification deleted: $id');
+        
+        // حذف من القائمة المحلية
+        final updatedList = notificationsNotifier.value
+            .where((n) => n.id != id)
+            .toList();
+        notificationsNotifier.value = updatedList;
+        
+        // تحديث العداد
+        await updateUnreadCountOnConnect();
       }
     } catch (e) {
       debugPrint('❌ Error deleting notification: $e');
@@ -203,10 +350,13 @@ static const String wsUrl = 'http://10.0.2.2:3000';
   /// دالة مساعدة لربط أنواع الباك إند مع أنواع الواجهة الأمامية
   static NotificationType _mapBackendTypeToUiType(String? backendType) {
     switch (backendType) {
+      case 'new_message':
       case 'NEW_MESSAGE':
       case 'USER_MESSAGE':
         return NotificationType.message;
+      case 'booking_confirmed':
       case 'BOOKING_CONFIRMED':
+      case 'booking_cancelled':
       case 'BOOKING_CANCELLED':
         return NotificationType.booking;
       case 'SERVICE_FAVOURITED':
@@ -214,6 +364,7 @@ static const String wsUrl = 'http://10.0.2.2:3000';
       case 'REVIEW_ADDED':
         return NotificationType.review;
       case 'PAYOUT_SENT':
+      case 'promo_code':
       case 'PROMO_CODE':
       default:
         return NotificationType.system;

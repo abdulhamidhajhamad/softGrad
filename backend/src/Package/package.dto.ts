@@ -16,6 +16,11 @@ export class CreatePackageDto {
   @IsMongoId({ each: true }) 
   serviceIds: string[]; 
 
+  // 🟢 الإضافة الجديدة هنا: الوصف
+  @IsNotEmpty()
+  @IsString()
+  description: string; // 👈 تمت الإضافة
+  
   @IsNotEmpty()
   // 2. 🆕 التحويل من نص إلى رقم قبل التحقق
   @Transform(({ value }) => parseFloat(value)) // 👈 التعديل هنا

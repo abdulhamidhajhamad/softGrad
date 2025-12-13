@@ -48,6 +48,7 @@ export class PackageService {
       
       const newPackage = new this.packageModel({
         packageName: dto.packageName,
+        description: dto.description, // 🟢 الإضافة الجديدة هنا
         vendorId: vendorObjectId,
         serviceIds: dto.serviceIds.map(id => new Types.ObjectId(id)), 
         newPrice: dto.newPrice,
@@ -110,6 +111,7 @@ export class PackageService {
     return packages.map(pkg => ({
       _id: pkg._id.toString(), 
       packageName: pkg.packageName,
+      description: pkg.description, // 🟢 إضافة الوصف هنا للـ Vendor  
       newPrice: pkg.newPrice,
       packageImageUrl: pkg.packageImageUrl, // 🟢 الإضافة الجديدة هنا
       serviceNames: pkg.serviceIds

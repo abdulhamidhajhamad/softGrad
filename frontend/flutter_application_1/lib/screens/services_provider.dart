@@ -1,12 +1,11 @@
-import 'dart:io';
+// lib/screens/services_provider.dart
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 
-import 'package:flutter_application_1/screens/add_service_provider.dart';
+import 'package:flutter_application_1/screens/add_service/add_service_provider.dart';
 import 'package:flutter_application_1/services/service_service.dart';
-import 'showMore_provider.dart';
+import 'show more/showMore_provider.dart';
 import 'edit_service_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
@@ -42,7 +41,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
   Future<void> _loadServices() async {
     setState(() {
       _isLoading = true;
-      _hasError = false; // A soft error (No services found) is not a hard error
+      _hasError = false;
     });
 
     try {
@@ -53,19 +52,16 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         _lastUpdated = DateTime.now();
       });
     } catch (e) {
-      // ✅ التعديل هنا: معالجة حالة "لا توجد خدمات"
       if (e.toString().contains('No services found for vendor ID')) {
         setState(() {
-          _services = []; // تأكد أن القائمة فارغة
+          _services = [];
           _isLoading = false;
-          _hasError = false; // لا نعتبرها خطأ جدي، بل حالة فارغة
-          // لا حاجة لتعيين _errorMessage لأننا سنعرض شاشة الـ Empty State
+          _hasError = false;
         });
       } else {
-        // إذا كان خطأ آخر، فاعرض شاشة الخطأ الحقيقية
         setState(() {
           _isLoading = false;
-          _hasError = true; // خطأ حقيقي
+          _hasError = true;
           _errorMessage = e.toString();
         });
         print('Error loading services: $e');
@@ -121,6 +117,32 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
 
   Future<void> _refresh() async {
     await _loadServices();
+  }
+
+  // ✅✅ التعديل المطلوب: حطّينا snippet بمكانه الصح + await
+  Future<void> _openAddService() async {
+    final created = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddServiceProviderScreen()),
+    );
+
+    if (created == true) {
+      await _loadServices(); // تعمل fetchMyServices وتعمل setState
+      return;
+    }
+
+    // (اختياري) لو شاشة الإضافة بترجع Map بدل true
+    if (created is Map && created["created"] == true) {
+      final createdService = created["service"];
+      if (createdService != null) {
+        setState(() {
+          _services.insert(0, Map<String, dynamic>.from(createdService));
+          _markUpdated();
+        });
+      } else {
+        await _loadServices();
+      }
+    }
   }
 
   void _confirmDelete(int index, String serviceId) {
@@ -245,7 +267,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
+                const SizedBox(height: 6),
                 Text(
                   'Failed to load services',
                   style: GoogleFonts.poppins(
@@ -307,20 +329,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => AddServiceProviderScreen(
-                    existingData: null,
-                  ),
-                ),
-              );
-
-              if (result == true) {
-                _loadServices();
-              }
-            },
+            onPressed: _openAddService,
             icon: const Icon(Icons.add),
           ),
         ],
@@ -353,12 +362,11 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
                       itemBuilder: (context, index) {
                         final service = _filteredServices[index];
                         final originalIndex = _services.indexOf(service);
-                        final serviceId = service['_id'] ?? '';
+                        final serviceId = (service['_id'] ?? '').toString();
 
                         return _ServiceCard(
                           service: service,
                           onEdit: () async {
-                            // Navigate to edit screen
                             final result = await Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -423,8 +431,8 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
         const SizedBox(width: 8),
         _MiniStatCard(
           icon: Icons.visibility_outlined,
-          label: 'Active / Hidden',
-          value: '$active / $hidden',
+          label: 'Active ┃ Hidden',
+          value: '$active   ┃   $hidden',
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -460,11 +468,12 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.grey.shade300),
+              borderSide:
+                  const BorderSide(color: Color.fromARGB(255, 142, 142, 142)),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: kPrimaryColor),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+              borderSide: BorderSide(color: kPrimaryColor),
             ),
           ),
         ),
@@ -505,20 +514,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
             ),
             const SizedBox(height: 18),
             ElevatedButton(
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AddServiceProviderScreen(
-                      existingData: null,
-                    ),
-                  ),
-                );
-
-                if (result == true) {
-                  _loadServices();
-                }
-              },
+              onPressed: _openAddService,
               style: ElevatedButton.styleFrom(
                 backgroundColor: kPrimaryColor,
                 foregroundColor: Colors.white,
@@ -552,15 +548,16 @@ class _MiniStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return SizedBox(
+      width: 110,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: const Color.fromARGB(213, 1, 1, 85),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -569,20 +566,21 @@ class _MiniStatCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 18, color: kPrimaryColor),
+            Icon(icon, size: 18, color: Colors.white),
             const SizedBox(height: 4),
             Text(
               value,
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
+                color: Colors.white,
               ),
             ),
             Text(
               label,
               style: GoogleFonts.poppins(
                 fontSize: 11,
-                color: Colors.grey.shade600,
+                color: Colors.white70,
               ),
             ),
           ],

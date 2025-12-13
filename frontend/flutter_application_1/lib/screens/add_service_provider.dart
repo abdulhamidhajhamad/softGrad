@@ -5,8 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_1/services/service_service.dart';
-import 'dart:typed_data'; // ✅ ضرورية لـ MemoryImage
-import 'package:flutter/foundation.dart'; // ✅ إضافة ضرورية لـ kIsWeb (للتأكد من بيئة التشغيل)
+import 'dart:typed_data'; // 💡 إضافة ضرورية للتعامل مع MemoryImage (لحل مشكلة الويب)
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kBackgroundColor = Color(0xFFF3F4F6);
@@ -123,12 +122,13 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
 
 // 1. لتخزين الصور الجديدة التي تم اختيارها فقط (قبل رفعها)
   List<Map<String, dynamic>> _images = [];
-  // 2. لتخزين روابط الصور القديمة التي جُلبت من الـ Backend
+  // 2. 💡 جديد: لتخزين روابط الصور القديمة التي جُلبت من الـ Backend
   List<String> _existingImageUrls = [];
   List<Map<String, dynamic>> _highlights = [];
   List<Map<String, dynamic>> _packages = [];
 
   void _showLoadingSnackBar(String message, {bool isError = false}) {
+    // نستخدم الألوان الافتراضية للتطبيق (kPrimaryColor و Colors.red)
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -218,9 +218,21 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
     super.dispose();
   }
 
-  // ❌ تم حذف دالة _uploadAndSaveImage القديمة وغير المستخدمة
+  Future<String> _uploadAndSaveImage(String path) async {
+    // 💡 مثال افتراضي (يجب استبداله بمنطقك الفعلي):
+    if (path.isEmpty) {
+      throw Exception("Image path is invalid.");
+    }
 
-  // ✅ هذه الدالة تعمل بشكل صحيح على الويب والجوال لأنها تستخدم البايتات
+    // final File imageFile = File(path);
+    // final String imageUrl = await SupabaseService.uploadFile(imageFile);
+    // return imageUrl;
+
+    // لإزالة خطأ التصريف حاليًا، سنعيد قيمة نصية فارغة.
+    // ❌ يجب تعديل هذا السطر بمنطق الرفع الخاص بك
+    return Future.value("temp_supabase_url_needs_real_logic");
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -232,15 +244,14 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
     _showLoadingSnackBar('Processing image...');
 
     try {
-      // ✅ قراءة البايتات مباشرة من XFile، وهذا يحل مشكلة مسار الملف في الويب
+      // 💡 الحل لخطأ الـ Namespace: قراءة البايتات مباشرة من XFile
       final bytes = await pickedFile.readAsBytes();
       final fileName = pickedFile.name;
 
       setState(() {
         // تخزين البايتات واسم الملف بدلاً من المسار
         _images.add({
-          // 💡 تم توجيه هذا النوع ليكون Uint8List لضمان التوافق مع Image.memory
-          'bytes': bytes as Uint8List,
+          'bytes': bytes,
           'name': fileName,
         });
       });
@@ -490,6 +501,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    // 💡 تصحيح 1: إضافة فحص لـ _priceType
     if (_selectedCategory == null ||
         _selectedCity == null ||
         _priceType == null) {
@@ -498,7 +510,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
       return;
     }
 
-    // ✅ فحص الصور: يجب أن يشمل الملفات الجديدة التي تم اختيارها
+    // 💡 تعديل: فحص الصور يجب أن يشمل الملفات الجديدة (باستخدام _images)
     if (_images.isEmpty && _existingImageUrls.isEmpty) {
       _showLoadingSnackBar('Please upload at least one image for the service.',
           isError: true);
@@ -508,9 +520,11 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. جلب اسم الشركة تلقائياً
+      // 🆕 1. جلب اسم الشركة تلقائياً
       final companyName = await ServiceService.fetchCompanyName();
       if (companyName == null) {
+        // يمكنك هنا عرض رسالة خطأ إذا كان اسم الشركة مطلوباً بشكل صارم
+        // استخدم الدالة المخصصة لديك لعرض الرسالة
         _showLoadingSnackBar(
             'Could not retrieve company name. Please contact support.',
             isError: true);
@@ -531,23 +545,24 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
           };
         }).toList();
 
+        // 💡 تصحيح 2: تمرير companyName كمعامل جديد
         final result = await ServiceService.addService(
           title: _nameCtrl.text.trim(),
           description: _fullDescCtrl.text.trim(),
           price: price,
           priceType: _priceType!,
           highlights: highlightsForApi,
-          imageFilesData: _images, // ✅ يتم تمرير البايتات وأسماء الملفات هنا
+          imageFilesData: _images,
           category: _selectedCategory!,
           latitude: latitude,
           longitude: longitude,
           address: _addressCtrl.text.trim(),
           city: _selectedCity!,
-          companyName: companyName,
+          companyName: companyName, // ⬅️ 🆕 تم إضافة اسم الشركة هنا
         );
 
         _showLoadingSnackBar('Service saved successfully!', isError: false);
-        Navigator.of(context).pop(true);
+        Navigator.of(context).pop(result);
       } catch (e) {
         print('Error adding service: $e');
         _showLoadingSnackBar('Error adding service: ${e.toString()}',
@@ -556,6 +571,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
         setState(() => _isLoading = false);
       }
     } catch (e) {
+      // التعامل مع الخطأ العام (مثل خطأ جلب اسم الشركة)
       print('General error during save process: $e');
       _showLoadingSnackBar('An unexpected error occurred: ${e.toString()}',
           isError: true);
@@ -677,31 +693,23 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
+                                horizontal: 100, vertical: 20),
                             decoration: BoxDecoration(
                               color: kPrimaryColor.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(5),
                             ),
                             child: Text(
                               "Service Details",
                               style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w700,
                                 color: kPrimaryColor,
                               ),
                             ),
                           ),
-                          const Spacer(),
-                          Text(
-                            _selectedCategory ?? "Select category",
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              color: Colors.grey[600],
-                            ),
-                          ),
                         ],
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 16),
                       _buildInput("Name", _nameCtrl),
                     ],
                   ),
@@ -730,7 +738,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                             "Description",
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w600,
-                              fontSize: 14,
+                              fontSize: 15,
                               color: kTextColor,
                             ),
                           ),
@@ -764,38 +772,72 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         "Pricing & Location",
                         style: GoogleFonts.poppins(
                           fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                          fontSize: 15,
                           color: kTextColor,
                         ),
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
+                          // ------- Address -------
                           Expanded(
-                            child: _buildInput("Address", _addressCtrl),
+                            child: Container(
+                              height: 52,
+                              child: TextFormField(
+                                controller: _addressCtrl,
+                                decoration: _inputDecoration("Address"),
+                                style: GoogleFonts.poppins(fontSize: 13),
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 12),
+
+                          // ------- City Dropdown -------
                           Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedCity,
-                              decoration: _inputDecoration("City"),
-                              icon: const Icon(Icons.expand_more_rounded,
-                                  size: 18),
-                              items: kCities
-                                  .map(
-                                    (city) => DropdownMenuItem<String>(
-                                      value: city,
-                                      child: Text(
-                                        city,
-                                        style:
-                                            GoogleFonts.poppins(fontSize: 13),
-                                      ),
+                            child: Container(
+                              height: 52,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade300),
+                                color: Colors.white,
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: (_selectedCity == null ||
+                                          _selectedCity!.isEmpty)
+                                      ? null
+                                      : _selectedCity,
+
+                                  // ⭐ هذا هو الليبل (placeholder)
+                                  hint: Text(
+                                    "City",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade500,
                                     ),
-                                  )
-                                  .toList(),
-                              onChanged: (v) {
-                                setState(() => _selectedCity = v);
-                              },
+                                  ),
+
+                                  icon: const Icon(Icons.expand_more_rounded,
+                                      size: 18),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    color: Colors.black,
+                                  ),
+                                  items: kCities
+                                      .map(
+                                        (city) => DropdownMenuItem<String>(
+                                          value: city,
+                                          child: Text(city),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (v) {
+                                    setState(() => _selectedCity = v);
+                                  },
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -838,16 +880,16 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 13),
                       Text(
                         "Price Type",
                         style: GoogleFonts.poppins(
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: FontWeight.w500,
                           color: kTextColor,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Expanded(
@@ -863,16 +905,16 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 20),
                       Text(
                         "Service Category",
                         style: GoogleFonts.poppins(
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: FontWeight.w500,
                           color: kTextColor,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         value: _selectedCategory,
                         decoration: _inputDecoration("Category"),
@@ -928,7 +970,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                         "Gallery",
                         style: GoogleFonts.poppins(
                           fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                          fontSize: 15,
                           color: kTextColor,
                         ),
                       ),
@@ -964,9 +1006,9 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(16),
                                   child: Image(
-                                    // ✅ التصحيح الجوهري: استخدام MemoryImage لعرض البايتات (يعمل على الويب والجوال)
-                                    image:
-                                        MemoryImage(img['bytes'] as Uint8List),
+                                    // ✅ التصحيح الجوهري هنا: استخدام MemoryImage
+                                    // لأن img عبارة عن Map يحتوي على bytes
+                                    image: MemoryImage(img['bytes']),
                                     fit: BoxFit.cover,
                                   ),
                                 ),
@@ -991,7 +1033,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(16),
                                   child: Image.network(
-                                    url,
+                                    url, // للصور القادمة من السيرفر نستخدم Network
                                     fit: BoxFit.cover,
                                     errorBuilder:
                                         (context, error, stackTrace) =>
@@ -1062,7 +1104,7 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                             "Highlights",
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w600,
-                              fontSize: 14,
+                              fontSize: 15,
                               color: kTextColor,
                             ),
                           ),
@@ -1134,15 +1176,15 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
                               ),
                           ],
                         ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       const Divider(height: 24),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         title: Text(
                           "Visible in search",
                           style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                             color: kTextColor,
                           ),
                         ),

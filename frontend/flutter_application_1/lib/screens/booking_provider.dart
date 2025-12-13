@@ -41,12 +41,39 @@ class _BookingsScreenState extends State<BookingsScreen> {
     fetchBookings();
   }
 
+  // -----------------------------
+  //  ⭐ Dummy Data Added Here
+  // -----------------------------
   Future<void> fetchBookings() async {
-    // TODO: لاحقًا يتم الربط مع API
-    await Future.delayed(const Duration(seconds: 1));
+    await Future.delayed(const Duration(milliseconds: 700));
 
     setState(() {
-      allBookings = []; // سيتم تعبئتها من الAPI لاحقًا
+      allBookings = [
+        Booking(
+          clientName: "Alaa Khader",
+          eventType: "Wedding Photography",
+          date: "12 Jan 2026",
+          time: "4:00 PM",
+          location: "Rawabi City Hall",
+          status: "Pending",
+        ),
+        Booking(
+          clientName: "Sara Mahmoud",
+          eventType: "Engagement Party",
+          date: "20 Jan 2026",
+          time: "7:00 PM",
+          location: "Nablus - AlMashtal",
+          status: "Approved",
+        ),
+        Booking(
+          clientName: "Yara Sabri",
+          eventType: "Birthday Event",
+          date: "3 Feb 2026",
+          time: "5:30 PM",
+          location: "Ramallah - AlBireh",
+          status: "Rejected",
+        ),
+      ];
       isLoading = false;
     });
   }
@@ -56,30 +83,22 @@ class _BookingsScreenState extends State<BookingsScreen> {
     return allBookings.where((b) => b.status == selectedFilter).toList();
   }
 
-  // ----------------------
-  //   🔥 إضافة التراجع Undo
-  // ----------------------
   void updateStatus(Booking booking, String newStatus) {
     final oldStatus = booking.status;
 
-    setState(() {
-      booking.status = newStatus;
-      // TODO: ارسال الحالة الجديدة للـ API
-    });
+    setState(() => booking.status = newStatus);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         content: Text("Status changed to $newStatus"),
         action: SnackBarAction(
           label: "Undo",
           onPressed: () {
-            setState(() {
-              booking.status = oldStatus;
-              // TODO: إعادة إرسال الحالة القديمة للـ API
-            });
+            setState(() => booking.status = oldStatus);
           },
         ),
-        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -95,12 +114,14 @@ class _BookingsScreenState extends State<BookingsScreen> {
           icon: const Icon(Icons.arrow_back, color: kTextColor),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text("My Bookings",
-            style: GoogleFonts.poppins(
-              color: kTextColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 20,
-            )),
+        title: Text(
+          "My Bookings",
+          style: GoogleFonts.poppins(
+            color: kTextColor,
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
         centerTitle: true,
       ),
       body: isLoading
@@ -112,8 +133,10 @@ class _BookingsScreenState extends State<BookingsScreen> {
                 Expanded(
                   child: filteredBookings.isEmpty
                       ? Center(
-                          child: Text("No bookings in this category",
-                              style: GoogleFonts.poppins(color: Colors.grey)),
+                          child: Text(
+                            "No bookings in this category",
+                            style: GoogleFonts.poppins(color: Colors.grey),
+                          ),
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.all(12),
@@ -141,11 +164,16 @@ class _BookingsScreenState extends State<BookingsScreen> {
         children: filters.map((filter) {
           final isSelected = selectedFilter == filter;
           return ChoiceChip(
-            label: Text(filter,
-                style: GoogleFonts.poppins(
-                    color: isSelected ? Colors.white : kTextColor)),
+            label: Text(
+              filter,
+              style: GoogleFonts.poppins(
+                color: isSelected ? Colors.white : kTextColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             selected: isSelected,
             selectedColor: kPrimaryColor,
+            backgroundColor: Colors.grey.shade200,
             onSelected: (_) => setState(() => selectedFilter = filter),
           );
         }).toList(),
@@ -166,15 +194,18 @@ class _BookingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      elevation: 0, // بدون ظل
+      color: Colors.white,
+      elevation: 1.2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       margin: const EdgeInsets.symmetric(vertical: 10),
+      shadowColor: Colors.black12,
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
                   backgroundColor: kPrimaryColor.withOpacity(0.1),
@@ -196,7 +227,7 @@ class _BookingCard extends StatelessWidget {
                       _iconRow(Icons.person, booking.clientName),
                       _iconRow(Icons.event, booking.eventType),
                       _iconRow(Icons.calendar_month,
-                          "${booking.date} at ${booking.time}"),
+                          "${booking.date} • ${booking.time}"),
                       _iconRow(Icons.location_on, booking.location),
                     ],
                   ),
@@ -209,14 +240,14 @@ class _BookingCard extends StatelessWidget {
                         ? Colors.green.shade100
                         : booking.status == 'Rejected'
                             ? Colors.red.shade100
-                            : Colors.grey.shade200,
+                            : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     booking.status,
                     style: GoogleFonts.poppins(
                       fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                       color: booking.status == 'Approved'
                           ? Colors.green
                           : booking.status == 'Rejected'
@@ -227,6 +258,10 @@ class _BookingCard extends StatelessWidget {
                 ),
               ],
             ),
+
+            // --------------------------
+            //  ACTION BUTTONS
+            // --------------------------
             if (booking.status == 'Pending') ...[
               const SizedBox(height: 14),
               Row(
@@ -235,24 +270,30 @@ class _BookingCard extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: () => onStatusChange(booking, 'Rejected'),
                     icon: const Icon(Icons.close, color: Colors.red),
-                    label: const Text("Reject",
-                        style: TextStyle(color: Colors.red)),
+                    label: const Text(
+                      "Reject",
+                      style: TextStyle(color: Colors.red),
+                    ),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.red),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   ElevatedButton.icon(
                     onPressed: () => onStatusChange(booking, 'Approved'),
                     icon: const Icon(Icons.check_circle_outline),
                     label: const Text("Approve"),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kPrimaryColor,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ],
               ),
-            ]
+            ],
           ],
         ),
       ),
@@ -261,13 +302,16 @@ class _BookingCard extends StatelessWidget {
 
   Widget _iconRow(IconData icon, String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.only(bottom: 3),
       child: Row(
         children: [
           Icon(icon, size: 16, color: Colors.grey),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
           Expanded(
-            child: Text(text, style: GoogleFonts.poppins(fontSize: 13)),
+            child: Text(
+              text,
+              style: GoogleFonts.poppins(fontSize: 13),
+            ),
           )
         ],
       ),

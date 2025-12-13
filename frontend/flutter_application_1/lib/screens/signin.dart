@@ -79,12 +79,30 @@ Future<String?> _getFCMToken() async {
           fcmToken: fcmToken,
         );
 
-        if (response.containsKey('token') && response.containsKey('user')) {
+       if (response.containsKey('token') && response.containsKey('user')) {
           print('✅ Login successful with FCM token saved');
           
           final userData = response['user'];
           final userName = userData['userName'] ?? 'Guest';
           final userRole = userData['role'] ?? 'user';
+
+          // ⚠️  الدالة المساعدة الجديدة لإصلاح خطأ toDouble
+          int _getStatCount(dynamic data, String key) {
+            final value = data[key];
+            if (value == null) return 0; // إذا كانت القيمة فارغة
+            if (value is num) return value.toInt(); // إذا كانت رقم (int أو double)
+            
+            // إذا كانت القيمة هي Map (وهذا سبب خطأك الحالي)
+            if (value is Map) {
+              // نفترض أن القيمة المطلوبة موجودة داخل مفتاح 'count' أو 'total'
+              // يجب عليك التأكد من اسم المفتاح الصحيح في الـ JSON الخاص بك
+              final nestedValue = value['count'] ?? value['total'] ?? 0;
+              if (nestedValue is num) return nestedValue.toInt();
+              return 0;
+            }
+            return 0; // للحالات غير المتوقعة
+          }
+          // ⚠️  نهاية الدالة المساعدة
 
           if (userRole == 'vendor') {
             Navigator.pushReplacement(
@@ -98,10 +116,11 @@ Future<String?> _getFCMToken() async {
                     description: userData['description'] ??
                         'Professional service provider',
                     city: userData['city'] ?? '',
-                    bookings: userData['bookings'] ?? 0,
-                    views: userData['views'] ?? 0,
-                    messages: userData['messages'] ?? 0,
-                    reviews: userData['reviews'] ?? 0,
+                    // ⬇️ تم استخدام الدالة المساعدة الجديدة هنا لحل المشكلة ⬇️
+                    bookings: _getStatCount(userData, 'bookings'),
+                    views: _getStatCount(userData, 'views'),
+                    messages: _getStatCount(userData, 'messages'),
+                    reviews: _getStatCount(userData, 'reviews'),
                   ),
                 ),
               ),

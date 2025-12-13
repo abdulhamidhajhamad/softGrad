@@ -265,7 +265,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> {
                 children: [
                   Row(
                     children: [
-                      Expanded(
+                    Expanded(
                         child: _QuickAction(
                           title: "Services",
                           icon: Icons.auto_awesome_outlined,

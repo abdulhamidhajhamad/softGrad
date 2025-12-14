@@ -8,7 +8,7 @@ export class Package extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   vendorId: Types.ObjectId; 
     @Prop({ required: true, trim: true })
-  packageName: string; // ✅ الحقل الجديد
+    packageName: string; // ✅ الحقل الجديد
   // مصفوفة من معرفات الخدمات التي تنطبق عليها هذه الباقة
   @Prop({ type: [Types.ObjectId], required: true })
   serviceIds: Types.ObjectId[]; 
@@ -30,6 +30,9 @@ export class Package extends Document {
 
   @Prop({ required: false, trim: true })
   description: string; // 👈 تمت الإضافة
+
+  @Prop({ type: Boolean, default: true })
+  isActive: boolean;
 
 }
 

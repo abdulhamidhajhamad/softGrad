@@ -225,4 +225,74 @@ class PackageService {
     if (s.isEmpty) return null;
     return double.tryParse(s);
   }
+// -------------------- 1. تحديث بيانات الباقة --------------------
+  static Future<void> updatePackage({
+  required String packageId,
+  required String newPackageName,
+  required List<String> newServiceIds,
+  required double newPrice,
+  DateTime? startDate,
+  DateTime? endDate,
+}) async {
+  try {
+    final token = await AuthService.getToken();
+    if (token == null) throw Exception('Authentication token not found.');
+
+    // تحضير البيانات التي سيتم إرسالها (قد تحتاج لتعديلها حسب متطلبات الـ Backend)
+    final body = jsonEncode({
+      'packageName': newPackageName,
+      'serviceIds': newServiceIds,
+      'newPrice': newPrice,
+      'startDate': startDate?.toIso8601String(),
+      'endDate': endDate?.toIso8601String(),
+    });
+
+    final res = await http.put( // نستخدم PUT أو PATCH للتعديل
+      Uri.parse('$baseUrl/packages/$packageId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: body,
+    );
+
+    if (res.statusCode == 200) return;
+
+    final data = _decodeJsonSafe(res.body);
+    throw Exception(_extractMessage(data) ?? 'Failed to update package.');
+  } catch (e) {
+    print('❌ Error in updatePackage: $e');
+    rethrow;
+  }
+}
+// -------------------- 2. تحديث حالة الباقة (تفعيل/إلغاء تفعيل) --------------------
+static Future<void> updatePackageStatus({
+  required String packageId,
+  required bool isActive,
+}) async {
+  try {
+    final token = await AuthService.getToken();
+    if (token == null) throw Exception('Authentication token not found.');
+
+    final body = jsonEncode({'isActive': isActive});
+
+    // نستخدم PATCH لتحديث خاصية واحدة فقط
+    final res = await http.patch(
+      Uri.parse('$baseUrl/packages/$packageId'), // افترضت وجود endpoint لتحديث الحالة
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: body,
+    );
+
+    if (res.statusCode == 200) return;
+
+    final data = _decodeJsonSafe(res.body);
+    throw Exception(_extractMessage(data) ?? 'Failed to update package status.');
+  } catch (e) {
+    print('❌ Error in updatePackageStatus: $e');
+    rethrow;
+  }
+}
 }

@@ -1,5 +1,5 @@
 // package.controller.ts
-import { Controller, Post, HttpCode, HttpStatus, Body, Req, UseGuards, Get, Delete, Param, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, HttpCode, HttpStatus, Body, Req, UseGuards, Get, Delete, Param, UseInterceptors, UploadedFile, BadRequestException, Patch, Put } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express'; // 👈 استيراد جديد
 import { PackageService } from './package.service';
 import { CreatePackageDto } from './package.dto';
@@ -41,6 +41,38 @@ export class PackageController {
     await this.packageService.deletePackage(packageId, vendorId);
     return { message: 'Package deleted successfully' };
   }
+
+  @Get(':id')
+@HttpCode(HttpStatus.OK)
+async getOne(@Req() req, @Param('id') packageId: string): Promise<any> {
+  const vendorId = req.user.userId;
+  return this.packageService.getPackageById(packageId, vendorId);
+}
+
+@Put(':id')
+@HttpCode(HttpStatus.OK)
+async update(
+  @Req() req,
+  @Param('id') packageId: string,
+  @Body() dto: CreatePackageDto,
+): Promise<{ message: string }> {
+  const vendorId = req.user.userId;
+  await this.packageService.updatePackage(packageId, vendorId, dto);
+  return { message: 'Package updated successfully' };
+}
+
+@Patch(':id')
+@HttpCode(HttpStatus.OK)
+async updateStatus(
+  @Req() req,
+  @Param('id') packageId: string,
+  @Body('isActive') isActive: boolean,
+): Promise<{ message: string }> {
+  const vendorId = req.user.userId;
+  await this.packageService.updatePackageStatus(packageId, vendorId, isActive);
+  return { message: 'Package status updated successfully' };
+}
+
 
   
 

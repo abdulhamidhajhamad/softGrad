@@ -15,6 +15,7 @@ class BundlePackage {
   final DateTime? startDate;
   final DateTime? endDate;
   final String? packageImageUrl;
+  final bool isActive;
 
   BundlePackage({
     required this.id,
@@ -25,6 +26,7 @@ class BundlePackage {
     this.startDate,
     this.endDate,
     this.packageImageUrl,
+    this.isActive = true,
   });
 
   factory BundlePackage.fromJson(Map<String, dynamic> json) {
@@ -46,6 +48,7 @@ class BundlePackage {
       startDate: start,
       endDate: end,
       packageImageUrl: json['packageImageUrl'] as String?,
+      isActive: json['isActive'] as bool? ?? true,
     );
   }
 }
@@ -61,7 +64,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
   List<BundlePackage> _packages = [];
   List<Map<String, dynamic>> _services = [];
 
-  // ✅ لحفظ الكميات المدخلة لكل خدمة (serviceId -> quantity)
   final Map<String, int> _serviceQuantities = {};
 
   bool _isLoading = true;
@@ -100,7 +102,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
     }
   }
 
-  // ✅ حساب السعر النهائي للخدمة بناءً على النوع والكمية
   double _calculateServicePrice(Map<String, dynamic> service) {
     final String priceType = service['priceType'] ?? 'fixed';
     final String serviceId = service['_id'] ?? '';
@@ -113,7 +114,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
       final double perPerson = service['perPerson'] ?? 0.0;
       return perPerson * quantity;
     } else {
-      // fixed price
       return service['basePrice'] ?? 0.0;
     }
   }
@@ -177,12 +177,19 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
   }
 
   Future<void> _openPackageSheet({BundlePackage? editingPackage}) async {
+    // ✅ إذا كان في وضع التعديل، نحط الخدمات الموجودة مسبقاً
     final selectedServiceIds = <String>{
       if (editingPackage != null) ...editingPackage.serviceIds,
     };
 
-    // ✅ إعادة تعيين الكميات عند فتح الـ Sheet
     _serviceQuantities.clear();
+    
+    // ✅ في وضع التعديل، نحط الكميات السابقة إذا موجودة
+    if (editingPackage != null) {
+      for (final serviceId in editingPackage.serviceIds) {
+        _serviceQuantities[serviceId] = 1;
+      }
+    }
 
     final nameCtrl = TextEditingController(text: editingPackage?.name ?? '');
     final priceCtrl = TextEditingController(
@@ -328,7 +335,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Package name
                     TextField(
                       controller: nameCtrl,
                       decoration: InputDecoration(
@@ -395,11 +401,9 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                               service['priceType'] ?? 'fixed';
                           final isChecked = selectedServiceIds.contains(id);
 
-                          // ✅ الكمية الحالية
                           final int currentQty =
                               _serviceQuantities[id] ?? 1;
 
-                          // حساب السعر الحالي
                           final double currentPrice =
                               _calculateServicePrice(service);
 
@@ -420,7 +424,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // الصف الأول: Checkbox + الاسم + السعر
                                 Row(
                                   children: [
                                     Checkbox(
@@ -429,7 +432,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                         setSheetState(() {
                                           if (v == true) {
                                             selectedServiceIds.add(id);
-                                            // تعيين كمية افتراضية
                                             if (!_serviceQuantities
                                                 .containsKey(id)) {
                                               _serviceQuantities[id] = 1;
@@ -475,7 +477,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                   ],
                                 ),
 
-                                // ✅ الصف الثاني: حقل إدخال الكمية (إذا كان السعر ديناميكي)
                                 if (isChecked &&
                                     (priceType == 'hourly' ||
                                         priceType == 'capacity'))
@@ -559,7 +560,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
                     const SizedBox(height: 10),
 
-                    // Bundle price
                     TextField(
                       controller: priceCtrl,
                       keyboardType: TextInputType.number,
@@ -598,7 +598,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
                     const SizedBox(height: 14),
 
-                    // Package duration
                     Text(
                       "Package duration (optional)",
                       style: GoogleFonts.poppins(
@@ -719,7 +718,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
                     const SizedBox(height: 12),
 
-                    // Summary
                     if (baseTotal > 0)
                       Container(
                         width: double.infinity,
@@ -824,9 +822,31 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
     if (result != null) {
       if (editingPackage != null) {
-        _showSnackBar(
-            'Update feature not implemented (Missing PUT/PATCH API).');
+        // ✅ وضع التعديل
+        setState(() {
+          _isLoading = true;
+        });
+        try {
+          await PackageService.updatePackage(
+            packageId: editingPackage.id,
+            newPackageName: result['packageName'],
+            newServiceIds: result['serviceIds'],
+            newPrice: result['newPrice'],
+            startDate: result['startDate'],
+            endDate: result['endDate'],
+          );
+          await _fetchData();
+          _showSnackBar('✅ Package updated successfully!');
+        } catch (e) {
+          print('Error updating package: $e');
+          _showSnackBar('❌ Failed to update package: ${e.toString()}');
+        } finally {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       } else {
+        // ✅ وضع الإنشاء
         setState(() {
           _isLoading = true;
         });
@@ -994,7 +1014,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 14),
-                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(18),
@@ -1009,161 +1028,235 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              if (p.packageImageUrl != null &&
-                                  p.packageImageUrl!.isNotEmpty)
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: Image.network(
-                                    p.packageImageUrl!,
-                                    width: 48,
-                                    height: 48,
-                                    fit: BoxFit.cover,
-                                    loadingBuilder:
-                                        (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Container(
-                                        width: 48,
-                                        height: 48,
-                                        color: Colors.grey.shade200,
-                                        child: const Center(
-                                          child: CircularProgressIndicator(
-                                              color: kPrimaryColor,
-                                              strokeWidth: 2),
+                          if (p.packageImageUrl != null &&
+                              p.packageImageUrl!.isNotEmpty)
+                            ClipRRect(
+                              borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(18)),
+                              child: Image.network(
+                                p.packageImageUrl!,
+                                width: double.infinity,
+                                height: 170,
+                                fit: BoxFit.cover,
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                    width: double.infinity,
+                                    height: 170,
+                                    color: Colors.grey.shade200,
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                          color: kPrimaryColor, strokeWidth: 2),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                  width: double.infinity,
+                                  height: 170,
+                                  color: Colors.grey.shade100,
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.image_not_supported_outlined,
+                                      size: 48,
+                                      color: kPrimaryColor,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            ClipRRect(
+                              borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(18)),
+                              child: Container(
+                                width: double.infinity,
+                                height: 170,
+                                color: Colors.grey.shade100,
+                                child: Center(
+                                  child: Icon(Icons.inventory_2_rounded,
+                                      color: Colors.grey.shade400, size: 48),
+                                ),
+                              ),
+                            ),
+                          
+                          Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        p.name,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
                                         ),
-                                      );
-                                    },
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            Container(
-                                      width: 48,
-                                      height: 48,
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: kPrimaryColor.withOpacity(0.08),
-                                        borderRadius: BorderRadius.circular(14),
                                       ),
-                                      child: const Icon(
-                                        Icons.image_not_supported_outlined,
-                                        size: 20,
+                                    ),
+                                    Text(
+                                      "₪${p.bundlePrice.toStringAsFixed(0)}",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
                                         color: kPrimaryColor,
                                       ),
                                     ),
-                                  ),
-                                )
-                              else
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: kPrimaryColor.withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: const Icon(
-                                    Icons.inventory_2_rounded,
-                                    size: 20,
-                                    color: kPrimaryColor,
-                                  ),
+                                  ],
                                 ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  p.name,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                "₪${p.bundlePrice.toStringAsFixed(0)}",
-                                style: GoogleFonts.poppins(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: kPrimaryColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          if (includedNames.isNotEmpty)
-                            Text(
-                              "Includes: ${includedNames.join(', ')}",
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                          if (rangeText != null) ...[
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.schedule_outlined,
-                                  size: 16,
-                                  color: Colors.grey[700],
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    rangeText,
+                                const SizedBox(height: 4),
+                                if (includedNames.isNotEmpty)
+                                  Text(
+                                    "Includes: ${includedNames.join(', ')}",
                                     style: GoogleFonts.poppins(
-                                      fontSize: 11.5,
-                                      color: Colors.grey[700],
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
-                          const SizedBox(height: 4),
-                          if (baseTotal > 0)
-                            Row(
-                              children: [
-                                Text(
-                                  "Base: ₪${baseTotal.toStringAsFixed(0)}",
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 11.5,
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
-                                if (discount > 0) ...[
-                                  const SizedBox(width: 10),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFE8F5E9),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Text(
-                                      "-${discount.toStringAsFixed(1)}%",
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 11,
-                                        color: const Color(0xFF2E7D32),
-                                        fontWeight: FontWeight.w600,
+                                if (rangeText != null) ...[
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.schedule_outlined,
+                                        size: 16,
+                                        color: Colors.grey[700],
                                       ),
-                                    ),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          rangeText,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11.5,
+                                            color: Colors.grey[700],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
+                                const SizedBox(height: 6),
+                                if (baseTotal > 0)
+                                  Row(
+                                    children: [
+                                      Text(
+                                        "Base: ₪${baseTotal.toStringAsFixed(0)}",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11.5,
+                                          color: Colors.grey[700],
+                                        ),
+                                      ),
+                                      if (discount > 0) ...[
+                                        const SizedBox(width: 10),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFE8F5E9),
+                                            borderRadius:
+                                                BorderRadius.circular(999),
+                                          ),
+                                          child: Text(
+                                            "-${discount.toStringAsFixed(1)}%",
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 11,
+                                              color: const Color(0xFF2E7D32),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: () =>
+                                          _openPackageSheet(editingPackage: p),
+                                      style: OutlinedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 14, vertical: 8),
+                                        side: BorderSide(color: Colors.grey.shade300),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.edit_outlined, size: 18),
+                                      label: Text('Edit',
+                                          style: GoogleFonts.poppins(
+                                              fontSize: 13, fontWeight: FontWeight.w500)),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    TextButton(
+                                      onPressed: () => _deletePackage(p.id),
+                                      child: Text('Delete',
+                                          style: GoogleFonts.poppins(
+                                              fontSize: 13,
+                                              color: Colors.red,
+                                              fontWeight: FontWeight.w500)),
+                                    ),
+                                    const Spacer(),
+                                    Text('Visible',
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 12, color: Colors.grey.shade700)),
+                                    Switch.adaptive(
+                                      value: p.isActive,
+                                      activeColor: kPrimaryColor,
+                                      inactiveThumbColor: Colors.grey.shade400,
+                                      inactiveTrackColor: Colors.grey.shade300,
+                                      onChanged: (val) async {
+                                        // ✅ نحدث الـ UI فوراً قبل الطلب للسيرفر
+                                        setState(() {
+                                          _packages[index] = BundlePackage(
+                                            id: p.id,
+                                            name: p.name,
+                                            serviceIds: p.serviceIds,
+                                            serviceNames: p.serviceNames,
+                                            bundlePrice: p.bundlePrice,
+                                            startDate: p.startDate,
+                                            endDate: p.endDate,
+                                            packageImageUrl: p.packageImageUrl,
+                                            isActive: val, // ✅ القيمة الجديدة
+                                          );
+                                        });
+
+                                        try {
+                                          await PackageService.updatePackageStatus(
+                                            packageId: p.id,
+                                            isActive: val,
+                                          );
+                                          _showSnackBar(val 
+                                              ? 'Package is now visible' 
+                                              : 'Package is now hidden');
+                                        } catch (e) {
+                                          // ✅ إذا فشل الطلب، نرجع القيمة القديمة
+                                          setState(() {
+                                            _packages[index] = BundlePackage(
+                                              id: p.id,
+                                              name: p.name,
+                                              serviceIds: p.serviceIds,
+                                              serviceNames: p.serviceNames,
+                                              bundlePrice: p.bundlePrice,
+                                              startDate: p.startDate,
+                                              endDate: p.endDate,
+                                              packageImageUrl: p.packageImageUrl,
+                                              isActive: !val, // ✅ نرجع للقيمة القديمة
+                                            );
+                                          });
+                                          _showSnackBar(
+                                              'Failed to update package: ${e.toString()}');
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
-                          const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined,
-                                    size: 20, color: Colors.grey),
-                                onPressed: () =>
-                                    _openPackageSheet(editingPackage: p),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline,
-                                    size: 20, color: Colors.redAccent),
-                                onPressed: () => _deletePackage(p.id),
-                              ),
-                            ],
                           ),
                         ],
                       ),

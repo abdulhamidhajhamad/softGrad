@@ -1,4 +1,4 @@
-// src/notification/notification.module.ts
+// src/notification/notification.module.ts - FINAL FIXED VERSION
 
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -10,13 +10,11 @@ import { EmailProcessor, NotificationProcessor } from './notification.processor'
 import { Notification, NotificationSchema } from './notification.schema';
 import { NotificationsGateway } from './notification.gateway';
 import { NotificationController } from './notification.controller'; 
-// 💡 افترض أن هذا هو مسار ملف AuthModule الخاص بك
-import { AuthModule } from '../auth/auth.module'; // ✅ إضافة الاستيراد
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
-    // 🔑 الخطوة التصحيحية: استيراد AuthModule للسماح بحقن JwtService
-    AuthModule, 
+    AuthModule, // ✅ ضروري لـ JwtService
     
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
@@ -36,8 +34,13 @@ import { AuthModule } from '../auth/auth.module'; // ✅ إضافة الاستي
     EmailProcessor,
     NotificationProcessor,
     MailService,
-    NotificationsGateway, // هذا يحتاج JwtService
+    NotificationsGateway,
   ],
-  exports: [NotificationService, BullModule],
+  
+  exports: [
+    NotificationService, 
+    NotificationsGateway, // ✅ تصدير Gateway لاستخدامه في ChatModule
+    BullModule
+  ],
 })
 export class NotificationModule {}

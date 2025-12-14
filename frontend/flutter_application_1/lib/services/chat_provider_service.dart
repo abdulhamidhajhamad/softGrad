@@ -14,7 +14,7 @@ class ChatProviderService {
   factory ChatProviderService() => _instance;
   ChatProviderService._internal();
 
-  // ✅ استخدم نفس الـ IP في كل مكان
+  // âœ… Ø§Ø³ØªØ®Ø¯Ù… Ù†ÙØ³ Ø§Ù„Ù€ IP ÙÙŠ ÙƒÙ„ Ù…ÙƒØ§Ù†
 static const String _baseUrl = 'http://10.0.2.2:3000';  
   IO.Socket? _socket;
   static final ValueNotifier<int> unreadGlobalCount = ValueNotifier<int>(0);
@@ -47,16 +47,16 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
     final token = await AuthService.getToken();
     
     if (token == null) {
-      print('❌ Cannot init socket: No token');
+      print('âŒ Cannot init socket: No token');
       return;
     }
     
     if (_socket != null && _socket!.connected) {
-      print('✅ Socket already connected');
+      print('âœ… Socket already connected');
       return;
     }
 
-    print('🔌 Initializing chat socket to: $_baseUrl');
+    print('ðŸ”Œ Initializing chat socket to: $_baseUrl');
 
     _socket = IO.io(
       _baseUrl,
@@ -74,7 +74,7 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
     _socket!.connect();
 
     _socket!.onConnect((_) {
-      print('✅ Chat Socket Connected ID: ${_socket!.id}');
+      print('âœ… Chat Socket Connected ID: ${_socket!.id}');
       if (_activeChatId != null) {
         joinChatRoom(_activeChatId!);
       }
@@ -82,15 +82,15 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
     });
 
     _socket!.onDisconnect((_) {
-      print('❌ Chat Socket Disconnected');
+      print('âŒ Chat Socket Disconnected');
     });
 
     _socket!.onConnectError((data) {
-      print('⚠️ Chat Connection Error: $data');
+      print('âš ï¸ Chat Connection Error: $data');
     });
 
     _socket?.on('newMessage', (data) {
-      print('📨 New message received via socket: $data');
+      print('ðŸ“¨ New message received via socket: $data');
       
       final messageData = data['message'] ?? data;
       
@@ -112,14 +112,14 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
         );
         
         if (_activeChatId == chatID) {
-          print('✅ Socket: New message for active chat. Calling onNewMessage.');
+          print('âœ… Socket: New message for active chat. Calling onNewMessage.');
           onNewMessage?.call(newMessage);
           
           if (!isMe) {
              markAsRead(chatID); 
           }
         } else {
-          print('ℹ️ Socket: New message for inactive chat: $chatID');
+          print('â„¹ï¸ Socket: New message for inactive chat: $chatID');
         }
 
         onMessageStatusUpdate?.call();
@@ -131,21 +131,21 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
     _socket?.on('unreadCountUpdated', (data) {
       final count = data['count'] ?? 0;
       unreadGlobalCount.value = count;
-      print('📊 Socket: Global unread count updated: $count');
+      print('ðŸ“Š Socket: Global unread count updated: $count');
     });
     
     _socket?.on('messagesRead', (data) {
-      print('✅ Messages marked as read');
+      print('âœ… Messages marked as read');
       onMessageStatusUpdate?.call();
     });
   }
   
   void joinChatRoom(String chatId) {
     if (_socket?.connected == true) {
-      print('🚪 Joining chat room: $chatId');
+      print('ðŸšª Joining chat room: $chatId');
       _socket?.emit('joinRoom', {'chatId': chatId, 'userId': currentUserId});
     } else {
-      print('❌ Cannot join room: Socket not connected');
+      print('âŒ Cannot join room: Socket not connected');
     }
   }
 
@@ -163,10 +163,10 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
         final data = json.decode(response.body);
         final count = data['count'] ?? 0;
         unreadGlobalCount.value = count;
-        print('📊 Unread count fetched: $count');
+        print('ðŸ“Š Unread count fetched: $count');
       }
     } catch (e) {
-      print('❌ Error fetching unread count: $e');
+      print('âŒ Error fetching unread count: $e');
     }
   }
 
@@ -174,54 +174,54 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
     final token = await AuthService.getToken();
     if (token == null) return;
     
-    // 1. إطلاق الحدث عبر السوكيت
+    // 1. Ø¥Ø·Ù„Ø§Ù‚ Ø§Ù„Ø­Ø¯Ø« Ø¹Ø¨Ø± Ø§Ù„Ø³ÙˆÙƒÙŠØª
     if (_socket?.connected == true) {
-      print('📖 Sending markAsRead via Socket');
+      print('ðŸ“– Sending markAsRead via Socket');
       _socket?.emit('markAsRead', {'chatId': chatId, 'userId': currentUserId});
     }
 
     // 2. Fallback to HTTP
     try {
-      print('📖 Sending markAsRead via HTTP');
+      print('ðŸ“– Sending markAsRead via HTTP');
       final response = await http.patch(
         Uri.parse('$_baseUrl/chat/mark-read/$chatId'),
         headers: {'Authorization': 'Bearer $token'},
       );
       
       if (response.statusCode == 200) {
-        print('✅ MarkAsRead sent via HTTP successfully');
+        print('âœ… MarkAsRead sent via HTTP successfully');
         onMessageStatusUpdate?.call();
         fetchUnreadCount();
       }
     } catch (e) {
-      print('❌ Error marking as read via HTTP: $e');
+      print('âŒ Error marking as read via HTTP: $e');
     }
   }
   
   Future<List<Map<String, dynamic>>> fetchUserChats() async {
     final token = await AuthService.getToken();
     if (token == null) {
-      print('❌ Cannot fetch chats: No token');
+      print('âŒ Cannot fetch chats: No token');
       return [];
     }
     
     try {
-      print('📥 Fetching user chats...');
+      print('ðŸ“¥ Fetching user chats...');
       final response = await http.get(
         Uri.parse('$_baseUrl/chat/my-chats'),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 10));
       
-      print('📡 Response status: ${response.statusCode}');
+      print('ðŸ“¡ Response status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final List<dynamic> jsonChats = json.decode(response.body);
-        print('✅ Successfully fetched ${jsonChats.length} chats');
+        print('âœ… Successfully fetched ${jsonChats.length} chats');
         return jsonChats.cast<Map<String, dynamic>>();
       }
       return [];
     } catch (e) {
-      print('❌ Error fetching user chats: $e');
+      print('âŒ Error fetching user chats: $e');
       return [];
     }
   }
@@ -229,23 +229,23 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
   Future<List<ChatMessage>> fetchChatMessages(String chatId) async {
     final token = await AuthService.getToken();
     if (token == null) {
-      print('❌ Cannot fetch messages: No token');
+      print('âŒ Cannot fetch messages: No token');
       return [];
     }
     
     try {
-      print('📥 Fetching messages for chat: $chatId');
+      print('ðŸ“¥ Fetching messages for chat: $chatId');
       final response = await http.get(
         Uri.parse('$_baseUrl/chat/messages/$chatId'),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 10));
       
-      print('📡 Messages response status: ${response.statusCode}');
-      print('📡 Messages response body: ${response.body}');
+      print('ðŸ“¡ Messages response status: ${response.statusCode}');
+      print('ðŸ“¡ Messages response body: ${response.body}');
       
       if (response.statusCode == 200) {
         final List<dynamic> jsonMessages = json.decode(response.body);
-        print('✅ Successfully fetched ${jsonMessages.length} messages');
+        print('âœ… Successfully fetched ${jsonMessages.length} messages');
         
         final messages = jsonMessages.map((msgJson) {
           final senderData = msgJson['sender'];
@@ -265,11 +265,11 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
         return messages;
         
       } else {
-        print('⚠️ Failed to fetch messages: ${response.statusCode}');
+        print('âš ï¸ Failed to fetch messages: ${response.statusCode}');
         throw Exception('Failed to load messages: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ Error fetching messages: $e');
+      print('âŒ Error fetching messages: $e');
       rethrow;
     }
   }
@@ -278,12 +278,12 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
     final token = await AuthService.getToken();
     
     if (token == null) {
-      print('❌ Cannot send message: No token');
+      print('âŒ Cannot send message: No token');
       return;
     }
     
     try {
-      print('📤 Sending message via HTTP');
+      print('ðŸ“¤ Sending message via HTTP');
       final response = await http.post(
         Uri.parse('$_baseUrl/chat/send'),
         headers: {
@@ -293,16 +293,16 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
         body: json.encode({'chatId': chatId, 'content': content}),
       );
       
-      print('📡 Send message response: ${response.statusCode}');
+      print('ðŸ“¡ Send message response: ${response.statusCode}');
       
       if (response.statusCode == 200 || response.statusCode == 201) {
-        print('✅ Message sent via HTTP successfully');
+        print('âœ… Message sent via HTTP successfully');
         onMessageStatusUpdate?.call();
       } else {
          throw Exception('Failed to send message: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
-      print('❌ Error sending message: $e');
+      print('âŒ Error sending message: $e');
       rethrow;
     }
   }
@@ -318,13 +318,13 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
       );
       
       if (response.statusCode == 200) {
-        print('✅ Chat deleted successfully');
+        print('âœ… Chat deleted successfully');
         fetchUnreadCount();
         return true;
       }
       return false;
     } catch (e) {
-      print('❌ Error deleting chat: $e');
+      print('âŒ Error deleting chat: $e');
       return false;
     }
   }
@@ -333,6 +333,6 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
-    print('🔌 Socket disposed');
+    print('ðŸ”Œ Socket disposed');
   }
 }

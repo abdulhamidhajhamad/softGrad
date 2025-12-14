@@ -1,4 +1,4 @@
-// chat.service.ts
+// chat.service.ts - FIXED VERSION (No DB notification for messages)
 import { Injectable, NotFoundException , forwardRef, Inject, Logger} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Chat, LastReadStatus } from './chat.schema';
@@ -9,6 +9,7 @@ import { NotificationService } from '../notification/notification.service';
 import { NotificationType, RecipientType } from '../notification/notification.schema';
 import { ProviderService } from '../providers/provider.service'; 
 import { ChatGateway } from './chat.gateway';
+import { NotificationsGateway } from '../notification/notification.gateway';
 
 @Injectable()
 export class ChatService {
@@ -22,6 +23,7 @@ export class ChatService {
     private providerService: ProviderService,
     @Inject(forwardRef(() => ChatGateway))
     private chatGateway: ChatGateway,
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   async createChat(userId: string, receiverId: string) {
@@ -141,35 +143,32 @@ export class ChatService {
         this.logger.log(`📱 FCM Token: ${fcmToken ? 'EXISTS' : 'MISSING'}`);
         this.logger.log(`👤 Recipient role: ${recipientRole}`);
         
-        const targetType = recipientRole === 'vendor' ? RecipientType.VENDOR : RecipientType.USER;
+        // ✅ التحقق من حالة اتصال المستخدم
+        const isRecipientOnline = this.notificationsGateway.isUserConnected(recipientId);
+        this.logger.log(`🔌 Recipient online status: ${isRecipientOnline}`);
         
-        this.logger.log(`🎯 Target type: ${targetType}`);
+        // ✅ إرسال FCM فقط إذا كان المستخدم offline و عنده token
+        const shouldSendFCM = !isRecipientOnline && fcmToken && fcmToken.trim() !== '';
         
-        const notifDto = {
-          recipientId: recipient._id as Types.ObjectId, 
-          recipientType: targetType,
-          title: notificationTitle, 
-          body: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
-          type: NotificationType.NEW_MESSAGE,
-          metadata: { chatId: chatId, messageId: message._id as Types.ObjectId }
-        };
-        
-        this.logger.log(`📝 Notification DTO: ${JSON.stringify({
-          recipientId: notifDto.recipientId.toString(),
-          recipientType: notifDto.recipientType,
-          title: notifDto.title,
-          type: notifDto.type
-        })}`);
-        
-        try {
-          this.logger.log(`🚀 Calling createNotification...`);
-          // ✅ FIX: إرسال الإشعار حتى لو لم يكن هناك FCM token
-          // نمرر empty string إذا لم يكن هناك token
-          const createdNotification = await this.notificationService.createNotification(notifDto, fcmToken || '');
-          this.logger.log(`✅ Notification created successfully with ID: ${createdNotification._id}`);
-        } catch (notifError) {
-          this.logger.error(`❌ Error creating notification: ${notifError.message}`);
-          this.logger.error(`Stack: ${notifError.stack}`);
+        if (shouldSendFCM) {
+          this.logger.log(`🚀 Recipient is OFFLINE - Sending FCM notification ONLY`);
+          
+          try {
+            // ✅ إرسال FCM مباشرة بدون حفظ في قاعدة البيانات
+            await this.notificationService.sendNotification(
+              fcmToken!,
+              notificationTitle,
+              content.substring(0, 100) + (content.length > 100 ? '...' : '')
+            );
+            
+            this.logger.log(`✅ FCM notification sent successfully (no DB save)`);
+          } catch (fcmError) {
+            this.logger.error(`❌ Error sending FCM notification: ${fcmError.message}`);
+          }
+        } else if (isRecipientOnline) {
+          this.logger.log(`✅ Recipient is ONLINE - Message delivered via WebSocket (no FCM needed)`);
+        } else if (!fcmToken) {
+          this.logger.log(`⚠️ No FCM token - Cannot send push notification`);
         }
       }
     } else {

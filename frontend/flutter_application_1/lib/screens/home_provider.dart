@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/notification_provider_service.dart'; 
+import 'package:flutter_application_1/services/booked_provider_service.dart'; // ✅ إضافة
 import 'edit_profile_provider.dart';
 import 'services_provider.dart';
 import 'signin.dart';
@@ -80,6 +81,9 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> with WidgetsBin
     
     // تحديث العداد الأولي
     await _updateUnreadCount();
+    
+    // ✅ جلب عدد الحجوزات غير المشاهدة
+    await BookedProviderService.fetchUnseenCount();
     
     // التحقق من حالة الاتصال بعد ثانية
     Future.delayed(const Duration(seconds: 1), () {
@@ -331,7 +335,7 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> with WidgetsBin
                 children: [
                   Row(
                     children: [
-                    Expanded(
+                      Expanded(
                         child: _QuickAction(
                           title: "Services",
                           icon: Icons.auto_awesome_outlined,
@@ -346,16 +350,25 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> with WidgetsBin
                         ),
                       ),
                       const SizedBox(width: 8),
+                      // ✅ Bookings مع Badge
                       Expanded(
-                        child: _QuickAction(
-                          title: "Bookings",
-                          icon: Icons.calendar_month_outlined,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const BookingsScreen(),
-                              ),
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: BookedProviderService.unseenCountNotifier,
+                          builder: (context, unseenCount, child) {
+                            return _QuickAction(
+                              title: "Bookings",
+                              icon: Icons.calendar_month_outlined,
+                              showBadge: unseenCount > 0,
+                              onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const BookingsScreen(),
+                                  ),
+                                );
+                                // ✅ تحديث العداد عند العودة
+                                BookedProviderService.fetchUnseenCount();
+                              },
                             );
                           },
                         ),
@@ -363,53 +376,53 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> with WidgetsBin
                     ],
                   ),
                   const SizedBox(height: 10),
-                 Row(
-                      children: [
-                        Expanded(
-                          child: ValueListenableBuilder<int>(
-                            valueListenable: ChatProviderService.unreadGlobalCount,
-                            builder: (context, unreadCount, child) {
-                              return _QuickAction(
-                                title: "Messages",
-                                icon: Icons.chat_bubble_outline,
-                                showBadge: unreadCount > 0,
-                                onTap: () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const MessagesProviderScreen(),
-                                    ),
-                                  );
-                                  ChatProviderService().fetchUnreadCount();
-                                },
-                              );
-                            },
-                          ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: ChatProviderService.unreadGlobalCount,
+                          builder: (context, unreadCount, child) {
+                            return _QuickAction(
+                              title: "Messages",
+                              icon: Icons.chat_bubble_outline,
+                              showBadge: unreadCount > 0,
+                              onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const MessagesProviderScreen(),
+                                  ),
+                                );
+                                ChatProviderService().fetchUnreadCount();
+                              },
+                            );
+                          },
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ValueListenableBuilder<bool>(
-                            valueListenable: NotificationProviderService.hasUnreadNotifier,
-                            builder: (context, hasUnread, child) {
-                              return _QuickAction(
-                                title: "Notifications",
-                                icon: Icons.notifications_none_outlined,
-                                showBadge: hasUnread,
-                                onTap: () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const NotificationsProviderScreen(),
-                                    ),
-                                  );
-                                  _updateUnreadCount();
-                                },
-                              );
-                            },
-                          ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: NotificationProviderService.hasUnreadNotifier,
+                          builder: (context, hasUnread, child) {
+                            return _QuickAction(
+                              title: "Notifications",
+                              icon: Icons.notifications_none_outlined,
+                              showBadge: hasUnread,
+                              onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const NotificationsProviderScreen(),
+                                  ),
+                                );
+                                _updateUnreadCount();
+                              },
+                            );
+                          },
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 22),

@@ -1,4 +1,4 @@
-// booking.schema.ts
+// booking.entity.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { BookingType } from '../service/service.schema';
@@ -6,7 +6,7 @@ import { BookingType } from '../service/service.schema';
 export enum BookingStatus {
   PENDING = 'pending',
   CONFIRMED = 'confirmed',
-  CANCELLED = 'cancelled',
+  CANCELLED = 'cancelled', // 👈 حالة الإلغاء لبوكينج واحد
   COMPLETED = 'completed'
 }
 
@@ -30,18 +30,24 @@ export class BookingDetails {
 
 @Schema({ timestamps: true })
 export class Booking extends Document {
+  // 🔗 هذا المعرف يربط هذا الحجز بالـ Payment Intent
+  @Prop({ type: String, required: true })
+  paymentIntentId: string;
+    
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;
 
+  // معلومات الخدمة
   @Prop({ type: Types.ObjectId, ref: 'Service', required: true })
   serviceId: Types.ObjectId;
 
   @Prop({ type: String, required: true })
   serviceName: string;
 
+  // معلومات البائع
   @Prop({ type: String, required: true })
-  providerId: string;
-
+  providerId: string; // Vendor ID
+    
   @Prop({ type: String, required: true })
   companyName: string;
 
@@ -52,28 +58,20 @@ export class Booking extends Document {
   bookingDetails: BookingDetails;
 
   @Prop({ type: Number, required: true })
-  price: number;
+  price: number; // 💰 سعر الخدمة الواحدة (مهم للريفند)
 
-  @Prop({ type: String, enum: Object.values(BookingStatus), default: BookingStatus.CONFIRMED })
+  @Prop({ type: String, enum: Object.values(BookingStatus), default: BookingStatus.PENDING }) // 👈 تبدأ PENDING بعد الدفع
   status: BookingStatus;
-
-  @Prop({ type: String, required: true })
-  paymentIntentId: string;
-
-  @Prop({ type: String })
+    
+  @Prop({ type: Boolean, default: false }) // 💰 حقل لتسجيل عملية الـ Refund
+  refunded: boolean;
+    
+  @Prop({ type: String, required: false }) // 📝 سبب الإلغاء
   cancellationReason?: string;
 
-  @Prop({ type: Date })
-  cancelledAt?: Date;
-
-  @Prop({ type: String })
-  cancelledBy?: string; // 'vendor' or 'user'
-
+  // 🟢 الحقل الجديد: لتحديد ما إذا كان البائع قد شاهد الحجز
   @Prop({ type: Boolean, default: false })
-  refunded: boolean;
-
-  @Prop({ type: String })
-  refundId?: string;
+  seen: boolean;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);

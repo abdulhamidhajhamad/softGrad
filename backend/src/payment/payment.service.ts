@@ -1,5 +1,5 @@
-// payment.service.ts (Final Integration with Promotion Service)
-import { Injectable, BadRequestException, HttpException, HttpStatus, Logger } from '@nestjs/common';
+// payment.service.ts - النسخة المصلحة مع forwardRef
+import { Injectable, BadRequestException, HttpException, HttpStatus, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose'; 
@@ -21,6 +21,7 @@ export class PaymentService {
   constructor(
     private configService: ConfigService,
     @InjectModel(Cart.name) private cartModel: Model<Cart>,
+    @Inject(forwardRef(() => BookingService)) // ✅ أضف forwardRef هنا
     private bookingService: BookingService,
     private promotionService: PromotionService,
   ) {
@@ -215,5 +216,31 @@ export class PaymentService {
         }
         throw new BadRequestException('Failed to process payment');
       }
+  }
+
+  async processPartialRefund(paymentIntentId: string, amountToRefund: number): Promise<void> {
+    try {
+      if (amountToRefund <= 0) {
+        this.logger.warn(`Attempted to refund zero or negative amount for PI: ${paymentIntentId}`);
+        return;
+      }
+      
+      const amountInCents = Math.round(amountToRefund * 100);
+
+      const refund = await this.stripe.refunds.create({
+        payment_intent: paymentIntentId,
+        amount: amountInCents, 
+        metadata: {
+            reason: 'Vendor cancelled specific service',
+            amountUSD: amountToRefund.toFixed(2),
+        }
+      });
+      
+      this.logger.log(`✅ Partial refund of $${amountToRefund} processed successfully for PI: ${paymentIntentId}`);
+
+    } catch (error) {
+      this.logger.error(`❌ Failed to process partial refund for PI: ${paymentIntentId}`, error.message);
+      throw new HttpException('Refund operation failed at the payment gateway.', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 }

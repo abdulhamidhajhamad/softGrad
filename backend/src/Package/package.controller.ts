@@ -41,4 +41,7 @@ export class PackageController {
     await this.packageService.deletePackage(packageId, vendorId);
     return { message: 'Package deleted successfully' };
   }
+
+  
+
 }

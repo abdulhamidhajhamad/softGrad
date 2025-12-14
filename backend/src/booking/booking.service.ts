@@ -1,5 +1,5 @@
 // booking.service.ts
-import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Booking, BookingStatus } from './booking.entity';
@@ -10,6 +10,7 @@ import { NotificationType, RecipientType } from '../notification/notification.sc
 import { User } from '../auth/user.entity';
 import Stripe from 'stripe';
 import { ConfigService } from '@nestjs/config';
+import { PaymentService } from '../payment/payment.service';
 
 @Injectable()
 export class BookingService {
@@ -23,6 +24,8 @@ export class BookingService {
     @InjectModel(User.name) private userModel: Model<User>,
     private notificationService: NotificationService,
     private configService: ConfigService,
+    @Inject(forwardRef(() => PaymentService)) // ✅ استخدام forwardRef في الحقن
+    private paymentService: PaymentService,
   ) {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (!secretKey) {
@@ -31,325 +34,307 @@ export class BookingService {
     this.stripe = new Stripe(secretKey!, { apiVersion: '2025-11-17.clover' });
   }
 
+
+  /**
+   * 📌 إنشاء حجوزات منفصلة من السلة بعد نجاح الدفع
+   * كل خدمة في السلة = booking منفصل
+   */
   async createBookingsFromCart(userId: string, paymentIntentId: string): Promise<Booking[]> {
-    try {
-      const cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
-      
-      if (!cart || cart.items.length === 0) {
-        throw new HttpException('Cart is empty', HttpStatus.BAD_REQUEST);
-      }
+    const userObjectId = new Types.ObjectId(userId);
+    const cart = await this.cartModel.findOne({ userId: userObjectId }).populate('items.serviceId').exec();
 
-      const bookings: Booking[] = [];
-      const serviceUpdates: Map<string, any> = new Map();
-
-      for (const item of cart.items) {
-        const service = await this.serviceModel.findById(item.serviceId);
-        if (!service) {
-          this.logger.warn(`Service ${item.serviceId} not found, skipping`);
-          continue;
-        }
-
-        // Create booking
-        const booking = await this.bookingModel.create({
-          userId: new Types.ObjectId(userId),
-          serviceId: item.serviceId,
-          serviceName: item.serviceName,
-          providerId: item.providerId,
-          companyName: item.companyName,
-          bookingType: item.bookingType,
-          bookingDetails: item.bookingDetails,
-          price: item.price,
-          status: BookingStatus.CONFIRMED,
-          paymentIntentId,
-        });
-
-        bookings.push(booking);
-
-        // Update service booking slots
-        if (!serviceUpdates.has(item.serviceId.toString())) {
-          serviceUpdates.set(item.serviceId.toString(), {
-            service,
-            updates: []
-          });
-        }
-
-        const serviceData = serviceUpdates.get(item.serviceId.toString());
-        serviceData.updates.push(item);
-
-        // Send notification to vendor
-        await this.sendBookingNotificationToVendor(booking, item.providerId);
-      }
-
-      // Apply all service updates
-      for (const [serviceId, data] of serviceUpdates) {
-        await this.updateServiceBookingSlots(data.service, data.updates);
-      }
-
-      // Clear cart
-      await this.cartModel.findOneAndDelete({ userId: new Types.ObjectId(userId) });
-
-      return bookings;
-
-    } catch (error) {
-      this.logger.error('Failed to create bookings:', error.stack);
-      if (error instanceof HttpException) throw error;
-      throw new HttpException('Failed to create bookings', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  private async updateServiceBookingSlots(service: Service, updates: any[]): Promise<void> {
-    for (const update of updates) {
-      const date = new Date(update.bookingDetails.date);
-      
-      switch (service.bookingType) {
-        case BookingType.Hourly:
-          if (!service.bookingSlots) {
-            service.bookingSlots = { dailyBookings: [], hourlyBookings: [], capacityBookings: [] };
-          }
-          service.bookingSlots.hourlyBookings.push({
-            date,
-            startHour: update.bookingDetails.startHour,
-            endHour: update.bookingDetails.endHour,
-          });
-          break;
-
-        case BookingType.Daily:
-          if (!service.bookingSlots) {
-            service.bookingSlots = { dailyBookings: [], hourlyBookings: [], capacityBookings: [] };
-          }
-          service.bookingSlots.dailyBookings.push(date);
-          break;
-
-        case BookingType.Capacity:
-          if (!service.bookingSlots) {
-            service.bookingSlots = { dailyBookings: [], hourlyBookings: [], capacityBookings: [] };
-          }
-          const existingCapacity = service.bookingSlots.capacityBookings.find(
-            cb => new Date(cb.date).getTime() === date.getTime()
-          );
-          if (existingCapacity) {
-            existingCapacity.bookedCount += update.bookingDetails.numberOfPeople;
-          } else {
-            service.bookingSlots.capacityBookings.push({
-              date,
-              bookedCount: update.bookingDetails.numberOfPeople,
-            });
-          }
-          break;
-
-        case BookingType.Mixed:
-          if (!service.bookingSlots) {
-            service.bookingSlots = { dailyBookings: [], hourlyBookings: [], capacityBookings: [] };
-          }
-          if (update.bookingDetails.isFullVenue) {
-            service.bookingSlots.dailyBookings.push(date);
-          } else {
-            const existingCapacity = service.bookingSlots.capacityBookings.find(
-              cb => new Date(cb.date).getTime() === date.getTime()
-            );
-            if (existingCapacity) {
-              existingCapacity.bookedCount += update.bookingDetails.numberOfPeople;
-            } else {
-              service.bookingSlots.capacityBookings.push({
-                date,
-                bookedCount: update.bookingDetails.numberOfPeople,
-              });
-            }
-          }
-          break;
-      }
+    if (!cart || cart.items.length === 0) {
+      this.logger.warn(`Cart is empty for user ${userId}. No bookings created.`);
+      return [];
     }
 
-    await service.save();
-  }
+    // 👤 جلب معلومات المستخدم لإرسالها في الإشعار
+    const user = await this.userModel.findById(userObjectId).select('name email').lean().exec();
+    const clientName = (user as any)?.name || (user as any)?.email || 'Client';
 
-  private async sendBookingNotificationToVendor(booking: Booking, providerId: string): Promise<void> {
-    try {
-      const vendor = await this.userModel.findById(providerId);
-      if (!vendor || !vendor['fcmToken']) {
-        this.logger.warn(`Vendor ${providerId} not found or no FCM token`);
-        return;
-      }
+    const createdBookings: Booking[] = [];
 
-      const dateStr = booking.bookingDetails.date.toLocaleDateString();
-      let timeStr = '';
-      
-      if (booking.bookingType === BookingType.Hourly) {
-        timeStr = ` from ${booking.bookingDetails.startHour}:00 to ${booking.bookingDetails.endHour}:00`;
-      }
+    // 🔄 التكرار على كل عنصر في السلة لإنشاء حجز منفصل
+    for (const item of cart.items) {
+      const service = item.serviceId as any;
 
-      const notificationDto = {
-        recipientId: new Types.ObjectId(providerId),
-        recipientType: RecipientType.VENDOR,
-        title: 'New Booking Confirmed',
-        body: `New booking for ${booking.serviceName} on ${dateStr}${timeStr}. Amount: $${booking.price}`,
-        type: NotificationType.BOOKING_CONFIRMED,
-        metadata: {
-          bookingId: booking._id,
-          serviceId: booking.serviceId,
-          userId: booking.userId,
-        }
-      };
-
-      await this.notificationService.createNotification(
-        notificationDto,
-        vendor['fcmToken'] as string
-      );
-
-    } catch (error) {
-      this.logger.error('Failed to send notification to vendor:', error);
-    }
-  }
-
-  async cancelBookingByVendor(
-    bookingId: string,
-    vendorId: string,
-    reason?: string
-  ): Promise<{ booking: Booking; refund: any }> {
-    try {
-      const booking = await this.bookingModel.findById(bookingId);
-      
-      if (!booking) {
-        throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
-      }
-
-      if (booking.providerId !== vendorId) {
-        throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
-      }
-
-      if (booking.status === BookingStatus.CANCELLED) {
-        throw new HttpException('Booking already cancelled', HttpStatus.BAD_REQUEST);
-      }
-
-      // Process refund
-      const refund = await this.stripe.refunds.create({
-        payment_intent: booking.paymentIntentId,
-        amount: Math.round(booking.price * 100), // Convert to cents
+      const newBooking = new this.bookingModel({
+        userId: userObjectId,
+        paymentIntentId: paymentIntentId,
+        serviceId: service._id,
+        serviceName: service.serviceName,
+        providerId: service.providerId,
+        companyName: service.companyName,
+        bookingType: service.bookingType,
+        bookingDetails: {
+          date: item.bookingDetails.date,
+          startHour: item.bookingDetails.startHour,
+          endHour: item.bookingDetails.endHour,
+          numberOfPeople: item.bookingDetails.numberOfPeople,
+          isFullVenue: item.bookingDetails.isFullVenue,
+        },
+        price: item.price,
+        status: BookingStatus.CONFIRMED, // ✅ الدفع تم بنجاح
+        refunded: false,
+        seen: false, // 🆕 الحجز جديد، لم يشاهده الـ vendor بعد
       });
 
-      // Update booking
-      booking.status = BookingStatus.CANCELLED;
-      booking.cancellationReason = reason || 'We apologize, but we are unable to provide this service at the requested time. Your payment has been refunded.';
-      booking.cancelledAt = new Date();
-      booking.cancelledBy = 'vendor';
-      booking.refunded = true;
-      booking.refundId = refund.id;
+      const booking = await newBooking.save();
+      createdBookings.push(booking);
 
-      await booking.save();
+      // 📅 تنسيق التاريخ
+      const bookingDateStr = new Date(item.bookingDetails.date).toLocaleDateString('en-GB'); // DD/MM/YYYY
 
-      // Update service booking slots (remove the booking)
-      await this.removeBookingFromService(booking);
+      // 📧 جلب FCM token للـ vendor
+      const vendor = await this.userModel.findById(service.providerId).select('fcmToken').lean().exec();
+      const vendorFcmToken = (vendor as any)?.fcmToken as string | undefined;
 
-      // Send notification to user
-      await this.sendCancellationNotificationToUser(booking);
-
-      return { booking, refund };
-
-    } catch (error) {
-      this.logger.error('Failed to cancel booking:', error.stack);
-      if (error instanceof HttpException) throw error;
-      throw new HttpException('Failed to cancel booking', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  private async removeBookingFromService(booking: Booking): Promise<void> {
-    try {
-      const service = await this.serviceModel.findById(booking.serviceId);
-      if (!service || !service.bookingSlots) return;
-
-      const date = new Date(booking.bookingDetails.date);
-      date.setHours(0, 0, 0, 0);
-
-      switch (booking.bookingType) {
-        case BookingType.Hourly:
-          service.bookingSlots.hourlyBookings = service.bookingSlots.hourlyBookings.filter(
-            hb => !(
-              new Date(hb.date).getTime() === date.getTime() &&
-              hb.startHour === booking.bookingDetails.startHour &&
-              hb.endHour === booking.bookingDetails.endHour
-            )
-          );
-          break;
-
-        case BookingType.Daily:
-          service.bookingSlots.dailyBookings = service.bookingSlots.dailyBookings.filter(
-            db => new Date(db).getTime() !== date.getTime()
-          );
-          break;
-
-        case BookingType.Capacity:
-        case BookingType.Mixed:
-          const capacityBooking = service.bookingSlots.capacityBookings.find(
-            cb => new Date(cb.date).getTime() === date.getTime()
-          );
-          if (capacityBooking) {
-            capacityBooking.bookedCount -= booking.bookingDetails.numberOfPeople || 0;
-            if (capacityBooking.bookedCount <= 0) {
-              service.bookingSlots.capacityBookings = service.bookingSlots.capacityBookings.filter(
-                cb => new Date(cb.date).getTime() !== date.getTime()
-              );
+      // 🔔 إرسال الإشعار للـ vendor
+      const notificationBody = `${service.serviceName} has been booked successfully at ${bookingDateStr} by ${clientName}`;
+      
+      try {
+        await this.notificationService.createNotification(
+          {
+            recipientId: new Types.ObjectId(service.providerId),
+            recipientType: RecipientType.VENDOR,
+            title: 'New Booking Confirmed',
+            body: notificationBody,
+            type: NotificationType.BOOKING_CONFIRMED,
+            metadata: { 
+              bookingId: (booking._id as Types.ObjectId).toString(), 
+              serviceId: service._id.toString(),
+              clientName: clientName,
+              bookingDate: bookingDateStr,
             }
-          }
-          break;
+          },
+          vendorFcmToken || ''
+        );
+      } catch (notifError) {
+        this.logger.error(`Failed to send notification for booking ${booking._id}:`, notifError.message);
+        // Continue with other bookings even if notification fails
       }
-
-      await service.save();
-    } catch (error) {
-      this.logger.error('Failed to remove booking from service:', error);
     }
+    
+    this.logger.log(`✅ ${createdBookings.length} separate bookings created for user ${userId}`);
+    return createdBookings;
   }
 
-  private async sendCancellationNotificationToUser(booking: Booking): Promise<void> {
-    try {
-      const user = await this.userModel.findById(booking.userId);
-      if (!user || !user['fcmToken']) {
-        this.logger.warn(`User ${booking.userId} not found or no FCM token`);
-        return;
-      }
+  /**
+   * 🆕 حساب عدد الحجوزات غير المقروءة للفندر
+   */
+  async getUnseenCount(vendorId: string): Promise<number> {
+    return this.bookingModel.countDocuments({
+      providerId: vendorId, // تأكدنا من الـ Entity أن هذا الحقل String
+      seen: false           // نبحث عن غير المقروء فقط
+    }).exec();
+  }
 
+
+  /**
+   * 🚫 إلغاء الحجز من قبل الـ Vendor مع Refund
+   */
+  async cancelBookingByVendor(
+    bookingId: string, 
+    vendorId: string, 
+    reason: string = 'Vendor cancelled the service'
+  ): Promise<Booking> {
+    const booking = await this.bookingModel.findOne({
+      _id: new Types.ObjectId(bookingId),
+      providerId: vendorId, // 🛡️ التأكد من أن الـ vendor يملك هذا الحجز
+      status: { $in: [BookingStatus.CONFIRMED, BookingStatus.PENDING] }
+    }).exec();
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found or not owned by this vendor');
+    }
+      
+    if (booking.refunded) {
+      throw new BadRequestException('This booking has already been refunded.');
+    }
+
+    // 1️⃣ طلب الـ Refund الجزئي
+    try {
+      await this.paymentService.processPartialRefund(booking.paymentIntentId, booking.price);
+      this.logger.log(`✅ Refund of $${booking.price} processed for booking ${bookingId}`);
+    } catch (error) {
+      this.logger.error(`❌ Refund failed: ${error.message}`);
+      throw new BadRequestException('Refund processing failed. Please try again later.');
+    }
+      
+    // 2️⃣ تحديث حالة الحجز في DB
+    booking.status = BookingStatus.CANCELLED;
+    booking.refunded = true;
+    booking.cancellationReason = reason;
+    await booking.save();
+
+    // 3️⃣ إرسال إشعار للعميل
+    await this.sendCancellationNotification(booking);
+
+    return booking;
+  }
+    
+  /**
+   * 📧 دالة مساعدة لإرسال إشعار الإلغاء للمستخدم
+   */
+  private async sendCancellationNotification(booking: Booking): Promise<void> {
+    try {
+      const user = await this.userModel.findById(booking.userId).select('fcmToken').lean().exec();
+      const fcmToken = (user as any)?.fcmToken as string | undefined;
+      
       const notificationDto = {
         recipientId: booking.userId,
         recipientType: RecipientType.USER,
         title: 'Booking Cancelled',
-        body: `Your booking for ${booking.serviceName} has been cancelled. ${booking.cancellationReason}`,
+        body: `Your booking for ${booking.serviceName} has been cancelled. A refund of $${booking.price.toFixed(2)} has been initiated.${booking.cancellationReason ? ` Reason: ${booking.cancellationReason}` : ''}`,
         type: NotificationType.BOOKING_CANCELLED,
         metadata: {
-          bookingId: booking._id,
-          serviceId: booking.serviceId,
-          refunded: booking.refunded,
+          bookingId: (booking._id as Types.ObjectId).toString(),
+          serviceId: booking.serviceId.toString(),
+          refunded: true,
           refundAmount: booking.price,
+          cancellationReason: booking.cancellationReason,
         }
       };
 
       await this.notificationService.createNotification(
         notificationDto,
-        user['fcmToken'] as string
+        fcmToken || ''
       );
 
+      this.logger.log(`✅ Cancellation notification sent to user ${booking.userId}`);
     } catch (error) {
-      this.logger.error('Failed to send cancellation notification:', error);
+      this.logger.error('Failed to send cancellation notification:', error.message);
     }
   }
 
-  async getUserBookings(userId: string): Promise<Booking[]> {
-    return this.bookingModel
-      .find({ userId: new Types.ObjectId(userId) })
-      .sort({ createdAt: -1 })
-      .exec();
+  /**
+   * 🆕 تحديد الحجز كـ "تمت مشاهدته" بواسطة الـ vendor
+   */
+  async markBookingAsSeen(bookingId: string, vendorId: string): Promise<Booking> {
+    const booking = await this.bookingModel.findOneAndUpdate(
+      { 
+        _id: new Types.ObjectId(bookingId), 
+        providerId: vendorId,
+        seen: false
+      },
+      { $set: { seen: true } },
+      { new: true }
+    ).exec();
+
+    if (!booking) {
+      const existingBooking = await this.bookingModel.findOne({ 
+        _id: new Types.ObjectId(bookingId), 
+        providerId: vendorId 
+      }).exec();
+      
+      if (existingBooking) return existingBooking;
+      
+      throw new NotFoundException('Booking not found or not owned by this vendor.');
+    }
+
+    return booking;
   }
 
-  async getVendorBookings(vendorId: string): Promise<Booking[]> {
-    return this.bookingModel
-      .find({ providerId: vendorId })
+  /**
+   * 🆕 جلب الحجوزات بناءً على دور المستخدم مع تصفية الحقول المطلوبة
+   */
+  async getBookingsByRole(userId: string, role: string): Promise<any[]> {
+    let query: any;
+    let populateOptions: any[] = [];
+    const clientRoles = ['user', 'client']; 
+    const isVendor = role === 'vendor';
+
+    // --- 1. تحديد الـ Query والـ Population ---
+    if (isVendor) {
+      // 👑 لـ Vendor: يحتاج اسم العميل (Client Name) من جدول User
+      query = { providerId: userId };
+      // 🔗 ربط حقل userId لجلب اسم العميل (name) فقط
+      // يجب أن يكون ref 'User' معرفًا في booking.entity.ts
+      populateOptions.push({ path: 'userId', select: 'name -_id' }); 
+      
+    } else if (clientRoles.includes(role)) {
+      // 👤 لـ Client: يبحث بـ userId
+      if (!Types.ObjectId.isValid(userId)) {
+          throw new BadRequestException('Invalid user ID format.');
+      }
+      query = { userId: new Types.ObjectId(userId) };
+    } else {
+      throw new BadRequestException('User role is not recognized.');
+    }
+
+    const rawBookings = await this.bookingModel
+      .find(query)
       .sort({ createdAt: -1 })
+      .populate(populateOptions) 
       .exec();
+
+    // 🔄 2. تحويل النتائج لتطابق الهيكل المطلوب (Projection)
+    return rawBookings.map(booking => {
+        // Mongoose document conversion
+        const bookingObject: any = booking.toObject({ virtuals: true });
+        
+        if (isVendor) {
+            // 📝 الحقول المطلوبة للـ Vendor: اسم العميل، اسم السيرفس، تاريخ الحجز
+            
+            // 💡Fix: تم حل مشكلة TypeError/Compilation error عبر التحقق من الـ Population
+            const populatedUser = bookingObject.userId as { name: string } | Types.ObjectId | null;
+            const clientName = (populatedUser && typeof populatedUser === 'object' && 'name' in populatedUser)
+                               ? populatedUser.name 
+                               : 'Unknown Client';
+            
+            return {
+                bookingId: bookingObject._id,
+                clientName: clientName, // ✅ اسم الشخص الذي قام بالحجز (من جدول User)
+                serviceName: bookingObject.serviceName, // ✅ اسم الخدمة
+                bookingDate: bookingObject.bookingDetails?.date, // ✅ تاريخ الحجز
+                status: bookingObject.status,
+                seen: bookingObject.seen
+            };
+        } else {
+            // 📝 الحقول المطلوبة للـ Client: اسم الحجز، status، Cancellation Reason
+            return {
+                bookingId: bookingObject._id,
+                serviceName: bookingObject.serviceName, // ✅ اسم الحجز
+                status: bookingObject.status, // ✅ حالته
+                cancellationReason: bookingObject.cancellationReason || null, // ✅ سبب الإلغاء
+                bookingDate: bookingObject.bookingDetails?.date // إضافة التاريخ للمستخدم
+            };
+        }
+    });
   }
 
+  // 🗑️ تم حذف الدوال القديمة (getUserBookings و getVendorBookings)
+  /*
+  async getUserBookings(userId: string): Promise<Booking[]> { ... }
+  async getVendorBookings(vendorId: string): Promise<Booking[]> { ... }
+  */
+  
+  /**
+   * 🔍 جلب حجز واحد بالـ ID
+   */
   async getBookingById(bookingId: string): Promise<Booking> {
     const booking = await this.bookingModel.findById(bookingId);
     if (!booking) {
       throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
     }
     return booking;
+  }
+
+  /**
+   * 🆕 4. تحديد جميع حجوزات البائع التي لم تتم مشاهدتها كـ "تمت مشاهدتها"
+   * @param vendorId معرف البائع
+   * @returns نتيجة عملية التحديث (كم بوكينج تم تعديله)
+   */
+  async markAllVendorBookingsAsSeen(vendorId: string): Promise<any> {
+    const result = await this.bookingModel.updateMany(
+      { 
+        providerId: vendorId, // 👈 الفلترة بالـ Vendor ID فقط
+        seen: false // 👈 فقط التي لم تتم مشاهدتها بعد
+      },
+      { $set: { seen: true } } // 👈 تحديث قيمة seen إلى true
+    ).exec();
+    
+    this.logger.log(`✅ Marked ${result.modifiedCount} bookings as seen for vendor ${vendorId}`);
+    return result; // ترجع { acknowledged: true, modifiedCount: N }
   }
 }

@@ -1,5 +1,5 @@
-// chat.module.ts
-import { Module } from '@nestjs/common';
+// chat.module.ts - FINAL FIXED VERSION
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
@@ -17,6 +17,7 @@ import { ProviderModule } from '../providers/provider.module';
       { name: Message.name, schema: MessageSchema },
       { name: User.name, schema: UserSchema },
     ]),
+    // ✅ استيراد NotificationModule للحصول على NotificationService و NotificationsGateway
     NotificationModule,
     ProviderModule,
   ],

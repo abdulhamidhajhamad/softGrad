@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/chat_provider_service.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'messages_provider.dart'
-    show kPrimaryColor, kBackgroundColor, kTextColor; // افتراضياً يتم استيراد هذه الألوان من messages_provider.dart
+    show kPrimaryColor, kBackgroundColor, kTextColor;
 
 class ChatMessage {
   final String id;
@@ -57,7 +57,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // ✅ الحل: إزالة الاشتراك عند الخروج من الشاشة
     ChatProviderService().onNewMessage = null; 
     ChatProviderService().onMessageStatusUpdate = null;
     ChatProviderService().setActiveChat(null);
@@ -70,8 +69,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // وضع علامة مقروءة عند العودة إلى التطبيق
-      ChatProviderService().markAsRead(widget.conversationId);
+      // ✅ عند العودة للتطبيق، وضع علامة مقروءة فقط إذا كان هناك رسائل من الطرف الآخر
+      _markAsReadIfNeeded();
+    }
+  }
+
+  /// ✅ دالة جديدة: تضع علامة مقروءة فقط إذا كانت آخر رسالة ليست مني
+  Future<void> _markAsReadIfNeeded() async {
+    if (_messages.isEmpty) return;
+    
+    // ✅ نحصل على آخر رسالة (الأحدث)
+    final latestMessage = _messages.first;
+    
+    // ✅ إذا آخر رسالة ليست مني، نضع علامة مقروءة
+    if (!latestMessage.isMe) {
+      print('📖 Marking as read (last message is from other person)');
+      await ChatProviderService().markAsRead(widget.conversationId);
+    } else {
+      print('🚫 NOT marking as read (last message is mine)');
     }
   }
 
@@ -83,7 +98,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _messages.clear();
     });
 
-    // 1. جلب ID المستخدم الحالي أولاً
+    // 1. جلب ID المستخدم الحالي
     final userMap = await AuthService.getUserData();
     _currentUserId = _cleanId(userMap?['_id'] ?? userMap?['id']);
     
@@ -93,21 +108,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     ChatProviderService().currentUserId = _currentUserId;
     ChatProviderService().setActiveChat(widget.conversationId);
     
-    // 3. تهيئة الـ Socket (يربط إذا لم يكن متصلاً)
+    // 3. تهيئة الـ Socket
     await ChatProviderService().initSocket();
     
-    // 4. تحميل الرسائل (باستخدام اسم الدالة الموحد)
+    // 4. تحميل الرسائل
     await _loadChatHistory(); 
 
-    // 5. وضع علامة مقروءة على الرسائل بعد التحميل
-    await _markMessagesAsReadWithRetry();
+    // 5. ✅ وضع علامة مقروءة فقط إذا كانت آخر رسالة من الطرف الآخر
+    await _markAsReadIfNeeded();
 
-    // 6. إعداد مستمعات الـ Socket
-    
-    // ✅ مستمع الرسائل الجديدة (تحديث فوري)
+    // 6. ✅ إعداد مستمع الرسائل الجديدة (real-time)
     ChatProviderService().onNewMessage = (message) {
       if (mounted) {
-        print('📨 New message received: ${message.text}');
+        print('📨 New message received in ChatScreen: ${message.text}');
+        print('📨 Message isMe: ${message.isMe}');
         
         // التحقق من عدم وجود تكرار
         final exists = _messages.any((m) => 
@@ -117,18 +131,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         
         if (!exists) {
           setState(() {
-            _messages.insert(0, message); // ✅ الحل: إضافة الرسالة في البداية لتظهر في الأسفل
+            _messages.insert(0, message);
           });
           _scrollToBottom();
           print('✅ Message added to UI');
+          
+          // ✅ FIX: وضع علامة مقروءة فقط إذا كانت الرسالة من الطرف الآخر
+          if (!message.isMe) {
+            print('📖 Marking message as read (from other person)');
+            ChatProviderService().markAsRead(widget.conversationId);
+          } else {
+            print('🚫 NOT marking as read (my own message)');
+          }
         } 
       }
     };
     
-    // ✅ مستمع تحديث حالة الرسائل (لتحديث علامات القراءة)
+    // ✅ مستمع تحديث حالة الرسائل
     ChatProviderService().onMessageStatusUpdate = () {
       if (mounted) {
-        // إعادة تحميل السجل بشكل صامت لتحديث حالة "مقروءة"
         _loadChatHistory(silent: true); 
       }
     };
@@ -140,7 +161,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  // ✨ الحل: توحيد اسم الدالة
   Future<void> _loadChatHistory({bool silent = false}) async { 
     if (!mounted || _currentUserId == null || _currentUserId!.isEmpty) return;
 
@@ -154,11 +174,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final messages = await ChatProviderService().fetchChatMessages(widget.conversationId);
       if (mounted) {
         setState(() {
-          // عرض الرسائل بترتيب عكسي لتظهر الأحدث في الأسفل
           _messages.clear();
-          _messages.addAll(messages); 
+          // ✅ عكس الترتيب لعرض الأحدث في الأسفل
+          _messages.addAll(messages.reversed); 
         });
-        _scrollToBottom(jump: true); // القفز المباشر للأسفل عند التحميل الأولي
+        if (!silent) {
+          _scrollToBottom(jump: true);
+        }
       }
     } catch (e) {
       print('❌ Error loading chat history: $e');
@@ -171,14 +193,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _markMessagesAsReadWithRetry() async {
-    // حاول وضع علامة مقروءة بضمان، مع إعادة المحاولة
-    await Future.delayed(const Duration(milliseconds: 50)); 
-    await ChatProviderService().markAsRead(widget.conversationId);
-  }
-
   void _scrollToBottom({bool jump = false}) {
-    // التمرير إلى أسفل القائمة لرؤية الرسالة الجديدة
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         if (jump) {
@@ -213,13 +228,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     setState(() {
       _isSending = true;
-      // إضافة الرسالة إلى الواجهة فوراً (Optimistic UI)
+      // ✅ رسالتي تظهر مع isRead: false (لأنها ما زالت لم تُقرأ من الطرف الآخر)
       final tempMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(), 
         text: content,
         createdAt: DateTime.now(),
         isMe: true,
-        isRead: false,
+        isRead: false, // ✅ دائماً false عند الإرسال
       );
       _messages.insert(0, tempMessage); 
       _scrollToBottom();
@@ -227,9 +242,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     try {
       await ChatProviderService().sendMessage(widget.conversationId, content);
+      print('✅ Message sent successfully');
     } catch (e) {
       print('❌ Failed to send message: $e');
-      // يمكن إضافة منطق لإظهار خطأ وإزالة الرسالة المؤقتة
     } finally {
       if (mounted) {
         setState(() {
@@ -274,7 +289,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Widget _buildChatList() {
     return ListView.builder(
-      reverse: true, // لعرض الرسائل من الأسفل للأعلى
+      reverse: true,
       controller: _scrollController,
       padding: const EdgeInsets.only(top: 10, bottom: 8),
       itemCount: _messages.length,
@@ -329,6 +344,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
                 if (isMe) ...[
                   const SizedBox(width: 4),
+                  // ✅ علامة صح واحدة (رمادي) = تم الإرسال
+                  // ✅ علامتين صح (أزرق) = تم القراءة من الطرف الآخر
                   Icon(
                     message.isRead ? Icons.done_all : Icons.done,
                     size: 14,

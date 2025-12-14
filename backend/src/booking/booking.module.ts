@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BookingController } from './booking.controller';
 import { BookingService } from './booking.service';
@@ -7,6 +7,7 @@ import { Service, ServiceSchema } from '../service/service.schema';
 import { Cart, CartSchema } from '../shoppingCart/shoppingCart.schema';
 import { User, UserSchema } from '../auth/user.entity';
 import { NotificationModule } from '../notification/notification.module';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationModule } from '../notification/notification.module';
       { name: User.name, schema: UserSchema },
     ]),
     NotificationModule,
+    forwardRef(() => PaymentModule), // ✅ استخدام forwardRef لحل المشكلة
   ],
   controllers: [BookingController],
   providers: [BookingService],

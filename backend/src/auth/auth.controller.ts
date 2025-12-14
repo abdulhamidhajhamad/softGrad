@@ -10,7 +10,9 @@ import {
   UseInterceptors,
   UploadedFile,
   Put,
-  Query
+  Query,
+  Param,
+  NotFoundException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
@@ -24,10 +26,14 @@ import {
 } from './auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ApiConsumes, ApiBody } from '@nestjs/swagger';
-
+import { User } from './user.entity'; // 👈 تأكد من مسار ملف الـ User entity الصحيح
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService,
+    @InjectModel(User.name) private userModel: Model<User>
+  ) {}
 
   @Post('signup')
   @ApiConsumes('multipart/form-data')
@@ -108,6 +114,15 @@ async getProfile(@Req() req) {
     await this.authService.updateFCMToken(req.user.userId, fcmToken);
     return { message: 'FCM token updated successfully' };
   }
+
+  @Get(':id')
+async getUserById(@Param('id') id: string) {
+  const user = await this.userModel.findById(id).select('userName email').lean().exec();
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+  return user;
+}
 
 
 }

@@ -192,4 +192,32 @@ export class PackageService {
 
     return updatedPackage;
   }
+
+
+  /**
+   * جلب عدد محدد من روابط صور الباقات النشطة بشكل عشوائي.
+   * @param count العدد المطلوب من الصور (افتراضياً 10).
+   */
+  async getShuffledPackageImages(count: number = 10): Promise<string[]> {
+    const randomImages = await this.packageModel.aggregate([
+      // 1. تصفية الباقات النشطة، والتي لم تنتهِ صلاحيتها، والتي تحتوي على صور
+      { $match: { 
+          isActive: true, 
+          endDate: { $gt: new Date() },
+         packageImageUrl: { $nin: [null, '', undefined] }
+        } 
+      }, 
+      // 2. اختيار عينة عشوائية بالحجم المطلوب
+      { $sample: { size: count } },
+      // 3. عرض حقل packageImageUrl فقط
+      { $project: {
+          _id: 0, // لا نحتاج المعرّف
+          packageImageUrl: 1,
+        }
+      }
+    ]).exec();
+    
+    // 4. استخراج الروابط كـ Array of strings (ليكون أسهل لـ Flutter)
+    return randomImages.map(item => item.packageImageUrl);
+  }
 } 

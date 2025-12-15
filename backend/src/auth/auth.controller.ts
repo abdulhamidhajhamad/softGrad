@@ -12,7 +12,8 @@ import {
   Put,
   Query,
   Param,
-  NotFoundException
+  NotFoundException,
+  Patch
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
@@ -73,20 +74,23 @@ async getProfile(@Req() req) {
     return this.authService.login(loginDto);
   }
 
-  @Put('profile')
-  @UseGuards(JwtAuthGuard)
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('image'))
+ @Patch('profile') // أو @Patch('profile') حسب استخدامك، في الملف المرفق كان @Put
+  @UseGuards(JwtAuthGuard) //
+  @ApiConsumes('multipart/form-data') //
+  @UseInterceptors(FileInterceptor('image')) //
   async updateProfile(
     @Req() req,
     @Body() updateData: {
       userName?: string;
       phone?: string;
       city?: string;
+      currentPassword?: string; 
+      newPassword?: string;
+      confirmNewPassword?: string;
     },
-    @UploadedFile() file?: Express.Multer.File
+    @UploadedFile() file?: Express.Multer.File //
   ) {
-    return this.authService.updateProfile(req.user.userId, updateData, file);
+    return this.authService.updateProfile(req.user.userId, updateData, file); //
   }
 
 

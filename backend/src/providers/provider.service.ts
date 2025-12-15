@@ -76,6 +76,7 @@ async findAllByUser(userId: string): Promise<ServiceProvider[]> {
 async update(userId: string, companyName: string, dto: UpdateServiceProviderDto): Promise<ServiceProvider> {
   const userObjectId = new Types.ObjectId(userId);
   
+  // 1. العثور على الشركة الحالية
   const company = await this.providerModel.findOne({ 
     userId: userObjectId,
     companyName 
@@ -83,9 +84,22 @@ async update(userId: string, companyName: string, dto: UpdateServiceProviderDto)
   
   if (!company) throw new NotFoundException('Company not found or you do not own this company');
   
+  // 2. تجهيز كائن التحديث
+  const updatePayload: any = { ...dto }; // نبدأ بالـ DTO المرسل
+  
+  // 3. دمج حقل details لضمان التحديث الجزئي
+  if (dto.details) {
+    // ندمج الـ details القديمة مع الجديدة المرسلة لتجنب مسح الحقول الأخرى
+    updatePayload.details = {
+      ...company.details, // البيانات القديمة في details
+      ...dto.details,     // البيانات الجديدة المرسلة (مثل phone أو email)
+    };
+  }
+
+  // 4. تنفيذ التحديث
   const updatedCompany = await this.providerModel.findOneAndUpdate(
     { userId: userObjectId, companyName }, 
-    dto, 
+    updatePayload, // استخدام كائن التحديث المعدل
     { new: true }
   );
   
@@ -138,4 +152,68 @@ async findCompanyNameByUserId(userId: string): Promise<string> {
   
   return company.companyName;
 }
+
+
+async findProviderDetails(userId: string): Promise<any> {
+  const userObjectId = new Types.ObjectId(userId);
+
+  // 1. جلب بيانات الشركة
+  const company = await this.providerModel.findOne({ userId: userObjectId }).exec();
+
+  if (!company) {
+    throw new NotFoundException('No company found for this user.');
+  }
+
+  // 2. استخراج البيانات المطلوبة: companyName, description, city, phone, email, image
+  return {
+    companyName: company.companyName, // من حقول الشركة الأساسية
+    description: company.description, // من حقول الشركة الأساسية
+    city: company.location?.city, // من حقل location
+    
+    // استخراج من حقل details (حسب طلبك الأخير)
+    phone: company.details?.phone, 
+    email: company.details?.email, 
+    
+    // حقل image: بما أنه غير موجود في الـ entity الحالية، سنرجعه كـ null
+    image: company.details?.image || null, // يمكنك استخدام حقل آخر إذا تمت إضافته لاحقًا بشكل مستقل.
+  };
+}
+
+async updateByUserId(userId: string, dto: UpdateServiceProviderDto): Promise<ServiceProvider> {
+  // 1. استخدام userId (string) مباشرة في البحث
+  // ملاحظة: بما أن حقل userId في الـ entity هو Types.ObjectId، التحويل هو الأفضل.
+  // سنقوم بالتحويل لكن سنُجرب استخدام findByIdAndUpdate
+  
+  const userObjectId = new Types.ObjectId(userId);
+  
+  // 1. العثور على الشركة الحالية بواسطة userId فقط 
+  const company = await this.providerModel.findOne({ userId: userObjectId }); 
+  
+  if (!company) {
+    // 💡 قم بتغيير رسالة الخطأ لتكون فريدة للـ PATCH /my-details
+    throw new NotFoundException('Cannot find company details for the logged-in user.'); 
+  }
+  
+  // 2. و 3. ... (باقي الكود لـ updatePayload)
+  const updatePayload: any = { ...dto };
+  if (dto.details) {
+    updatePayload.details = {
+      ...company.details,
+      ...dto.details,
+    };
+  }
+
+  // 4. تنفيذ التحديث باستخدام updateOne بدلاً من findOneAndUpdate لتجنب أي تعارض
+  // ملاحظة: نستخدم findOneAndUpdate لتبسيط الحصول على الكائن المحدث
+  const updatedCompany = await this.providerModel.findOneAndUpdate(
+    { userId: userObjectId }, // البحث فقط بواسطة userId
+    updatePayload, 
+    { new: true }
+  );
+  
+  // 💡 قم بتغيير رسالة الخطأ هنا أيضاً
+  if (!updatedCompany) throw new NotFoundException('Update failed after finding the company.'); 
+  return updatedCompany;
+}
+
 }

@@ -301,27 +301,63 @@ export class AuthService {
   }
 
   // ✅ Update user profile with image handling
-  async updateProfile(
+ async updateProfile(
     userId: string,
     updateData: Partial<{
       userName: string;
       phone: string;
       city: string;
+      // 🆕 الحقول الجديدة لكلمة المرور
+      currentPassword?: string; 
+      newPassword?: string;
+      confirmNewPassword?: string;
     }>,
     file?: Express.Multer.File
-  ): Promise<{ message: string; user: any }> {
+  ): Promise<{ message: string; user: any; newToken?: string }> {
     const user = await this.userModel.findById(userId).exec();
     
     if (!user) {
       throw new NotFoundException('User not found');
     }
+    
+    // ----------------------------------------------------------------
+    // 🛑 منطق التحقق من كلمة المرور الجديدة
+    // ----------------------------------------------------------------
+    // فصل حقول كلمة المرور عن باقي بيانات الملف الشخصي (profileData)
+    const { currentPassword, newPassword, confirmNewPassword, ...profileData } = updateData; 
 
-    let imageUrl = user.imageUrl;
+    if (newPassword || currentPassword || confirmNewPassword) {
+      // 1. يجب أن تكون جميع الحقول موجودة لتغيير كلمة المرور
+      if (!currentPassword || !newPassword || !confirmNewPassword) {
+        throw new BadRequestException('Current password, new password, and confirmation are all required to change password.');
+      }
+
+      // 2. التحقق من تطابق كلمة المرور الجديدة وتأكيدها
+      if (newPassword !== confirmNewPassword) {
+        throw new BadRequestException('New password and confirmation do not match.');
+      }
+      
+      // 3. التحقق من صحة كلمة المرور الحالية
+      const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Current password is not correct.');
+      }
+      
+      // 4. تشفير وتحديث كلمة المرور
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      user.password = hashedPassword;
+      console.log(`Password updated for user: ${user.email}`);
+    } // 👈 القوس الناقص الذي كان يسبب خطأ التجميع
+    // ----------------------------------------------------------------
+    
+    // منطق تحديث الصورة والحقول الأخرى
+    let imageUrl = user.imageUrl; 
 
     if (file) {
       try {
         console.log('📤 Uploading new image to Supabase...');
         
+        // حذف الصورة القديمة إذا لم تكن الصورة الافتراضية
         if (user.imageUrl && !user.imageUrl.includes('ui-avatars.com')) {
           console.log('🗑️ Deleting old image:', user.imageUrl);
           await this.supabaseStorage.deleteImage(user.imageUrl);
@@ -335,30 +371,21 @@ export class AuthService {
       }
     }
 
-    if (updateData.userName) user.userName = updateData.userName;
-    if (updateData.phone) user.phone = updateData.phone;
-    if (updateData.city) user.city = updateData.city;
+    // 🛑 استخدام profileData لتحديث باقي الحقول (لأن حقول كلمة المرور تم فصلها في الأعلى)
+    if (profileData.userName) user.userName = profileData.userName;
+    if (profileData.phone) user.phone = profileData.phone;
+    if (profileData.city) user.city = profileData.city;
     user.imageUrl = imageUrl;
 
     await user.save();
 
     const userObject = user.toObject();
-    const { password, ...userWithoutPassword } = userObject;
+    const { password: _, ...userWithoutPassword } = userObject;
 
     return {
       message: 'Profile updated successfully',
       user: userWithoutPassword,
     };
-  }
-
-  // Clean up expired verification codes (call this periodically)
-  cleanupExpiredVerificationCodes(): void {
-    const now = new Date();
-    for (const [email, data] of this.verificationCodes.entries()) {
-      if (now > data.expires) {
-        this.verificationCodes.delete(email);
-      }
-    }
   }
 
 

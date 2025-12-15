@@ -7,9 +7,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_1/services/service_service.dart';
 import 'dart:typed_data'; // 💡 إضافة ضرورية للتعامل مع MemoryImage (لحل مشكلة الويب)
 
-const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
-const Color kBackgroundColor = Color(0xFFF3F4F6);
-const Color kTextColor = Color(0xFF111827);
+  const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
+  const Color kBackgroundColor = Color(0xFFF3F4F6);
+  const Color kTextColor = Color(0xFF111827);
 
 const List<Map<String, dynamic>> kServiceCategories = [
   {

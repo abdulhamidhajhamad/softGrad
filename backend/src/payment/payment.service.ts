@@ -1,4 +1,4 @@
-// payment.service.ts - النسخة المصلحة مع forwardRef
+// payment.service.ts - النسخة المحدثة مع MailService الموجود
 import { Injectable, BadRequestException, HttpException, HttpStatus, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
@@ -7,6 +7,8 @@ import Stripe from 'stripe';
 import { Cart } from '../shoppingCart/shoppingCart.schema';
 import { BookingService } from '../booking/booking.service';
 import { PromotionService } from '../promotion/promotion.service';
+import { MailService } from '../auth/mail.service'; // 🆕 استخدام MailService الموجود
+import { User } from '../auth/user.entity'; // 🆕 إضافة User Schema
 
 interface CheckoutDto {
   currency: string;
@@ -21,9 +23,11 @@ export class PaymentService {
   constructor(
     private configService: ConfigService,
     @InjectModel(Cart.name) private cartModel: Model<Cart>,
-    @Inject(forwardRef(() => BookingService)) // ✅ أضف forwardRef هنا
+    @InjectModel(User.name) private userModel: Model<User>, // 🆕 إضافة User Model
+    @Inject(forwardRef(() => BookingService))
     private bookingService: BookingService,
     private promotionService: PromotionService,
+    private mailService: MailService, // 🆕 حقن MailService
   ) {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (!secretKey) {
@@ -166,6 +170,25 @@ export class PaymentService {
       // Create bookings
       const bookings = await this.bookingService.createBookingsFromCart(userId, validPaymentIntentId);
 
+      // 🆕 الحصول على معلومات المستخدم لإرسال الإيميل
+      const user = await this.getUserInfo(userId);
+      
+      // 🆕 إرسال إيميل التأكيد
+      if (user && user.email) {
+        await this.sendPaymentConfirmationEmail(user.email, {
+          userName: user.name || user.email,
+          originalAmount: parseFloat(paymentIntent.metadata?.originalAmount || '0'),
+          discount: parseFloat(paymentIntent.metadata?.discount || '0'),
+          finalAmount: paymentIntent.amount / 100,
+          promoCode: paymentIntent.metadata?.promoCode,
+          bookingsCount: bookings.length,
+        });
+      }
+
+      // 🆕 حذف السلة بعد إتمام الدفع بنجاح
+      await this.clearUserCart(userId);
+      this.logger.log(`✅ Cart cleared for user: ${userId}`);
+
       return {
         success: true,
         message: 'Payment confirmed and bookings created successfully',
@@ -241,6 +264,228 @@ export class PaymentService {
     } catch (error) {
       this.logger.error(`❌ Failed to process partial refund for PI: ${paymentIntentId}`, error.message);
       throw new HttpException('Refund operation failed at the payment gateway.', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  // 🆕 دالة حذف السلة
+  private async clearUserCart(userId: string): Promise<void> {
+    try {
+      const objectId = Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId;
+      const result = await this.cartModel.findOneAndDelete({ userId: objectId });
+      
+      if (result) {
+        this.logger.log(`✅ Cart cleared successfully for user: ${userId}`);
+      } else {
+        this.logger.warn(`⚠️ No cart found to clear for user: ${userId}`);
+      }
+    } catch (error) {
+      this.logger.error(`❌ Failed to clear cart for user ${userId}:`, error);
+      // لا نرمي خطأ هنا لأن الدفع تم بنجاح، فقط نسجل الخطأ
+    }
+  }
+
+  // 🆕 دالة الحصول على معلومات المستخدم
+  private async getUserInfo(userId: string): Promise<any> {
+    try {
+      const objectId = Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId;
+      const user = await this.userModel.findById(objectId).select('email name').exec();
+      
+      if (!user) {
+        this.logger.warn(`⚠️ User not found: ${userId}`);
+        return null;
+      }
+      
+      return user;
+    } catch (error) {
+      this.logger.error(`❌ Failed to get user info for ${userId}:`, error);
+      return null;
+    }
+  }
+
+  // 🆕 دالة إرسال إيميل التأكيد باستخدام MailService
+  private async sendPaymentConfirmationEmail(email: string, paymentDetails: any): Promise<void> {
+    try {
+      const hasDiscount = paymentDetails.discount > 0;
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    background-color: #f4f4f4;
+                    margin: 0;
+                    padding: 0;
+                }
+                .container {
+                    max-width: 600px;
+                    margin: 20px auto;
+                    background-color: #ffffff;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+                .header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 30px 20px;
+                    text-align: center;
+                }
+                .header h1 {
+                    margin: 0;
+                    font-size: 28px;
+                }
+                .success-icon {
+                    font-size: 48px;
+                    margin-bottom: 10px;
+                }
+                .content {
+                    padding: 30px 20px;
+                }
+                .greeting {
+                    font-size: 18px;
+                    margin-bottom: 20px;
+                    color: #333;
+                }
+                .payment-details {
+                    background-color: #f8f9fa;
+                    border-radius: 6px;
+                    padding: 20px;
+                    margin: 20px 0;
+                }
+                .detail-row {
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 10px 0;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+                .detail-row:last-child {
+                    border-bottom: none;
+                }
+                .detail-label {
+                    font-weight: 600;
+                    color: #555;
+                }
+                .detail-value {
+                    color: #333;
+                }
+                .discount-row {
+                    color: #28a745;
+                    font-weight: 600;
+                }
+                .total-row {
+                    font-size: 20px;
+                    font-weight: bold;
+                    color: #667eea;
+                    margin-top: 10px;
+                    padding-top: 10px;
+                    border-top: 2px solid #667eea;
+                }
+                .message {
+                    text-align: center;
+                    padding: 20px;
+                    color: #666;
+                }
+                .footer {
+                    background-color: #f8f9fa;
+                    padding: 20px;
+                    text-align: center;
+                    color: #666;
+                    font-size: 14px;
+                }
+                .promo-badge {
+                    display: inline-block;
+                    background-color: #28a745;
+                    color: white;
+                    padding: 4px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    margin-top: 15px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div class="success-icon">✅</div>
+                    <h1>Payment Confirmed!</h1>
+                    <p>Your booking has been successfully completed</p>
+                </div>
+                
+                <div class="content">
+                    <div class="greeting">
+                        Hello ${paymentDetails.userName},
+                    </div>
+                    
+                    <p>Thank you for your payment! Your booking has been confirmed successfully.</p>
+                    
+                    <div class="payment-details">
+                        <h3 style="margin-top: 0; color: #667eea;">Payment Summary</h3>
+                        
+                        <div class="detail-row">
+                            <span class="detail-label">Original Amount:</span>
+                            <span class="detail-value">$${paymentDetails.originalAmount.toFixed(2)}</span>
+                        </div>
+                        
+                        ${hasDiscount ? `
+                        <div class="detail-row discount-row">
+                            <span class="detail-label">
+                                Discount ${paymentDetails.promoCode ? `(${paymentDetails.promoCode})` : ''}:
+                            </span>
+                            <span class="detail-value">-$${paymentDetails.discount.toFixed(2)}</span>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="detail-row total-row">
+                            <span class="detail-label">Total Paid:</span>
+                            <span class="detail-value">$${paymentDetails.finalAmount.toFixed(2)}</span>
+                        </div>
+                        
+                        <div class="detail-row">
+                            <span class="detail-label">Number of Bookings:</span>
+                            <span class="detail-value">${paymentDetails.bookingsCount}</span>
+                        </div>
+                        
+                        ${paymentDetails.promoCode ? `
+                        <div style="text-align: center;">
+                            <span class="promo-badge">Promo Code Applied: ${paymentDetails.promoCode}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    
+                    <div class="message">
+                        <p>🎉 Your payment has been processed successfully!</p>
+                        <p>You can view your bookings in your dashboard.</p>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p>If you have any questions, please contact our support team.</p>
+                    <p style="margin: 0; color: #999; font-size: 12px;">
+                        This is an automated email. Please do not reply to this message.
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+      `;
+
+      await this.mailService.sendHtmlEmail(
+        email,
+        'Payment Confirmation - Your Booking is Confirmed! ✅',
+        htmlContent
+      );
+
+      this.logger.log(`✅ Payment confirmation email sent to: ${email}`);
+    } catch (error) {
+      this.logger.error(`❌ Failed to send confirmation email to ${email}:`, error);
+      // لا نرمي خطأ هنا لأن الدفع تم بنجاح
     }
   }
 }

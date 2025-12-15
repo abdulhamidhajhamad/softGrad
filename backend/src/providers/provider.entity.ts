@@ -41,6 +41,10 @@ export class ServiceProvider extends Document {
 
   @Prop({ type: String, enum: ['regular', 'mid', 'high'], default: 'regular' })
   targetCustomerType?: 'regular' | 'mid' | 'high';
+
+@Prop({ default: null })
+  image?: string;
+
 }
 
 export const ServiceProviderSchema = SchemaFactory.createForClass(ServiceProvider);

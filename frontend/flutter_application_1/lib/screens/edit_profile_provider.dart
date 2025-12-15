@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'home_provider.dart';
 import 'edit_profile_company.dart';
+import 'package:flutter_application_1/services/edit_profile_service.dart';
 
 class EditProfileProvider extends StatefulWidget {
   final ProviderModel provider;
@@ -22,12 +23,18 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
   late TextEditingController _emailCtrl;
   String? _selectedCity;
 
-  late TextEditingController _passCtrl;
+  late TextEditingController _currentPassCtrl;
+  late TextEditingController _newPassCtrl;
   late TextEditingController _confirmCtrl;
-  bool _showPass = false, _showConfirm = false;
+  bool _showCurrentPass = false;
+  bool _showNewPass = false;
+  bool _showConfirm = false;
 
   String _passwordStrengthLabel = '';
   Color _passwordStrengthColor = Colors.transparent;
+  
+  bool _isLoading = true;
+  bool _isSaving = false;
 
   static const kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 
@@ -44,14 +51,45 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
   @override
   void initState() {
     super.initState();
-    _usernameCtrl = TextEditingController(text: widget.provider.brandName);
-    _phoneCtrl = TextEditingController(text: widget.provider.phone);
-    _emailCtrl = TextEditingController(text: widget.provider.email);
-    _selectedCity =
-        _cities.contains(widget.provider.city) ? widget.provider.city : null;
-
-    _passCtrl = TextEditingController();
+    _usernameCtrl = TextEditingController();
+    _phoneCtrl = TextEditingController();
+    _emailCtrl = TextEditingController();
+    _currentPassCtrl = TextEditingController();
+    _newPassCtrl = TextEditingController();
     _confirmCtrl = TextEditingController();
+    
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      setState(() => _isLoading = true);
+      
+      final userData = await EditProfileService.getUserProfile();
+      
+      if (mounted) {
+        setState(() {
+          _usernameCtrl.text = userData['userName'] ?? '';
+          _phoneCtrl.text = userData['phone'] ?? '';
+          _emailCtrl.text = userData['email'] ?? '';
+          
+          final city = userData['city'];
+          _selectedCity = _cities.contains(city) ? city : null;
+          
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load user data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -59,7 +97,8 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
     _usernameCtrl.dispose();
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
-    _passCtrl.dispose();
+    _currentPassCtrl.dispose();
+    _newPassCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
   }
@@ -127,21 +166,81 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
     setState(() {});
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final updated = {
-      "username": _usernameCtrl.text,
-      "phone": _phoneCtrl.text,
-      "email": _emailCtrl.text,
-      "city": _selectedCity,
-    };
+    try {
+      setState(() => _isSaving = true);
 
-    Navigator.pop(context, updated);
+      // ✅ إرسال confirmNewPassword أيضاً
+      final result = await EditProfileService.updateUserProfile(
+        userName: _usernameCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+        city: _selectedCity,
+        currentPassword: _currentPassCtrl.text.isNotEmpty ? _currentPassCtrl.text : null,
+        newPassword: _newPassCtrl.text.isNotEmpty ? _newPassCtrl.text : null,
+        confirmNewPassword: _confirmCtrl.text.isNotEmpty ? _confirmCtrl.text : null, // ✅ مهم!
+      );
+
+      if (mounted) {
+        setState(() => _isSaving = false);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile updated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        final updatedProvider = ProviderModel(
+          brandName: _usernameCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          phone: _phoneCtrl.text.trim(),
+          description: widget.provider.description,
+          city: _selectedCity ?? widget.provider.city,
+        );
+
+        Navigator.pop(context, updatedProvider);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update profile: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: const Color(0xffFAFAFA),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: true,
+          title: Text("Edit Profile",
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                  fontSize: 18)),
+          iconTheme: const IconThemeData(color: Colors.black),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(
+            color: kPrimaryColor,
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xffFAFAFA),
       appBar: AppBar(
@@ -203,18 +302,33 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
 
               _modernCard("Security", [
                 TextFormField(
-                  controller: _passCtrl,
-                  obscureText: !_showPass,
+                  controller: _currentPassCtrl,
+                  obscureText: !_showCurrentPass,
+                  decoration: _decor("Current Password",
+                      icon: Icons.lock_outline,
+                      suffix: IconButton(
+                        icon: Icon(
+                            _showCurrentPass
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            color: Colors.grey.shade700),
+                        onPressed: () => setState(() => _showCurrentPass = !_showCurrentPass),
+                      )),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _newPassCtrl,
+                  obscureText: !_showNewPass,
                   onChanged: _evaluatePasswordStrength,
                   decoration: _decor("New Password",
                       icon: Icons.lock_outline,
                       suffix: IconButton(
                         icon: Icon(
-                            _showPass
+                            _showNewPass
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
                             color: Colors.grey.shade700),
-                        onPressed: () => setState(() => _showPass = !_showPass),
+                        onPressed: () => setState(() => _showNewPass = !_showNewPass),
                       )),
                 ),
                 if (_passwordStrengthLabel.isNotEmpty) ...[
@@ -245,8 +359,8 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                             setState(() => _showConfirm = !_showConfirm),
                       )),
                   validator: (v) {
-                    if (_passCtrl.text.isNotEmpty &&
-                        v != _passCtrl.text.trim()) {
+                    if (_newPassCtrl.text.isNotEmpty &&
+                        v != _newPassCtrl.text.trim()) {
                       return "Passwords do not match";
                     }
                     return null;
@@ -260,7 +374,7 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _save,
+                  onPressed: _isSaving ? null : _save,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kPrimaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -268,11 +382,20 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: Text("Save Changes",
-                      style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700)),
+                  child: _isSaving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text("Save Changes",
+                          style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700)),
                 ),
               ),
 
@@ -285,7 +408,7 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     elevation: 0,
-                    side: BorderSide(color: kPrimaryColor, width: 3.0),
+                    side: const BorderSide(color: kPrimaryColor, width: 3.0),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),

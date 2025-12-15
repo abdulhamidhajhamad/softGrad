@@ -1,5 +1,5 @@
 // package.controller.ts
-import { Controller, Post, HttpCode, HttpStatus, Body, Req, UseGuards, Get, Delete, Param, UseInterceptors, UploadedFile, BadRequestException, Patch, Put } from '@nestjs/common';
+import { Controller, Post, HttpCode, HttpStatus, Body, Req, UseGuards, Get, Delete, Param, UseInterceptors, UploadedFile, BadRequestException, Patch, Put, Query, DefaultValuePipe, ParseIntPipe } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express'; // 👈 استيراد جديد
 import { PackageService } from './package.service';
 import { CreatePackageDto } from './package.dto';
@@ -72,6 +72,19 @@ async updateStatus(
   await this.packageService.updatePackageStatus(packageId, vendorId, isActive);
   return { message: 'Package status updated successfully' };
 }
+
+// ✅ NEW ENDPOINT: /packages/public/random-images
+  // يجب التأكد من إزالة حماية JwtAuthGuard عن هذا الـ Endpoint (مثلاً باستخدام @Public())
+  @Get('public/random-images') 
+  @HttpCode(HttpStatus.OK)
+  async getPublicRandomImages(
+    // limit: عدد الصور العشوائية المطلوبة (افتراضياً 10)
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+  ): Promise<string[]> {
+    // نمرر العدد المطلوب إلى الـ Service
+    return this.packageService.getShuffledPackageImages(limit);
+  }
+  
 
 
   

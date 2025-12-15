@@ -23,6 +23,23 @@ export class ProviderController {
     }
   }
 
+  @Patch('my-details') 
+  async updateMyDetails(
+    @Req() req,
+    @Body() dto: UpdateServiceProviderDto
+  ) {
+    const userId = req.user.userId;
+    return this.providerService.updateByUserId(userId, dto);
+  }
+
+
+
+  @Get('my-details') // 👈 الـ Endpoint الجديد: /providers/my-details
+  async getMyDetails(@Req() req): Promise<any> {
+    const userId = req.user.userId;
+    return this.providerService.findProviderDetails(userId);
+  }
+
 
   @Get()
   async getAll(@Req() req) {
@@ -39,6 +56,8 @@ export class ProviderController {
     const userId = req.user.userId;
     return this.providerService.update(userId, companyName, dto);
   }
+
+
 
   @Get('my-company-name')
   async getCompanyName(@Req() req): Promise<{ companyName: string }> {

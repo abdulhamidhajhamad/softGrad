@@ -450,4 +450,79 @@ export class ServiceService {
     return R * c;
   }
   private deg2rad(deg: number): number { return deg * (Math.PI / 180); }
+/**
+   * جلب الخدمات النشطة مع دعم التصفح (Pagination) وإرجاع تفاصيل محددة (للصفحة الرئيسية).
+   * @param limit عدد الخدمات في الصفحة الواحدة.
+   * @param page رقم الصفحة المطلوب (تبدأ من 1).
+   */
+  async getPaginatedServicesWithDetails(limit: number, page: number): Promise<{ 
+    services: any[], 
+    totalCount: number 
+  }> {
+    const skip = (page - 1) * limit;
+
+    // 1. جلب العدد الكلي للخدمات أولاً (لإبلاغ الفرونت إند عن إجمالي الصفحات)
+    const totalCount = await this.serviceModel.countDocuments({ isActive: true }).exec();
+
+    // 2. Aggregation Pipeline لجلب وتشكيل البيانات
+   const services = await this.serviceModel.aggregate([
+      // 1. التصفية: الخدمات النشطة والمتاحة فقط
+      { $match: { isActive: true } }, 
+      
+      // 2. الترتيب: (الأحدث أولاً)
+      { $sort: { createdAt: -1 } }, 
+      
+      // 3. التصفح: تخطي وتحديد
+      { $skip: skip },
+      { $limit: limit },
+
+      // 4. تشكيل (Projection) وحساب الحقول المطلوبة (الصيغة المصححة)
+      { $project: {
+          _id: 1,
+          serviceName: 1,
+          
+          // الصورة الأولى فقط (نضمن أن images مصفوفة باستخدام $ifNull)
+          firstImage: { $arrayElemAt: [{ $ifNull: ['$images', []] }, 0] },
+          
+          // إرجاع خيارات السعر بالكامل
+          priceOptions: '$price', 
+
+          // المدينة (افتراضاً: أنها موجودة ضمن حقل address في location)
+          city: '$location.address', 
+          
+          // اسم الشركة (من حقل companyName في Service Schema)
+          companyName: '$companyName',
+
+          // ✅ التصحيح الأول: عدد الريفيوز. نستخدم $ifNull لضمان أن $reviews هي مصفوفة.
+          reviewCount: { $size: { $ifNull: ['$reviews', []] } },
+          
+          // ✅ التصحيح الثاني: عدد الحجوزات. نستخدم $ifNull على كل مصفوفة حجز بشكل منفصل.
+          bookingCount: {
+              $add: [
+                  { $size: { $ifNull: ['$bookingSlots.dailyBookings', []] } },
+                  { $size: { $ifNull: ['$bookingSlots.hourlyBookings', []] } },
+                  { $size: { $ifNull: ['$bookingSlots.capacityBookings', []] } },
+              ]
+          }
+      }},
+      
+      // 5. تنسيق الإخراج 
+      { $project: {
+          id: '$_id', 
+          serviceName: 1,
+          firstImage: 1,
+          priceOptions: 1,
+          city: 1,
+          companyName: 1,
+          reviewCount: 1,
+          bookingCount: 1,
+          _id: 0, 
+      }}
+    ]).exec();
+    
+    return { services, totalCount };
+  }
+
+
+
 }

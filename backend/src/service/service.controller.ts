@@ -2,7 +2,9 @@ import {
   Controller, Get, Post, Put, Delete, Body, Param, 
   UseGuards, Request, HttpException, HttpStatus, Query,
   UseInterceptors,
-  UploadedFiles
+  UploadedFiles,
+  DefaultValuePipe,
+  ParseIntPipe
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ServiceService } from './service.service';
@@ -296,4 +298,18 @@ export class ServiceController {
       );
     }
   }
+
+
+  // ✅ NEW ENDPOINT: جلب الخدمات مع تفاصيل محددة لدعم التمرير اللانهائي
+  @Get('public/paginate-details')
+  // @Public() // 👈 يجب إضافة هذا الـ Decorator أو الترتيب لتجاوز JwtAuthGuard
+  async getPaginatedServicesDetails(
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number, // افتراضياً 20 عنصر
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,   // افتراضياً الصفحة الأولى
+  ) {
+    if (limit > 50) limit = 50; 
+    
+    return this.serviceService.getPaginatedServicesWithDetails(limit, page);
+  }
+  
 }

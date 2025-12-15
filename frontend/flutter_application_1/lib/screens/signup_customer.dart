@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-// **التعديل هنا:** استيراد الخدمة الموحدة
-import 'package:flutter_application_1/services/auth_service.dart'; 
+import 'package:flutter_application_1/services/auth_service.dart';
+import 'package:flutter_application_1/screens/home_customer.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);
@@ -11,10 +11,8 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  // Form Key
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -22,7 +20,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _confirmCtrl = TextEditingController();
   final _otherCityCtrl = TextEditingController();
 
-  // Cities Dropdown
   final List<String> _cities = const [
     'Nablus',
     'Ramallah',
@@ -40,25 +37,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _showConfirm = false;
   bool _isLoading = false;
 
-  // لحفظ الدور الحالي
-  String _currentRole = 'customer'; 
+  String _currentRole = 'customer';
 
   @override
   void initState() {
     super.initState();
-    // استخدام AuthService
-    AuthService.testConnection(); 
-  }
-
-  Future<void> _testConnection() async {
-    print('🔗 Testing connection to server...');
-    await AuthService.testConnection(); 
+    AuthService.testConnection();
   }
 
   static const kPrimaryButtonColor = Color.fromARGB(215, 20, 20, 215);
   static const kTextColor = Colors.black;
 
-  // Decoration
+  // ✅ TEMP: Skip مباشرة للهوم
+  void _skipToHome() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage(userName: 'Guest')),
+    );
+  }
+
   InputDecoration _decor({
     required String hint,
     required IconData icon,
@@ -96,62 +93,48 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
       );
 
-  // ===============================================
-  // SUBMIT (API Call)
-  // ===============================================
   Future<void> _submit() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+    if (!_formKey.currentState!.validate()) return;
 
-      // **التعديل هنا:** قراءة الدور من الـ Arguments
-      final arguments = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      final String userRole = arguments?['role'] ?? 'customer';
+    setState(() => _isLoading = true);
 
-      try {
-        // **التعديل هنا:** استخدام AuthService.signup وتمرير الدور
-        final response = await AuthService.signup(
-          userName: _nameCtrl.text.trim(),
-          email: _emailCtrl.text.trim(),
-          password: _passCtrl.text,
-          phone: _phoneCtrl.text.trim(),
-          city: _selectedCity == 'Other' 
-              ? _otherCityCtrl.text.trim() 
-              : _selectedCity!,
-          role: userRole, // تمرير الدور ('customer' أو 'vendor')
+    final arguments =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    final rawRole = (arguments?['role'] ?? 'customer').toString();
+    final apiRole = rawRole == 'customer' ? 'user' : 'vendor';
+
+    try {
+      final response = await AuthService.signup(
+        userName: _nameCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+        password: _passCtrl.text,
+        phone: _phoneCtrl.text.trim(),
+        city: _selectedCity == 'Other'
+            ? _otherCityCtrl.text.trim()
+            : _selectedCity!,
+        role: apiRole,
+      );
+
+      print('✅ SIGNUP RESPONSE: $response');
+
+      if (response['token'] != null || response['message'] != null) {
+        Navigator.pushReplacementNamed(
+          context,
+          '/verification',
+          arguments: {
+            "email": _emailCtrl.text.trim(),
+            "role": apiRole,
+            "name": _nameCtrl.text.trim(),
+          },
         );
-
-        if (response.containsKey('message')) {
-          // نجح التسجيل - الانتقال لشاشة التحقق
-          Navigator.pushReplacementNamed(
-            context,
-            '/verification',
-            arguments: {
-              "email": _emailCtrl.text.trim(),
-              // تمرير الدور إلى شاشة التحقق ليتم توجيهه بعدها إلى شاشة المزود إذا كان الدور 'vendor'
-              "role": userRole, 
-              "name": _nameCtrl.text.trim(),
-            },
-          );
-        } else {
-          _showErrorDialog('Signup failed. Please try again.');
-        }
-      } catch (e) {
-        String errorMessage = 'An error occurred. Please try again.';
-        
-        if (e.toString().contains('email already exists')) {
-          errorMessage = 'Email already exists. Please use a different email.';
-        } else if (e.toString().contains('Network error')) {
-          errorMessage = 'Network error. Please check your connection.';
-        }
-        
-        _showErrorDialog(errorMessage);
-      } finally {
-        setState(() {
-          _isLoading = false;
-        });
+      } else {
+        _showErrorDialog('Signup failed: ${response.toString()}');
       }
+    } catch (e) {
+      _showErrorDialog(e.toString());
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -180,7 +163,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  // Password Strength Logic
   void _evaluatePasswordStrength(String password) {
     String label;
     Color color;
@@ -232,33 +214,42 @@ class _SignUpScreenState extends State<SignUpScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // قراءة الدور وتحديث حالة الواجهة عند تغيير التبعيات
-    final arguments = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    _currentRole = arguments?['role'] ?? 'customer';
+    final arguments =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    _currentRole = (arguments?['role'] ?? 'customer').toString();
   }
 
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    // لتحديد النص المعروض بناءً على الدور
-    final String roleDisplay = _currentRole == 'vendor' ? 'Provider' : 'Customer';
+    final String roleDisplay =
+        _currentRole == 'vendor' ? 'Provider' : 'Customer';
 
     return Scaffold(
       backgroundColor: Colors.white,
 
-      // BACK BUTTON → يعود لصفحة choose_role
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.black,
-          ),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
         ),
+
+        // ✅ زر Skip فوق
+        actions: [
+          TextButton(
+            onPressed: _skipToHome,
+            child: Text(
+              'Skip',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700,
+                color: kPrimaryButtonColor,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
 
       body: SafeArea(
@@ -275,7 +266,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  // **التعديل هنا:** عرض الدور
                   'Create Account as $roleDisplay',
                   style: GoogleFonts.poppins(
                     fontSize: 23,
@@ -285,7 +275,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-
                 Text(
                   'Join our wedding community in a few steps',
                   style: GoogleFonts.poppins(
@@ -293,10 +282,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     color: Colors.grey.shade600,
                   ),
                 ),
-
                 const SizedBox(height: 24),
 
-                // Full Name
                 _label('Full Name'),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -306,14 +293,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     hint: 'Enter your full name',
                     icon: Icons.person_outline,
                   ),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Enter your name'
-                      : null,
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Enter your name' : null,
                 ),
 
                 const SizedBox(height: 16),
 
-                // Email
                 _label('Email'),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -325,9 +310,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     icon: Icons.email_outlined,
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'Enter your email';
-                    }
+                    if (v == null || v.trim().isEmpty) return 'Enter your email';
                     final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
                         .hasMatch(v.trim());
                     return ok ? null : 'Enter a valid email';
@@ -336,7 +319,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 16),
 
-                // Phone
                 _label('Phone Number'),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -354,7 +336,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 16),
 
-                // City Dropdown
                 _label('City'),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
@@ -364,10 +345,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       .map(
                         (city) => DropdownMenuItem(
                           value: city,
-                          child: Text(
-                            city,
-                            style: GoogleFonts.poppins(fontSize: 14),
-                          ),
+                          child: Text(city,
+                              style: GoogleFonts.poppins(fontSize: 14)),
                         ),
                       )
                       .toList(),
@@ -401,7 +380,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 16),
 
-                // Password
                 _label('Password'),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -413,14 +391,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     hint: '••••••••',
                     icon: Icons.lock_outline,
                     suffix: IconButton(
-                      onPressed: () {
-                        setState(() => _showPass = !_showPass);
-                      },
-                      icon: Icon(
-                        _showPass
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
+                      onPressed: () => setState(() => _showPass = !_showPass),
+                      icon: Icon(_showPass
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined),
                     ),
                   ),
                   validator: (v) =>
@@ -443,11 +417,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(
-                        Icons.bolt_rounded,
-                        size: 16,
-                        color: _passwordStrengthColor,
-                      ),
+                      Icon(Icons.bolt_rounded,
+                          size: 16, color: _passwordStrengthColor),
                       const SizedBox(width: 6),
                       Text(
                         'Password strength: $_passwordStrengthLabel',
@@ -463,7 +434,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                 const SizedBox(height: 16),
 
-                // Confirm Password
                 _label('Confirm Password'),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -476,11 +446,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     suffix: IconButton(
                       onPressed: () =>
                           setState(() => _showConfirm = !_showConfirm),
-                      icon: Icon(
-                        _showConfirm
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
+                      icon: Icon(_showConfirm
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined),
                     ),
                   ),
                   validator: (v) {
@@ -505,16 +473,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ),
                     child: _isLoading
-                        ? SizedBox(
+                        ? const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
                         : Text(
-                            // **التعديل هنا:** عرض الدور
                             'Sign up as $roleDisplay',
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w700,
@@ -537,15 +505,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ),
                     InkWell(
-                      onTap: _isLoading 
-                          ? null 
-                          : () => Navigator.pushReplacementNamed(context, '/signin'),
+                      onTap: _isLoading
+                          ? null
+                          : () => Navigator.pushReplacementNamed(
+                                context,
+                                '/signin',
+                              ),
                       child: Text(
                         '  Sign In',
                         style: GoogleFonts.poppins(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: _isLoading ? Colors.grey.shade400 : kPrimaryButtonColor,
+                          color: _isLoading
+                              ? Colors.grey.shade400
+                              : kPrimaryButtonColor,
                         ),
                       ),
                     ),

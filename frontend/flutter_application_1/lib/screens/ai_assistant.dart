@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile.dart'; // for kAccentColor
+import 'home_customer.dart'; // ✅ NEW: go back to HomePage
 
 const String kAiSystemPrompt = '''
 You are "My Wedding AI Assistant", a friendly, smart planner that helps users organize their wedding based on their budget and preferences.
@@ -76,6 +77,16 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  // ✅ NEW: go back to home_customer.dart (HomePage)
+  void _goHome() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const HomePage(userName: "Guest"),
+      ),
+      (route) => false,
+    );
   }
 
   void _addWelcomeMessage() {
@@ -157,202 +168,216 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     const Color scaffoldBg = Color(0xFFF3F4F8);
     const Color textPrimary = Colors.black;
 
-    return Scaffold(
-      backgroundColor: scaffoldBg,
-      appBar: AppBar(
+    return WillPopScope(
+      // ✅ Android/system back
+      onWillPop: () async {
+        _goHome();
+        return false;
+      },
+      child: Scaffold(
         backgroundColor: scaffoldBg,
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: textPrimary),
-        title: Text(
-          'AI Wedding Assistant',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: textPrimary,
-          ),
-        ),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 8.0),
-            child: Icon(Icons.auto_awesome, color: Colors.black87, size: 22),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: _AssistantHeaderCard(),
+        appBar: AppBar(
+          backgroundColor: scaffoldBg,
+          elevation: 0,
+          centerTitle: true,
+          iconTheme: const IconThemeData(color: textPrimary),
+
+          // ✅ Back button in AppBar
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            onPressed: _goHome,
           ),
 
-          // Dropdown header is always visible
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _showFullSuggestions = !_showFullSuggestions;
-                });
-              },
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Suggestions",
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF8A8A9E),
-                    ),
-                  ),
-                  Icon(
-                    _showFullSuggestions
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    size: 16,
-                    color: const Color(0xFF8A8A9E),
-                  ),
-                ],
-              ),
+          title: Text(
+            'AI Wedding Assistant',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: textPrimary,
             ),
           ),
+          actions: const [
+            Padding(
+              padding: EdgeInsets.only(right: 8.0),
+              child: Icon(Icons.auto_awesome, color: Colors.black87, size: 22),
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: _AssistantHeaderCard(),
+            ),
 
-          // Only the list itself collapses/expands
-          if (_showFullSuggestions) ...[
-            const SizedBox(height: 4),
+            // Dropdown header is always visible
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: _QuickSuggestionsRow(
-                onTapSuggestion: _handleQuickSuggestion,
-              ),
-            ),
-            const SizedBox(height: 8),
-          ] else
-            const SizedBox(height: 4),
-
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 32),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(26),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x22000000),
-                      blurRadius: 16,
-                      offset: Offset(0, 8),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showFullSuggestions = !_showFullSuggestions;
+                  });
+                },
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Suggestions",
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF8A8A9E),
+                      ),
+                    ),
+                    Icon(
+                      _showFullSuggestions
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      size: 16,
+                      color: const Color(0xFF8A8A9E),
                     ),
                   ],
                 ),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: _scrollCtrl,
-                        padding: const EdgeInsets.only(
-                            bottom: 12, left: 4, right: 4),
-                        itemCount: _messages.length + (_isSending ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (_isSending && index == _messages.length) {
-                            return const _TypingIndicator();
-                          }
-                          final msg = _messages[index];
-                          return MessageBubble(
-                            text: msg.text,
-                            isUser: msg.isUser,
-                          );
-                        },
+              ),
+            ),
+
+            // Only the list itself collapses/expands
+            if (_showFullSuggestions) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: _QuickSuggestionsRow(
+                  onTapSuggestion: _handleQuickSuggestion,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ] else
+              const SizedBox(height: 4),
+
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 32),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(26),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x22000000),
+                        blurRadius: 16,
+                        offset: Offset(0, 8),
                       ),
-                    ),
-                    SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 4, 10, 14),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 14),
-                                decoration: BoxDecoration(
-                                  color:
-                                      const Color.fromARGB(255, 249, 239, 196),
-                                  borderRadius: BorderRadius.circular(24),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x14000000),
-                                      blurRadius: 10,
-                                      offset: Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: TextField(
-                                  controller: _inputCtrl,
-                                  maxLines: 4,
-                                  minLines: 1,
-                                  maxLength: _maxUserChars,
-                                  decoration: InputDecoration(
-                                    hintText:
-                                        'Type your budget and I’ll suggest the best wedding services for you...',
-                                    hintStyle: GoogleFonts.poppins(
-                                      fontSize: 13,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                    border: InputBorder.none,
-                                    counterText: '',
-                                  ),
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: _sendMessage,
-                              child: Container(
-                                width: 46,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(23),
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      kAccentColor,
-                                      kAccentColor.withOpacity(0.8),
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x33000000),
-                                      blurRadius: 10,
-                                      offset: Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.send,
-                                  size: 20,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ],
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: ListView.builder(
+                          controller: _scrollCtrl,
+                          padding: const EdgeInsets.only(
+                              bottom: 12, left: 4, right: 4),
+                          itemCount: _messages.length + (_isSending ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (_isSending && index == _messages.length) {
+                              return const _TypingIndicator();
+                            }
+                            final msg = _messages[index];
+                            return MessageBubble(
+                              text: msg.text,
+                              isUser: msg.isUser,
+                            );
+                          },
                         ),
                       ),
-                    ),
-                  ],
+                      SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 4, 10, 14),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14),
+                                  decoration: BoxDecoration(
+                                    color: const Color.fromARGB(
+                                        255, 249, 239, 196),
+                                    borderRadius: BorderRadius.circular(24),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Color(0x14000000),
+                                        blurRadius: 10,
+                                        offset: Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: TextField(
+                                    controller: _inputCtrl,
+                                    maxLines: 4,
+                                    minLines: 1,
+                                    maxLength: _maxUserChars,
+                                    decoration: InputDecoration(
+                                      hintText:
+                                          'Type your budget and I’ll suggest the best wedding services for you...',
+                                      hintStyle: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                      border: InputBorder.none,
+                                      counterText: '',
+                                    ),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: _sendMessage,
+                                child: Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(23),
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        kAccentColor,
+                                        kAccentColor.withOpacity(0.8),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Color(0x33000000),
+                                        blurRadius: 10,
+                                        offset: Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.send,
+                                    size: 20,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

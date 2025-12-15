@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_application_1/screens/home_customer.dart'; // Import HomePage
-import 'package:flutter_application_1/services/auth_service.dart'; // Import AuthService
+import 'package:flutter_application_1/screens/home_customer.dart';
+import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/screens/home_provider.dart';
 
-/// Sign In screen for existing users
 class SignInScreen extends StatefulWidget {
   const SignInScreen({Key? key}) : super(key: key);
 
@@ -19,12 +18,6 @@ class _SignInScreenState extends State<SignInScreen> {
   bool _isPasswordVisible = false;
   bool _rememberMe = false;
   bool _isLoading = false;
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
 
   @override
   void initState() {
@@ -37,11 +30,24 @@ class _SignInScreenState extends State<SignInScreen> {
     await AuthService.testConnection();
   }
 
+  // ✅ TEMP: Skip مباشرة للهوم
+  void _skipToHome() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage(userName: 'Guest')),
+    );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _signIn() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+      setState(() => _isLoading = true);
 
       try {
         final email = _emailController.text.trim();
@@ -98,9 +104,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
         _showErrorDialog(errorMessage);
       } finally {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -111,14 +115,9 @@ class _SignInScreenState extends State<SignInScreen> {
       builder: (context) => AlertDialog(
         title: Text(
           'Login Failed',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-          ),
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
         ),
-        content: Text(
-          message,
-          style: GoogleFonts.poppins(),
-        ),
+        content: Text(message, style: GoogleFonts.poppins()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -139,6 +138,26 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+
+      // ✅ AppBar بس للـ Skip (نظيف وخفيف)
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          TextButton(
+            onPressed: _skipToHome,
+            child: Text(
+              'Skip',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700,
+                color: const Color.fromARGB(215, 20, 20, 215),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -147,9 +166,7 @@ class _SignInScreenState extends State<SignInScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 40),
-
-                // Title
+                const SizedBox(height: 24),
                 Text(
                   'Welcome Back!',
                   style: GoogleFonts.poppins(
@@ -158,10 +175,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     color: const Color(0xFF1A1A2E),
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
-                // Subtitle
                 Text(
                   'Sign in to access your account',
                   style: GoogleFonts.poppins(
@@ -169,9 +183,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     color: Colors.grey.shade600,
                   ),
                 ),
-
                 const SizedBox(height: 48),
-                // Email Field
                 Text(
                   'Email',
                   style: GoogleFonts.poppins(
@@ -187,10 +199,8 @@ class _SignInScreenState extends State<SignInScreen> {
                   decoration: InputDecoration(
                     hintText: 'you@example.com',
                     hintStyle: GoogleFonts.poppins(color: Colors.grey.shade400),
-                    prefixIcon: const Icon(
-                      Icons.email_outlined,
-                      color: Colors.grey,
-                    ),
+                    prefixIcon:
+                        const Icon(Icons.email_outlined, color: Colors.grey),
                     filled: true,
                     fillColor: Colors.grey.shade50,
                     border: OutlineInputBorder(
@@ -210,19 +220,14 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.isEmpty)
                       return 'Please enter your email';
-                    }
-                    if (!value.contains('@')) {
+                    if (!value.contains('@'))
                       return 'Please enter a valid email';
-                    }
                     return null;
                   },
                 ),
-
                 const SizedBox(height: 20),
-
-                // Password Field
                 Text(
                   'Password',
                   style: GoogleFonts.poppins(
@@ -238,10 +243,8 @@ class _SignInScreenState extends State<SignInScreen> {
                   decoration: InputDecoration(
                     hintText: '••••••••',
                     hintStyle: GoogleFonts.poppins(color: Colors.grey.shade400),
-                    prefixIcon: const Icon(
-                      Icons.lock_outline,
-                      color: Colors.grey,
-                    ),
+                    prefixIcon:
+                        const Icon(Icons.lock_outline, color: Colors.grey),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isPasswordVisible
@@ -249,11 +252,8 @@ class _SignInScreenState extends State<SignInScreen> {
                             : Icons.visibility_off_outlined,
                         color: Colors.grey,
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _isPasswordVisible = !_isPasswordVisible;
-                        });
-                      },
+                      onPressed: () => setState(
+                          () => _isPasswordVisible = !_isPasswordVisible),
                     ),
                     filled: true,
                     fillColor: Colors.grey.shade50,
@@ -274,16 +274,12 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.isEmpty)
                       return 'Please enter your password';
-                    }
                     return null;
                   },
                 ),
-
                 const SizedBox(height: 16),
-
-                // Remember Me & Forgot Password Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -294,11 +290,8 @@ class _SignInScreenState extends State<SignInScreen> {
                           height: 24,
                           child: Checkbox(
                             value: _rememberMe,
-                            onChanged: (value) {
-                              setState(() {
-                                _rememberMe = value ?? false;
-                              });
-                            },
+                            onChanged: (value) =>
+                                setState(() => _rememberMe = value ?? false),
                             activeColor: const Color.fromARGB(215, 20, 20, 215),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(4),
@@ -316,9 +309,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       ],
                     ),
                     GestureDetector(
-                      onTap: () {
-                        // TODO(Auth): Navigate to Forgot Password screen
-                      },
+                      onTap: () {},
                       child: Text(
                         'Forgot Password?',
                         style: GoogleFonts.poppins(
@@ -330,10 +321,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 32),
-
-                // Sign In Button
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -348,7 +336,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       ),
                     ),
                     child: _isLoading
-                        ? SizedBox(
+                        ? const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
@@ -366,10 +354,7 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
-                // Sign Up Link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -397,7 +382,6 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 20),
               ],
             ),

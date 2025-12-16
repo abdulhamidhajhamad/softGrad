@@ -6,6 +6,7 @@ import { CartController } from './shoppingCart.controller';
 import { CartService } from './shoppingCart.service';
 import { Cart, CartSchema } from './shoppingCart.schema';
 import { Service, ServiceSchema } from '../service/service.schema';
+import { PackageModule } from '../Package/package.module';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { Service, ServiceSchema } from '../service/service.schema';
       { name: Cart.name, schema: CartSchema },
       { name: Service.name, schema: ServiceSchema },
     ]),
-  ],
+         PackageModule,],
   controllers: [CartController],
   providers: [CartService],
   exports: [CartService, MongooseModule],

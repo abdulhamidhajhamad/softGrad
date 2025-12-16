@@ -39,57 +39,89 @@ export class BookingService {
    * 📌 إنشاء حجوزات منفصلة من السلة بعد نجاح الدفع
    * كل خدمة في السلة = booking منفصل
    */
-  async createBookingsFromCart(userId: string, paymentIntentId: string): Promise<Booking[]> {
-    const userObjectId = new Types.ObjectId(userId);
-    const cart = await this.cartModel.findOne({ userId: userObjectId }).populate('items.serviceId').exec();
+  /**
+ * 📌 إنشاء حجوزات منفصلة من السلة بعد نجاح الدفع (مع دعم الباقات)
+ */
+async createBookingsFromCart(userId: string, paymentIntentId: string): Promise<Booking[]> {
+  const userObjectId = new Types.ObjectId(userId);
+  const cart = await this.cartModel.findOne({ userId: userObjectId }).populate('items.serviceId').exec();
 
-    if (!cart || cart.items.length === 0) {
-      this.logger.warn(`Cart is empty for user ${userId}. No bookings created.`);
-      return [];
-    }
+  if (!cart || cart.items.length === 0) {
+    this.logger.warn(`Cart is empty for user ${userId}. No bookings created.`);
+    return [];
+  }
 
-    // 👤 جلب معلومات المستخدم لإرسالها في الإشعار
-    const user = await this.userModel.findById(userObjectId).select('name email').lean().exec();
-    const clientName = (user as any)?.name || (user as any)?.email || 'Client';
+  // 💤 جلب معلومات المستخدم لإرساله في الإشعار
+  const user = await this.userModel.findById(userObjectId).select('name email').lean().exec();
+  const clientName = (user as any)?.name || (user as any)?.email || 'Client';
 
-    const createdBookings: Booking[] = [];
+  const createdBookings: Booking[] = [];
+  
+  // لتجميع الإشعارات حسب الـ vendor (لإرسال إشعار واحد لكل vendor عن الباقة)
+  const packageNotifications: Map<string, { 
+    packageName: string, 
+    services: string[], 
+    date: string,
+    fcmToken?: string 
+  }> = new Map();
 
-    // 🔄 التكرار على كل عنصر في السلة لإنشاء حجز منفصل
-    for (const item of cart.items) {
-      const service = item.serviceId as any;
+  // 🔄 التكرار على كل عنصر في السلة لإنشاء حجز منفصل
+  for (const item of cart.items) {
+    const service = item.serviceId as any;
 
-      const newBooking = new this.bookingModel({
-        userId: userObjectId,
-        paymentIntentId: paymentIntentId,
-        serviceId: service._id,
-        serviceName: service.serviceName,
-        providerId: service.providerId,
-        companyName: service.companyName,
-        bookingType: service.bookingType,
-        bookingDetails: {
-          date: item.bookingDetails.date,
-          startHour: item.bookingDetails.startHour,
-          endHour: item.bookingDetails.endHour,
-          numberOfPeople: item.bookingDetails.numberOfPeople,
-          isFullVenue: item.bookingDetails.isFullVenue,
-        },
-        price: item.price,
-        status: BookingStatus.CONFIRMED, // ✅ الدفع تم بنجاح
-        refunded: false,
-        seen: false, // 🆕 الحجز جديد، لم يشاهده الـ vendor بعد
-      });
+    const newBooking = new this.bookingModel({
+      userId: userObjectId,
+      paymentIntentId: paymentIntentId,
+      serviceId: service._id,
+      serviceName: service.serviceName,
+      providerId: service.providerId,
+      companyName: service.companyName,
+      bookingType: service.bookingType,
+      bookingDetails: {
+        date: item.bookingDetails.date,
+        startHour: item.bookingDetails.startHour,
+        endHour: item.bookingDetails.endHour,
+        numberOfPeople: item.bookingDetails.numberOfPeople,
+        isFullVenue: item.bookingDetails.isFullVenue,
+      },
+      price: item.price,
+      status: BookingStatus.CONFIRMED,
+      refunded: false,
+      seen: false,
+    });
 
-      const booking = await newBooking.save();
-      createdBookings.push(booking);
+    const booking = await newBooking.save();
+    createdBookings.push(booking);
 
-      // 📅 تنسيق التاريخ
-      const bookingDateStr = new Date(item.bookingDetails.date).toLocaleDateString('en-GB'); // DD/MM/YYYY
+    // 📅 تنسيق التاريخ
+    const bookingDateStr = new Date(item.bookingDetails.date).toLocaleDateString('en-GB');
 
-      // 📧 جلب FCM token للـ vendor
+    // إذا كان الحجز جزء من باقة
+    if (item.packageId && item.packageName) {
+      const vendorId = service.providerId.toString();
+      
+      if (!packageNotifications.has(vendorId)) {
+        // جلب FCM token للـ vendor
+        const vendor = await this.userModel.findById(service.providerId).select('fcmToken').lean().exec();
+        
+        packageNotifications.set(vendorId, {
+          packageName: item.packageName,
+          services: [service.serviceName],
+          date: bookingDateStr,
+          fcmToken: (vendor as any)?.fcmToken
+        });
+      } else {
+        const notification = packageNotifications.get(vendorId);      
+      if (notification) {
+             notification.services.push(service.serviceName);
+        }
+      }
+    } else {
+      // 🔧 جلب FCM token للـ vendor (للحجوزات العادية)
       const vendor = await this.userModel.findById(service.providerId).select('fcmToken').lean().exec();
       const vendorFcmToken = (vendor as any)?.fcmToken as string | undefined;
 
-      // 🔔 إرسال الإشعار للـ vendor
+      // 🔔 إرسال الإشعار للـ vendor (حجز عادي)
       const notificationBody = `${service.serviceName} has been booked successfully at ${bookingDateStr} by ${clientName}`;
       
       try {
@@ -111,13 +143,40 @@ export class BookingService {
         );
       } catch (notifError) {
         this.logger.error(`Failed to send notification for booking ${booking._id}:`, notifError.message);
-        // Continue with other bookings even if notification fails
       }
     }
-    
-    this.logger.log(`✅ ${createdBookings.length} separate bookings created for user ${userId}`);
-    return createdBookings;
   }
+
+  // 📦 إرسال إشعارات الباقات (إشعار واحد لكل vendor)
+  for (const [vendorId, data] of packageNotifications.entries()) {
+    const servicesText = data.services.join(', ');
+    const notificationBody = `${clientName} booked "${data.packageName}" package (${servicesText}) at ${data.date}`;
+    
+    try {
+      await this.notificationService.createNotification(
+        {
+          recipientId: new Types.ObjectId(vendorId),
+          recipientType: RecipientType.VENDOR,
+          title: 'New Package Booking',
+          body: notificationBody,
+          type: NotificationType.BOOKING_CONFIRMED,
+          metadata: { 
+            packageName: data.packageName,
+            services: data.services,
+            clientName: clientName,
+            bookingDate: data.date,
+          }
+        },
+        data.fcmToken || ''
+      );
+    } catch (notifError) {
+      this.logger.error(`Failed to send package notification to vendor ${vendorId}:`, notifError.message);
+    }
+  }
+  
+  this.logger.log(`✅ ${createdBookings.length} separate bookings created for user ${userId}`);
+  return createdBookings;
+}
 
   /**
    * 🆕 حساب عدد الحجوزات غير المقروءة للفندر
@@ -337,4 +396,6 @@ export class BookingService {
     this.logger.log(`✅ Marked ${result.modifiedCount} bookings as seen for vendor ${vendorId}`);
     return result; // ترجع { acknowledged: true, modifiedCount: N }
   }
+
+
 }

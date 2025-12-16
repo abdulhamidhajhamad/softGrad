@@ -49,6 +49,12 @@ export class CartItem {
 
   @Prop({ type: String })
   imageUrl?: string;
+  
+  @Prop({ type: Types.ObjectId, ref: 'Package' })
+  packageId?: Types.ObjectId;
+
+  @Prop({ type: String })
+  packageName?: string;
 }
 
 @Schema({ timestamps: true })

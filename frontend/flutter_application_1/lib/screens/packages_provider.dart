@@ -177,14 +177,15 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
   }
 
   Future<void> _openPackageSheet({BundlePackage? editingPackage}) async {
-    // ✅ إذا كان في وضع التعديل، نحط الخدمات الموجودة مسبقاً
     final selectedServiceIds = <String>{
       if (editingPackage != null) ...editingPackage.serviceIds,
     };
 
+    // Map لحفظ الأسعار الجديدة لكل خدمة
+    final Map<String, TextEditingController> newPriceControllers = {};
+    
     _serviceQuantities.clear();
     
-    // ✅ في وضع التعديل، نحط الكميات السابقة إذا موجودة
     if (editingPackage != null) {
       for (final serviceId in editingPackage.serviceIds) {
         _serviceQuantities[serviceId] = 1;
@@ -192,11 +193,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
     }
 
     final nameCtrl = TextEditingController(text: editingPackage?.name ?? '');
-    final priceCtrl = TextEditingController(
-      text: editingPackage != null
-          ? editingPackage.bundlePrice.toStringAsFixed(0)
-          : '',
-    );
 
     DateTime? startDate = editingPackage?.startDate;
     DateTime? endDate = editingPackage?.endDate;
@@ -218,23 +214,29 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
           ),
           child: StatefulBuilder(
             builder: (context, setSheetState) {
+              // حساب السعر الأساسي الكلي والسعر الجديد الكلي
               double baseTotal = 0;
+              double newTotal = 0;
+              
               for (final id in selectedServiceIds) {
                 final service = _services.firstWhere(
                   (s) => s['_id'] == id,
                   orElse: () => {},
                 );
-                baseTotal += _calculateServicePrice(service);
+                final oldPrice = _calculateServicePrice(service);
+                baseTotal += oldPrice;
+                
+                // السعر الجديد من الـ Controller
+                final newPriceCtrl = newPriceControllers[id];
+                if (newPriceCtrl != null) {
+                  final newPrice = double.tryParse(newPriceCtrl.text.trim()) ?? 0.0;
+                  newTotal += newPrice;
+                }
               }
 
-              final bundlePrice =
-                  double.tryParse(priceCtrl.text.trim()) ?? 0.0;
-
               double discount = 0;
-              if (baseTotal > 0 &&
-                  bundlePrice > 0 &&
-                  bundlePrice < baseTotal) {
-                discount = (1 - (bundlePrice / baseTotal)) * 100;
+              if (baseTotal > 0 && newTotal > 0 && newTotal < baseTotal) {
+                discount = ((baseTotal - newTotal) / baseTotal) * 100;
               }
 
               Future<void> pickStartDate() async {
@@ -372,7 +374,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                     const SizedBox(height: 18),
 
                     Text(
-                      "Select services to include",
+                      "Select services and set new prices",
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -397,15 +399,16 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                           final service = _services[index];
                           final name = _serviceNameAt(index);
                           final id = _serviceIdAt(index);
-                          final String priceType =
-                              service['priceType'] ?? 'fixed';
+                          final String priceType = service['priceType'] ?? 'fixed';
                           final isChecked = selectedServiceIds.contains(id);
 
-                          final int currentQty =
-                              _serviceQuantities[id] ?? 1;
+                          final int currentQty = _serviceQuantities[id] ?? 1;
+                          final double oldPrice = _calculateServicePrice(service);
 
-                          final double currentPrice =
-                              _calculateServicePrice(service);
+                          // إنشاء controller للسعر الجديد إذا لم يكن موجود
+                          if (!newPriceControllers.containsKey(id)) {
+                            newPriceControllers[id] = TextEditingController();
+                          }
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 8),
@@ -432,13 +435,13 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                         setSheetState(() {
                                           if (v == true) {
                                             selectedServiceIds.add(id);
-                                            if (!_serviceQuantities
-                                                .containsKey(id)) {
+                                            if (!_serviceQuantities.containsKey(id)) {
                                               _serviceQuantities[id] = 1;
                                             }
                                           } else {
                                             selectedServiceIds.remove(id);
                                             _serviceQuantities.remove(id);
+                                            newPriceControllers[id]?.clear();
                                           }
                                         });
                                       },
@@ -446,8 +449,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                     ),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             name,
@@ -466,135 +468,169 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                         ],
                                       ),
                                     ),
-                                    Text(
-                                      "₪${currentPrice.toStringAsFixed(0)}",
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: kPrimaryColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                if (isChecked &&
-                                    (priceType == 'hourly' ||
-                                        priceType == 'capacity'))
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                        left: 48, top: 6),
-                                    child: Row(
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
-                                        Expanded(
-                                          child: Text(
-                                            priceType == 'hourly'
-                                                ? "Number of hours:"
-                                                : "Number of people:",
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 12,
-                                              color: Colors.grey[700],
-                                            ),
-                                          ),
-                                        ),
-                                        Container(
-                                          width: 90,
-                                          height: 36,
-                                          child: TextField(
-                                            keyboardType: TextInputType.number,
-                                            textAlign: TextAlign.center,
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                            decoration: InputDecoration(
-                                              contentPadding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 8),
-                                              filled: true,
-                                              fillColor: Colors.white,
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                borderSide: BorderSide(
-                                                  color: Colors.grey.shade300,
-                                                ),
-                                              ),
-                                              enabledBorder: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                borderSide: BorderSide(
-                                                  color: Colors.grey.shade300,
-                                                ),
-                                              ),
-                                              focusedBorder: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                                borderSide: const BorderSide(
-                                                  color: kPrimaryColor,
-                                                  width: 1.5,
-                                                ),
-                                              ),
-                                            ),
-                                            onChanged: (v) {
-                                              final qty =
-                                                  int.tryParse(v.trim()) ?? 1;
-                                              setSheetState(() {
-                                                _serviceQuantities[id] =
-                                                    qty > 0 ? qty : 1;
-                                              });
-                                            },
-                                            controller: TextEditingController(
-                                              text: currentQty.toString(),
-                                            ),
+                                        Text(
+                                          "Old: ₪${oldPrice.toStringAsFixed(0)}",
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            color: Colors.grey[600],
+                                            decoration: TextDecoration.lineThrough,
                                           ),
                                         ),
                                       ],
                                     ),
+                                  ],
+                                ),
+
+                                // حقل إدخال السعر الجديد
+                                if (isChecked) ...[
+                                  const SizedBox(height: 8),
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 48),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // إذا كان السعر بالساعة أو بعدد الأشخاص
+                                        if (priceType == 'hourly' || priceType == 'capacity')
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  priceType == 'hourly'
+                                                      ? "Number of hours:"
+                                                      : "Number of people:",
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[700],
+                                                  ),
+                                                ),
+                                              ),
+                                              Container(
+                                                width: 90,
+                                                height: 36,
+                                                child: TextField(
+                                                  keyboardType: TextInputType.number,
+                                                  textAlign: TextAlign.center,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                  decoration: InputDecoration(
+                                                    contentPadding: const EdgeInsets.symmetric(
+                                                        horizontal: 8, vertical: 8),
+                                                    filled: true,
+                                                    fillColor: Colors.white,
+                                                    border: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(10),
+                                                      borderSide: BorderSide(
+                                                        color: Colors.grey.shade300,
+                                                      ),
+                                                    ),
+                                                    enabledBorder: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(10),
+                                                      borderSide: BorderSide(
+                                                        color: Colors.grey.shade300,
+                                                      ),
+                                                    ),
+                                                    focusedBorder: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(10),
+                                                      borderSide: const BorderSide(
+                                                        color: kPrimaryColor,
+                                                        width: 1.5,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  onChanged: (v) {
+                                                    final qty = int.tryParse(v.trim()) ?? 1;
+                                                    setSheetState(() {
+                                                      _serviceQuantities[id] = qty > 0 ? qty : 1;
+                                                    });
+                                                  },
+                                                  controller: TextEditingController(
+                                                    text: currentQty.toString(),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        
+                                        if (priceType == 'hourly' || priceType == 'capacity')
+                                          const SizedBox(height: 8),
+
+                                        // حقل السعر الجديد
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                priceType == 'hourly'
+                                                    ? "New price per hour (₪):"
+                                                    : priceType == 'capacity'
+                                                        ? "New price per person (₪):"
+                                                        : "New price (₪):",
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.grey[700],
+                                                ),
+                                              ),
+                                            ),
+                                            Container(
+                                              width: 100,
+                                              height: 38,
+                                              child: TextField(
+                                                controller: newPriceControllers[id],
+                                                keyboardType: TextInputType.number,
+                                                textAlign: TextAlign.center,
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: kPrimaryColor,
+                                                ),
+                                                decoration: InputDecoration(
+                                                  hintText: "0",
+                                                  hintStyle: GoogleFonts.poppins(
+                                                    color: Colors.grey[400],
+                                                  ),
+                                                  contentPadding: const EdgeInsets.symmetric(
+                                                      horizontal: 8, vertical: 8),
+                                                  filled: true,
+                                                  fillColor: Colors.white,
+                                                  border: OutlineInputBorder(
+                                                    borderRadius: BorderRadius.circular(10),
+                                                    borderSide: BorderSide(
+                                                      color: kPrimaryColor.withOpacity(0.3),
+                                                    ),
+                                                  ),
+                                                  enabledBorder: OutlineInputBorder(
+                                                    borderRadius: BorderRadius.circular(10),
+                                                    borderSide: BorderSide(
+                                                      color: kPrimaryColor.withOpacity(0.3),
+                                                    ),
+                                                  ),
+                                                  focusedBorder: OutlineInputBorder(
+                                                    borderRadius: BorderRadius.circular(10),
+                                                    borderSide: const BorderSide(
+                                                      color: kPrimaryColor,
+                                                      width: 2,
+                                                    ),
+                                                  ),
+                                                ),
+                                                onChanged: (_) => setSheetState(() {}),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
                                   ),
+                                ],
                               ],
                             ),
                           );
                         }),
                       ),
-
-                    const SizedBox(height: 10),
-
-                    TextField(
-                      controller: priceCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: "Bundle price (₪)",
-                        labelStyle: GoogleFonts.poppins(
-                          fontSize: 13,
-                          color: Colors.grey[700],
-                        ),
-                        filled: true,
-                        fillColor: const Color(0xFFF9FAFB),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFE5E7EB),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFE5E7EB),
-                          ),
-                        ),
-                        focusedBorder: const OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(16)),
-                          borderSide: BorderSide(
-                            color: kPrimaryColor,
-                            width: 1.5,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                      ),
-                      onChanged: (_) => setSheetState(() {}),
-                    ),
 
                     const SizedBox(height: 14),
 
@@ -718,7 +754,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
                     const SizedBox(height: 12),
 
-                    if (baseTotal > 0)
+                    if (baseTotal > 0 && selectedServiceIds.isNotEmpty)
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
@@ -745,9 +781,9 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                 color: Colors.grey[800],
                               ),
                             ),
-                            if (bundlePrice > 0)
+                            if (newTotal > 0)
                               Text(
-                                "Bundle price: ₪${bundlePrice.toStringAsFixed(0)}",
+                                "Bundle price: ₪${newTotal.toStringAsFixed(0)}",
                                 style: GoogleFonts.poppins(
                                   fontSize: 12,
                                   color: Colors.grey[800],
@@ -781,23 +817,55 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                         ),
                         onPressed: () {
                           final name = nameCtrl.text.trim();
-                          final price =
-                              double.tryParse(priceCtrl.text.trim()) ?? 0;
-                          if (name.isEmpty ||
-                              selectedServiceIds.isEmpty ||
-                              price <= 0) {
+                          
+                          if (name.isEmpty || selectedServiceIds.isEmpty) {
                             _showSnackBar(
-                                "Please fill name, select at least one service, and set bundle price.");
+                                "Please fill name and select at least one service.");
                             return;
                           }
 
-                          Navigator.pop(ctx, {
-                            'packageName': name,
-                            'serviceIds': selectedServiceIds.toList(),
-                            'newPrice': price,
-                            'startDate': startDate,
-                            'endDate': endDate,
+                          // التحقق من أن كل خدمة لديها سعر جديد
+                          bool allHavePrices = true;
+                          for (final id in selectedServiceIds) {
+                            final priceText = newPriceControllers[id]?.text.trim() ?? '';
+                            final price = double.tryParse(priceText) ?? 0;
+                            if (price <= 0) {
+                              allHavePrices = false;
+                              break;
+                            }
+                          }
+
+                          if (!allHavePrices) {
+                            _showSnackBar(
+                                "Please enter a new price for all selected services.");
+                            return;
+                          }
+
+                          // حساب السعر الكلي من جميع الأسعار الجديدة
+                          double totalNewPrice = 0;
+                          for (final id in selectedServiceIds) {
+                            final priceText = newPriceControllers[id]?.text.trim() ?? '';
+                            final price = double.tryParse(priceText) ?? 0;
+                            totalNewPrice += price;
+                          }
+
+                        final List<Map<String, dynamic>> formattedServices = [];
+                        for (final id in selectedServiceIds) {
+                          final priceText = newPriceControllers[id]?.text.trim() ?? '';
+                          final price = double.tryParse(priceText) ?? 0;
+                          formattedServices.add({
+                            'id': id,
+                            'customPrice': price,
                           });
+                        }
+
+                        Navigator.pop(ctx, {
+                          'packageName': name,
+                          'services': formattedServices,
+                          'totalPrice': totalNewPrice,
+                          'startDate': startDate,
+                          'endDate': endDate,
+                        });
                         },
                         child: Text(
                           editingPackage == null
@@ -822,7 +890,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
     if (result != null) {
       if (editingPackage != null) {
-        // ✅ وضع التعديل
         setState(() {
           _isLoading = true;
         });
@@ -846,18 +913,17 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
           });
         }
       } else {
-        // ✅ وضع الإنشاء
         setState(() {
           _isLoading = true;
         });
         try {
-          await PackageService.createPackage(
-            packageName: result['packageName'],
-            serviceIds: result['serviceIds'].cast<String>(),
-            newPrice: result['newPrice'],
-            startDate: result['startDate'],
-            endDate: result['endDate'],
-          );
+            await PackageService.createPackage(
+              packageName: result['packageName'],
+              services: result['services'],
+              totalPrice: result['totalPrice'],
+              startDate: result['startDate'],
+              endDate: result['endDate'],
+            );
           await _fetchData();
           _showSnackBar('✅ Package created successfully!');
         } catch (e) {
@@ -1210,7 +1276,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                       inactiveThumbColor: Colors.grey.shade400,
                                       inactiveTrackColor: Colors.grey.shade300,
                                       onChanged: (val) async {
-                                        // ✅ نحدث الـ UI فوراً قبل الطلب للسيرفر
                                         setState(() {
                                           _packages[index] = BundlePackage(
                                             id: p.id,
@@ -1221,7 +1286,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                             startDate: p.startDate,
                                             endDate: p.endDate,
                                             packageImageUrl: p.packageImageUrl,
-                                            isActive: val, // ✅ القيمة الجديدة
+                                            isActive: val,
                                           );
                                         });
 
@@ -1234,7 +1299,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                               ? 'Package is now visible' 
                                               : 'Package is now hidden');
                                         } catch (e) {
-                                          // ✅ إذا فشل الطلب، نرجع القيمة القديمة
                                           setState(() {
                                             _packages[index] = BundlePackage(
                                               id: p.id,
@@ -1245,7 +1309,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                               startDate: p.startDate,
                                               endDate: p.endDate,
                                               packageImageUrl: p.packageImageUrl,
-                                              isActive: !val, // ✅ نرجع للقيمة القديمة
+                                              isActive: !val,
                                             );
                                           });
                                           _showSnackBar(

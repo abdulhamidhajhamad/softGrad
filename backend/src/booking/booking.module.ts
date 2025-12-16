@@ -8,6 +8,7 @@ import { Cart, CartSchema } from '../shoppingCart/shoppingCart.schema';
 import { User, UserSchema } from '../auth/user.entity';
 import { NotificationModule } from '../notification/notification.module';
 import { PaymentModule } from '../payment/payment.module';
+import { Package, PackageSchema } from '../Package/package.entity';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { PaymentModule } from '../payment/payment.module';
       { name: Service.name, schema: ServiceSchema },
       { name: Cart.name, schema: CartSchema },
       { name: User.name, schema: UserSchema },
+      { name: Package.name, schema: PackageSchema },
     ]),
     NotificationModule,
     forwardRef(() => PaymentModule), // ✅ استخدام forwardRef لحل المشكلة

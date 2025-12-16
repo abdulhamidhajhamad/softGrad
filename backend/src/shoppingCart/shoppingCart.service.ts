@@ -1,10 +1,12 @@
 // cart.service.ts
-import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Cart, CartItem } from './shoppingCart.schema';
 import { Service, BookingType } from '../service/service.schema';
 import { AddToCartDto, RemoveFromCartDto, UpdateCartItemDto } from './shoppingCart.dto';
+import { AddPackageToCartDto } from '../Package/package.dto';
+import { PackageService } from '../Package/package.service';
 
 @Injectable()
 export class CartService {
@@ -13,6 +15,7 @@ export class CartService {
   constructor(
     @InjectModel(Cart.name) private cartModel: Model<Cart>,
     @InjectModel(Service.name) private serviceModel: Model<Service>,
+    private packageService: PackageService,
   ) {}
 
   async addToCart(userId: string, addToCartDto: AddToCartDto): Promise<Cart> {
@@ -22,7 +25,7 @@ export class CartService {
         throw new HttpException('Service not found', HttpStatus.NOT_FOUND);
       }
 
-      // 🆕 التحقق من يوم العمل
+      // ✅ 1. التحقق من يوم العمل
       const bookingDate = new Date(addToCartDto.bookingDetails.date);
       const dayName = this.getDayName(bookingDate);
       
@@ -33,7 +36,10 @@ export class CartService {
         );
       }
 
-      // Check availability
+      // ✅ 2. التحقق من الحدود القصوى للخدمة
+      this.validateServiceLimits(service, addToCartDto.bookingDetails);
+
+      // ✅ 3. التحقق من التوفر
       const isAvailable = await this.checkAvailability(
         service,
         bookingDate,
@@ -47,7 +53,7 @@ export class CartService {
         );
       }
 
-      // Calculate price based on booking type
+      // ✅ 4. حساب السعر
       const price = this.calculatePrice(service, addToCartDto.bookingDetails);
 
       let cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
@@ -147,7 +153,7 @@ export class CartService {
         throw new HttpException('Service not found', HttpStatus.NOT_FOUND);
       }
 
-      // 🆕 التحقق من يوم العمل
+      // ✅ 1. التحقق من يوم العمل
       const bookingDate = new Date(updateCartItemDto.bookingDetails.date);
       const dayName = this.getDayName(bookingDate);
       
@@ -158,6 +164,10 @@ export class CartService {
         );
       }
 
+      // ✅ 2. التحقق من الحدود القصوى للخدمة
+      this.validateServiceLimits(service, updateCartItemDto.bookingDetails);
+
+      // ✅ 3. التحقق من التوفر
       const isAvailable = await this.checkAvailability(
         service,
         bookingDate,
@@ -221,7 +231,7 @@ export class CartService {
         return this.checkCapacityAvailability(service, dateOnly, bookingDetails.numberOfPeople);
       
       case BookingType.Display:
-        return true; // Display type doesn't require availability check
+        return true;
       
       case BookingType.Mixed:
         if (bookingDetails.isFullVenue) {
@@ -315,9 +325,237 @@ export class CartService {
     }
   }
 
-  // 🆕 دالة للحصول على اسم اليوم من التاريخ
   private getDayName(date: Date): string {
     const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     return days[date.getDay()];
+  }
+
+  /**
+   * ✅ التحقق من الحدود القصوى للخدمة
+   */
+  private validateServiceLimits(service: Service, bookingDetails: any): void {
+    // للخدمات الساعية - التحقق من عدد الساعات المعقول
+    if (service.bookingType === BookingType.Hourly) {
+      if (!bookingDetails.startHour || !bookingDetails.endHour) {
+        throw new HttpException(
+          'Start hour and end hour are required for hourly bookings',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      
+      const hours = bookingDetails.endHour - bookingDetails.startHour;
+      
+      if (hours <= 0) {
+        throw new HttpException(
+          'End hour must be greater than start hour',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (hours > 24) {
+        throw new HttpException(
+          'Cannot book more than 24 hours',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+
+    // للخدمات بالسعة - التحقق من عدد الأشخاص
+    if (service.bookingType === BookingType.Capacity || service.bookingType === BookingType.Mixed) {
+      if (!bookingDetails.isFullVenue && !bookingDetails.numberOfPeople) {
+        throw new HttpException(
+          'Number of people is required for capacity bookings',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (bookingDetails.numberOfPeople && service.maxCapacity) {
+        if (bookingDetails.numberOfPeople > service.maxCapacity) {
+          throw new HttpException(
+            `This service has a maximum capacity of ${service.maxCapacity} people. You requested ${bookingDetails.numberOfPeople} people.`,
+            HttpStatus.BAD_REQUEST
+          );
+        }
+      }
+
+      if (bookingDetails.numberOfPeople && bookingDetails.numberOfPeople <= 0) {
+        throw new HttpException(
+          'Number of people must be greater than 0',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+  }
+
+  /**
+   * ✅ إضافة باقة إلى السلة مع كل التحققات اللازمة
+   */
+  async addPackageToCart(userId: string, dto: AddPackageToCartDto): Promise<Cart> {
+    const userObjectId = new Types.ObjectId(userId);
+    
+    // 1. جلب الباقة
+    const pkg = await this.packageService.getPackageById(dto.packageId);
+    
+    if (!pkg.isActive) {
+      throw new BadRequestException('This package is not currently available.');
+    }
+
+    // 2. التحقق من أن عدد الخدمات المطلوبة يطابق عدد الخدمات في الباقة
+    if (dto.serviceBookings.length !== pkg.services.length) {
+      throw new BadRequestException(
+        `Package requires booking all ${pkg.services.length} services. You provided ${dto.serviceBookings.length}.`
+      );
+    }
+
+    // 3. التحقق من كل خدمة
+    for (const booking of dto.serviceBookings) {
+      const serviceInPackage = pkg.services.find(
+        s => s.serviceId.toString() === booking.serviceId.toString()
+      );
+
+      if (!serviceInPackage) {
+        throw new BadRequestException(`Service ${booking.serviceId} is not part of this package.`);
+      }
+
+      const service = await this.serviceModel.findById(booking.serviceId).exec();
+      if (!service) {
+        throw new NotFoundException(`Service ${booking.serviceId} not found.`);
+      }
+
+      const bookingDate = new Date(booking.bookingDetails.date);
+
+      // ✅ 3.1: التحقق من أن التاريخ ضمن فترة الباقة
+      await this.packageService.validatePackageBookingDate(dto.packageId, bookingDate);
+
+      // ✅ 3.2: التحقق من يوم العمل
+      const dayName = this.getDayName(bookingDate);
+      if (!service.workingDays || !service.workingDays.includes(dayName)) {
+        throw new BadRequestException(
+          `Service "${service.serviceName}" is not available on ${dayName}. Working days: ${service.workingDays.join(', ')}`
+        );
+      }
+
+      // ✅ 3.3: التحقق من حدود الباقة (maxHours / maxCapacity)
+      if (serviceInPackage.maxHours) {
+        // باقة بكمية محددة من الساعات
+        if (!booking.bookingDetails.numberOfHours) {
+          throw new BadRequestException(
+            `Service "${service.serviceName}" requires numberOfHours (max: ${serviceInPackage.maxHours} hours).`
+          );
+        }
+        if (booking.bookingDetails.numberOfHours > serviceInPackage.maxHours) {
+          throw new BadRequestException(
+            `Service "${service.serviceName}" allows maximum ${serviceInPackage.maxHours} hours in this package. You requested ${booking.bookingDetails.numberOfHours} hours.`
+          );
+        }
+      }
+
+      if (serviceInPackage.maxCapacity) {
+        // باقة بكمية محددة من الأشخاص
+        if (!booking.bookingDetails.numberOfPeople) {
+          throw new BadRequestException(
+            `Service "${service.serviceName}" requires numberOfPeople (max: ${serviceInPackage.maxCapacity} people).`
+          );
+        }
+        if (booking.bookingDetails.numberOfPeople > serviceInPackage.maxCapacity) {
+          throw new BadRequestException(
+            `Service "${service.serviceName}" allows maximum ${serviceInPackage.maxCapacity} people in this package. You requested ${booking.bookingDetails.numberOfPeople} people.`
+          );
+        }
+      }
+
+      // ✅ 3.4: التحقق من توفر الخدمة في التاريخ المطلوب
+      let isAvailable = false;
+
+      if (service.bookingType === BookingType.Hourly) {
+        if (!booking.bookingDetails.numberOfHours) {
+          throw new BadRequestException(`Service "${service.serviceName}" requires numberOfHours.`);
+        }
+        
+        // حساب الساعات (افتراضياً من 9 صباحاً)
+        const startHour = 9;
+        const endHour = startHour + booking.bookingDetails.numberOfHours;
+        
+        isAvailable = this.checkHourlyAvailability(service, bookingDate, startHour, endHour);
+
+      } else if (service.bookingType === BookingType.Capacity) {
+        if (!booking.bookingDetails.numberOfPeople) {
+          throw new BadRequestException(`Service "${service.serviceName}" requires numberOfPeople.`);
+        }
+        
+        isAvailable = this.checkCapacityAvailability(service, bookingDate, booking.bookingDetails.numberOfPeople);
+
+      } else if (service.bookingType === BookingType.Daily) {
+        isAvailable = this.checkDailyAvailability(service, bookingDate);
+
+      } else {
+        // Display or other types
+        isAvailable = true;
+      }
+
+      if (!isAvailable) {
+        throw new BadRequestException(
+          `Service "${service.serviceName}" is not available on ${bookingDate.toDateString()}.`
+        );
+      }
+    }
+
+    // 4. إضافة الخدمات إلى السلة
+    let cart = await this.cartModel.findOne({ userId: userObjectId }).exec();
+    if (!cart) {
+      cart = new this.cartModel({ userId: userObjectId, items: [], totalAmount: 0 });
+    }
+
+    // حذف أي خدمات موجودة من نفس الباقة (لتجنب التكرار)
+    cart.items = cart.items.filter(item => item.packageId?.toString() !== dto.packageId);
+
+    // إضافة كل خدمة
+    for (const booking of dto.serviceBookings) {
+      const serviceInPackage = pkg.services.find(
+        s => s.serviceId.toString() === booking.serviceId
+      );
+
+      if (!serviceInPackage) {
+        throw new BadRequestException('Service details not found in package definition.');
+      }
+
+      const service = await this.serviceModel.findById(booking.serviceId).exec();
+      if (!service) {
+        throw new NotFoundException(`Service ${booking.serviceId} not found.`);
+      }
+
+      // حساب startHour و endHour للخدمات الساعية
+      let startHour: number | undefined;
+      let endHour: number | undefined;
+
+      if (service.bookingType === BookingType.Hourly && booking.bookingDetails.numberOfHours) {
+        startHour = 9; // افتراضي
+        endHour = startHour + booking.bookingDetails.numberOfHours;
+      }
+
+      cart.items.push({
+        serviceId: new Types.ObjectId(booking.serviceId),
+        serviceName: service.serviceName,
+        providerId: service.providerId,
+        companyName: service.companyName,
+        bookingType: service.bookingType,
+        bookingDetails: {
+          date: new Date(booking.bookingDetails.date),
+          startHour: startHour,
+          endHour: endHour,
+          numberOfPeople: booking.bookingDetails.numberOfPeople,
+          isFullVenue: false,
+        },
+        price: serviceInPackage.newPrice, 
+        imageUrl: service.images?.[0],
+        packageId: new Types.ObjectId(dto.packageId),
+        packageName: pkg.packageName,
+      } as CartItem);
+    }
+
+    // 5. حساب المجموع الكلي (سعر الباقة)
+    cart.totalAmount = pkg.newPrice;
+    
+    return await cart.save();
   }
 }

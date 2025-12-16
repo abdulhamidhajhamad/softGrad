@@ -130,28 +130,38 @@ class PackageService {
   }
 
   /// إنشاء باقة جديدة
-  static Future<void> createPackage({
+static Future<void> createPackage({
     required String packageName,
-    required List<String> serviceIds,
-    required double newPrice,
+    required List<Map<String, dynamic>> services,
+    required double totalPrice,
     DateTime? startDate,
     DateTime? endDate,
+    String? imageUrl,
   }) async {
     try {
       final token = await AuthService.getToken();
       if (token == null) throw Exception('Authentication token not found.');
 
-      final now = DateTime.now();
-      final start = startDate ?? now;
-      final end = endDate ?? DateTime(now.year + 1, now.month, now.day);
+      // ✅ التعديل هنا: تحويل البيانات لتناسب DTO الباك إند بدقة
+      // الباك إند يتوقع: services: [{ serviceId: "...", newPrice: number }]
+      final List<Map<String, dynamic>> formattedServices = services.map((s) {
+        return {
+          "serviceId": s['id'], // يجب أن يطابق الاسم في DTO (serviceId)
+          "newPrice": s['customPrice'], // السعر الجديد
+          // قمنا بإزالة maxHours و maxCapacity لأنك لم تعد تدخلهم
+        };
+      }).toList();
 
-      final body = jsonEncode({
-        'packageName': packageName,
-        'serviceIds': serviceIds,
-        'newPrice': newPrice,
-        'startDate': start.toIso8601String(),
-        'endDate': end.toIso8601String(),
-      });
+final body = jsonEncode({
+  'packageName': packageName,
+  'services': formattedServices,
+  'newPrice': totalPrice,
+  'startDate': startDate?.toIso8601String(),
+  'endDate': endDate?.toIso8601String(),
+  'packageImageUrl': imageUrl,
+});
+
+      print("📤 Sending Body: $body"); // للطباعة والتأكد في الـ Debug Console
 
       final res = await http.post(
         Uri.parse('$baseUrl/packages'),
@@ -162,7 +172,9 @@ class PackageService {
         body: body,
       );
 
-      if (res.statusCode == 201 || res.statusCode == 200) return;
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        return;
+      }
 
       final data = _decodeJsonSafe(res.body);
       throw Exception(_extractMessage(data) ?? 'Failed to create package.');
@@ -239,13 +251,20 @@ class PackageService {
     if (token == null) throw Exception('Authentication token not found.');
 
     // تحضير البيانات التي سيتم إرسالها (قد تحتاج لتعديلها حسب متطلبات الـ Backend)
-    final body = jsonEncode({
-      'packageName': newPackageName,
-      'serviceIds': newServiceIds,
-      'newPrice': newPrice,
-      'startDate': startDate?.toIso8601String(),
-      'endDate': endDate?.toIso8601String(),
-    });
+final List<Map<String, dynamic>> formattedServices = newServiceIds.map((id) {
+  return {
+    'serviceId': id,
+    'newPrice': newPrice / newServiceIds.length, // أو حسب اللوجيك المطلوب
+  };
+}).toList();
+
+final body = jsonEncode({
+  'packageName': newPackageName,
+  'services': formattedServices,
+  'newPrice': newPrice,
+  'startDate': startDate?.toIso8601String(),
+  'endDate': endDate?.toIso8601String(),
+});
 
     final res = await http.put( // نستخدم PUT أو PATCH للتعديل
       Uri.parse('$baseUrl/packages/$packageId'),

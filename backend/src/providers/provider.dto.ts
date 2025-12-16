@@ -23,6 +23,7 @@ export class CreateServiceProviderDto {
 }
 
 export class UpdateServiceProviderDto {
+  @IsOptional() @IsString() companyName?: string; // ✅ أضف هذا السطر
   @IsOptional() @IsString() description?: string;
   @IsOptional() @Type(() => LocationDto) location?: LocationDto;
   @IsOptional() @IsObject() details?: Record<string, any>;

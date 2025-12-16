@@ -2,38 +2,65 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-@Schema({ timestamps: { createdAt: true, updatedAt: true }, collection: 'packages' })
-export class Package extends Document {
-  // معرف البائع (Vendor) الذي أنشأ الباقة، يتم أخذه من التوكن
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  vendorId: Types.ObjectId; 
-    @Prop({ required: true, trim: true })
-    packageName: string; // ✅ الحقل الجديد
-  // مصفوفة من معرفات الخدمات التي تنطبق عليها هذه الباقة
-  @Prop({ type: [Types.ObjectId], required: true })
-  serviceIds: Types.ObjectId[]; 
+@Schema({ _id: false })
+export class PackageServiceItem {
+  @Prop({ type: Types.ObjectId, ref: 'Service', required: true })
+  serviceId: Types.ObjectId;
 
-  // السعر الجديد (المخفض) الذي سيصبح عليه سعر الخدمات المشمولة في الباقة
+  @Prop({ type: String, required: true })
+  serviceName: string;
+
   @Prop({ type: Number, required: true })
-  newPrice: number; 
+  originalPrice: number; // السعر الأصلي
 
-  // تاريخ بداية العرض
+  @Prop({ type: Number, required: true })
+  newPrice: number; // السعر الجديد في الباقة
+
+  // ⭐ إذا موجود = باقة بكمية ثابتة، إذا null = سعر وحدة مخفض
+  @Prop({ type: Number })
+  maxHours?: number;
+
+  @Prop({ type: Number })
+  maxCapacity?: number;
+
+  @Prop({ type: String })
+  description?: string;
+}
+
+@Schema({ timestamps: true })
+export class Package extends Document {
+  @Prop({ type: String, required: true })
+  providerId: string;
+
+  @Prop({ type: String, required: true })
+  companyName: string;
+
+  @Prop({ type: String, required: true })
+  packageName: string;
+
+  @Prop({ type: [PackageServiceItem], required: true })
+  services: PackageServiceItem[];
+
+  @Prop({ type: Number, required: true })
+  originalTotalPrice: number; // مجموع الأسعار الأصلية
+
+  @Prop({ type: Number, required: true })
+  newPrice: number; // سعر الباقة النهائي
+
   @Prop({ type: Date, required: true })
-  startDate: Date; 
+  startDate: Date;
 
-  // تاريخ نهاية العرض، وهو التاريخ الذي سيتم بعده حذف الباقة تلقائياً
-  @Prop({ type: Date, required: true, expires: 0 }) 
-  endDate: Date; // 💡 الميزة الأهم: "expires: 0" تجعل MongoDB تحذف المستند تلقائياً عند انتهاء صلاحية هذا التاريخ
+  @Prop({ type: Date, required: true })
+  endDate: Date;
 
-  @Prop({ required: false, type: String }) 
-  packageImageUrl?: string; // 👈 التعديل هنا
-
-  @Prop({ required: false, trim: true })
-  description: string; // 👈 تمت الإضافة
+  @Prop({ type: String })
+  packageImageUrl?: string;
 
   @Prop({ type: Boolean, default: true })
   isActive: boolean;
 
+  @Prop({ type: String })
+  description?: string;
 }
 
 export const PackageSchema = SchemaFactory.createForClass(Package);

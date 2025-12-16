@@ -188,14 +188,24 @@ async updateByUserId(userId: string, dto: UpdateServiceProviderDto): Promise<Ser
   
   // 1. العثور على الشركة الحالية بواسطة userId فقط 
   const company = await this.providerModel.findOne({ userId: userObjectId }); 
-  
   if (!company) {
     // 💡 قم بتغيير رسالة الخطأ لتكون فريدة للـ PATCH /my-details
     throw new NotFoundException('Cannot find company details for the logged-in user.'); 
   }
-  
-  // 2. و 3. ... (باقي الكود لـ updatePayload)
+
+   if (!company) {
+    throw new NotFoundException('Cannot find company details for the logged-in user.'); 
+  }
+
+  // ✅ 2. تجهيز كائن التحديث
   const updatePayload: any = { ...dto };
+
+  // ✅ 3. معالجة companyName
+  if (dto.companyName) {
+    updatePayload.companyName = dto.companyName;
+  }
+  
+  // ✅ 4. دمج حقل details
   if (dto.details) {
     updatePayload.details = {
       ...company.details,
@@ -203,15 +213,13 @@ async updateByUserId(userId: string, dto: UpdateServiceProviderDto): Promise<Ser
     };
   }
 
-  // 4. تنفيذ التحديث باستخدام updateOne بدلاً من findOneAndUpdate لتجنب أي تعارض
-  // ملاحظة: نستخدم findOneAndUpdate لتبسيط الحصول على الكائن المحدث
+  // ✅ 5. تنفيذ التحديث
   const updatedCompany = await this.providerModel.findOneAndUpdate(
-    { userId: userObjectId }, // البحث فقط بواسطة userId
+    { userId: userObjectId },
     updatePayload, 
     { new: true }
   );
   
-  // 💡 قم بتغيير رسالة الخطأ هنا أيضاً
   if (!updatedCompany) throw new NotFoundException('Update failed after finding the company.'); 
   return updatedCompany;
 }

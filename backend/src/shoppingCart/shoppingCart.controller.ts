@@ -3,6 +3,7 @@ import { Controller, Post, Get, Delete, Body, UseGuards, Request, HttpCode, Http
 import { CartService } from './shoppingCart.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AddToCartDto, RemoveFromCartDto, UpdateCartItemDto } from './shoppingCart.dto';
+import { AddPackageToCartDto } from '../Package/package.dto';
 
 @Controller('cart')
 @UseGuards(JwtAuthGuard)
@@ -37,4 +38,9 @@ export class CartController {
   async clearCart(@Request() req) {
     await this.cartService.clearCart(req.user.userId);
   }
+  @Post('add-package')
+async addPackageToCart(@Request() req, @Body() dto: AddPackageToCartDto) {
+  return this.cartService.addPackageToCart(req.user.userId, dto);
+}
+
 }

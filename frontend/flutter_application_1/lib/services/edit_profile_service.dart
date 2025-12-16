@@ -168,31 +168,41 @@ class EditProfileService {
 
       print('📡 Updating provider details...');
 
-      final Map<String, dynamic> body = {};
-      
-      if (companyName != null && companyName.isNotEmpty) {
-        body['companyName'] = companyName;
-      }
-      
-      if (description != null && description.isNotEmpty) {
-        body['description'] = description;
-      }
-      
-      if (city != null && city.isNotEmpty) {
-        body['location'] = {'city': city};
-      }
-      
-      final Map<String, dynamic> details = {};
-      if (email != null && email.isNotEmpty) details['email'] = email;
-      if (phone != null && phone.isNotEmpty) details['phone'] = phone;
-      
-      if (details.isNotEmpty) {
-        body['details'] = details;
-      }
-      
-      if (logoPath != null && logoPath.isNotEmpty) {
-        body['logo'] = logoPath;
-      }
+final Map<String, dynamic> body = {};
+
+// âœ… Ø§Ø³Ù… Ø§Ù„Ø´Ø±ÙƒØ©
+if (companyName != null && companyName.isNotEmpty) {
+  body['companyName'] = companyName;
+}
+
+// âœ… Ø§Ù„ÙˆØµÙ
+if (description != null && description.isNotEmpty) {
+  body['description'] = description;
+}
+
+// âœ… details - ÙÙ‚Ø· Ø¥Ø°Ø§ ÙƒØ§Ù† ÙÙŠ ØªØ¹Ø¯ÙŠÙ„
+if (email != null || phone != null) {
+  final Map<String, dynamic> details = {};
+  if (email != null && email.isNotEmpty) {
+    details['email'] = email;
+  }
+  if (phone != null && phone.isNotEmpty) {
+    details['phone'] = phone;
+  }
+  if (details.isNotEmpty) {
+    body['details'] = details;
+  }
+}
+
+// âœ… location - ÙÙ‚Ø· Ø¥Ø°Ø§ ÙƒØ§Ù† ÙÙŠ ØªØ¹Ø¯ÙŠÙ„
+if (city != null && city.isNotEmpty) {
+  body['location'] = {'city': city};
+}
+
+// âœ… Ø§Ù„Ø´Ø¹Ø§Ø±
+if (logoPath != null && logoPath.isNotEmpty) {
+  body['image'] = logoPath;
+}
 
       print('📤 Update body: $body');
 

@@ -61,9 +61,13 @@ class _EditProfileCompanyState extends State<EditProfileCompany> {
           // ✅ قراءة البيانات من الـ Response المباشر
           _originalCompanyName = providerData['companyName']?.toString() ?? '';
           _originalDescription = providerData['description']?.toString() ?? '';
-          _originalCity = providerData['city']?.toString() ?? '';
-          _originalEmail = providerData['email']?.toString() ?? '';
-          _originalPhone = providerData['phone']?.toString() ?? '';
+          final details = providerData['details'];
+          _originalEmail = details?['email']?.toString() ?? '';
+          _originalPhone = details?['phone']?.toString() ?? '';
+
+          // âœ… Ù‚Ø±Ø§Ø¡Ø© Ù…Ù† location
+          final location = providerData['location'];
+          _originalCity = location?['city']?.toString() ?? '';
           
           // ✅ تعيين القيم للـ Controllers
           _nameCtrl.text = _originalCompanyName;
@@ -212,7 +216,7 @@ class _EditProfileCompanyState extends State<EditProfileCompany> {
       print('Logo: ${_logo?.path}');
 
       final result = await EditProfileService.updateProviderDetails(
-        companyName: companyNameToSend,
+        /companyName: companyNameToSend,
         email: emailToSend,
         phone: phoneToSend,
         city: cityToSend,
@@ -343,11 +347,13 @@ class _EditProfileCompanyState extends State<EditProfileCompany> {
               _card(
                 title: "Company Details",
                 children: [
-                  TextFormField(
-                    controller: _nameCtrl,
-                    decoration: _decor("Name", icon: Icons.business),
-                    validator: (v) => v!.isEmpty ? "Required" : null,
-                  ),
+                    TextFormField(
+                      controller: _nameCtrl,
+                      enabled: false,
+                      decoration: _decor("Name", icon: Icons.business),
+                      style: GoogleFonts.poppins(color: Colors.grey), 
+                      validator: (v) => v!.isEmpty ? "Required" : null,
+                    ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _emailCtrl,

@@ -80,8 +80,7 @@ class CartStore {
   CartStore._();
   static final CartStore instance = CartStore._();
 
-  final ValueNotifier<List<CartItem>> _items =
-      ValueNotifier<List<CartItem>>([]);
+  final ValueNotifier<List<CartItem>> _items = ValueNotifier<List<CartItem>>([]);
   final ValueNotifier<int> count = ValueNotifier<int>(0);
 
   ValueListenable<List<CartItem>> get itemsListenable => _items;
@@ -149,11 +148,11 @@ class CartPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: kBg,
       appBar: AppBar(
-        automaticallyImplyLeading: false, // ✅ kept as-is
+        automaticallyImplyLeading: false,
         leading: IconButton(
           tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded, color: kText),
-          onPressed: () => Navigator.pop(context), // ✅ يرجع للصفحة السابقة
+          onPressed: () => Navigator.pop(context),
         ),
         backgroundColor: kBg,
         elevation: 0,
@@ -221,8 +220,7 @@ class CartPage extends StatelessWidget {
                   final it = items[i];
                   return _CartCard(
                     item: it,
-                    onRemove: () =>
-                        CartStore.instance.removeAt(i), // ✅ cancel/remove
+                    onRemove: () => CartStore.instance.removeAt(i),
                   );
                 },
               ),
@@ -304,9 +302,8 @@ class CartPage extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(18),
                               ),
                             ),
-                            icon: Icon(Icons.lock_rounded,
-                                color:
-                                    const Color.fromARGB(165, 244, 255, 179)),
+                            icon: const Icon(Icons.lock_rounded,
+                                color: Color.fromARGB(165, 244, 255, 179)),
                             label: Text(
                               'Checkout',
                               style: GoogleFonts.poppins(
@@ -376,8 +373,7 @@ class _CartCard extends StatelessWidget {
                             child: const SizedBox(
                               width: 18,
                               height: 18,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2.2),
+                              child: CircularProgressIndicator(strokeWidth: 2.2),
                             ),
                           );
                         },
@@ -437,7 +433,7 @@ class _CartCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 IconButton(
-                  onPressed: onRemove, // ✅ cancel item
+                  onPressed: onRemove,
                   icon: const Icon(Icons.delete_rounded),
                   color: kDanger,
                   tooltip: 'Remove',

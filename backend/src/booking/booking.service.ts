@@ -397,5 +397,66 @@ async createBookingsFromCart(userId: string, paymentIntentId: string): Promise<B
     return result; // ترجع { acknowledged: true, modifiedCount: N }
   }
 
+  // داخل كلاس BookingService
+
+async getSalesStats(vendorId?: string) {
+  const matchQuery: any = {};
+  if (vendorId) matchQuery.providerId = vendorId;
+
+  const now = new Date();
+  const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+  const stats = await this.bookingModel.aggregate([
+    { $match: matchQuery },
+    {
+      $facet: {
+        // الإحصائيات العامة (التي عملناها سابقاً)
+        "overallStats": [
+          {
+            $group: {
+              _id: null,
+              totalSalesAmount: { $sum: { $cond: [{ $in: ["$status", ["confirmed", "completed"]] }, "$price", 0] } },
+              totalSalesCount: { $sum: { $cond: [{ $in: ["$status", ["confirmed", "completed"]] }, 1, 0] } },
+              totalCancelledAmount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, "$price", 0] } },
+              totalCancelledCount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } }
+            }
+          }
+        ],
+        // مبيعات الشهر الحالي
+        "currentMonthSales": [
+          { $match: { createdAt: { $gte: startOfCurrentMonth }, status: { $in: ["confirmed", "completed"] } } },
+          { $group: { _id: null, amount: { $sum: "$price" } } }
+        ],
+        // مبيعات الشهر الماضي (لحساب النمو)
+        "lastMonthSales": [
+          { $match: { createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth }, status: { $in: ["confirmed", "completed"] } } },
+          { $group: { _id: null, amount: { $sum: "$price" } } }
+        ]
+      }
+    }
+  ]);
+
+  const result = stats[0];
+  const overall = result.overallStats[0] || { totalSalesAmount: 0, totalSalesCount: 0, totalCancelledAmount: 0, totalCancelledCount: 0 };
+  const currentMonthAmount = result.currentMonthSales[0]?.amount || 0;
+  const lastMonthAmount = result.lastMonthSales[0]?.amount || 0;
+
+  // حساب نسبة النمو
+  let growthRate = 0;
+  if (lastMonthAmount > 0) {
+    growthRate = ((currentMonthAmount - lastMonthAmount) / lastMonthAmount) * 100;
+  } else if (currentMonthAmount > 0) {
+    growthRate = 100; // نمو 100% إذا لم تكن هناك مبيعات سابقاً
+  }
+
+  return {
+    ...overall,
+    currentMonthSales: currentMonthAmount,
+    growthRate: parseFloat(growthRate.toFixed(2)) // تقريب الرقم
+  };
+}
+
 
 }

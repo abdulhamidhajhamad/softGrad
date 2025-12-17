@@ -1,10 +1,11 @@
 // lib/screens/profile.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import 'edit_profile_customer.dart';
 import 'security_password.dart';
 import 'provider.dart';
-import 'package:flutter_application_1/services/auth_service.dart'; // Import AuthService
+import 'package:flutter_application_1/services/auth_service.dart';
 
 /// Simple user data model for the profile screen
 class User {
@@ -25,7 +26,6 @@ class User {
 
 const Color kAccentColor = Color.fromARGB(215, 20, 20, 215);
 
-/// Profile screen
 class ProfileScreen extends StatefulWidget {
   final User currentUser;
   const ProfileScreen({Key? key, required this.currentUser}) : super(key: key);
@@ -40,7 +40,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _offersAndDiscounts = true;
   bool _remindersAndChecklist = true;
 
-  // أضف متغيرات لتخزين البيانات الحقيقية
   late User _currentUser;
   bool _isLoading = true;
 
@@ -59,14 +58,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           fullName: userData['userName'] ?? 'Guest',
           email: userData['email'] ?? 'No email',
           phone: userData['phone'] ?? 'No phone',
-          location: userData['city'] ?? 'No location', // city بتكون location
+          location: userData['city'] ?? 'No location',
           avatarUrl: userData['imageUrl'],
         );
         _isLoading = false;
       });
     } catch (e) {
-      print('❌ Error loading user profile: $e');
-      // إذا فشل جلب البيانات، استخدم البيانات الافتراضية
+      // fallback to provided user
       setState(() {
         _currentUser = widget.currentUser;
         _isLoading = false;
@@ -76,12 +74,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+
     if (_isLoading) {
-      return Scaffold(
-        backgroundColor: _isDarkMode ? Colors.black : Colors.white,
-        body: Center(
-          child: CircularProgressIndicator(
-            color: kAccentColor,
+      return Theme(
+        data: baseTheme.copyWith(
+          textTheme: GoogleFonts.poppinsTextTheme(baseTheme.textTheme),
+        ),
+        child: Scaffold(
+          backgroundColor: _isDarkMode ? Colors.black : Colors.white,
+          body: const Center(
+            child: CircularProgressIndicator(color: kAccentColor),
           ),
         ),
       );
@@ -109,367 +112,273 @@ class _ProfileScreenState extends State<ProfileScreen> {
       color: textSecondary,
     );
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: backgroundColor,
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: IconThemeData(color: iconColor),
-        title: Text(
-          'Profile',
-          style: GoogleFonts.poppins(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: textPrimary,
-          ),
+    return Theme(
+      data: baseTheme.copyWith(
+        textTheme: GoogleFonts.poppinsTextTheme(baseTheme.textTheme).apply(
+          bodyColor: textPrimary,
+          displayColor: textPrimary,
         ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isDarkMode
-                  ? Icons.light_mode_outlined
-                  : Icons.dark_mode_outlined,
-              color: iconColor,
-            ),
-            onPressed: () {
-              setState(() {
-                _isDarkMode = !_isDarkMode;
-              });
-            },
-          ),
-        ],
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          children: [
-            _ProfileHeader(
-              user: _currentUser, // غيرت من widget.currentUser إلى _currentUser
-              textPrimary: textPrimary,
-              textSecondary: textSecondary,
-              iconColor: iconColor,
-              isDarkMode: _isDarkMode,
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        appBar: AppBar(
+          automaticallyImplyLeading: false, // ✅ removes back arrow
+          backgroundColor: backgroundColor,
+          elevation: 0,
+          centerTitle: true,
+          iconTheme: IconThemeData(color: iconColor),
+          title: Text(
+            'Profile',
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: textPrimary,
             ),
-            const SizedBox(height: 24),
-
-            Text('Account Info', style: sectionTitleStyle),
-            const SizedBox(height: 8),
-            _SectionCard(
-              backgroundColor: cardColor,
-              child: Column(
-                children: [
-                  _InfoRow(
-                    icon: Icons.person_outline,
-                    label: 'Full Name',
-                    value: _currentUser
-                        .fullName, // غيرت من widget.currentUser إلى _currentUser
-                    textPrimary: textPrimary,
-                    textSecondary: textSecondary,
-                    iconColor: iconColor,
-                  ),
-                  const Divider(height: 1),
-                  _InfoRow(
-                    icon: Icons.mail_outline,
-                    label: 'Email',
-                    value: _currentUser
-                        .email, // غيرت من widget.currentUser إلى _currentUser
-                    textPrimary: textPrimary,
-                    textSecondary: textSecondary,
-                    iconColor: iconColor,
-                  ),
-                  const Divider(height: 1),
-                  _InfoRow(
-                    icon: Icons.phone_outlined,
-                    label: 'Phone',
-                    value: _currentUser
-                        .phone, // غيرت من widget.currentUser إلى _currentUser
-                    textPrimary: textPrimary,
-                    textSecondary: textSecondary,
-                    iconColor: iconColor,
-                  ),
-                  const Divider(height: 1),
-                  _InfoRow(
-                    icon: Icons.location_on_outlined,
-                    label: 'Location',
-                    value: _currentUser
-                        .location, // غيرت من widget.currentUser إلى _currentUser
-                    textPrimary: textPrimary,
-                    textSecondary: textSecondary,
-                    iconColor: iconColor,
-                  ),
-                ],
+          ),
+          actions: [
+            IconButton(
+              icon: Icon(
+                _isDarkMode
+                    ? Icons.light_mode_outlined
+                    : Icons.dark_mode_outlined,
+                color: iconColor,
               ),
-            ),
-            const SizedBox(height: 24),
-
-            // Become a Provider section
-            Padding(
-              padding: const EdgeInsets.only(bottom: 24.0),
-              child: Material(
-                color: _isDarkMode ? const Color(0xFF1A1A1A) : Colors.white,
-                elevation: 1,
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _isDarkMode
-                        ? const Color(0xFF1E1E1E) // darker for dark mode
-                        : const Color.fromARGB(
-                            157, 198, 222, 249), // light blue for light mode
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _isDarkMode
-                            ? Colors.black.withOpacity(0.2)
-                            : Colors.black12.withOpacity(0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.storefront_rounded,
-                        size: 36,
-                        color: _isDarkMode ? Colors.white : Colors.black,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Become a Provider',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color:
-                                    _isDarkMode ? Colors.white : Colors.black,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'List your wedding services and reach couples planning their big day.',
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: _isDarkMode
-                                    ? Colors.white70
-                                    : Colors.black87,
-                                height: 1.4,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: 180,
-                              height: 40,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: kAccentColor,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ProviderScreen(
-                                          isDarkMode: _isDarkMode),
-                                    ),
-                                  );
-                                },
-                                child: const Text(
-                                  'Switch to Provider Mode',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Settings Section
-            Text('Settings', style: sectionTitleStyle),
-            const SizedBox(height: 8),
-
-            Text('App Theme', style: sectionTitleStyle),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _ThemeButton(
-                  label: 'Light',
-                  selected: !_isDarkMode,
-                  onTap: () => setState(() => _isDarkMode = false),
-                ),
-                const SizedBox(width: 8),
-                _ThemeButton(
-                  label: 'Dark',
-                  selected: _isDarkMode,
-                  onTap: () => setState(() => _isDarkMode = true),
-                ),
-                const SizedBox(width: 8),
-                _ThemeButton(
-                  label: 'System',
-                  selected: false,
-                  onTap: () {
-                    final brightness =
-                        WidgetsBinding.instance.window.platformBrightness;
-                    setState(() => _isDarkMode = brightness == Brightness.dark);
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            _SectionCard(
-              backgroundColor: cardColor,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Row(
-                      children: [
-                        Icon(Icons.notifications_none_outlined,
-                            color: iconColor),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Notifications',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: textPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Text(
-                      'Choose which notifications you want to receive.',
-                      style: bodyStyle,
-                    ),
-                  ),
-                  _NotificationToggleRow(
-                    title: 'Booking Updates',
-                    subtitle:
-                        'Notifications about confirmed bookings, changes, or cancellations.',
-                    value: _bookingUpdates,
-                    onChanged: (v) => setState(() => _bookingUpdates = v),
-                    textPrimary: textPrimary,
-                    textSecondary: textSecondary,
-                    iconColor: iconColor,
-                  ),
-                  _NotificationToggleRow(
-                    title: 'Offers & Discounts',
-                    subtitle:
-                        'Promotions and vendor offers tailored to your plan.',
-                    value: _offersAndDiscounts,
-                    onChanged: (v) => setState(() => _offersAndDiscounts = v),
-                    textPrimary: textPrimary,
-                    textSecondary: textSecondary,
-                    iconColor: iconColor,
-                  ),
-                  _NotificationToggleRow(
-                    title: 'Reminders & Checklist',
-                    subtitle:
-                        'Reminders about tasks, deadlines, and your wedding timeline.',
-                    value: _remindersAndChecklist,
-                    onChanged: (v) =>
-                        setState(() => _remindersAndChecklist = v),
-                    textPrimary: textPrimary,
-                    textSecondary: textSecondary,
-                    iconColor: iconColor,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Security Section
-            Text('Security', style: sectionTitleStyle),
-            const SizedBox(height: 8),
-            _SectionCard(
-              backgroundColor: cardColor,
-              child: ListTile(
-                leading: Icon(Icons.lock_reset_outlined, color: iconColor),
-                title: Text(
-                  'Change password',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: textPrimary,
-                  ),
-                ),
-                subtitle: Text(
-                  'Update your login password regularly.',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: textSecondary,
-                  ),
-                ),
-                trailing: Icon(Icons.chevron_right_rounded, color: iconColor),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => SecurityPasswordScreen(
-                        isDarkMode: _isDarkMode,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 22),
-
-            // Sign Out
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushNamedAndRemoveUntil(
-                    context, '/signin', (route) => false);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kAccentColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: Text(
-                'Sign Out',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Center(
-              child: Text(
-                'You can sign in again anytime using your email.',
-                style: bodyStyle.copyWith(fontSize: 13),
-                textAlign: TextAlign.center,
-              ),
+              onPressed: () => setState(() => _isDarkMode = !_isDarkMode),
             ),
           ],
+        ),
+        body: SafeArea(
+          child: ListView(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            children: [
+              _ProfileHeader(
+                user: _currentUser,
+                textPrimary: textPrimary,
+                textSecondary: textSecondary,
+                iconColor: iconColor,
+                isDarkMode: _isDarkMode,
+              ),
+              const SizedBox(height: 24),
+
+              Text('Account Info', style: sectionTitleStyle),
+              const SizedBox(height: 8),
+              _SectionCard(
+                backgroundColor: cardColor,
+                child: Column(
+                  children: [
+                    _InfoRow(
+                      icon: Icons.person_outline,
+                      label: 'Full Name',
+                      value: _currentUser.fullName,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      iconColor: iconColor,
+                    ),
+                    Divider(height: 1, color: Colors.black.withOpacity(0.08)),
+                    _InfoRow(
+                      icon: Icons.mail_outline,
+                      label: 'Email',
+                      value: _currentUser.email,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      iconColor: iconColor,
+                    ),
+                    Divider(height: 1, color: Colors.black.withOpacity(0.08)),
+                    _InfoRow(
+                      icon: Icons.phone_outlined,
+                      label: 'Phone',
+                      value: _currentUser.phone,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      iconColor: iconColor,
+                    ),
+                    Divider(height: 1, color: Colors.black.withOpacity(0.08)),
+                    _InfoRow(
+                      icon: Icons.location_on_outlined,
+                      label: 'Location',
+                      value: _currentUser.location,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      iconColor: iconColor,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Settings Section
+              Text('Settings', style: sectionTitleStyle),
+              const SizedBox(height: 8),
+
+              Text('App Theme', style: sectionTitleStyle),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _ThemeButton(
+                    label: 'Light',
+                    selected: !_isDarkMode,
+                    onTap: () => setState(() => _isDarkMode = false),
+                  ),
+                  const SizedBox(width: 8),
+                  _ThemeButton(
+                    label: 'Dark',
+                    selected: _isDarkMode,
+                    onTap: () => setState(() => _isDarkMode = true),
+                  ),
+                  const SizedBox(width: 8),
+                  _ThemeButton(
+                    label: 'System',
+                    selected: false,
+                    onTap: () {
+                      final brightness =
+                          WidgetsBinding.instance.window.platformBrightness;
+                      setState(
+                          () => _isDarkMode = brightness == Brightness.dark);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              _SectionCard(
+                backgroundColor: cardColor,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Row(
+                        children: [
+                          Icon(Icons.notifications_none_outlined,
+                              color: iconColor),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Notifications',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Text(
+                        'Choose which notifications you want to receive.',
+                        style: bodyStyle,
+                      ),
+                    ),
+                    _NotificationToggleRow(
+                      title: 'Booking Updates',
+                      subtitle:
+                          'Notifications about confirmed bookings, changes, or cancellations.',
+                      value: _bookingUpdates,
+                      onChanged: (v) => setState(() => _bookingUpdates = v),
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      iconColor: iconColor,
+                    ),
+                    _NotificationToggleRow(
+                      title: 'Offers & Discounts',
+                      subtitle:
+                          'Promotions and vendor offers tailored to your plan.',
+                      value: _offersAndDiscounts,
+                      onChanged: (v) => setState(() => _offersAndDiscounts = v),
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      iconColor: iconColor,
+                    ),
+                    _NotificationToggleRow(
+                      title: 'Reminders & Checklist',
+                      subtitle:
+                          'Reminders about tasks, deadlines, and your wedding timeline.',
+                      value: _remindersAndChecklist,
+                      onChanged: (v) =>
+                          setState(() => _remindersAndChecklist = v),
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      iconColor: iconColor,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Security Section
+              Text('Security', style: sectionTitleStyle),
+              const SizedBox(height: 8),
+              _SectionCard(
+                backgroundColor: cardColor,
+                child: ListTile(
+                  leading: Icon(Icons.lock_reset_outlined, color: iconColor),
+                  title: Text(
+                    'Change password',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Update your login password regularly.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: textSecondary,
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right_rounded, color: iconColor),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            SecurityPasswordScreen(isDarkMode: _isDarkMode),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 22),
+
+              // Sign Out
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pushNamedAndRemoveUntil(
+                      context, '/signin', (route) => false);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kAccentColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  'Sign Out',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Center(
+                child: Text(
+                  'You can sign in again anytime using your email.',
+                  style: bodyStyle.copyWith(fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -511,14 +420,23 @@ class _ProfileHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(user.fullName,
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: textPrimary)),
+              Text(
+                user.fullName,
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: textPrimary,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text(user.email,
-                  style: TextStyle(fontSize: 14, color: textSecondary)),
+              Text(
+                user.email,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: textSecondary,
+                ),
+              ),
             ],
           ),
         ),
@@ -545,6 +463,7 @@ class _SectionCard extends StatelessWidget {
   final Color backgroundColor;
   final Widget child;
   const _SectionCard({required this.backgroundColor, required this.child});
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -564,6 +483,7 @@ class _InfoRow extends StatelessWidget {
   final Color textPrimary;
   final Color textSecondary;
   final Color iconColor;
+
   const _InfoRow({
     required this.icon,
     required this.label,
@@ -572,14 +492,27 @@ class _InfoRow extends StatelessWidget {
     required this.textSecondary,
     required this.iconColor,
   });
+
   @override
   Widget build(BuildContext context) {
     return ListTile(
       leading: Icon(icon, color: iconColor),
-      title: Text(label, style: TextStyle(fontSize: 14, color: textSecondary)),
-      subtitle: Text(value,
-          style: TextStyle(
-              fontSize: 15, fontWeight: FontWeight.w500, color: textPrimary)),
+      title: Text(
+        label,
+        style: GoogleFonts.poppins(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: textSecondary,
+        ),
+      ),
+      subtitle: Text(
+        value,
+        style: GoogleFonts.poppins(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: textPrimary,
+        ),
+      ),
     );
   }
 }
@@ -608,11 +541,23 @@ class _NotificationToggleRow extends StatelessWidget {
     return SwitchListTile(
       value: value,
       onChanged: onChanged,
-      title: Text(title,
-          style: TextStyle(fontWeight: FontWeight.w500, color: textPrimary)),
-      subtitle:
-          Text(subtitle, style: TextStyle(fontSize: 12, color: textSecondary)),
       activeColor: kAccentColor,
+      title: Text(
+        title,
+        style: GoogleFonts.poppins(
+          fontWeight: FontWeight.w600,
+          color: textPrimary,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w400,
+          color: textSecondary,
+          height: 1.35,
+        ),
+      ),
     );
   }
 }
@@ -642,9 +587,10 @@ class _ThemeButton extends StatelessWidget {
           alignment: Alignment.center,
           child: Text(
             label,
-            style: TextStyle(
+            style: GoogleFonts.poppins(
               color: selected ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
             ),
           ),
         ),

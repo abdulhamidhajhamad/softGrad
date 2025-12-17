@@ -3,6 +3,7 @@ import { Controller, Post, Get, Body, Param, UseGuards, Request, HttpCode, HttpS
 import { BookingService } from './booking.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { IsString, IsOptional } from 'class-validator';
+import { AdminGuard } from '../admin/admin.guard';
 
 class CancelBookingDto {
   @IsOptional()
@@ -62,5 +63,21 @@ export class BookingController {
     await this.bookingService.markAllVendorBookingsAsSeen(vendorId); 
     // لا نرجع شيء (204)
   }
+
+  // 🟢 إحصائيات البروفايدر (تعتمد على الـ Token الخاص به)
+@Get('vendor/stats')
+async getVendorStats(@Request() req) {
+  const vendorId = req.user.userId; // جلب الـ ID من التوكن
+  return this.bookingService.getSalesStats(vendorId);
+}
+
+  // 🔴 إحصائيات الأدمن (تجلب مبيعات كل المنصة)
+  @UseGuards(AdminGuard)
+  @Get('admin/stats')
+  // يفضل هنا إضافة Guard للتأكد أن المستخدم هو Admin فعلاً
+  async getAdminStats() {
+    return this.bookingService.getSalesStats(); // استدعاء بدون براميتر لجلب الكل
+  }
+
 
 }

@@ -216,7 +216,7 @@ class _EditProfileCompanyState extends State<EditProfileCompany> {
       print('Logo: ${_logo?.path}');
 
       final result = await EditProfileService.updateProviderDetails(
-        /companyName: companyNameToSend,
+        companyName: companyNameToSend,
         email: emailToSend,
         phone: phoneToSend,
         city: cityToSend,

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'booking_common_widgets.dart';
 import 'package:flutter_application_1/services/service_service.dart';
+import '../map_location_picker.dart' hide kPrimaryColor, kTextColor;
 
 class AddFullDayService extends StatefulWidget {
   final String category;
@@ -44,7 +45,9 @@ class _AddFullDayServiceState extends State<AddFullDayService> {
 
   // ✅ highlights key/value
   final List<Map<String, String>> _highlights = [];
-
+ double? _selectedLat;
+  double? _selectedLng;
+  bool _hasLocationSet = false;
   // ✅ Days - store full words internally
   final List<String> _weekdays = const [
     "Monday",
@@ -653,33 +656,119 @@ Future<void> _trySave() async {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: latitudeCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            decoration: inputStyle("Latitude (optional)"),
+                    const SizedBox(height: 14),
+           // ✅ Map Location Button
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Map coordinates (optional)",
+                            style: GoogleFonts.poppins(
+                                fontSize: 12, fontWeight: FontWeight.w700),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: longitudeCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            decoration: inputStyle("Longitude (optional)"),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kPrimaryColor,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              onPressed: () async {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => MapLocationPicker(
+                                      initialLat: _selectedLat,
+                                      initialLng: _selectedLng,
+                                    ),
+                                  ),
+                                );
+
+                                if (result != null && result is Map) {
+                                  setState(() {
+                                    _selectedLat = result['latitude'];
+                                    _selectedLng = result['longitude'];
+                                    _hasLocationSet = true;
+                                  });
+                                }
+                              },
+                              icon: Icon(
+                                _hasLocationSet
+                                    ? Icons.check_circle_rounded
+                                    : Icons.map_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              label: Text(
+                                _hasLocationSet
+                                    ? "Location Set ✅"
+                                    : "Add Map Location",
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                          
+                          if (_hasLocationSet && _selectedLat != null && _selectedLng != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: kPrimaryColor.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.location_pin,
+                                        color: kPrimaryColor, size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        "Lat: ${_selectedLat!.toStringAsFixed(5)}, Lng: ${_selectedLng!.toStringAsFixed(5)}",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: kPrimaryColor,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.close_rounded,
+                                          size: 18, color: kPrimaryColor),
+                                      onPressed: () {
+                                        setState(() {
+                                          _selectedLat = null;
+                                          _selectedLng = null;
+                                          _hasLocationSet = false;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-
-              // Pricing + Final price
               sectionLabel("Pricing"),
               Container(
                 padding: const EdgeInsets.all(16),

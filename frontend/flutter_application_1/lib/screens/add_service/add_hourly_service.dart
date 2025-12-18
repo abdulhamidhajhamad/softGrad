@@ -1,12 +1,12 @@
-// lib/screens/booking type/add_hourly_service.dart
-import 'dart:typed_data';
+import 'dart:typed_data'; // Fixed library name
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'booking_common_widgets.dart';
+import 'booking_common_widgets.dart'; 
 import 'package:flutter_application_1/services/service_service.dart';
 
-
+// Added kTextColor to the hide list to resolve the ambiguity error
+import '../map_location_picker.dart' hide kPrimaryColor, kTextColor;
 class AddHourlyService extends StatefulWidget {
   final String category;
   final String bookingType;
@@ -44,7 +44,9 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
   // ✅ live pricing preview
   double? _finalPrice;
   double? _savedAmount;
-
+    double? _selectedLat;
+    double? _selectedLng;
+    bool _hasLocationSet = false;
   // hourly-specific (min must allow 1 hour)
   final minHoursCtrl = TextEditingController(text: "1");
   final maxHoursCtrl = TextEditingController(text: "8");
@@ -344,8 +346,8 @@ Future<void> _trySave() async {
 
     "address": addressCtrl.text.trim(),
     "city": _selectedCity,
-    "latitude": latitudeCtrl.text.trim(),
-    "longitude": longitudeCtrl.text.trim(),
+    "latitude": _selectedLat?.toString() ?? "",
+  "longitude": _selectedLng?.toString() ?? "",
 
     "price": priceCtrl.text.trim(),
     "discount": discountCtrl.text.trim(),
@@ -1084,93 +1086,162 @@ Future<void> _trySave() async {
                 child: _dailyCapacityCard(eventsCount, slots),
               ),
               sectionLabel("Location"),
-              Container(
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: cardDecoration(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on_rounded,
-                            color: kPrimaryColor, size: 18),
-                        const SizedBox(width: 8),
-                        Text(
-                          "Where is your service?",
-                          style: GoogleFonts.poppins(
-                              fontSize: 13, fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: addressCtrl,
-                      decoration: inputStyle("Address"),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? "Required" : null,
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _selectedCity,
-                      decoration: inputStyle("City"),
-                      items: kCities
-                          .map((c) => DropdownMenuItem(
-                                value: c,
-                                child: Text(c,
-                                    style: GoogleFonts.poppins(fontSize: 13)),
-                              ))
-                          .toList(),
-                      onChanged: (v) => setState(() => _selectedCity = v),
-                      validator: (v) =>
-                          (v == null || v.isEmpty) ? "Required" : null,
-                    ),
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Map coordinates (optional)",
-                            style: GoogleFonts.poppins(
-                                fontSize: 12, fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextFormField(
-                                  controller: latitudeCtrl,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                          decimal: true),
-                                  decoration: inputStyle("Latitude"),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextFormField(
-                                  controller: longitudeCtrl,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                          decimal: true),
-                                  decoration: inputStyle("Longitude"),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+Container(
+  padding: const EdgeInsets.all(16),
+  margin: const EdgeInsets.only(bottom: 16),
+  decoration: cardDecoration(),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          const Icon(Icons.location_on_rounded,
+              color: kPrimaryColor, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            "Where is your service?",
+            style: GoogleFonts.poppins(
+                fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: addressCtrl,
+        decoration: inputStyle("Address"),
+        validator: (v) =>
+            (v == null || v.trim().isEmpty) ? "Required" : null,
+      ),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        value: _selectedCity,
+        decoration: inputStyle("City"),
+        items: kCities
+            .map((c) => DropdownMenuItem(
+                  value: c,
+                  child: Text(c,
+                      style: GoogleFonts.poppins(fontSize: 13)),
+                ))
+            .toList(),
+        onChanged: (v) => setState(() => _selectedCity = v),
+        validator: (v) =>
+            (v == null || v.isEmpty) ? "Required" : null,
+      ),
+      const SizedBox(height: 14),
+      
+      // ✅ NEW: Map Location Picker Button
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Map coordinates (optional)",
+              style: GoogleFonts.poppins(
+                  fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kPrimaryColor,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MapLocationPicker(
+                        initialLat: _selectedLat,
+                        initialLng: _selectedLng,
                       ),
                     ),
-                  ],
+                  );
+
+                  if (result != null && result is Map) {
+                    setState(() {
+                      _selectedLat = result['latitude'];
+                      _selectedLng = result['longitude'];
+                      _hasLocationSet = true;
+                    });
+                  }
+                },
+                icon: Icon(
+                  _hasLocationSet
+                      ? Icons.check_circle_rounded
+                      : Icons.map_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+                label: Text(
+                  _hasLocationSet
+                      ? "Location Set ✅"
+                      : "Add Map Location",
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: Colors.white,
+                  ),
                 ),
               ),
+            ),
+            
+            // Show coordinates after selection
+            if (_hasLocationSet && _selectedLat != null && _selectedLng != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kPrimaryColor.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_pin,
+                          color: kPrimaryColor, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Lat: ${_selectedLat!.toStringAsFixed(5)}, Lng: ${_selectedLng!.toStringAsFixed(5)}",
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: kPrimaryColor,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded,
+                            size: 18, color: kPrimaryColor),
+                        onPressed: () {
+                          setState(() {
+                            _selectedLat = null;
+                            _selectedLng = null;
+                            _hasLocationSet = false;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ],
+  ),
+),
               sectionLabel("Pricing"),
               Container(
                 padding: const EdgeInsets.all(16),

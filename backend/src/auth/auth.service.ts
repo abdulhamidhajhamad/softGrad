@@ -543,4 +543,58 @@ async generateToken(user: any): Promise<string> {
     };
     return this.jwtService.sign(payload);
   }
+
+
+  async toggleFavoriteService(userId: string, serviceId: string): Promise<Types.ObjectId[]> {
+  const user = await this.userModel.findById(userId);
+  if (!user) throw new NotFoundException('User not found');
+
+  const sId = new Types.ObjectId(serviceId);
+  const index = user.favoriteServices.indexOf(sId);
+
+  if (index > -1) {
+    // إذا كان موجوداً، نقوم بحذفه
+    user.favoriteServices.splice(index, 1);
+  } else {
+    // إذا لم يكن موجوداً، نقوم بإضافته
+    user.favoriteServices.push(sId);
+  }
+
+  await user.save();
+  return user.favoriteServices;
+}
+
+async toggleFavoritePackage(userId: string, packageId: string): Promise<Types.ObjectId[]> {
+  const user = await this.userModel.findById(userId);
+  if (!user) throw new NotFoundException('User not found');
+
+  const pId = new Types.ObjectId(packageId);
+  const index = user.favoritePackages.indexOf(pId);
+
+  if (index > -1) {
+    user.favoritePackages.splice(index, 1);
+  } else {
+    user.favoritePackages.push(pId);
+  }
+
+  await user.save();
+  return user.favoritePackages;
+}
+
+async getUserFavorites(userId: string): Promise<{ favoriteServices: any[]; favoritePackages: any[] }> {
+  // جلب المستخدم مع اختيار حقول المفضلات فقط واستثناء الـ _id الخاص بالمستند إذا أردت
+  const user = await this.userModel.findById(userId)
+    .select('favoriteServices favoritePackages -_id')
+    .exec();
+
+  if (!user) {
+    throw new NotFoundException('User not found'); //
+  }
+
+  return {
+    favoriteServices: user.favoriteServices || [],
+    favoritePackages: user.favoritePackages || []
+  };
+}
+
 }

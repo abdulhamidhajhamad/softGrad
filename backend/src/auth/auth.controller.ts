@@ -36,6 +36,31 @@ export class AuthController {
     @InjectModel(User.name) private userModel: Model<User>
   ) {}
 
+
+  @Post('favorites/service/:serviceId')
+@UseGuards(JwtAuthGuard)
+async toggleServiceFavorite(@Req() req, @Param('serviceId') serviceId: string) {
+  const favorites = await this.authService.toggleFavoriteService(req.user.userId, serviceId);
+  return { message: 'Favorite services updated', favorites };
+}
+
+@Post('favorites/package/:packageId')
+@UseGuards(JwtAuthGuard)
+async togglePackageFavorite(@Req() req, @Param('packageId') packageId: string) {
+  const favorites = await this.authService.toggleFavoritePackage(req.user.userId, packageId);
+  return { message: 'Favorite packages updated', favorites };
+}
+
+// تعديل بسيط على getUserProfile ليعيد المفضلات أيضاً
+@Get('favorites')
+@UseGuards(JwtAuthGuard) //
+async getFavorites(@Req() req) {
+  // req.user.userId يأتي من الـ JwtStrategy بعد التحقق من التوكن
+  return this.authService.getUserFavorites(req.user.userId);
+}
+
+
+
   @Post('signup')
   @ApiConsumes('multipart/form-data')
   @ApiBody({

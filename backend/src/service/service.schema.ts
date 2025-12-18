@@ -67,6 +67,7 @@ export enum PayType {
     PerEvent = 'per event',
     PerHour = 'per hour',
     PerPerson = 'per person',
+    PerDay = 'per day'
 }
 
 @Schema({ _id: false }) 
@@ -76,22 +77,23 @@ export class Review {
 
     @Prop({ type: String })
     userName: string;
-    
-    // ❌ تمت إزالة workingDays من هنا لأن مكانها غير صحيح في التقييمات
 
     @Prop({ type: Number, required: true, min: 1, max: 5 })
-    rating: number; 
-    
+    rating: number; // إلزامية كما طلبت
+
     @Prop({ 
         type: String, 
         required: true, 
         enum: [PayType.PerEvent, PayType.PerHour, PayType.PerPerson] 
     })
     payType: PayType;
-    
-    @Prop({ type: String })
+
+    @Prop({ type: String, required: false }) // أصبح اختيارياً
     comment: string;
-    
+
+    @Prop({ type: [String], default: [] }) // حقل الصور الجديد داخل الريفيو
+    images: string[];
+
     @Prop({ type: Date, default: Date.now })
     createdAt: Date;
 }
@@ -111,6 +113,9 @@ export class Service extends Document {
     
     @Prop({ type: [String], default: [] })
     images: string[];
+
+    @Prop({ type: String, default: '' }) // إضافة حقل الوصف
+    description: string;
 
     @Prop({ 
         type: String, 
@@ -158,7 +163,7 @@ export class Service extends Document {
     @Prop({ 
         type: String, 
         required: true, 
-        enum: [PayType.PerEvent, PayType.PerHour, PayType.PerPerson] 
+        enum: [PayType.PerEvent, PayType.PerHour, PayType.PerPerson, PayType.PerDay] // 👈 أضف PayType.PerDay هنا
     })
     payType: PayType;
 

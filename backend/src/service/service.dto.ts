@@ -134,6 +134,12 @@ export class CreateServiceDto {
   @IsArray()
   @IsString({ each: true })
   workingDays?: string[]; // ['sunday', 'monday', 'tuesday', etc.]
+
+  @IsOptional()
+  @IsString()
+  description?: string; // إضافة الوصف هنا
+
+
 }
 
 export class UpdateServiceDto {
@@ -214,4 +220,10 @@ export class UpdateServiceDto {
   @IsOptional()
   @IsBoolean()
   allowFullVenueBooking?: boolean;
+
+
+  @IsOptional()
+  @IsString()
+  description?: string; // إضافة الوصف هنا أيضاً
+  
 }

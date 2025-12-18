@@ -15,6 +15,19 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
   
+
+  @Get('home-service')
+async getHomepageCategoriesPreview() {
+  try {
+    return await this.serviceService.getHomepageServicesByCategories();
+  } catch (error) {
+    throw new HttpException(
+      error.message || 'Failed to fetch homepage services',
+      error.status || HttpStatus.INTERNAL_SERVER_ERROR
+    );
+  }
+}
+
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 10)) 
@@ -271,17 +284,18 @@ export class ServiceController {
 
 
   // 12. Get Service Details by ID - مفتوح للجميع ويرجع حقول محددة
-  @Get('id/:serviceId') // ⬅️ استخدام مسار محدد لتجنب التعارض مع Get()
-  async getServiceDetailsById(@Param('serviceId') serviceId: string) {
-    try {
-      return await this.serviceService.getServiceById(serviceId); 
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to fetch service details',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
+  @Get(':serviceId') // ⬅️ استخدام مسار محدد لتجنب التعارض مع Get()
+async getServiceDetailsById(@Param('serviceId') serviceId: string) {
+  try {
+    // هذه الدالة الآن ترجع الـ Object المفلتر تماماً كما طلبت
+    return await this.serviceService.getServiceById(serviceId); 
+  } catch (error) {
+    throw new HttpException(
+      error.message || 'Failed to fetch service details',
+      error.status || HttpStatus.INTERNAL_SERVER_ERROR
+    );
   }
+}
 
   // 13. Get Vendor Services Details (ID, Name, Price) - محمي للـ Vendor
   @Get('vendor-services-details') // مسار جديد لعدم التعارض
@@ -311,5 +325,8 @@ export class ServiceController {
     
     return this.serviceService.getPaginatedServicesWithDetails(limit, page);
   }
+
+
+
   
 }

@@ -24,74 +24,62 @@ export class ReviewService {
    */
   /*
   async createReviewAndAnalyze(
-    userId: string,
-    dto: CreateReviewDto,
-  ): Promise<{ reviewId: string }> {
-    const { serviceId, bookingId, comment, rating } = dto;
+userId: string,
+  dto: CreateReviewDto,
+  files?: Express.Multer.File[] // استقبال الملفات
+): Promise<{ reviewId: string }> {
+  const { serviceId, bookingId, comment, rating } = dto;
 
-    // ----------------------------------------------------
-    // 🛑 1. التحقق من الحجز (الأمان)
-    // ----------------------------------------------------
-    const booking = await this.bookingModel.findOne({
-      _id: new Types.ObjectId(bookingId),
-      userId: userId,
-      'services.serviceId': serviceId,
-    }).exec();
+  // 1. التحقق من الحجز (المنطق السابق يبقى كما هو)
+  const booking = await this.bookingModel.findOne({
+    _id: new Types.ObjectId(bookingId),
+    userId: userId,
+    'services.serviceId': serviceId,
+  }).exec();
 
-    if (!booking) {
-      throw new NotFoundException('Booking not found or you are not authorized.');
-    }
+  if (!booking) throw new NotFoundException('Booking not found');
 
-    if (booking.paymentStatus !== PaymentStatus.SUCCESSFUL) {
-      throw new BadRequestException('Cannot review an unsuccessful or pending booking.');
-    }
-
-    // 💡 التحقق الزمني: التأكد من أن التقييم بعد تاريخ الخدمة
-    const serviceItem = booking.services.find(s => s.serviceId === serviceId);
-    if (!serviceItem) {
-        throw new NotFoundException('Service not found in this booking.');
-    }
-    
-    // تاريخ اليوم (الوقت الحالي) يجب أن يكون أكبر من تاريخ الخدمة
-    if (new Date() < new Date(serviceItem.bookingDate)) {
-      throw new BadRequestException('Cannot review service before the event date has passed.');
-    }
-    
-    // ----------------------------------------------------
-    // ✅ 2. حفظ التقييم في Service Document
-    // ----------------------------------------------------
-const newReviewId = new Types.ObjectId(); 
-
-const review = {
-  _id: newReviewId, // 🆕 إضافة المعرّف المحلي
-  userId: userId,
-  userName: 'placeholder-user', 
-  rating: rating,
-  comment: comment,
-  createdAt: new Date(),
-};
-
-const updatedService = await this.serviceModel.findByIdAndUpdate(
-  serviceId,
-  {
-    $push: { reviews: review },
-  },
-  { new: true },
-).exec();
-
-if (!updatedService) {
-  throw new NotFoundException('Service not found.');
-}
-// ----------------------------------------------------
-// 🧠 3. تشغيل تحليل الذكاء الاصطناعي (Async/Background)
-// ----------------------------------------------------
-this.processAiAnalysis(serviceId, comment).catch(err => {
-    this.logger.error(`AI Analysis failed in background for service ${serviceId}.`);
-});
-
-// 🛠️ FIX: الآن نرجع المعرّف الذي أنشأناه محلياً بدلاً من محاولة قراءته من الـ Array.
-return { reviewId: newReviewId.toString() };
+  // 2. رفع الصور إلى Supabase (إن وجدت)
+  let imageUrls: string[] = [];
+  if (files && files.length > 0) {
+    // تأكد من حقن supabaseStorage في الـ constructor
+    const uploadPromises = files.map(file => 
+      this.supabaseStorage.uploadImage(file, 'review-images', true)
+    );
+    imageUrls = await Promise.all(uploadPromises);
   }
+
+  // 3. إنشاء كائن التقييم الجديد مع الحقول المطلوبة
+  const newReviewId = new Types.ObjectId(); 
+  const review = {
+    _id: newReviewId,
+    userId: userId,
+    userName: req.user?.name || 'User', 
+    rating: Number(rating), // إلزامية
+    comment: comment || '',  // اختيارية (وصف)
+    images: imageUrls,      // اختيارية (صور)
+    payType: dto.payType || 'per event', // قيمة افتراضية لتوافق السكيما
+    createdAt: new Date(),
+  };
+
+  // 4. حفظ التقييم داخل مصفوفة reviews فقط
+  const updatedService = await this.serviceModel.findByIdAndUpdate(
+    serviceId,
+    { $push: { reviews: review } },
+    { new: true },
+  ).exec();
+
+  if (!updatedService) throw new NotFoundException('Service not found.');
+      // ----------------------------------------------------
+      // 🧠 3. تشغيل تحليل الذكاء الاصطناعي (Async/Background)
+      // ----------------------------------------------------
+      this.processAiAnalysis(serviceId, comment).catch(err => {
+          this.logger.error(`AI Analysis failed in background for service ${serviceId}.`);
+      });
+
+      // 🛠️ FIX: الآن نرجع المعرّف الذي أنشأناه محلياً بدلاً من محاولة قراءته من الـ Array.
+      return { reviewId: newReviewId.toString() };
+        }
 
   /**
    * 🧠 دالة مساعدة لمعالجة تحليل الذكاء الاصطناعي وتحديث DB بشكل غير متزامن.

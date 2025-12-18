@@ -2,10 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'favorites.dart';
 import 'compnay_insider_provider.dart';
-import 'cart.dart' as cart; // ✅ Cart (alias to avoid constants conflicts)
+import 'cart.dart' as cart;
+import 'package:flutter_application_1/services/user_service/user_service_service.dart';
 
 // =====================
 // 🎨 Black / White / Blue
@@ -51,35 +54,44 @@ class ServiceFavoritesStore {
     }
     _tick.value++;
   }
+
+  static void setFavorites(List<String> ids) {
+    _ids.clear();
+    _ids.addAll(ids);
+    _tick.value++;
+  }
 }
 
 // ✅ bridge: لما نعمل Favorite هون، ينضاف كمان على FavoritesPage
-void toggleServiceFavorite(ServiceItem s) {
-  ServiceFavoritesStore.toggle(s.id);
+void toggleServiceFavorite(ServiceItem s) async {
+  try {
+    await UserServiceService.toggleServiceFavorite(s.id);
+    ServiceFavoritesStore.toggle(s.id);
 
-  final nowFav = ServiceFavoritesStore.isFavorite(s.id);
+    final nowFav = ServiceFavoritesStore.isFavorite(s.id);
+    final newPrice = (s.hasDiscount && s.discountPrice != null) 
+        ? s.discountPrice! 
+        : s.price;
 
-  final newPrice =
-      (s.hasDiscount && s.discountPrice != null) ? s.discountPrice! : s.price;
-
-  if (nowFav) {
-    FavoritesStore.addService(
-      FavoriteService(
-        id: s.id,
-        name: s.serviceName,
-        category: s.category,
-        company: s.companyName,
-        city: s.city,
-
-        oldPrice: s.price, // ✅ السعر قبل الخصم
-        price: newPrice, // ✅ السعر بعد الخصم (او نفس السعر اذا ما في خصم)
-
-        rating: s.rating,
-        image: s.imageUrl, // network url
-      ),
-    );
-  } else {
-    FavoritesStore.removeServiceById(s.id);
+    if (nowFav) {
+      FavoritesStore.addService(
+        FavoriteService(
+          id: s.id,
+          name: s.serviceName,
+          category: s.category,
+          company: s.companyName,
+          city: s.city,
+          oldPrice: s.price,
+          price: newPrice,
+          rating: s.rating,
+          image: s.imageUrl,
+        ),
+      );
+    } else {
+      FavoritesStore.removeServiceById(s.id);
+    }
+  } catch (e) {
+    print('Error toggling favorite: $e');
   }
 }
 
@@ -90,7 +102,7 @@ class ServiceItem {
   final String id;
   final String category;
   final String serviceName;
-
+  final String? payType; // 'per event', 'per hour', 'per person', 'per day'
   final String companyName;
   final String companyEmail;
   final String companyPhone;
@@ -111,6 +123,8 @@ class ServiceItem {
 
   /// uploaded image url
   final String? imageUrl;
+ final double? lat;
+  final double? lng;
 
   const ServiceItem({
     required this.id,
@@ -126,10 +140,44 @@ class ServiceItem {
     required this.rating,
     required this.reviewsCount,
     this.imageUrl,
+    this.payType,
+    this.lat,
+    this.lng,
+
   });
 
   bool get hasDiscount =>
       discountPrice != null && discountPrice! > 0 && discountPrice! < price;
+
+  factory ServiceItem.fromJson(Map<String, dynamic> json, String category) {
+    return ServiceItem(
+      id: json['id'] ?? '',
+      category: category,
+      serviceName: json['serviceName'] ?? 'N/A',
+      companyName: json['companyName'] ?? 'N/A',
+      companyEmail: '',
+      companyPhone: '',
+      city: json['city'] ?? 'N/A',
+      price: _parsePrice(json['price']),
+      rating: (json['rating'] ?? 0).toDouble(),
+      reviewsCount: 0,
+      imageUrl: json['image'],
+      description: json['description'] ?? '',
+      payType: json['payType'],
+    lat: json['latitude'] != null ? double.tryParse(json['latitude'].toString()) : null,
+    lng: json['longitude'] != null ? double.tryParse(json['longitude'].toString()) : null,
+    );
+  }
+
+  static double _parsePrice(dynamic price) {
+    if (price == null || price == 'N/A') return 0.0;
+    if (price is num) return price.toDouble();
+    if (price is String) {
+      final parsed = double.tryParse(price);
+      return parsed ?? 0.0;
+    }
+    return 0.0;
+  }
 }
 
 // =====================
@@ -193,6 +241,71 @@ final Map<String, List<ReviewItem>> kSeedReviewsByServiceId = {
     ),
   ],
 };
+
+// =====================
+// ✅ Service Map Section Widget
+// =====================
+class _ServiceMapSection extends StatelessWidget {
+  final double lat;
+  final double lng;
+  final String serviceName;
+
+  const _ServiceMapSection({
+    required this.lat,
+    required this.lng,
+    required this.serviceName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: FlutterMap(
+        options: MapOptions(
+          initialCenter: LatLng(lat, lng),
+          initialZoom: 15.0,
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+          ),
+        ),
+        children: [
+          TileLayer(
+           urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+            subdomains: const ['a', 'b', 'c'],
+            userAgentPackageName: 'com.example.flutter_application_1', // ✅ غيّر هذا
+          ),
+          MarkerLayer(
+            markers: [
+              Marker(
+                point: LatLng(lat, lng),
+                width: 40,
+                height: 40,
+                child: const Icon(
+                  Icons.location_on,
+                  color: Colors.red,
+                  size: 40,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class VendorsListPage extends StatefulWidget {
   const VendorsListPage({Key? key}) : super(key: key);
@@ -284,289 +397,50 @@ class _VendorsListPageState extends State<VendorsListPage> {
   final Map<String, bool> _expanded = {};
 
   // =====================
-  // ✅ Seed Services (Replace with API)
+  // ✅ Load Services from API
   // =====================
-  late final List<ServiceItem> _seedServices = const [
-    ServiceItem(
-      id: 'v1',
-      category: 'Venues',
-      serviceName: 'Royal Garden Hall',
-      companyName: 'Royal Garden',
-      companyEmail: 'info@royalgarden.ps',
-      companyPhone: '+970 599 111 111',
-      city: 'Nablus',
-      description:
-          'Luxury wedding hall with premium seating, lighting, and full setup.',
-      price: 4200,
-      discountPrice: 3799,
-      rating: 4.7,
-      reviewsCount: 128,
-      imageUrl: 'https://picsum.photos/seed/venue1/1200/800',
-    ),
-    ServiceItem(
-      id: 'v2',
-      category: 'Venues',
-      serviceName: 'Skyline Outdoor Venue',
-      companyName: 'Skyline Venues',
-      companyEmail: 'contact@skyline.ps',
-      companyPhone: '+970 599 222 222',
-      city: 'Ramallah',
-      description:
-          'Outdoor venue with panoramic view, modern decor, and flexible layouts.',
-      price: 5500,
-      rating: 4.5,
-      reviewsCount: 86,
-      imageUrl: 'https://picsum.photos/seed/venue2/1200/800',
-    ),
-    ServiceItem(
-      id: 'v3',
-      category: 'Venues',
-      serviceName: 'Classic Ballroom',
-      companyName: 'Classic Events',
-      companyEmail: 'hello@classicevents.ps',
-      companyPhone: '+970 599 333 333',
-      city: 'Hebron',
-      description:
-          'Classic ballroom with elegant styling, stage setup, and seating options.',
-      price: 3800,
-      rating: 4.2,
-      reviewsCount: 64,
-      imageUrl: 'https://picsum.photos/seed/venue3/1200/800',
-    ),
-    ServiceItem(
-      id: 'p1',
-      category: 'Photographers',
-      serviceName: 'Cinematic Wedding Shoot',
-      companyName: 'LensCraft Studio',
-      companyEmail: 'studio@lenscraft.ps',
-      companyPhone: '+970 599 444 444',
-      city: 'Nablus',
-      description:
-          'Cinematic photo + video coverage with highlight reel and edited album.',
-      price: 900,
-      discountPrice: 799,
-      rating: 4.8,
-      reviewsCount: 210,
-      imageUrl: 'https://picsum.photos/seed/photo1/1200/800',
-    ),
-    ServiceItem(
-      id: 'p2',
-      category: 'Photographers',
-      serviceName: 'Photo + Video Package',
-      companyName: 'Golden Frame',
-      companyEmail: 'book@goldenframe.ps',
-      companyPhone: '+970 599 555 555',
-      city: 'Jenin',
-      description:
-          'Full day coverage: photos + video, edited shots, and digital delivery.',
-      price: 1200,
-      rating: 4.4,
-      reviewsCount: 97,
-      imageUrl: 'https://picsum.photos/seed/photo2/1200/800',
-    ),
-    ServiceItem(
-      id: 'c1',
-      category: 'Catering',
-      serviceName: 'Premium Buffet',
-      companyName: 'Taste & Joy',
-      companyEmail: 'orders@tastejoy.ps',
-      companyPhone: '+970 599 666 666',
-      city: 'Ramallah',
-      description:
-          'Premium buffet menu with appetizers, main dishes, desserts, and service.',
-      price: 18,
-      rating: 4.6,
-      reviewsCount: 74,
-      imageUrl: 'https://picsum.photos/seed/cater1/1200/800',
-    ),
-    ServiceItem(
-      id: 'c2',
-      category: 'Catering',
-      serviceName: 'Traditional Palestinian Menu',
-      companyName: 'Dar Zaitoon',
-      companyEmail: 'info@darzaitoon.ps',
-      companyPhone: '+970 599 777 777',
-      city: 'Nablus',
-      description:
-          'Authentic Palestinian dishes with fresh ingredients and traditional flavors.',
-      price: 14,
-      rating: 4.3,
-      reviewsCount: 52,
-      imageUrl: 'https://picsum.photos/seed/cater2/1200/800',
-    ),
-    ServiceItem(
-      id: 'ck1',
-      category: 'Cake',
-      serviceName: '3-Tier Classic Cake',
-      companyName: 'Sugar Bloom',
-      companyEmail: 'cakes@sugarbloom.ps',
-      companyPhone: '+970 599 888 888',
-      city: 'Hebron',
-      description:
-          'Three-tier classic wedding cake with custom flavors and decoration.',
-      price: 220,
-      rating: 4.7,
-      reviewsCount: 41,
-      imageUrl: 'https://picsum.photos/seed/cake1/1200/800',
-    ),
-    ServiceItem(
-      id: 'ck2',
-      category: 'Cake',
-      serviceName: 'Custom Floral Cake',
-      companyName: 'Cake Atelier',
-      companyEmail: 'contact@cakeatelier.ps',
-      companyPhone: '+970 599 999 999',
-      city: 'Ramallah',
-      description:
-          'Custom floral cake design, personalized colors, and premium finishing.',
-      price: 300,
-      discountPrice: 260,
-      rating: 4.5,
-      reviewsCount: 33,
-      imageUrl: 'https://picsum.photos/seed/cake2/1200/800',
-    ),
-    ServiceItem(
-      id: 'f1',
-      category: 'Flower Shops',
-      serviceName: 'Bridal Bouquet Set',
-      companyName: 'Rose Corner',
-      companyEmail: 'rose@rosecorners.ps',
-      companyPhone: '+970 599 101 010',
-      city: 'Nablus',
-      description:
-          'Bouquet set including bride bouquet + matching accessories (custom colors).',
-      price: 80,
-      rating: 4.4,
-      reviewsCount: 28,
-      imageUrl: 'https://picsum.photos/seed/flower1/1200/800',
-    ),
-    ServiceItem(
-      id: 'f2',
-      category: 'Flower Shops',
-      serviceName: 'Stage Floral Decor',
-      companyName: 'Bloom & Co',
-      companyEmail: 'hi@bloomco.ps',
-      companyPhone: '+970 599 202 020',
-      city: 'Tulkarm',
-      description:
-          'Stage floral decor with modern styling and seasonal premium flowers.',
-      price: 250,
-      rating: 4.2,
-      reviewsCount: 19,
-      imageUrl: 'https://picsum.photos/seed/flower2/1200/800',
-    ),
-    ServiceItem(
-      id: 'd1',
-      category: 'Decor & Lighting',
-      serviceName: 'Modern White Theme Decor',
-      companyName: 'Luma Decor',
-      companyEmail: 'contact@lumadecor.ps',
-      companyPhone: '+970 599 303 030',
-      city: 'Ramallah',
-      description:
-          'Modern white theme decor, lighting setup, and table arrangements.',
-      price: 900,
-      rating: 4.6,
-      reviewsCount: 61,
-      imageUrl: 'https://picsum.photos/seed/decor1/1200/800',
-    ),
-    ServiceItem(
-      id: 'm1',
-      category: 'Music & Entertainment',
-      serviceName: 'DJ + Sound System',
-      companyName: 'Beat Masters',
-      companyEmail: 'book@beatmasters.ps',
-      companyPhone: '+970 599 404 040',
-      city: 'Nablus',
-      description:
-          'DJ service + professional sound system with curated wedding playlists.',
-      price: 350,
-      rating: 4.1,
-      reviewsCount: 44,
-      imageUrl: 'https://picsum.photos/seed/music1/1200/800',
-    ),
-    ServiceItem(
-      id: 'w1',
-      category: 'Wedding Planners & Coordinators',
-      serviceName: 'Full Wedding Planning',
-      companyName: 'PlanPerfect',
-      companyEmail: 'team@planperfect.ps',
-      companyPhone: '+970 599 505 050',
-      city: 'Hebron',
-      description:
-          'Full wedding planning, timeline coordination, vendors, and on-site management.',
-      price: 1500,
-      rating: 4.7,
-      reviewsCount: 88,
-      imageUrl: 'https://picsum.photos/seed/planner1/1200/800',
-    ),
-    ServiceItem(
-      id: 'cp1',
-      category: 'Card Printing',
-      serviceName: 'Luxury Invitation Set',
-      companyName: 'Ink & Gold',
-      companyEmail: 'print@inkgold.ps',
-      companyPhone: '+970 599 606 060',
-      city: 'Jenin',
-      description:
-          'Luxury invitation set with premium paper, foil printing, and envelopes.',
-      price: 120,
-      rating: 4.3,
-      reviewsCount: 21,
-      imageUrl: 'https://picsum.photos/seed/card1/1200/800',
-    ),
-    ServiceItem(
-      id: 'j1',
-      category: 'Jewelry & Accessories',
-      serviceName: 'Rings Consultation',
-      companyName: 'Shine Jewelers',
-      companyEmail: 'hello@shinejewelers.ps',
-      companyPhone: '+970 599 707 070',
-      city: 'Ramallah',
-      description:
-          'Rings consultation with sizing, material selection, and custom engraving options.',
-      price: 0,
-      rating: 4.5,
-      reviewsCount: 17,
-      imageUrl: 'https://picsum.photos/seed/jewel1/1200/800',
-    ),
-    ServiceItem(
-      id: 'car1',
-      category: 'Car Rental & Transportation',
-      serviceName: 'Bridal Car (Luxury)',
-      companyName: 'Elite Rides',
-      companyEmail: 'support@eliterides.ps',
-      companyPhone: '+970 599 808 080',
-      city: 'Nablus',
-      description:
-          'Luxury bridal car rental with driver, decorations, and time flexibility.',
-      price: 180,
-      rating: 4.4,
-      reviewsCount: 39,
-      imageUrl: 'https://picsum.photos/seed/car1/1200/800',
-    ),
-    ServiceItem(
-      id: 'g1',
-      category: 'Gift & Souvenir',
-      serviceName: 'Personalized Guest Favors',
-      companyName: 'Nice Memories',
-      companyEmail: 'orders@nicememories.ps',
-      companyPhone: '+970 599 909 090',
-      city: 'Hebron',
-      description:
-          'Personalized guest favors with custom names, packaging, and theme options.',
-      price: 4,
-      rating: 4.2,
-      reviewsCount: 23,
-      imageUrl: 'https://picsum.photos/seed/gift1/1200/800',
-    ),
-  ];
+  bool _isLoading = true;
+  Map<String, List<ServiceItem>> _allServices = {};
 
   @override
   void initState() {
     super.initState();
     for (final c in VendorsListPage.vendorData) {
       _expanded[c['name'] as String] = false;
+    }
+    _loadHomeServices();
+  }
+
+  Future<void> _loadHomeServices() async {
+    try {
+      setState(() => _isLoading = true);
+      
+      final data = await UserServiceService.getHomeServices();
+      final Map<String, List<ServiceItem>> services = {};
+      
+      data.forEach((category, items) {
+        if (items is List) {
+          services[category] = items.map((item) => 
+            ServiceItem.fromJson(item, category)
+          ).toList();
+        }
+      });
+
+      setState(() {
+        _allServices = services;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading services: $e');
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load services: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -670,17 +544,16 @@ class _VendorsListPageState extends State<VendorsListPage> {
   }
 
   List<ServiceItem> _servicesForCategory(String categoryName) {
-    List<ServiceItem> list =
-        _seedServices.where((s) => s.category == categoryName).toList();
-    list = _applyFiltersToServices(list);
-    return list;
+    final list = _allServices[categoryName] ?? [];
+    return _applyFiltersToServices(list);
   }
 
   List<ServiceItem> _servicesForCompany(String companyName) {
-    final list =
-        _seedServices.where((s) => s.companyName == companyName).toList();
-    final filtered = _applyFiltersToServices(list);
-    return filtered;
+    final List<ServiceItem> all = [];
+    _allServices.forEach((_, services) {
+      all.addAll(services.where((s) => s.companyName == companyName));
+    });
+    return _applyFiltersToServices(all);
   }
 
   List<Map<String, dynamic>> _filteredCategories() {
@@ -702,10 +575,6 @@ class _VendorsListPageState extends State<VendorsListPage> {
         return name.contains(q) || type.contains(q);
       }).toList();
     }
-
-    res = res
-        .where((cat) => _servicesForCategory(cat['name'] as String).isNotEmpty)
-        .toList();
 
     return res;
   }
@@ -766,7 +635,7 @@ class _VendorsListPageState extends State<VendorsListPage> {
       context,
       MaterialPageRoute(
         builder: (_) => ServiceDetailsPage(
-          service: service,
+          serviceId: service.id,
           companyServices: _servicesForCompany(service.companyName),
         ),
       ),
@@ -799,145 +668,147 @@ class _VendorsListPageState extends State<VendorsListPage> {
           SizedBox(width: 6),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: Colors.black.withOpacity(0.06)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 20,
-                      offset: const Offset(0, 12),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: Colors.black.withOpacity(0.06)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 20,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _CategorySearchField(
+                                  controller: _categorySearchCtrl,
+                                  hint: 'Search categories...',
+                                  onChanged: () => setState(() {}),
+                                  onClear: () {
+                                    _categorySearchCtrl.clear();
+                                    setState(() {});
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              _FilterButton(
+                                active: _hasAnyFilter,
+                                onTap: _openFiltersSheet,
+                              ),
+                            ],
+                          ),
+                          if (_hasAnyFilter ||
+                              _categorySearchCtrl.text.trim().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: _ActiveFiltersBar(
+                                categoriesCount: _selectedCategories.length,
+                                citiesCount: _selectedCities.length,
+                                minRating: _minRatingValue,
+                                cheapest: _sortCheapest,
+                                expensive: _sortMostExpensive,
+                                topRated: _sortTopRated,
+                                onRemove: (kind) {
+                                  setState(() {
+                                    if (kind == 'cheapest') _sortCheapest = false;
+                                    if (kind == 'expensive')
+                                      _sortMostExpensive = false;
+                                    if (kind == 'topRated') _sortTopRated = false;
+                                    if (kind == 'minRating') _minRatingValue = 0.0;
+                                    if (kind == 'categories')
+                                      _selectedCategories.clear();
+                                    if (kind == 'cities') _selectedCities.clear();
+                                  });
+                                },
+                                onClearAll: _clearAllFilters,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _CategorySearchField(
-                            controller: _categorySearchCtrl,
-                            hint: 'Search categories...',
-                            onChanged: () => setState(() {}),
-                            onClear: () {
-                              _categorySearchCtrl.clear();
-                              setState(() {});
+                  ),
+                  Expanded(
+                    child: categories.isEmpty
+                        ? const _EmptyStateMessage()
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                            itemCount: categories.length,
+                            itemBuilder: (context, index) {
+                              final cat = categories[index];
+                              final String catName = cat['name'] as String;
+                              final String catType = cat['type'] as String;
+                              final IconData icon = cat['icon'] as IconData;
+
+                              final services = _servicesForCategory(catName);
+                              final bool expanded = _expanded[catName] ?? false;
+                              final bool isFav =
+                                  FavoritesStore.isVendorFavorite(catName);
+
+                              return _CategoryCard(
+                                categoryName: catName,
+                                categoryType: catType,
+                                icon: icon,
+                                services: services,
+                                expanded: expanded,
+                                showDescription: showDescription,
+                                isFavorite: isFav,
+                                onToggleFavorite: () {
+                                  setState(() {
+                                    if (isFav) {
+                                      FavoritesStore.removeVendorByName(catName);
+                                    } else {
+                                      FavoritesStore.addVendor(
+                                        FavoriteVendor(name: catName, type: catType),
+                                      );
+                                    }
+                                  });
+                                },
+                                onToggleExpand: services.length <= 4
+                                    ? null
+                                    : () => setState(
+                                        () => _expanded[catName] = !expanded),
+                                onViewAll: services.isEmpty
+                                    ? null
+                                    : () async {
+                                        await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => CategoryServicesPage(
+                                              categoryName: catName,
+                                              categoryType: catType,
+                                              categoryIcon: icon,
+                                              services: services,
+                                              allCompanyResolver: (companyName) =>
+                                                  _servicesForCompany(companyName),
+                                            ),
+                                          ),
+                                        );
+                                        setState(() {});
+                                      },
+                                onTapService: (service) =>
+                                    _openServiceDetails(service),
+                              );
                             },
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        _FilterButton(
-                          active: _hasAnyFilter,
-                          onTap: _openFiltersSheet,
-                        ),
-                      ],
-                    ),
-                    if (_hasAnyFilter ||
-                        _categorySearchCtrl.text.trim().isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: _ActiveFiltersBar(
-                          categoriesCount: _selectedCategories.length,
-                          citiesCount: _selectedCities.length,
-                          minRating: _minRatingValue,
-                          cheapest: _sortCheapest,
-                          expensive: _sortMostExpensive,
-                          topRated: _sortTopRated,
-                          onRemove: (kind) {
-                            setState(() {
-                              if (kind == 'cheapest') _sortCheapest = false;
-                              if (kind == 'expensive')
-                                _sortMostExpensive = false;
-                              if (kind == 'topRated') _sortTopRated = false;
-                              if (kind == 'minRating') _minRatingValue = 0.0;
-                              if (kind == 'categories')
-                                _selectedCategories.clear();
-                              if (kind == 'cities') _selectedCities.clear();
-                            });
-                          },
-                          onClearAll: _clearAllFilters,
-                        ),
-                      ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            Expanded(
-              child: categories.isEmpty
-                  ? const _EmptyStateMessage()
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-                      itemCount: categories.length,
-                      itemBuilder: (context, index) {
-                        final cat = categories[index];
-                        final String catName = cat['name'] as String;
-                        final String catType = cat['type'] as String;
-                        final IconData icon = cat['icon'] as IconData;
-
-                        final services = _servicesForCategory(catName);
-                        final bool expanded = _expanded[catName] ?? false;
-                        final bool isFav =
-                            FavoritesStore.isVendorFavorite(catName);
-
-                        return _CategoryCard(
-                          categoryName: catName,
-                          categoryType: catType,
-                          icon: icon,
-                          services: services,
-                          expanded: expanded,
-                          showDescription: showDescription,
-                          isFavorite: isFav,
-                          onToggleFavorite: () {
-                            setState(() {
-                              if (isFav) {
-                                FavoritesStore.removeVendorByName(catName);
-                              } else {
-                                FavoritesStore.addVendor(
-                                  FavoriteVendor(name: catName, type: catType),
-                                );
-                              }
-                            });
-                          },
-                          onToggleExpand: services.length <= 4
-                              ? null
-                              : () => setState(
-                                  () => _expanded[catName] = !expanded),
-                          onViewAll: services.isEmpty
-                              ? null
-                              : () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => CategoryServicesPage(
-                                        categoryName: catName,
-                                        categoryType: catType,
-                                        categoryIcon: icon,
-                                        services: services,
-                                        allCompanyResolver: (companyName) =>
-                                            _servicesForCompany(companyName),
-                                      ),
-                                    ),
-                                  );
-                                  setState(() {});
-                                },
-                          onTapService: (service) =>
-                              _openServiceDetails(service),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1068,7 +939,7 @@ class _ServiceListTileCard extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => ServiceDetailsPage(
-                service: service, companyServices: companyServices),
+                serviceId: service.id, companyServices: companyServices),
           ),
         );
       },
@@ -1210,12 +1081,12 @@ class _ServiceListTileCard extends StatelessWidget {
 // Service Details Page
 // =====================
 class ServiceDetailsPage extends StatefulWidget {
-  final ServiceItem service;
+  final String serviceId;
   final List<ServiceItem> companyServices;
 
   const ServiceDetailsPage({
     super.key,
-    required this.service,
+    required this.serviceId,
     required this.companyServices,
   });
 
@@ -1223,7 +1094,61 @@ class ServiceDetailsPage extends StatefulWidget {
   State<ServiceDetailsPage> createState() => _ServiceDetailsPageState();
 }
 
+// ✅ استبدل _ServiceDetailsPageState كاملة بهذا الكود
+
 class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
+  bool _isLoading = true;
+  ServiceItem? _service;
+  Map<String, dynamic>? _serviceData;
+  
+  // ✅ إحداثيات الخريطة (من الـ API)
+  double? _lat;
+  double? _lng;
+
+  @override
+  void initState() {
+    super.initState();
+    _service = widget.companyServices.firstWhere(
+      (s) => s.id == widget.serviceId,
+      orElse: () => widget.companyServices.first,
+    );
+    _loadServiceDetails();
+  }
+
+  Future<void> _loadServiceDetails() async {
+    try {
+      setState(() => _isLoading = true);
+      final data = await UserServiceService.getServiceDetails(widget.serviceId);
+      
+      setState(() {
+        _serviceData = data;
+        
+        // ✅ نجيب latitude و longitude من الـ API Response
+        if (data['latitude'] != null) {
+          _lat = double.tryParse(data['latitude'].toString());
+        }
+        if (data['longitude'] != null) {
+          _lng = double.tryParse(data['longitude'].toString());
+        }
+        
+        print('📍 Coordinates from API: lat=$_lat, lng=$_lng');
+        
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('❌ Error loading service details: $e');
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load service details: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   String _money(double v) => '₪${v.toStringAsFixed(0)}';
 
   void _addToCart(BuildContext context, ServiceItem s) {
@@ -1267,9 +1192,144 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
     );
   }
 
+  String _getPayTypeLabel(String? payType) {
+    if (payType == null) return '';
+    switch (payType.toLowerCase()) {
+      case 'per event':
+        return 'Per Event';
+      case 'per hour':
+        return 'Per Hour';
+      case 'per person':
+        return 'Per Person';
+      case 'per day':
+        return 'Per Day';
+      default:
+        return payType;
+    }
+  }
+
+  Widget _buildPriceSection(Map<String, dynamic>? serviceData) {
+    final s = _service!;
+    final allPrices = serviceData?['allPrices'] as Map<String, dynamic>?;
+    
+    final List<MapEntry<String, double>> pricesList = [];
+    
+    if (allPrices != null) {
+      if (allPrices['perEvent'] != null && allPrices['perEvent'] > 0) {
+        pricesList.add(MapEntry('per event', (allPrices['perEvent'] as num).toDouble()));
+      }
+      if (allPrices['perHour'] != null && allPrices['perHour'] > 0) {
+        pricesList.add(MapEntry('per hour', (allPrices['perHour'] as num).toDouble()));
+      }
+      if (allPrices['perPerson'] != null && allPrices['perPerson'] > 0) {
+        pricesList.add(MapEntry('per person', (allPrices['perPerson'] as num).toDouble()));
+      }
+      if (allPrices['perDay'] != null && allPrices['perDay'] > 0) {
+        pricesList.add(MapEntry('per day', (allPrices['perDay'] as num).toDouble()));
+      }
+    }
+    
+    if (pricesList.isEmpty) {
+      pricesList.add(MapEntry(s.payType ?? 'per event', s.price));
+    }
+
+    if (pricesList.length == 1) {
+      final entry = pricesList.first;
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            _getPayTypeLabel(entry.key),
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: kMuted,
+            ),
+          ),
+          Text(
+            _money(entry.value),
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: kBlue,
+            ),
+          ),
+        ],
+      );
+    } else {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Pricing Options:',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: kText,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: pricesList.map((entry) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: kBlue.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: kBlue.withOpacity(0.20)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _getPayTypeLabel(entry.key),
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: kMuted,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _money(entry.value),
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: kBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final s = widget.service;
+    if (_isLoading || _service == null) {
+      return Scaffold(
+        backgroundColor: kBg,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0.6,
+          title: Text('Service Details', 
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText)),
+          iconTheme: const IconThemeData(color: kText),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final s = _service!;
+    final companyEmail = _serviceData?['companyInfo']?['email'] ?? s.companyEmail;
+    final companyPhone = _serviceData?['companyInfo']?['phone'] ?? s.companyPhone;
     final reviews = kSeedReviewsByServiceId[s.id] ?? const <ReviewItem>[];
 
     return Scaffold(
@@ -1307,8 +1367,7 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           decoration: BoxDecoration(
             color: Colors.white,
-            border:
-                Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
+            border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
           ),
           child: Row(
             children: [
@@ -1320,9 +1379,7 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
 
                     return ElevatedButton.icon(
                       onPressed: inCart ? null : () => _addToCart(context, s),
-                      icon: Icon(inCart
-                          ? Icons.check_rounded
-                          : Icons.add_shopping_cart_rounded),
+                      icon: Icon(inCart ? Icons.check_rounded : Icons.add_shopping_cart_rounded),
                       label: Text(
                         inCart ? 'Added' : 'Add to cart',
                         style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
@@ -1333,8 +1390,7 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                         disabledBackgroundColor: Colors.black.withOpacity(0.14),
                         disabledForegroundColor: kText,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     );
@@ -1350,8 +1406,8 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                       MaterialPageRoute(
                         builder: (_) => CompanyInsiderProviderPage(
                           companyName: s.companyName,
-                          companyEmail: s.companyEmail,
-                          companyPhone: s.companyPhone,
+                          companyEmail: companyEmail,
+                          companyPhone: companyPhone,
                           city: s.city,
                           services: widget.companyServices,
                         ),
@@ -1362,8 +1418,7 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                     backgroundColor: kText,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: Text(
@@ -1381,6 +1436,8 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
         children: [
           _BigHeroImage(url: s.imageUrl),
           const SizedBox(height: 12),
+          
+          // ✅ Service Info Container
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -1432,19 +1489,15 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 7),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.04),
                           borderRadius: BorderRadius.circular(999),
-                          border:
-                              Border.all(color: Colors.black.withOpacity(0.06)),
+                          border: Border.all(color: Colors.black.withOpacity(0.06)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.star_rounded,
-                                size: 20,
-                                color: Color.fromARGB(255, 255, 128, 0)),
+                            const Icon(Icons.star_rounded, size: 20, color: Color.fromARGB(255, 255, 128, 0)),
                             const SizedBox(width: 6),
                             Text(
                               '${s.rating.toStringAsFixed(1)} (${s.reviewsCount})',
@@ -1459,118 +1512,138 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 16),
                   if (s.price <= 0)
-                    Text(
-                      'Ask for price',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: kText,
-                      ),
-                    )
-                  else if (s.hasDiscount)
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          _money(s.price),
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.red,
-                            decoration: TextDecoration.lineThrough,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          _money(s.discountPrice!),
-                          style: GoogleFonts.poppins(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
-                            color: kText,
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: kBlue.withOpacity(0.10),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: kBlue.withOpacity(0.18)),
-                          ),
-                          child: Text(
-                            'Discount!',
-                            style: GoogleFonts.poppins(
-                              color: kText,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
+                        Text('Contact for pricing', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: kMuted)),
+                        Text('Ask for price', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w900, color: kText)),
                       ],
                     )
                   else
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 7),
-                        child: Text(
-                          _money(s.price),
-                          style: GoogleFonts.poppins(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w900,
-                            color: kText,
+                    _buildPriceSection(_serviceData),
+                ],
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // ✅ Description Container
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.black.withOpacity(0.06)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 18,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Description', style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText)),
+                  const SizedBox(height: 8),
+                  Text(
+                    (_serviceData?['description']?.toString().trim().isEmpty ?? true)
+                        ? 'No description yet.'
+                        : _serviceData!['description'].toString(),
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: kMuted, height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // ✅✅✅ MAP SECTION - بعد الـ Description وقبل الـ Reviews
+          if (_lat != null && _lng != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.black.withOpacity(0.06)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 18,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.location_on, color: kBlue, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Location',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        height: 220,
+                        child: FlutterMap(
+                          options: MapOptions(
+                            initialCenter: LatLng(_lat!, _lng!),
+                            initialZoom: 15.0,
+                            interactionOptions: const InteractionOptions(
+                              flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
+                            ),
                           ),
+                          children: [
+                                    TileLayer(
+                                      urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+                                      subdomains: const ['a', 'b', 'c'],
+                                      userAgentPackageName: 'com.example.flutter_application_1', // نفس الاسم
+                                    ),  
+                            MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: LatLng(_lat!, _lng!),
+                                  width: 40,
+                                  height: 40,
+                                  child: const Icon(
+                                    Icons.location_on,
+                                    color: Colors.red,
+                                    size: 40,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.black.withOpacity(0.06)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 18,
-                  offset: const Offset(0, 12),
+                  ],
                 ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Description',
-                    style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w900, color: kText),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    s.description.trim().isEmpty
-                        ? 'No description yet.'
-                        : s.description,
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w700,
-                      color: kMuted,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
               ),
             ),
-          ),
+          ],
+          
           const SizedBox(height: 12),
+          
+          // ✅ Reviews Section
           _ReviewsSection(serviceName: s.serviceName, reviews: reviews),
+          
           const SizedBox(height: 12),
+          
+          // ✅ Company Info
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -1589,17 +1662,13 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Company info',
-                    style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w900, color: kText),
-                  ),
+                  Text('Company info', style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText)),
                   const SizedBox(height: 15),
                   _InfoRow(icon: Icons.business_rounded, text: s.companyName),
                   const SizedBox(height: 8),
-                  _InfoRow(icon: Icons.email_rounded, text: s.companyEmail),
+                  _InfoRow(icon: Icons.email_rounded, text: companyEmail),
                   const SizedBox(height: 8),
-                  _InfoRow(icon: Icons.phone_rounded, text: s.companyPhone),
+                  _InfoRow(icon: Icons.phone_rounded, text: companyPhone),
                 ],
               ),
             ),
@@ -1610,6 +1679,8 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
   }
 }
 
+// Rest of the widgets (Cart, Info, Search, Filter, etc.) remain exactly the same...
+// I'll add them in the next update
 // =====================
 // Cart icon with badge
 // =====================

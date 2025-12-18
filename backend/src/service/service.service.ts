@@ -1,4 +1,4 @@
-import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose'; 
 import { Model, Types } from 'mongoose'; 
 
@@ -393,27 +393,74 @@ export class ServiceService {
   }
 
   // 11. دالة جلب تفاصيل الخدمة ID (تم التعديل للحقول الجديدة)
-  async getServiceById(serviceId: string): Promise<any> {
-    try {
-      const service = await this.serviceModel
-        .findById(serviceId)
-        .select('serviceName category location.city price additionalInfo bookingType externalLink images') 
-        .exec();
+async getServiceById(serviceId: string): Promise<any> {
+  try {
+    // 1. جلب الخدمة من قاعدة البيانات
+    const service = await this.serviceModel.findById(serviceId).lean().exec();
 
-      if (!service) throw new HttpException('Service not found', HttpStatus.NOT_FOUND);
-
-      const serviceObject = service.toObject();
-      return {
-          ...serviceObject,
-          description: serviceObject.additionalInfo, 
-          externalLink: serviceObject.externalLink || null 
-      };
-      
-    } catch (error) {
-      this.logger.error(`Failed to fetch service with ID ${serviceId}: ${error.stack}`);
-      throw new HttpException('Failed to fetch service', HttpStatus.INTERNAL_SERVER_ERROR);
+    if (!service) {
+      throw new NotFoundException('Service not found');
     }
+
+    // 2. تحويل providerId إلى ObjectId لضمان نجاح البحث في المونغو
+    const searchId = Types.ObjectId.isValid(service.providerId) 
+      ? new Types.ObjectId(service.providerId) 
+      : service.providerId;
+
+    // 3. جلب بيانات المزود (الشركة)
+    const provider: any = await this.providerModel.findOne({ 
+      $or: [
+        { userId: searchId }, 
+        { _id: searchId } 
+      ]
+    }).lean().exec();
+
+    // 4. معالجة الأسعار (حساب النطاق السعري للعرض السريع)
+    const priceObj = service.price || {};
+    const prices = Object.values(priceObj).filter(v => typeof v === 'number' && v > 0) as number[];
+    let priceRange = "N/A";
+    if (prices.length > 0) {
+      const minPrice = Math.min(...prices);
+      const maxPrice = Math.max(...prices);
+      priceRange = minPrice === maxPrice ? `${minPrice}` : `${minPrice} - ${maxPrice}`;
+    }
+
+    // 5. بناء الرد النهائي وتضمين الحقول الجديدة
+    return {
+      serviceName: service.serviceName,
+      companyName: service.companyName,
+      bookingType: service.bookingType,
+      description: service.description, // ✅ إضافة الوصف
+      additionalInfo: service.additionalInfo, // 🆕 إرجاع نوع الحجز (hourly, daily, etc.)
+      price: priceRange,                // نطاق السعر للعرض
+      allPrices: service.price || {},   // 🆕 إرجاع كائن الأسعار كاملاً (perHour, perDay, الخ)
+      city: service.location?.city || "N/A",
+      longitude: service.location?.longitude || null,
+      latitude: service.location?.latitude || null,
+      rating: service.rating || 0,
+      
+      // آخر مراجعتين
+      lastTwoReviews: (service.reviews || []).slice(-2).map((rev: any) => ({
+        rating: rev.rating,
+        images: rev.images || [],
+        date: rev.createdAt || rev.date,
+        description: rev.comment
+      })).reverse(),
+
+      // بيانات التواصل من الـ Provider
+      companyInfo: {
+        name: service.companyName,
+        // الوصول للبيانات داخل details كما هي في الداتا بيس عندك
+        email: provider?.details?.email || provider?.email || "N/A",
+        phone: provider?.details?.phone || provider?.phone || "N/A"
+      }
+    };
+  } catch (error) {
+    if (error instanceof NotFoundException) throw error;
+    this.logger.error(`Error in getServiceById: ${error.message}`);
+    throw new HttpException('Error retrieving service details', HttpStatus.INTERNAL_SERVER_ERROR);
   }
+}
 
   // 12. دالة جلب تفاصيل خدمات الفيندور (تم التعديل للحقول الجديدة)
   async getVendorServicesDetails(providerId: string): Promise<any[]> {
@@ -523,6 +570,72 @@ export class ServiceService {
     return { services, totalCount };
   }
 
+  // أضف هذه الدالة في ملف service.service.ts
 
+async getHomepageServicesByCategories(): Promise<any> {
+  const categories = [
+    'Venues', 'Photographers', 'Catering', 'Cake', 
+    'Music & Entertainment', 'Wedding Planners', 'Decor & Lighting', 
+    'Car Rental', 'Flower Shops', 'Card Printing', 
+    'Jewelry & Accessories', 'Gift & Souvenir'
+  ];
 
+  const results = {};
+
+  try {
+    for (const category of categories) {
+      const services = await this.serviceModel.aggregate([
+        // 1. التصفية حسب الفئة والخدمات النشطة فقط
+        { $match: { category: category, isActive: true } },
+        
+        // 2. اختيار عشوائي لـ 4 عناصر
+        { $sample: { size: 4 } },
+        
+        // 3. تحديد الحقول المطلوبة فقط لتقليل استهلاك البيانات
+        {
+          $project: {
+            serviceName: 1,
+            companyName: 1,
+            firstImage: { $arrayElemAt: ["$images", 0] },
+            rating: 1,
+            price: 1,
+            city: "$location.city",
+            _id: 1
+          }
+        }
+      ]).exec();
+
+      // 4. تنسيق البيانات وحساب نطاق السعر
+      results[category] = services.map(service => {
+        const priceObj = service.price || {};
+        // استخراج كل القيم الرقمية من كائن السعر
+        const prices = Object.values(priceObj).filter(v => typeof v === 'number' && v > 0) as number[];
+        
+        let priceDisplay = "N/A";
+        if (prices.length > 0) {
+          const minPrice = Math.min(...prices);
+          const maxPrice = Math.max(...prices);
+          priceDisplay = minPrice === maxPrice 
+            ? `${minPrice}` 
+            : `${minPrice} - ${maxPrice}`;
+        }
+
+        return {
+          id: service._id,
+          serviceName: service.serviceName,
+          companyName: service.companyName || "N/A",
+          image: service.firstImage || null,
+          rating: service.rating || 0,
+          price: priceDisplay,
+          city: service.city || "N/A"
+        };
+      });
+    }
+
+    return results;
+  } catch (error) {
+    this.logger.error('Failed to fetch services by categories', error.stack);
+    throw new HttpException('Failed to fetch categorised services', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+}
 }

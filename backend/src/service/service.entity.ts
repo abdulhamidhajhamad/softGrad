@@ -1,7 +1,6 @@
 import { BookingType, PricingOptions } from './service.schema'; // Import from schema
 
-export type PayType = 'per event' | 'per hour' | 'per person'; 
-
+export type PayType = 'per event' | 'per hour' | 'per person' | 'per day'; // 👈 أضف 'per day' هنا
   export class Service {
   serviceId: number;
   providerId: string;
@@ -23,7 +22,7 @@ export type PayType = 'per event' | 'per hour' | 'per person';
   bookedDates: Date[];
   rating: number; 
   isActive: boolean;
-
+description?: string; // إضافة الوصف للـ Entity
   constructor(data: Partial<Service>) {
     Object.assign(this, data);
     this.bookedDates = data?.bookedDates || [];

@@ -32,6 +32,13 @@ export class User extends Document {
   @Prop({ default: false })
   isVerified: boolean;
 
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Service' }], default: [] })
+  favoriteServices: Types.ObjectId[];
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Package' }], default: [] })
+  favoritePackages: Types.ObjectId[];
+  
   // ✅ NEW FIELD: For Firebase Cloud Messaging Token
   // unique: true with sparse: true ensures that only unique tokens are stored, 
   // but null values (for users who haven't logged in on the app) are allowed.

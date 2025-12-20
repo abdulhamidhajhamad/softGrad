@@ -2,14 +2,13 @@
 
 import 'dart:async';
 import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-
 import 'package:flutter_application_1/screens/search.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
+import 'package:flutter_application_1/screens/notifications_provider.dart';
 
 import 'favorites.dart';
 import 'ai_assistant.dart';
@@ -24,7 +23,6 @@ import 'signin.dart';
 
 // ✅ Chat page
 import 'chat_customer_home_page.dart';
-
 /// ✅ RGB(215, 20, 20, 215)
 const Color kNavBlue = Color.fromARGB(215, 20, 20, 215);
 
@@ -389,17 +387,21 @@ class _HomeTabState extends State<_HomeTab> {
               ),
 
               // ✅ Notifications (على اليمين)
-              IconButton(
-                icon: const Icon(Icons.notifications_none, color: Colors.white),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const NotificationsPage()),
-                  );
-                },
-                tooltip: 'Notifications',
-              ),
+IconButton(
+  icon: const Icon(Icons.notifications_none, color: Colors.white),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NotificationsProviderScreen(
+          // نمرر الـ ID هنا ليتم استخدامه في الصفحة
+          providerId: widget.userName, // أو الـ ID الفعلي إذا كان مخزناً بمتغير آخر
+        ),
+      ),
+    );
+  },
+  tooltip: 'Notifications',
+),
 
               const SizedBox(width: 8),
             ],

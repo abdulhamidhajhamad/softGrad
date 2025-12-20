@@ -36,7 +36,8 @@ class ProviderNotification {
 }
 
 class NotificationsProviderScreen extends StatefulWidget {
-  final String? providerId;
+  // غيرنا الاسم ليكون عاماً أو اتركناه كما هو لكن جعلناه اختياري ?
+  final String? providerId; 
 
   const NotificationsProviderScreen({Key? key, this.providerId})
       : super(key: key);

@@ -18,10 +18,12 @@ import 'package:flutter_application_1/screens/templates.dart';
 import 'package:flutter_application_1/screens/template_editor.dart';
 import 'package:flutter_application_1/screens/choose_role.dart';
 import 'package:flutter_application_1/screens/home_provider.dart';
+import 'package:flutter_application_1/services/service_locator.dart'; // ✅ أضف هذا السطر
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+  setupServiceLocator(); // ✅ أضف هذا السطر
+
   // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,

@@ -1,10 +1,12 @@
 // lib/screens/chat_customer_home_page.dart
-
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:flutter_application_1/services/user_service/chat_user_service.dart';
+import 'package:flutter_application_1/services/auth_service.dart';
+import 'package:flutter_application_1/services/service_locator.dart'; // ✅ أضف هذا السطر
+import 'dart:async';
 /// ✅ نفس لونك (ARGB) = RGB(215, 20, 20, 215)
 const Color kNavBlue = Color.fromARGB(215, 20, 20, 215);
 const Color kPageBg = Color(0xFFF6F7FB);
@@ -19,33 +21,66 @@ class ChatCustomerHomePage extends StatefulWidget {
 }
 
 class _ChatCustomerHomePageState extends State<ChatCustomerHomePage> {
-  final _repo = ChatRepository();
   final _searchCtrl = TextEditingController();
+  final _service = getIt<ChatUserService>(); // ✅ أضف هذا السطر
 
   ChatScope _scope = ChatScope.all;
-  List<ChatThread> _all = const [];
-  List<ChatThread> _filtered = const [];
+  List<ChatThreadModel> _all = const [];
+  List<ChatThreadModel> _filtered = const [];
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _initializeChat();
     _searchCtrl.addListener(_applyFilters);
+    
+  // ✅ استمع للـ Stream بدل callback
+  _service.statusUpdateStream.listen((_) {
+    if (mounted) {
+      _load();
+    }
+  });
+}
+
+  Future<void> _initializeChat() async {
+      setState(() => _isLoading = true);
+    
+    // Initialize user ID in service
+    await _service.initializeUserId();
+    
+    // Initialize socket
+    await _service.initSocket();
+    
+    // Load chats
+    await _load();
+    
+    setState(() => _isLoading = false);
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _service.setActiveChat(null);
     super.dispose();
   }
 
   Future<void> _load() async {
-    final items = await _repo.loadThreads();
-    if (!mounted) return;
-    setState(() {
-      _all = items;
-      _filtered = items;
-    });
+    try {
+      final items = await _service.fetchUserChats();
+      if (!mounted) return;
+      setState(() {
+        _all = items;
+        _filtered = items;
+      });
+      _applyFilters();
+    } catch (e) {
+      print('Error loading chats: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading chats: $e')),
+      );
+    }
   }
 
   void _applyFilters() {
@@ -65,7 +100,7 @@ class _ChatCustomerHomePageState extends State<ChatCustomerHomePage> {
       return inScope && inQuery;
     }).toList();
 
-    // ✅ ترتيب: غير المقروء أولاً + الأحدث
+    // Sort: unread first + most recent
     filtered.sort((a, b) {
       final ua = a.unreadCount > 0 ? 0 : 1;
       final ub = b.unreadCount > 0 ? 0 : 1;
@@ -75,6 +110,8 @@ class _ChatCustomerHomePageState extends State<ChatCustomerHomePage> {
 
     setState(() => _filtered = filtered);
   }
+
+
 
   int _totalUnread() => _all.fold<int>(0, (sum, t) => sum + t.unreadCount);
 
@@ -116,7 +153,6 @@ class _ChatCustomerHomePageState extends State<ChatCustomerHomePage> {
                         onTap: () {
                           HapticFeedback.selectionClick();
                           setState(() {
-                            // فلتر سريع: اعرض فقط اللي عليهم unread
                             _filtered =
                                 _all.where((e) => e.unreadCount > 0).toList();
                           });
@@ -166,37 +202,46 @@ class _ChatCustomerHomePageState extends State<ChatCustomerHomePage> {
                 ),
               ),
 
-              // ✅ List
-              SliverPadding(
+               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-                sliver: _filtered.isEmpty
+                sliver: _isLoading
                     ? SliverToBoxAdapter(
-                        child: _EmptyState(
-                          title: "No chats yet",
-                          subtitle:
-                              "Start a conversation with a vendor or contact support.",
-                          onPrimary: () => _showNewChatSheet(context),
-                          primaryText: "Start chat",
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32.0),
+                            child: CircularProgressIndicator(color: kNavBlue),
+                          ),
                         ),
                       )
-                    : SliverList.separated(
-                        itemCount: _filtered.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, i) {
-                          final t = _filtered[i];
-                          return _ThreadTile(
-                            thread: t,
-                            onTap: () async {
-                              HapticFeedback.selectionClick();
-                              final updated = await Navigator.push<ChatThread>(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ChatThreadPage(thread: t),
-                                ),
-                              );
+                    : _filtered.isEmpty
+                        ? SliverToBoxAdapter(
+                            child: _EmptyState(
+                              title: "No chats yet",
+                              subtitle:
+                                  "Start a conversation with a vendor or contact support.",
+                              onPrimary: () => _showNewChatSheet(context),
+                              primaryText: "Start chat",
+                            ),
+                          )
+                        : SliverList.separated(
+                            itemCount: _filtered.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 10),
+                            itemBuilder: (context, i) {
+                              final t = _filtered[i];
+                              return _ThreadTile(
+                                thread: t,
+                                onTap: () async {
+                                  HapticFeedback.selectionClick();
+                                  final updated = await Navigator.push<ChatThreadModel>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ChatThreadPage(thread: t),
+                                    ),
+                                  );
 
                               // ✅ رجّع من صفحة المحادثة: حدّث الليست
                               if (!mounted) return;
+                              await _load();
                               if (updated != null) {
                                 setState(() {
                                   _all = _all
@@ -216,9 +261,10 @@ class _ChatCustomerHomePageState extends State<ChatCustomerHomePage> {
         ),
       ),
     );
+
   }
 
-  void _showNewChatSheet(BuildContext context) {
+void _showNewChatSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
@@ -244,8 +290,10 @@ class _ChatCustomerHomePageState extends State<ChatCustomerHomePage> {
               icon: Icons.storefront_rounded,
               title: "Chat with a vendor",
               subtitle: "Ask about availability, pricing, details…",
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
+                // TODO: Implement vendor selection screen
+                // For now, show message to connect to vendors list
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                       content: Text("Connect this to Vendors list later ✅")),
@@ -257,19 +305,60 @@ class _ChatCustomerHomePageState extends State<ChatCustomerHomePage> {
               icon: Icons.support_agent_rounded,
               title: "Contact support",
               subtitle: "Payments, booking issues, help…",
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                // افتح محادثة دعم جاهزة (Dummy)
-                final support = _all.firstWhere(
+                
+                // Check if support chat already exists
+                final existingSupport = _all.firstWhere(
                   (e) => e.type == ThreadType.support,
-                  orElse: () => _repo.seedSupportThread(),
+                  orElse: () => ChatThreadModel(
+                    id: '',
+                    type: ThreadType.support,
+                    title: '',
+                    lastMessage: '',
+                    lastTime: DateTime.now(),
+                    unreadCount: 0,
+                    online: false,
+                  ),
                 );
 
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => ChatThreadPage(thread: support)),
-                );
+                String? chatId;
+                
+                if (existingSupport.id.isEmpty) {
+                  // Create new support chat - need to get admin ID
+                  // TODO: Replace with actual admin ID from your system
+                  final adminId = 'ADMIN_USER_ID'; // Get this from your backend
+                  chatId = await _service.createChat(adminId);
+                  
+                  if (chatId == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Failed to create support chat')),
+                    );
+                    return;
+                  }
+                  
+                  // Reload chats to get the new one
+                  await _load();
+                } else {
+                  chatId = existingSupport.id;
+                }
+
+                // Navigate to chat thread
+                if (chatId != null) {
+                  final updatedThread = await Navigator.push<ChatThreadModel>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChatThreadPage(
+                        thread: _all.firstWhere((e) => e.id == chatId),
+                      ),
+                    ),
+                  );
+
+                  if (!mounted) return;
+                  if (updatedThread != null) {
+                    await _load();
+                  }
+                }
               },
             ),
           ],
@@ -284,7 +373,7 @@ class _ChatCustomerHomePageState extends State<ChatCustomerHomePage> {
 ////////////////////////////////////////////////////////////////////////////////
 
 class ChatThreadPage extends StatefulWidget {
-  final ChatThread thread;
+  final ChatThreadModel thread;
   const ChatThreadPage({super.key, required this.thread});
 
   @override
@@ -294,25 +383,70 @@ class ChatThreadPage extends StatefulWidget {
 class _ChatThreadPageState extends State<ChatThreadPage> {
   final _ctrl = TextEditingController();
   final _scroll = ScrollController();
+  final _service = getIt<ChatUserService>(); // ✅ أضف هذا السطر
+  StreamSubscription<ChatMessageModel>? _messageSubscription; // ✅ أضف هذا السطر
 
-  late ChatThread _thread;
-  late List<ChatMessage> _messages;
+  late ChatThreadModel _thread;
+  List<ChatMessageModel> _messages = [];
 
   bool _typing = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _thread = widget.thread.copyWith(unreadCount: 0); // ✅ افتحها = صارت مقروءة
-    _messages = ChatRepository.seedMessagesFor(widget.thread.id);
+    _thread = widget.thread.copyWith(unreadCount: 0);
+    _initializeThread();    
+  _messageSubscription = _service.messageStream.listen((message) {
+    if (mounted && _service.activeChatId == _thread.id) {
+      setState(() {
+        _messages.add(message);
+        _thread = _thread.copyWith(
+          lastMessage: message.text,
+          lastTime: message.time,
+        );
+      });
+      _animateToBottom();
+    }
+  });
+}
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
+  Future<void> _initializeThread() async {
+    setState(() => _isLoading = true);
+    
+    // Set this as active chat
+    _service.setActiveChat(_thread.id);
+    
+    // Mark as read
+    await _service.markAsRead(_thread.id);
+    
+    // Load messages
+    try {
+      final messages = await _service.fetchChatMessages(_thread.id);
+      if (!mounted) return;
+      
+      setState(() {
+        _messages = messages;
+        _isLoading = false;
+      });
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
+    } catch (e) {
+      print('Error loading messages: $e');
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading messages: $e')),
+      );
+    }
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
-    _scroll.dispose();
+  _messageSubscription?.cancel(); // ✅ إلغاء الاشتراك
+  _service.setActiveChat(null);
+   _ctrl.dispose();      
+    _scroll.dispose();    
     super.dispose();
   }
 
@@ -323,61 +457,61 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
 
   void _animateToBottom() {
     if (!_scroll.hasClients) return;
-    _scroll.animateTo(
-      _scroll.position.maxScrollExtent + 120,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOut,
-    );
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent + 120,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
-  void _send(String text) {
+  Future<void> _send(String text) async {
     final t = text.trim();
     if (t.isEmpty) return;
 
     HapticFeedback.selectionClick();
 
-    final msg = ChatMessage(
-      id: "m_${DateTime.now().millisecondsSinceEpoch}",
+    // Create optimistic message
+    final tempMsg = ChatMessageModel(
+      id: "temp_${DateTime.now().millisecondsSinceEpoch}",
       text: t,
       time: DateTime.now(),
       fromMe: true,
+      isRead: true,
     );
 
     setState(() {
-      _messages.add(msg);
+      _messages.add(tempMsg);
       _thread = _thread.copyWith(
         lastMessage: t,
-        lastTime: msg.time,
+        lastTime: tempMsg.time,
         unreadCount: 0,
       );
       _ctrl.clear();
-      _typing = true;
     });
 
     _animateToBottom();
 
-    // ✅ Dummy reply (بدون باك-إند) — اربطيه لاحقاً بـ API
-    Future.delayed(const Duration(milliseconds: 850), () {
+    // Send via service
+    try {
+      await _service.sendMessage(_thread.id, t);
+      // Message will be updated via WebSocket
+    } catch (e) {
+      print('Error sending message: $e');
       if (!mounted) return;
-
-      final reply = ChatMessage(
-        id: "r_${DateTime.now().millisecondsSinceEpoch}",
-        text: ChatRepository.fakeReplyFor(_thread.type),
-        time: DateTime.now(),
-        fromMe: false,
-      );
-
+      
+      // Remove optimistic message on error
       setState(() {
-        _typing = false;
-        _messages.add(reply);
-        _thread = _thread.copyWith(
-          lastMessage: reply.text,
-          lastTime: reply.time,
-        );
+        _messages.removeWhere((m) => m.id == tempMsg.id);
       });
-
-      _animateToBottom();
-    });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send message: $e')),
+      );
+    }
   }
 
   void _openAttachSheet() {
@@ -521,7 +655,7 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
         ),
         body: Column(
           children: [
-            // ✅ Suggestion chips
+            // Suggestion chips
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: SingleChildScrollView(
@@ -549,49 +683,53 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
               ),
             ),
 
-            // ✅ Messages
+            // Messages
             Expanded(
-              child: ListView.builder(
-                controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                itemCount: _messages.length + (_typing ? 1 : 0),
-                itemBuilder: (context, i) {
-                  if (_typing && i == _messages.length) {
-                    return Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: _TypingBubble(),
-                      ),
-                    );
-                  }
+              child: _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(color: kNavBlue),
+                    )
+                  : ListView.builder(
+                      controller: _scroll,
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      itemCount: _messages.length + (_typing ? 1 : 0),
+                      itemBuilder: (context, i) {
+                        if (_typing && i == _messages.length) {
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: _TypingBubble(),
+                            ),
+                          );
+                        }
 
-                  final m = _messages[i];
-                  final prev = i > 0 ? _messages[i - 1] : null;
+                        final m = _messages[i];
+                        final prev = i > 0 ? _messages[i - 1] : null;
 
-                  final showDay = prev == null || !_sameDay(prev.time, m.time);
+                        final showDay = prev == null || !_sameDay(prev.time, m.time);
 
-                  return Column(
-                    children: [
-                      if (showDay) ...[
-                        const SizedBox(height: 4),
-                        _DayDivider(label: _prettyDay(m.time)),
-                        const SizedBox(height: 10),
-                      ],
-                      Align(
-                        alignment: m.fromMe
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: _MessageBubble(message: m),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  );
-                },
-              ),
+                        return Column(
+                          children: [
+                            if (showDay) ...[
+                              const SizedBox(height: 4),
+                              _DayDivider(label: _prettyDay(m.time)),
+                              const SizedBox(height: 10),
+                            ],
+                            Align(
+                              alignment: m.fromMe
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                              child: _MessageBubble(message: m),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                        );
+                      },
+                    ),
             ),
 
-            // ✅ Composer
+            // Composer
             _ComposerBar(
               controller: _ctrl,
               onAttach: _openAttachSheet,
@@ -762,7 +900,7 @@ class _ScopeTabs extends StatelessWidget {
 }
 
 class _ThreadTile extends StatelessWidget {
-  final ChatThread thread;
+ final ChatThreadModel thread;
   final VoidCallback onTap;
 
   const _ThreadTile({required this.thread, required this.onTap});
@@ -971,7 +1109,7 @@ class _AvatarCircle extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  final ChatMessage message;
+  final ChatMessageModel message;  // ✅ صح
   const _MessageBubble({required this.message});
 
   @override
@@ -1539,166 +1677,5 @@ class _SheetAction extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// ✅ Models + Dummy Repository (اربطها لاحقاً بـ API)
-////////////////////////////////////////////////////////////////////////////////
-
-enum ThreadType { vendor, support }
-
-class ChatThread {
-  final String id;
-  final ThreadType type;
-  final String title;
-  final String lastMessage;
-  final DateTime lastTime;
-  final int unreadCount;
-  final bool online;
-
-  const ChatThread({
-    required this.id,
-    required this.type,
-    required this.title,
-    required this.lastMessage,
-    required this.lastTime,
-    required this.unreadCount,
-    required this.online,
-  });
-
-  ChatThread copyWith({
-    String? id,
-    ThreadType? type,
-    String? title,
-    String? lastMessage,
-    DateTime? lastTime,
-    int? unreadCount,
-    bool? online,
-  }) {
-    return ChatThread(
-      id: id ?? this.id,
-      type: type ?? this.type,
-      title: title ?? this.title,
-      lastMessage: lastMessage ?? this.lastMessage,
-      lastTime: lastTime ?? this.lastTime,
-      unreadCount: unreadCount ?? this.unreadCount,
-      online: online ?? this.online,
-    );
-  }
-}
-
-class ChatMessage {
-  final String id;
-  final String text;
-  final DateTime time;
-  final bool fromMe;
-
-  const ChatMessage({
-    required this.id,
-    required this.text,
-    required this.time,
-    required this.fromMe,
-  });
-}
-
-class ChatRepository {
-  Future<List<ChatThread>> loadThreads() async {
-    await Future.delayed(const Duration(milliseconds: 420));
-
-    final now = DateTime.now();
-    return [
-      ChatThread(
-        id: "t_support",
-        type: ThreadType.support,
-        title: "PlanMyWedding Support",
-        lastMessage: "Hi! How can we help you today?",
-        lastTime: now.subtract(const Duration(minutes: 12)),
-        unreadCount: 1,
-        online: true,
-      ),
-      ChatThread(
-        id: "t_vendor_1",
-        type: ThreadType.vendor,
-        title: "Royal Events Co.",
-        lastMessage: "Yes, that date is available ✅",
-        lastTime: now.subtract(const Duration(hours: 2)),
-        unreadCount: 0,
-        online: true,
-      ),
-      ChatThread(
-        id: "t_vendor_2",
-        type: ThreadType.vendor,
-        title: "Lens Magic Photography",
-        lastMessage: "We can share a portfolio album.",
-        lastTime: now.subtract(const Duration(hours: 6)),
-        unreadCount: 3,
-        online: false,
-      ),
-      ChatThread(
-        id: "t_vendor_3",
-        type: ThreadType.vendor,
-        title: "Bloom & Co.",
-        lastMessage: "Do you prefer classic or modern flowers?",
-        lastTime: now.subtract(const Duration(days: 1, hours: 3)),
-        unreadCount: 0,
-        online: true,
-      ),
-    ];
-  }
-
-  ChatThread seedSupportThread() {
-    final now = DateTime.now();
-    return ChatThread(
-      id: "t_support",
-      type: ThreadType.support,
-      title: "PlanMyWedding Support",
-      lastMessage: "Hi! How can we help you today?",
-      lastTime: now,
-      unreadCount: 0,
-      online: true,
-    );
-  }
-
-  static List<ChatMessage> seedMessagesFor(String threadId) {
-    final now = DateTime.now();
-    // Dummy history
-    return [
-      ChatMessage(
-        id: "m1",
-        text: "Hi 👋",
-        time: now.subtract(const Duration(days: 1, hours: 2)),
-        fromMe: true,
-      ),
-      ChatMessage(
-        id: "m2",
-        text: threadId == "t_support"
-            ? "Hello! Tell me what you need and I’ll assist."
-            : "Hello! How can I help you?",
-        time: now.subtract(const Duration(days: 1, hours: 2, minutes: 1)),
-        fromMe: false,
-      ),
-      ChatMessage(
-        id: "m3",
-        text: "I want details about pricing / packages.",
-        time: now.subtract(const Duration(hours: 3, minutes: 20)),
-        fromMe: true,
-      ),
-      ChatMessage(
-        id: "m4",
-        text: threadId == "t_support"
-            ? "Sure — are you facing a booking/payment issue or general question?"
-            : "Sure ✅ Tell me your date + city and I’ll send options.",
-        time: now.subtract(const Duration(hours: 3, minutes: 18)),
-        fromMe: false,
-      ),
-    ];
-  }
-
-  static String fakeReplyFor(ThreadType type) {
-    if (type == ThreadType.support) {
-      return "Got it ✅ Please share your booking ID (if available) and I’ll check.";
-    }
-    return "Perfect ✅ Send your wedding date + city, and I’ll reply with availability + price.";
   }
 }

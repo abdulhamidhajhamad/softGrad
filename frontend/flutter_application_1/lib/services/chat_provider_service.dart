@@ -14,7 +14,6 @@ class ChatProviderService {
   factory ChatProviderService() => _instance;
   ChatProviderService._internal();
 
-  // âœ… Ø§Ø³ØªØ®Ø¯Ù… Ù†ÙØ³ Ø§Ù„Ù€ IP ÙÙŠ ÙƒÙ„ Ù…ÙƒØ§Ù†
 static const String _baseUrl = 'http://10.0.2.2:3000';  
   IO.Socket? _socket;
   static final ValueNotifier<int> unreadGlobalCount = ValueNotifier<int>(0);

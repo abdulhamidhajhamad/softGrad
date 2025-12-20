@@ -379,7 +379,6 @@ export class ServiceService {
     }
   }
 
-  // 10. دالة جلب خدمات بالـ Category (🚨 تم استرجاع هذه الدالة)
   async getServicesByCategory(category: string): Promise<Service[]> {
     try {
         const services = await this.serviceModel.find({ category: { $regex: category, $options: 'i' } }).exec();
@@ -392,22 +391,18 @@ export class ServiceService {
     }
   }
 
-  // 11. دالة جلب تفاصيل الخدمة ID (تم التعديل للحقول الجديدة)
 async getServiceById(serviceId: string): Promise<any> {
   try {
-    // 1. جلب الخدمة من قاعدة البيانات
     const service = await this.serviceModel.findById(serviceId).lean().exec();
 
     if (!service) {
       throw new NotFoundException('Service not found');
     }
 
-    // 2. تحويل providerId إلى ObjectId لضمان نجاح البحث في المونغو
     const searchId = Types.ObjectId.isValid(service.providerId) 
       ? new Types.ObjectId(service.providerId) 
       : service.providerId;
 
-    // 3. جلب بيانات المزود (الشركة)
     const provider: any = await this.providerModel.findOne({ 
       $or: [
         { userId: searchId }, 
@@ -415,7 +410,6 @@ async getServiceById(serviceId: string): Promise<any> {
       ]
     }).lean().exec();
 
-    // 4. معالجة الأسعار (حساب النطاق السعري للعرض السريع)
     const priceObj = service.price || {};
     const prices = Object.values(priceObj).filter(v => typeof v === 'number' && v > 0) as number[];
     let priceRange = "N/A";
@@ -425,21 +419,19 @@ async getServiceById(serviceId: string): Promise<any> {
       priceRange = minPrice === maxPrice ? `${minPrice}` : `${minPrice} - ${maxPrice}`;
     }
 
-    // 5. بناء الرد النهائي وتضمين الحقول الجديدة
     return {
       serviceName: service.serviceName,
       companyName: service.companyName,
       bookingType: service.bookingType,
-      description: service.description, // ✅ إضافة الوصف
-      additionalInfo: service.additionalInfo, // 🆕 إرجاع نوع الحجز (hourly, daily, etc.)
-      price: priceRange,                // نطاق السعر للعرض
-      allPrices: service.price || {},   // 🆕 إرجاع كائن الأسعار كاملاً (perHour, perDay, الخ)
+      description: service.description,
+      additionalInfo: service.additionalInfo, 
+      price: priceRange,              
+      allPrices: service.price || {},   
       city: service.location?.city || "N/A",
       longitude: service.location?.longitude || null,
       latitude: service.location?.latitude || null,
       rating: service.rating || 0,
       
-      // آخر مراجعتين
       lastTwoReviews: (service.reviews || []).slice(-2).map((rev: any) => ({
         rating: rev.rating,
         images: rev.images || [],
@@ -447,10 +439,8 @@ async getServiceById(serviceId: string): Promise<any> {
         description: rev.comment
       })).reverse(),
 
-      // بيانات التواصل من الـ Provider
       companyInfo: {
         name: service.companyName,
-        // الوصول للبيانات داخل details كما هي في الداتا بيس عندك
         email: provider?.details?.email || provider?.email || "N/A",
         phone: provider?.details?.phone || provider?.phone || "N/A"
       }

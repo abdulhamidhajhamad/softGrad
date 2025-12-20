@@ -59,4 +59,17 @@ export class ChatController {
     const count = await this.chatService.getUnreadChatsCount(req.user.id);
     return { count };
   }
+
+  // ✅ New Endpoint: Get unread messages count for EACH chat
+// ✅ Endpoint جديد يرجع تفصيل الرسائل غير المقروءة لكل شات
+@Get('unread-per-chat')
+async getUnreadPerChat(@Req() req) {
+  const result = await this.chatService.getUnreadCountsPerChat(req.user.id);
+  
+  return {
+    success: true,
+    data: result, // ستحتوي على مصفوفة بكل الشاتات التي بها رسائل غير مقروءة
+  };
+}
+
 }

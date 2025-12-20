@@ -314,4 +314,32 @@ export class ChatService {
     
     return unreadChats.length;
   }
+
+async getUnreadCountsPerChat(userId: string) {
+  const unreadCounts = await this.messageModel.aggregate([
+    {
+      $match: {
+        // 1. استبعاد الرسائل التي أرسلها المستخدم نفسه
+        sender: { $ne: new Types.ObjectId(userId) },
+        // 2. جلب الرسائل غير المقروءة فقط
+        isRead: false,
+      },
+    },
+    {
+      $group: {
+        // 3. تجميع النتائج حسب معرف الشات
+        _id: '$chatId',
+        // 4. حساب عدد الرسائل في كل مجموعة
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // تنسيق النتيجة لتكون أسهل في القراءة للفرونت إند
+  return unreadCounts.map((item) => ({
+    chatId: item._id,
+    unreadCount: item.count,
+  }));
+}
+  
 }

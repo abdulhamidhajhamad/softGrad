@@ -129,11 +129,11 @@ async getProfile(@Req() req) {
     return this.authService.verifyResetToken(token, email);
   }
 
-  @Post('reset-password')
-  async resetPassword(@Body() body: any) {
-    const { email, token, newPassword } = body;
-    return this.authService.resetPassword(email, token, newPassword);
-  }
+@Post('reset-password')
+@HttpCode(HttpStatus.OK)
+async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+  return this.authService.resetPassword(resetPasswordDto);
+}
 
   // ✅ NEW: Endpoint to receive and store FCM token
   @Put('fcm-token')

@@ -14,7 +14,8 @@ import {
   SignUpDto, 
   LoginDto, 
   VerifyEmailDto,
-  ResendVerificationDto 
+  ResendVerificationDto, 
+  ResetPasswordDto
 } from './auth.dto';
 import { MailService } from './mail.service';
 import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
@@ -390,42 +391,33 @@ export class AuthService {
 
 
 async forgotPassword(email: string) {
-  const user = await this.userModel.findOne({ email });
+ const user = await this.userModel.findOne({ email });
   if (!user) {
-    console.log('❌ User not found for email:', email);
     return { message: 'If this email exists, a reset link has been sent.' };
   }
-
-  console.log('✅ User found:', user.email);
-
-  // إنشاء التوكن
+  await this.passwordResetTokenModel.deleteMany({ email });
   const token = crypto.randomBytes(32).toString('hex');
-  console.log('🔑 Original token:', token);
-
-  // حساب الـ hash بشكل صحيح
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-  console.log('🔑 Token hash:', tokenHash);
-
-  // التأكد من عدم وجود مسافات أو أخطاء
-  if (tokenHash.includes(' ')) {
-    console.error('❌ ERROR: Token hash contains spaces!');
-  }
-
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-  // حفظ في قاعدة البيانات
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); 
   await this.passwordResetTokenModel.create({
     email,
     tokenHash,
     expiresAt
   });
 
-  console.log('💾 Token saved to database successfully');
+  const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3001'; 
+  const resetUrl = `${frontendBaseUrl}/reset-password?token=${token}&email=${email}`;
 
-  // لأغراض الت testing - إرجاع التوكن في ال response
+  try {
+    await this.mailService.sendPasswordResetEmail(email, resetUrl);
+    console.log(`✅ Password reset email sent to: ${email}`);
+  } catch (error) {
+    console.error('❌ Error sending reset email:', error);
+    throw new BadRequestException('Failed to send reset email, please try again later.');
+  }
+
   return { 
-    message: 'If this email exists, a reset link has been sent.',
-    debug_token: token // ✅ إرجاع التوكن للتجربة
+    message: 'If this email exists, a reset link has been sent.' 
   };
 }
 
@@ -470,31 +462,42 @@ async verifyResetToken(token: string, email: string) {
 
 
 
-  async resetPassword(email: string, token: string, newPassword: string) {
-  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+async resetPassword(resetData: ResetPasswordDto) {
+  const { email, token, newPassword, confirmPassword } = resetData;
 
-  const record = await this.passwordResetTokenModel.findOne({
+  // 1. 🔥 التحقق من تطابق كلمتي السر في الباك إند
+  if (newPassword !== confirmPassword) {
+    throw new BadRequestException('Passwords do not match');
+  }
+
+  // 2. التحقق من صحة التوكن (Hash comparison)
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const storedToken = await this.passwordResetTokenModel.findOne({
     email,
     tokenHash,
-    expiresAt: { $gt: new Date() }
+    expiresAt: { $gt: new Date() }, // تأكد أنه لم ينتهِ
   });
 
-  if (!record)
-    throw new BadRequestException('Invalid or expired token');
+  if (!storedToken) {
+    throw new BadRequestException('Invalid or expired reset token');
+  }
 
-  // hash new password
-  const hashedPassword = await bcrypt.hash(newPassword, 12);
-
-  // update user password
-  await this.userModel.updateOne(
+  // 3. تحديث كلمة السر للمستخدم
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  const user = await this.userModel.findOneAndUpdate(
     { email },
-    { $set: { password: hashedPassword } }
+    { password: hashedPassword },
+    { new: true }
   );
 
-  // حذف التوكن
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  // 4. 🔥 مسح التوكن بعد الاستخدام الناجح (أفضل ممارسة)
   await this.passwordResetTokenModel.deleteMany({ email });
 
-  return { message: 'Password has been reset successfully.' };
+  return { message: 'Password has been reset successfully' };
 }
 
 async getUserProfile(userId: string): Promise<{
@@ -582,7 +585,6 @@ async toggleFavoritePackage(userId: string, packageId: string): Promise<Types.Ob
 }
 
 async getUserFavorites(userId: string): Promise<{ favoriteServices: any[]; favoritePackages: any[] }> {
-  // جلب المستخدم مع اختيار حقول المفضلات فقط واستثناء الـ _id الخاص بالمستند إذا أردت
   const user = await this.userModel.findById(userId)
     .select('favoriteServices favoritePackages -_id')
     .exec();
@@ -596,5 +598,4 @@ async getUserFavorites(userId: string): Promise<{ favoriteServices: any[]; favor
     favoritePackages: user.favoritePackages || []
   };
 }
-
 }

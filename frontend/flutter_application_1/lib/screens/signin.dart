@@ -4,6 +4,8 @@ import 'package:flutter_application_1/screens/home_customer.dart'; // Import Hom
 import 'package:flutter_application_1/services/auth_service.dart'; // Import AuthService
 import 'package:flutter_application_1/screens/home_provider.dart';
 import 'package:flutter_application_1/services/fcm_service.dart';
+import 'package:flutter_application_1/screens/forgot_password/forgot_password_request.dart';
+
 /// Sign In screen for existing users
 class SignInScreen extends StatefulWidget {
   const SignInScreen({Key? key}) : super(key: key);
@@ -368,7 +370,12 @@ Future<String?> _getFCMToken() async {
                     ),
                     GestureDetector(
                       onTap: () {
-                        // TODO(Auth): Navigate to Forgot Password screen
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ForgotPasswordRequestScreen(),
+                          ),
+                        );
                       },
                       child: Text(
                         'Forgot Password?',

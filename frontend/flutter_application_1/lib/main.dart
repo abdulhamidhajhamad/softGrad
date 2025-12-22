@@ -4,6 +4,7 @@ import 'firebase_options.dart';
 
 // Services
 import 'package:flutter_application_1/services/fcm_service.dart';
+import 'package:flutter_application_1/services/service_locator.dart';
 
 // Screens
 import 'package:flutter_application_1/screens/splash.dart';
@@ -18,11 +19,12 @@ import 'package:flutter_application_1/screens/templates.dart';
 import 'package:flutter_application_1/screens/template_editor.dart';
 import 'package:flutter_application_1/screens/choose_role.dart';
 import 'package:flutter_application_1/screens/home_provider.dart';
-import 'package:flutter_application_1/services/service_locator.dart'; // ✅ أضف هذا السطر
+import 'package:flutter_application_1/screens/forgot_password/forgot_password_request.dart';
+import 'package:flutter_application_1/screens/forgot_password/reset_password.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  setupServiceLocator(); // ✅ أضف هذا السطر
+  setupServiceLocator();
 
   // Initialize Firebase
   await Firebase.initializeApp(
@@ -64,6 +66,7 @@ class MyApp extends StatelessWidget {
         '/home': (_) => const HomePage(),
         '/vendors': (_) => const VendorsListPage(),
         '/templates': (_) => const TemplatesPage(),
+        '/forgot-password': (_) => const ForgotPasswordRequestScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/verification') {
@@ -72,6 +75,15 @@ class MyApp extends StatelessWidget {
             settings: settings,
           );
         }
+        
+        // ✅ FIXED: Changed ResetPasswordWebScreen to ResetPasswordScreen
+        if (settings.name == '/reset-password') {
+          return MaterialPageRoute(
+            builder: (_) => ResetPasswordScreen(),
+            settings: settings,
+          );
+        }
+        
         if (settings.name == '/template_editor') {
           final args = settings.arguments as Map<String, dynamic>?;
           final templateName = args?['templateName'] as String? ?? 'Template';
@@ -85,6 +97,7 @@ class MyApp extends StatelessWidget {
             settings: settings,
           );
         }
+        
         if (settings.name == '/home_provider') {
           final args = settings.arguments;
           if (args != null && args is ProviderModel) {
@@ -103,6 +116,7 @@ class MyApp extends StatelessWidget {
             );
           }
         }
+        
         return null;
       },
     );

@@ -9,7 +9,7 @@ export class PasswordResetToken extends Document {
   @Prop({ required: true })
   tokenHash: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, type: Date, expires: 0 }) 
   expiresAt: Date;
 }
 

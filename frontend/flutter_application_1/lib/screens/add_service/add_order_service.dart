@@ -176,12 +176,6 @@ Future<void> _trySave() async {
     return;
   }
 
-  if (_coverImage == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Please add a cover image.", style: GoogleFonts.poppins())),
-    );
-    return;
-  }
 
   if (_availableQty < 1) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -200,7 +194,7 @@ Future<void> _trySave() async {
 
   final form = {
     "category": widget.category,
-    "bookingType": widget.bookingType,
+    "bookingType": "display",
 
     "name": nameCtrl.text.trim(),
     "description": descCtrl.text.trim(),

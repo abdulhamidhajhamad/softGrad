@@ -11,7 +11,7 @@ import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
 
 import 'favorites.dart';
-import 'ai_assistant.dart';
+import 'package:flutter_application_1/screens/Ai_Screen/ai_screen_layout.dart';
 import 'cart.dart';
 import 'profile.dart';
 import 'notifications.dart';
@@ -74,8 +74,7 @@ class _HomePageState extends State<HomePage> {
       const ChatCustomerHomePage(),
 
       /// AI
-      const AiAssistantScreen(),
-
+const AiScreenLayout(),
       /// Cart
       const CartPage(),
 

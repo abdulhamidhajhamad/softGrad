@@ -21,6 +21,7 @@ import 'package:flutter_application_1/screens/choose_role.dart';
 import 'package:flutter_application_1/screens/home_provider.dart';
 import 'package:flutter_application_1/screens/forgot_password/forgot_password_request.dart';
 import 'package:flutter_application_1/screens/forgot_password/reset_password.dart';
+import 'package:flutter_application_1/screens/Ai_Screen/ai_screen_layout.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,6 +68,7 @@ class MyApp extends StatelessWidget {
         '/vendors': (_) => const VendorsListPage(),
         '/templates': (_) => const TemplatesPage(),
         '/forgot-password': (_) => const ForgotPasswordRequestScreen(),
+        '/ai-generator': (context) => const AiScreenLayout(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/verification') {

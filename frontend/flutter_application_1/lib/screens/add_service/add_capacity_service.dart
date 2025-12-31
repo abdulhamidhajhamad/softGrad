@@ -403,16 +403,9 @@ Future<void> _trySave() async {
     return;
   }
 
-  if (_coverImage == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Please add a cover image.", style: GoogleFonts.poppins())),
-    );
-    return;
-  }
-
   final form = {
     "category": widget.category,
-    "bookingType": widget.bookingType,
+    "bookingType": "capacity",
 
     "name": nameCtrl.text.trim(),
     "description": descCtrl.text.trim(),

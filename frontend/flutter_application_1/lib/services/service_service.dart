@@ -273,32 +273,32 @@ class ServiceService {
   }
 
   // ✅ helper: map category إلى bookingType
-  static String _mapCategoryToBookingType(String category) {
-    switch (category) {
-      case 'Venues':
-      case 'Photographers':
-      case 'Music & Entertainment':
-      case 'Wedding Planners & Coordinators':
-        return 'Hourly';
+ static String _mapCategoryToBookingType(String category) {
+  switch (category) {
+    case 'Venues':
+    case 'Photographers':
+    case 'Music & Entertainment':
+    case 'Wedding Planners & Coordinators':
+      return 'hourly';  // ✅ lowercase
 
-      case 'Decor & Lighting':
-      case 'Car Rental & Transportation':
-        return 'Full-Day';
+    case 'Decor & Lighting':
+    case 'Car Rental & Transportation':
+      return 'daily';  // ✅ lowercase
 
-      case 'Catering':
-      case 'Cake':
-        return 'Capacity';
+    case 'Catering':
+    case 'Cake':
+      return 'capacity';  // ✅ lowercase
 
-      case 'Flower Shops':
-      case 'Card Printing':
-      case 'Jewelry & Accessories':
-      case 'Gift & Souvenir':
-        return 'Order';
+    case 'Flower Shops':
+    case 'Card Printing':
+    case 'Jewelry & Accessories':
+    case 'Gift & Souvenir':
+      return 'display';  // ✅ lowercase
 
-      default:
-        return 'Hourly';
-    }
+    default:
+      return 'hourly';  // ✅ lowercase
   }
+}
 
   // ====================== ✅ one method for ALL Add screens =========================
   static Future<Map<String, dynamic>> addServiceFromBookingForm(

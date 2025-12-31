@@ -70,8 +70,7 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
   RangeValues _hoursRange = const RangeValues(1, 8);
 
   // Daily capacity planner (suggested only)
-  double _eventHours = 2.0; // each event duration (hours)
-  double _gapMinutes = 30; // time between events (minutes)
+  double _gapMinutes = 0; // time between events (minutes)
 
   // ✅ NEW: choose suggested slots (count = seats per day)
   final Set<String> _selectedSuggestedSlots = {};
@@ -92,8 +91,7 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     );
 
     // sensible defaults
-    _eventHours = _hoursRange.start.clamp(1, 12);
-    _gapMinutes = 30;
+    _gapMinutes = 0;
 
     // ✅ live price calc
     priceCtrl.addListener(_recalcPrice);
@@ -242,57 +240,60 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     minHoursCtrl.text = v.start.round().toString();
     maxHoursCtrl.text = v.end.round().toString();
 
-    // keep event duration within booking range by default
-    if (_eventHours < v.start) _eventHours = v.start;
-    if (_eventHours > v.end) _eventHours = v.end;
   }
 
-  int _eventsPerDay() {
-    if (_from == null || _to == null) return 0;
+int _eventsPerDay() {
+  if (_from == null || _to == null) return 0;
 
-    final fromMin = _toMinutes(_from!);
-    final toMin = _toMinutes(_to!);
+  final fromMin = _toMinutes(_from!);
+  final toMin = _toMinutes(_to!);
 
-    final usable = toMin - fromMin; // ✅ no prep time
-    final eventMin = (_eventHours * 60).round();
-    final gapMin = _gapMinutes.round();
+  final usable = toMin - fromMin;
+  
+  // ✅ استخدم minHours بدل _eventHours
+  final minHours = double.tryParse(minHoursCtrl.text.trim()) ?? 1.0;
+  final eventMin = (minHours * 60).round();
+  final gapMin = _gapMinutes.round();
 
-    if (usable <= 0 || eventMin <= 0) return 0;
-    if (usable < eventMin) return 0;
+  if (usable <= 0 || eventMin <= 0) return 0;
+  if (usable < eventMin) return 0;
 
-    // n events need: n*event + (n-1)*gap <= usable
-    final n = ((usable + gapMin) / (eventMin + gapMin)).floor();
-    return n.clamp(0, 50);
+  // n events need: n*event + (n-1)*gap <= usable
+  final n = ((usable + gapMin) / (eventMin + gapMin)).floor();
+  return n.clamp(0, 50);
+}
+
+List<Map<String, String>> _buildSlotsPreview() {
+  if (_from == null || _to == null) return [];
+
+  final n = _eventsPerDay();
+  if (n <= 0) return [];
+
+  final toMin = _toMinutes(_to!);
+  final start = _toMinutes(_from!);
+  
+  // ✅ استخدم minHours بدل _eventHours
+  final minHours = double.tryParse(minHoursCtrl.text.trim()) ?? 1.0;
+  final eventMin = (minHours * 60).round();
+  final gapMin = _gapMinutes.round();
+
+  var cur = start;
+  final slots = <Map<String, String>>[];
+
+  for (int i = 0; i < n; i++) {
+    final s = cur;
+    final e = cur + eventMin;
+    if (e > toMin) break;
+
+    slots.add({
+      "start": _fmtTime(_fromMinutes(s)),
+      "end": _fmtTime(_fromMinutes(e)),
+    });
+
+    cur = e + gapMin;
   }
-
-  List<Map<String, String>> _buildSlotsPreview() {
-    if (_from == null || _to == null) return [];
-
-    final n = _eventsPerDay();
-    if (n <= 0) return [];
-
-    final toMin = _toMinutes(_to!);
-    final start = _toMinutes(_from!); // ✅ no prep time
-    final eventMin = (_eventHours * 60).round();
-    final gapMin = _gapMinutes.round();
-
-    var cur = start;
-    final slots = <Map<String, String>>[];
-
-    for (int i = 0; i < n; i++) {
-      final s = cur;
-      final e = cur + eventMin;
-      if (e > toMin) break;
-
-      slots.add({
-        "start": _fmtTime(_fromMinutes(s)),
-        "end": _fmtTime(_fromMinutes(e)),
-      });
-
-      cur = e + gapMin;
-    }
-    return slots;
-  }
+  return slots;
+}
 
   String _slotKey(Map<String, String> s) => '${s["start"]}-${s["end"]}';
 
@@ -330,49 +331,44 @@ Future<void> _trySave() async {
     return;
   }
 
-  if (_coverImage == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Please add a cover image.", style: GoogleFonts.poppins())),
-    );
-    return;
-  }
 
-  final form = {
-    "category": widget.category,
-    "bookingType": widget.bookingType,
+ final form = {
+  "category": widget.category,
+  "bookingType": "hourly",
 
-    "name": nameCtrl.text.trim(),
-    "description": descCtrl.text.trim(),
+  "name": nameCtrl.text.trim(),
+  "description": descCtrl.text.trim(),
 
-    "address": addressCtrl.text.trim(),
-    "city": _selectedCity,
-    "latitude": _selectedLat?.toString() ?? "",
+  "address": addressCtrl.text.trim(),
+  "city": _selectedCity,
+  "latitude": _selectedLat?.toString() ?? "",
   "longitude": _selectedLng?.toString() ?? "",
 
-    "price": priceCtrl.text.trim(),
-    "discount": discountCtrl.text.trim(),
+  "price": priceCtrl.text.trim(),
+  "discount": discountCtrl.text.trim(),
 
-    "finalPrice": _finalPrice?.toStringAsFixed(2),
-    "savedAmount": _savedAmount?.toStringAsFixed(2),
+  "finalPrice": _finalPrice?.toStringAsFixed(2),
+  "savedAmount": _savedAmount?.toStringAsFixed(2),
 
-    "coverImage": _coverImage,
-    "highlights": _highlights,
-    "visibleInSearch": _visibleInSearch,
+  "coverImage": _coverImage,
+  "highlights": _highlights,
+  "visibleInSearch": _visibleInSearch,
 
-    "pricingModel": "per_hour",
-    "minHours": minHoursCtrl.text.trim(),
-    "maxHours": maxHoursCtrl.text.trim(),
-    "days": _selectedDays.toList(),
-    "timeFrom": _fmtTime(_from),
-    "timeTo": _fmtTime(_to),
+  "pricingModel": "per_hour",
+  "minHours": minHoursCtrl.text.trim(),
+  "maxHours": maxHoursCtrl.text.trim(),
+  "days": _selectedDays.toList(),
+  "timeFrom": _fmtTime(_from),
+  "timeTo": _fmtTime(_to),
 
-    "eventDurationHours": _eventHours.toStringAsFixed(1),
-    "gapMinutes": _gapMinutes.round().toString(),
-    "eventsPerDay": _eventsPerDay().toString(),
-    "slotsPreview": _buildSlotsPreview(),
-    "selectedSuggestedSlots": _selectedSuggestedSlots.toList(),
-    "seatsPerDay": _selectedSuggestedSlots.length,
-  };
+  // ✅ Break اختياري
+  if (_gapMinutes > 0) "breakMinutes": _gapMinutes.round().toString(),
+  
+  // ✅ Suggested schedule data
+  "slotsPreview": _buildSlotsPreview(),
+  "selectedSuggestedSlots": _selectedSuggestedSlots.toList(),
+  "seatsPerDay": _selectedSuggestedSlots.length,
+};
 
   setState(() => _saving = true);
 
@@ -601,269 +597,242 @@ Future<void> _trySave() async {
   }
 
   Widget _dailyCapacityCard(int eventsCount, List<Map<String, String>> slots) {
-    // ✅ if user changes schedule settings, some selected keys might disappear
-    final validKeys = slots.map(_slotKey).toSet();
-    _selectedSuggestedSlots.removeWhere((k) => !validKeys.contains(k));
+  // ✅ تنظيف selected slots
+  final validKeys = slots.map(_slotKey).toSet();
+  _selectedSuggestedSlots.removeWhere((k) => !validKeys.contains(k));
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: kPrimaryColor.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: kPrimaryColor.withOpacity(0.14)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                height: 32,
-                width: 32,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.auto_awesome_rounded,
-                    color: kPrimaryColor, size: 18),
+  // ✅ حساب minHours من الـ controller
+  final minHours = double.tryParse(minHoursCtrl.text.trim()) ?? 1.0;
+
+  return Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: kPrimaryColor.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: kPrimaryColor.withOpacity(0.14)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              height: 32,
+              width: 32,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  "Daily capacity",
-                  style: GoogleFonts.poppins(
-                      fontSize: 14, fontWeight: FontWeight.w800),
-                ),
+              child: const Icon(Icons.auto_awesome_rounded,
+                  color: kPrimaryColor, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "Daily capacity",
+                style: GoogleFonts.poppins(
+                    fontSize: 14, fontWeight: FontWeight.w800),
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            "Pick event duration + break time, then we suggest a schedule.",
-            style:
-                GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade700),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "Event duration",
-            style:
-                GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Slider(
-                  value: _eventHours.clamp(1, 12),
-                  min: 1,
-                  max: 12,
-                  divisions: 22,
-                  label: "${_eventHours.toStringAsFixed(1)} h",
-                  onChanged: (v) {
-                    setState(() {
-                      final minB = _hoursRange.start;
-                      final maxB = _hoursRange.end;
-                      _eventHours = v.clamp(minB, maxB);
-                    });
-                  },
-                ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          "Set optional break time between bookings.",
+          style: GoogleFonts.poppins(
+              fontSize: 11, color: Colors.grey.shade700),
+        ),
+        
+        // ✅ Break slider (اختياري - حذفنا Event Duration)
+        const SizedBox(height: 12),
+        Text(
+          "Break between events (optional)",
+          style: GoogleFonts.poppins(
+              fontSize: 12, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: Slider(
+                value: _gapMinutes.clamp(0, 180),
+                min: 0,
+                max: 180,
+                divisions: 36,
+                label: _gapMinutes == 0 
+                    ? "No break" 
+                    : "${_gapMinutes.round()} min",
+                onChanged: (v) {
+                  setState(() {
+                    final rounded = (v / 5).round() * 5;
+                    _gapMinutes = rounded.toDouble().clamp(0, 180);
+                  });
+                },
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  "${_eventHours.toStringAsFixed(1)} h",
-                  style: GoogleFonts.poppins(
-                      fontSize: 12, fontWeight: FontWeight.w800),
-                ),
-              )
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            "Break between events",
-            style:
-                GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Slider(
-                  value: _gapMinutes.clamp(0, 180),
-                  min: 0,
-                  max: 180,
-                  divisions: 36,
-                  label: "${_gapMinutes.round()} min",
-                  onChanged: (v) {
-                    setState(() {
-                      final rounded = (v / 5).round() * 5;
-                      _gapMinutes = rounded.toDouble().clamp(0, 180);
-                    });
-                  },
-                ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(999),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  "${_gapMinutes.round()} min",
-                  style: GoogleFonts.poppins(
-                      fontSize: 12, fontWeight: FontWeight.w800),
-                ),
-              )
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _infoPill(
-                icon: Icons.event_note_rounded,
-                text: "$eventsCount events/day",
+              child: Text(
+                _gapMinutes == 0 
+                    ? "None" 
+                    : "${_gapMinutes.round()} min",
+                style: GoogleFonts.poppins(
+                    fontSize: 12, fontWeight: FontWeight.w800),
               ),
-              _infoPill(
-                icon: Icons.timer_rounded,
-                text: "${_eventHours.toStringAsFixed(1)}h each",
-              ),
+            )
+          ],
+        ),
+        
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _infoPill(
+              icon: Icons.event_note_rounded,
+              text: "$eventsCount events/day",
+            ),
+            _infoPill(
+              icon: Icons.timer_rounded,
+              text: "${minHours.toStringAsFixed(1)}h each", // ✅ من minHours
+            ),
+            if (_gapMinutes > 0)
               _infoPill(
                 icon: Icons.more_time_rounded,
                 text: "${_gapMinutes.round()}m break",
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "Suggested schedule",
-            style:
-                GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          if (_from == null || _to == null)
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded, color: kPrimaryColor),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      "Set your working hours first (Availability).",
-                      style: GoogleFonts.poppins(
-                          fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else if (slots.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                "Not enough time to fit an event with the current settings.",
-                style: GoogleFonts.poppins(
-                    fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-            )
-          else ...[
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: slots.take(12).map((s) {
-                final key = _slotKey(s);
-                final selected = _selectedSuggestedSlots.contains(key);
-
-                return InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: () {
-                    setState(() {
-                      if (selected) {
-                        _selectedSuggestedSlots.remove(key);
-                      } else {
-                        _selectedSuggestedSlots.add(key);
-                      }
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? kPrimaryColor.withOpacity(0.10)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: selected
-                            ? kPrimaryColor.withOpacity(0.35)
-                            : Colors.white.withOpacity(0.9),
-                      ),
-                    ),
-                    child: Text(
-                      '${s["start"]} - ${s["end"]}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: selected ? kPrimaryColor : Colors.black,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-
-            // ✅ seats per day = number of selected slots
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.event_seat_rounded,
-                      color: kPrimaryColor, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      "Seats per day",
-                      style: GoogleFonts.poppins(
-                          fontSize: 12, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  Text(
-                    "${_selectedSuggestedSlots.length}",
-                    style: GoogleFonts.poppins(
-                        fontSize: 13, fontWeight: FontWeight.w900),
-                  ),
-                ],
-              ),
-            ),
           ],
+        ),
+        
+        const SizedBox(height: 12),
+        Text(
+          "Suggested schedule",
+          style: GoogleFonts.poppins(
+              fontSize: 12, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        
+        // ✅ Suggested Schedule (نفسه)
+        if (_from == null || _to == null)
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, color: kPrimaryColor),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "Set your working hours first (Availability).",
+                    style: GoogleFonts.poppins(
+                        fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else if (slots.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              "Not enough time to fit an event with the current settings.",
+              style: GoogleFonts.poppins(
+                  fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          )
+        else ...[
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: slots.take(12).map((s) {
+              final key = _slotKey(s);
+              final selected = _selectedSuggestedSlots.contains(key);
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () {
+                  setState(() {
+                    if (selected) {
+                      _selectedSuggestedSlots.remove(key);
+                    } else {
+                      _selectedSuggestedSlots.add(key);
+                    }
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? kPrimaryColor.withOpacity(0.10)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: selected
+                          ? kPrimaryColor.withOpacity(0.35)
+                          : Colors.white.withOpacity(0.9),
+                    ),
+                  ),
+                  child: Text(
+                    '${s["start"]} - ${s["end"]}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: selected ? kPrimaryColor : Colors.black,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+
+          // ✅ Seats per day
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.event_seat_rounded,
+                    color: kPrimaryColor, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "Seats per day",
+                    style: GoogleFonts.poppins(
+                        fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Text(
+                  "${_selectedSuggestedSlots.length}",
+                  style: GoogleFonts.poppins(
+                      fontSize: 13, fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+          ),
         ],
-      ),
-    );
-  }
+      ],
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {

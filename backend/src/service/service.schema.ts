@@ -194,6 +194,8 @@ export class Service extends Document {
     @Prop({ type: Number, default: 0, min: 0 })
     cleanupTimeMinutes?: number; 
 
+
+
     @Prop({ type: Boolean, default: false })
     allowFullVenueBooking?: boolean; 
 

@@ -5,6 +5,7 @@ import {
 import { Type } from 'class-transformer';
 import { BookingType, PayType } from './service.schema';
 
+// ✅ إعادة PricingOptionsDto للتوافق
 export class PricingOptionsDto {
   @IsOptional()
   @IsNumber()
@@ -33,14 +34,13 @@ export class PricingOptionsDto {
 }
 
 export class LocationDto {
-  // ✅ بعد التعديل (أصبحت اختيارية في الـ DTO)
   @IsOptional()
   @IsNumber()
-  latitude?: number; // ⬅️ إضافة علامة ? وجعلها اختيارية
+  latitude?: number;
   
   @IsOptional()
   @IsNumber()
-  longitude?: number; // ⬅️ إضافة علامة ? وجعلها اختيارية
+  longitude?: number;
   
   @IsOptional()
   @IsString()
@@ -75,10 +75,11 @@ export class CreateServiceDto {
   @Type(() => LocationDto)
   location: LocationDto;
 
+  // ✅ السعر أصبح number بسيط (اختياري - للـ display)
   @IsOptional()
-  @ValidateNested()
-  @Type(() => PricingOptionsDto)
-  price?: PricingOptionsDto;
+  @IsNumber()
+  @Min(0)
+  price?: number;
 
   @IsOptional()
   @IsString()
@@ -100,7 +101,7 @@ export class CreateServiceDto {
   @Max(5)
   rating?: number;
 
-  // 🆕 حقول خاصة بأنواع الحجز المختلفة
+  // ✅ الحقول الاختيارية
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -124,22 +125,16 @@ export class CreateServiceDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  cleanupTimeMinutes?: number; // 🆕 وقت التنظيف بين الحجوزات
-
-  @IsOptional()
-  @IsBoolean()
-  allowFullVenueBooking?: boolean;
+  cleanupTimeMinutes?: number;
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  workingDays?: string[]; // ['sunday', 'monday', 'tuesday', etc.]
+  workingDays?: string[];
 
   @IsOptional()
   @IsString()
-  description?: string; // إضافة الوصف هنا
-
-
+  description?: string;
 }
 
 export class UpdateServiceDto {
@@ -165,10 +160,11 @@ export class UpdateServiceDto {
   @Type(() => LocationDto)
   location?: LocationDto;
 
+  // ✅ السعر أصبح number بسيط (اختياري)
   @IsOptional()
-  @ValidateNested()
-  @Type(() => PricingOptionsDto)
-  price?: PricingOptionsDto;
+  @IsNumber()
+  @Min(0)
+  price?: number;
 
   @IsOptional()
   @IsString()
@@ -215,15 +211,14 @@ export class UpdateServiceDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  cleanupTimeMinutes?: number; // 🆕 وقت التنظيف
+  cleanupTimeMinutes?: number;
 
   @IsOptional()
-  @IsBoolean()
-  allowFullVenueBooking?: boolean;
-
+  @IsArray()
+  @IsString({ each: true })
+  workingDays?: string[];
 
   @IsOptional()
   @IsString()
-  description?: string; // إضافة الوصف هنا أيضاً
-  
+  description?: string;
 }

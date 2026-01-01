@@ -15,7 +15,21 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
   
-
+  // 13. Get Vendor Services Details (ID, Name, Price) - محمي للـ Vendor
+  @Get('vendor-services-details') // مسار جديد لعدم التعارض
+  @UseGuards(JwtAuthGuard)
+  async getVendorServicesDetails(@Request() req: any): Promise<any[]> {
+    try {
+      const providerId = req.user.userId; 
+      // استدعاء الدالة التي تم إنشاؤها في الخدمة
+      return await this.serviceService.getVendorServicesDetails(providerId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch vendor services details',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
   @Get('home-service')
 async getHomepageCategoriesPreview() {
   try {
@@ -297,21 +311,7 @@ async getServiceDetailsById(@Param('serviceId') serviceId: string) {
   }
 }
 
-  // 13. Get Vendor Services Details (ID, Name, Price) - محمي للـ Vendor
-  @Get('vendor-services-details') // مسار جديد لعدم التعارض
-  @UseGuards(JwtAuthGuard)
-  async getVendorServicesDetails(@Request() req: any): Promise<any[]> {
-    try {
-      const providerId = req.user.userId; 
-      // استدعاء الدالة التي تم إنشاؤها في الخدمة
-      return await this.serviceService.getVendorServicesDetails(providerId);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to fetch vendor services details',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
+
 
 
   // ✅ NEW ENDPOINT: جلب الخدمات مع تفاصيل محددة لدعم التمرير اللانهائي

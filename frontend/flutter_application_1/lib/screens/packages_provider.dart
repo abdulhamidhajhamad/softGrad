@@ -30,20 +30,31 @@ class BundlePackage {
   });
 
   factory BundlePackage.fromJson(Map<String, dynamic> json) {
-    final List<dynamic> rawServiceNames =
-        json['serviceNames'] as List<dynamic>? ?? [];
-    final List<dynamic> rawServiceIds =
-        json['serviceIds'] as List<dynamic>? ?? [];
+    // ✅ التعديل هنا - نجيب services من الـ array
+    final List<dynamic> servicesArray = json['services'] as List<dynamic>? ?? [];
+    
+    // نستخرج الـ IDs والأسماء من services array
+    final List<String> extractedIds = [];
+    final List<String> extractedNames = [];
+    
+    for (final service in servicesArray) {
+      if (service is Map<String, dynamic>) {
+        final id = service['serviceId']?.toString() ?? '';
+        final name = service['serviceName']?.toString() ?? '';
+        if (id.isNotEmpty) extractedIds.add(id);
+        if (name.isNotEmpty) extractedNames.add(name);
+      }
+    }
+
     final double price = (json['newPrice'] as num?)?.toDouble() ?? 0.0;
-    final DateTime? start =
-        DateTime.tryParse(json['startDate'] as String? ?? '');
+    final DateTime? start = DateTime.tryParse(json['startDate'] as String? ?? '');
     final DateTime? end = DateTime.tryParse(json['endDate'] as String? ?? '');
 
     return BundlePackage(
       id: json['_id'] as String? ?? '',
       name: json['packageName'] as String? ?? 'N/A',
-      serviceIds: rawServiceIds.map((e) => e.toString()).toList(),
-      serviceNames: rawServiceNames.map((e) => e.toString()).toList(),
+      serviceIds: extractedIds,
+      serviceNames: extractedNames,
       bundlePrice: price,
       startDate: start,
       endDate: end,
@@ -82,8 +93,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
     });
 
     try {
-      final fetchedServices =
-          await PackageService.fetchProviderServicesForCreation();
+      final fetchedServices = await PackageService.fetchProviderServicesForCreation();
       final fetchedPackagesJson = await PackageService.fetchProviderPackages();
 
       setState(() {
@@ -181,7 +191,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
       if (editingPackage != null) ...editingPackage.serviceIds,
     };
 
-    // Map لحفظ الأسعار الجديدة لكل خدمة
     final Map<String, TextEditingController> newPriceControllers = {};
     
     _serviceQuantities.clear();
@@ -214,7 +223,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
           ),
           child: StatefulBuilder(
             builder: (context, setSheetState) {
-              // حساب السعر الأساسي الكلي والسعر الجديد الكلي
               double baseTotal = 0;
               double newTotal = 0;
               
@@ -226,7 +234,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                 final oldPrice = _calculateServicePrice(service);
                 baseTotal += oldPrice;
                 
-                // السعر الجديد من الـ Controller
                 final newPriceCtrl = newPriceControllers[id];
                 if (newPriceCtrl != null) {
                   final newPrice = double.tryParse(newPriceCtrl.text.trim()) ?? 0.0;
@@ -405,7 +412,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                           final int currentQty = _serviceQuantities[id] ?? 1;
                           final double oldPrice = _calculateServicePrice(service);
 
-                          // إنشاء controller للسعر الجديد إذا لم يكن موجود
                           if (!newPriceControllers.containsKey(id)) {
                             newPriceControllers[id] = TextEditingController();
                           }
@@ -484,7 +490,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                   ],
                                 ),
 
-                                // حقل إدخال السعر الجديد
                                 if (isChecked) ...[
                                   const SizedBox(height: 8),
                                   Padding(
@@ -492,7 +497,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        // إذا كان السعر بالساعة أو بعدد الأشخاص
                                         if (priceType == 'hourly' || priceType == 'capacity')
                                           Row(
                                             children: [
@@ -559,7 +563,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                         if (priceType == 'hourly' || priceType == 'capacity')
                                           const SizedBox(height: 8),
 
-                                        // حقل السعر الجديد
                                         Row(
                                           children: [
                                             Expanded(
@@ -824,7 +827,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                             return;
                           }
 
-                          // التحقق من أن كل خدمة لديها سعر جديد
                           bool allHavePrices = true;
                           for (final id in selectedServiceIds) {
                             final priceText = newPriceControllers[id]?.text.trim() ?? '';
@@ -841,7 +843,6 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                             return;
                           }
 
-                          // حساب السعر الكلي من جميع الأسعار الجديدة
                           double totalNewPrice = 0;
                           for (final id in selectedServiceIds) {
                             final priceText = newPriceControllers[id]?.text.trim() ?? '';

@@ -2,22 +2,18 @@ import { Injectable, HttpException, HttpStatus, Logger, NotFoundException } from
 import { InjectModel } from '@nestjs/mongoose'; 
 import { Model, Types } from 'mongoose'; 
 
-// 🚨 التصحيح 1: تأكد من استيراد Service من ملف service.schema
 import { Service, BookingType, PayType } from './service.schema'; 
-// التصحيح 2: تأكد من استيراد DTOs
-import { CreateServiceDto, UpdateServiceDto, PricingOptionsDto } from './service.dto'; 
+import { CreateServiceDto, UpdateServiceDto } from './service.dto'; 
 import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
-
-// 🚨 التصحيح 3: تأكد من صحة مسار ملف ServiceProvider (من provider.entity)
-// بناءً على ملفاتك السابقة، المسار الصحيح هو '../provider/provider.entity'
 import { ServiceProvider } from '../providers/provider.entity'; 
 
 @Injectable()
 export class ServiceService {
   private readonly logger = new Logger(ServiceService.name);
+  
   constructor(
     @InjectModel(Service.name) private serviceModel: Model<Service>,
-    @InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>, // تم تغيير ترتيب الحقن
+    @InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>,
     private supabaseStorage: SupabaseStorageService,
   ) {}
 
@@ -31,43 +27,35 @@ export class ServiceService {
     }
   }
 
-  // 2. إنشاء خدمة جديدة (تم التعديل للتعامل مع Price Object)
+  // 2. إنشاء خدمة جديدة
   async createService(
     providerId: string, 
     createServiceDto: CreateServiceDto,
     files?: Express.Multer.File[] 
   ): Promise<Service> {
     try {
-      // 🆕 معالجة الـ Price Object
+      // ✅ معالجة السعر - تحويله من string إلى number إذا لزم الأمر
       if (typeof createServiceDto.price === 'string') {
-        try {
-            createServiceDto.price = JSON.parse(createServiceDto.price as string) as PricingOptionsDto;
-        } catch (e) {
-            const singlePrice = parseFloat(createServiceDto.price as string);
-            if (!isNaN(singlePrice)) {
-                createServiceDto.price = { basePrice: singlePrice } as PricingOptionsDto;
-            } else {
-                createServiceDto.price = {} as PricingOptionsDto;
-            }
-        }
+        const parsedPrice = parseFloat(createServiceDto.price);
+        createServiceDto.price = isNaN(parsedPrice) ? undefined : parsedPrice;
       }
 
-      // 🆕 1. جلب اسم الشركة من نموذج المزود (ServiceProvider)
+      // جلب اسم الشركة من نموذج المزود
       const provider = await this.providerModel
-.findOne({ userId: new Types.ObjectId(providerId) }) // 🚨 تحويل providerId إلى ObjectId          .select('companyName')
-          .exec();
+        .findOne({ userId: new Types.ObjectId(providerId) })
+        .select('companyName')
+        .exec();
 
       if (!provider || !provider.companyName) {
-          throw new HttpException(
-              'Service Provider profile not found or company name is missing. Please complete your vendor profile.',
-              HttpStatus.BAD_REQUEST
-          );
+        throw new HttpException(
+          'Service Provider profile not found or company name is missing. Please complete your vendor profile.',
+          HttpStatus.BAD_REQUEST
+        );
       }
       
       const companyName = provider.companyName;
       this.logger.log(`🏢 Fetched company name for service provider ${providerId}: ${companyName}`);
       
-      // 🚨 تم تصحيح الخطأ: تم إزالة التعريف المكرر للمتغير existingService
       const existingService = await this.serviceModel.findOne({ 
         serviceName: createServiceDto.serviceName,
         providerId 
@@ -91,7 +79,7 @@ export class ServiceService {
 
       const newServiceData = {
         providerId,
-        companyName, // ⬅️ استخدام companyName الذي تم جلبه
+        companyName,
         ...createServiceDto,
         images: imageUrls,
         reviews: [],
@@ -103,7 +91,7 @@ export class ServiceService {
       
       const responseService = await this.serviceModel
         .findById(savedService._id)
-        .select('-reviews -bookedDates -rating -aiAnalysis')
+        .select('-reviews -rating -aiAnalysis')
         .exec();
 
       return responseService || savedService;
@@ -115,7 +103,7 @@ export class ServiceService {
     }
   }
 
-  // 3. تحديث خدمة بالـ ID (تم التعديل للتعامل مع Price Object وتصحيح العودة)
+  // 3. تحديث خدمة بالـ ID
   async updateServiceById(
     serviceId: string, 
     providerId: string,
@@ -123,13 +111,10 @@ export class ServiceService {
     files?: Express.Multer.File[] 
   ): Promise<Service> {
     try {
-      // 🆕 معالجة الـ Price Object عند التحديث
+      // ✅ معالجة السعر
       if (updateServiceDto.price && typeof updateServiceDto.price === 'string') {
-        try {
-             updateServiceDto.price = JSON.parse(updateServiceDto.price as string) as PricingOptionsDto;
-        } catch (e) {
-             // تجاهل
-        }
+        const parsedPrice = parseFloat(updateServiceDto.price as any);
+        updateServiceDto.price = isNaN(parsedPrice) ? undefined : parsedPrice;
       }
 
       const service = await this.serviceModel.findOne({ _id: serviceId, providerId });
@@ -140,16 +125,15 @@ export class ServiceService {
       let finalImageUrls: string[] = service.images || []; 
 
       if (files && files.length > 0) {
-        // حذف الصور القديمة ورفع الجديدة 
         if (service.images && service.images.length > 0) {
-            try {
-              const deletePromises = service.images.map(imageUrl => 
-                this.supabaseStorage.deleteFile(imageUrl) 
-              );
-              await Promise.all(deletePromises);
-            } catch (deleteError) {
-              this.logger.error('⚠️ Failed to delete old service images:', deleteError);
-            }
+          try {
+            const deletePromises = service.images.map(imageUrl => 
+              this.supabaseStorage.deleteFile(imageUrl) 
+            );
+            await Promise.all(deletePromises);
+          } catch (deleteError) {
+            this.logger.error('⚠️ Failed to delete old service images:', deleteError);
+          }
         }
         try {
           const uploadPromises = files.map(file => 
@@ -171,12 +155,11 @@ export class ServiceService {
         { $set: updateData },
         { new: true, runValidators: true }
       )
-      .select('-reviews -bookedDates -rating -aiAnalysis')
+      .select('-reviews -rating -aiAnalysis')
       .exec();
 
-      // 🚨 تصحيح خطأ TS2322: فحص القيمة المرجعة
       if (!updatedService) {
-         throw new HttpException('Service not found or update failed unexpectedly', HttpStatus.NOT_FOUND);
+        throw new HttpException('Service not found or update failed unexpectedly', HttpStatus.NOT_FOUND);
       }
 
       return updatedService;
@@ -215,117 +198,117 @@ export class ServiceService {
     }
   }
 
-  // 5. تحديث خدمة بالاسم (تم التعديل لـ Price Object و لإضافة files parameter)
+  // 5. تحديث خدمة بالاسم
   async updateServiceByName(
     serviceName: string, 
     providerId: string,
     updateServiceDto: UpdateServiceDto,
-    files?: Express.Multer.File[] // 🚨 تم إضافة files
+    files?: Express.Multer.File[]
   ): Promise<Service> {
     try {
-        // 🆕 معالجة الـ Price Object عند التحديث
-        if (updateServiceDto.price && typeof updateServiceDto.price === 'string') {
-            try { updateServiceDto.price = JSON.parse(updateServiceDto.price as string) as PricingOptionsDto; } catch (e) {}
-        }
+      // ✅ معالجة السعر
+      if (updateServiceDto.price && typeof updateServiceDto.price === 'string') {
+        const parsedPrice = parseFloat(updateServiceDto.price as any);
+        updateServiceDto.price = isNaN(parsedPrice) ? undefined : parsedPrice;
+      }
 
-        const service = await this.serviceModel.findOne({ serviceName, providerId });
-        if (!service) {
-            throw new HttpException('Service not found or you do not have permission to update it', HttpStatus.NOT_FOUND);
-        }
-        
-        let finalImageUrls: string[] = service.images || []; 
+      const service = await this.serviceModel.findOne({ serviceName, providerId });
+      if (!service) {
+        throw new HttpException('Service not found or you do not have permission to update it', HttpStatus.NOT_FOUND);
+      }
+      
+      let finalImageUrls: string[] = service.images || []; 
 
-        if (files && files.length > 0) {
-            // حذف الصور القديمة ورفع الجديدة
-            if (service.images && service.images.length > 0) {
-                try {
-                  const deletePromises = service.images.map(imageUrl => 
-                    this.supabaseStorage.deleteFile(imageUrl) 
-                  );
-                  await Promise.all(deletePromises);
-                } catch (deleteError) {
-                  this.logger.error('⚠️ Failed to delete old service images:', deleteError);
-                }
-            }
-            try {
-              const uploadPromises = files.map(file => 
-                this.supabaseStorage.uploadImage(file, 'services', true)
-              );
-              finalImageUrls = await Promise.all(uploadPromises); 
-            } catch (uploadError) {
-              throw new HttpException('Failed to upload new service images', HttpStatus.INTERNAL_SERVER_ERROR);
-            }
+      if (files && files.length > 0) {
+        if (service.images && service.images.length > 0) {
+          try {
+            const deletePromises = service.images.map(imageUrl => 
+              this.supabaseStorage.deleteFile(imageUrl) 
+            );
+            await Promise.all(deletePromises);
+          } catch (deleteError) {
+            this.logger.error('⚠️ Failed to delete old service images:', deleteError);
+          }
         }
-        
-        const updateData = {
-            ...updateServiceDto,
-            images: finalImageUrls
-        };
-        
-        const updatedService = await this.serviceModel.findOneAndUpdate(
-            { serviceName: serviceName, providerId },
-            { $set: updateData },
-            { new: true, runValidators: true }
-        ).select('-reviews -bookedDates -rating -aiAnalysis').exec();
+        try {
+          const uploadPromises = files.map(file => 
+            this.supabaseStorage.uploadImage(file, 'services', true)
+          );
+          finalImageUrls = await Promise.all(uploadPromises); 
+        } catch (uploadError) {
+          throw new HttpException('Failed to upload new service images', HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+      }
+      
+      const updateData = {
+        ...updateServiceDto,
+        images: finalImageUrls
+      };
+      
+      const updatedService = await this.serviceModel.findOneAndUpdate(
+        { serviceName: serviceName, providerId },
+        { $set: updateData },
+        { new: true, runValidators: true }
+      ).select('-reviews -rating -aiAnalysis').exec();
 
-        if (!updatedService) {
-            throw new HttpException('Service not found or update failed unexpectedly', HttpStatus.NOT_FOUND);
-        }
-        return updatedService;
+      if (!updatedService) {
+        throw new HttpException('Service not found or update failed unexpectedly', HttpStatus.NOT_FOUND);
+      }
+      return updatedService;
     } catch (error) {
-        if (error instanceof HttpException) throw error;
-        throw new HttpException('Failed to update service by name', HttpStatus.INTERNAL_SERVER_ERROR);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Failed to update service by name', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
   // 6. حذف خدمة بالاسم
   async deleteServiceByName(serviceName: string, providerId: string): Promise<{ message: string }> {
     try {
-        const service = await this.serviceModel.findOne({ serviceName, providerId });
+      const service = await this.serviceModel.findOne({ serviceName, providerId });
 
-        if (!service) {
-            throw new HttpException('Service not found or you do not have permission to delete it', HttpStatus.NOT_FOUND);
+      if (!service) {
+        throw new HttpException('Service not found or you do not have permission to delete it', HttpStatus.NOT_FOUND);
+      }
+
+      if (service.images && service.images.length > 0) {
+        try {
+          const deletePromises = service.images.map(imageUrl => this.supabaseStorage.deleteFile(imageUrl));
+          await Promise.all(deletePromises);
+        } catch (deleteError) {
+          this.logger.error('❌ Failed to delete service images from Supabase:', deleteError);
         }
+      }
+      await this.serviceModel.deleteOne({ serviceName, providerId });
 
-        if (service.images && service.images.length > 0) {
-            try {
-              const deletePromises = service.images.map(imageUrl => this.supabaseStorage.deleteFile(imageUrl));
-              await Promise.all(deletePromises);
-            } catch (deleteError) {
-              this.logger.error('❌ Failed to delete service images from Supabase:', deleteError);
-            }
-        }
-        await this.serviceModel.deleteOne({ serviceName, providerId });
-
-        return { message: `Service '${serviceName}' deleted successfully` };
+      return { message: `Service '${serviceName}' deleted successfully` };
     } catch (error) {
-        throw new HttpException(error.message || 'Failed to delete service', error.status || HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(error.message || 'Failed to delete service', error.status || HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
-  // 7. جلب خدمات المورد بالـ Provider ID (مطابقة لـ getServicesByVendorId في الـ Controller)
+  // 7. جلب خدمات المورد بالـ Provider ID
   async getServicesByVendor(providerId: string): Promise<Service[]> {
     try {
-        return await this.serviceModel.find({ providerId }).exec();
+      return await this.serviceModel.find({ providerId }).exec();
     } catch (error) {
-        throw new HttpException('Failed to fetch vendor services', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException('Failed to fetch vendor services', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
   
-  // 8. جلب خدمات المورد بالـ Company Name (🚨 تم استرجاع هذه الدالة)
+  // 8. جلب خدمات المورد بالـ Company Name
   async getServicesByVendorName(companyName: string): Promise<Service[]> {
     try {
-        const services = await this.serviceModel.find({ companyName: { $regex: companyName, $options: 'i' } }).exec();
-        if (!services || services.length === 0) {
-             throw new HttpException( `No services found for vendor '${companyName}'`, HttpStatus.NOT_FOUND );
-        }
-        return services;
+      const services = await this.serviceModel.find({ companyName: { $regex: companyName, $options: 'i' } }).exec();
+      if (!services || services.length === 0) {
+        throw new HttpException(`No services found for vendor '${companyName}'`, HttpStatus.NOT_FOUND);
+      }
+      return services;
     } catch (error) {
-        throw new HttpException( error.message || 'Failed to fetch vendor services', error.status || HttpStatus.INTERNAL_SERVER_ERROR );
+      throw new HttpException(error.message || 'Failed to fetch vendor services', error.status || HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
-  // 9. دالة البحث الشامل (تم التعديل لدعم منطق الأسعار الجديدة ونوع الحجز)
+  // 9. دالة البحث الشامل
   async searchServices(filters: any): Promise<Service[]> {
     try {
       let query: any = {};
@@ -334,17 +317,10 @@ export class ServiceService {
         query['location.city'] = { $regex: filters.city, $options: 'i' };
       }
 
-      // 🆕 منطق فلترة السعر الجديد: البحث في جميع حقول الأسعار الممكنة
+      // ✅ فلترة السعر - بسيطة الآن لأن price أصبح number واحد
       if (filters.priceRange) {
         const { min, max } = filters.priceRange;
-        query['$or'] = [
-            { 'price.perHour': { $gte: min, $lte: max } },
-            { 'price.perDay': { $gte: min, $lte: max } },
-            { 'price.perPerson': { $gte: min, $lte: max } },
-            { 'price.fullVenue': { $gte: min, $lte: max } },
-            { 'price.basePrice': { $gte: min, $lte: max } }
-        ];
-        if (query['$or'].length === 0) delete query['$or'];
+        query['price'] = { $gte: min, $lte: max };
       }
 
       if (filters.category) {
@@ -353,23 +329,22 @@ export class ServiceService {
       if (filters.serviceName) {
         query.serviceName = { $regex: filters.serviceName, $options: 'i' };
       }
-      // 🆕 فلترة حسب نوع الحجز المطلوب
       if (filters.bookingType) {
         query.bookingType = filters.bookingType; 
       }
       if (filters.aiTags && Array.isArray(filters.aiTags) && filters.aiTags.length > 0) { 
-         query['aiAnalysis.tags'] = { $in: filters.aiTags };
+        query['aiAnalysis.tags'] = { $in: filters.aiTags };
       }
       
       let services = await this.serviceModel.find(query).exec();
       
       // معالجة فلترة الموقع بناءً على المسافة
       if (filters.location && filters.location.lat && filters.location.lng && filters.location.radius) {
-         const { lat, lng, radius } = filters.location;
-         services = services.filter(service => {
-            const distance = this.calculateDistance(lat, lng, service.location.latitude, service.location.longitude);
-            return distance <= radius;
-         });
+        const { lat, lng, radius } = filters.location;
+        services = services.filter(service => {
+          const distance = this.calculateDistance(lat, lng, service.location.latitude, service.location.longitude);
+          return distance <= radius;
+        });
       }
 
       return services;
@@ -381,96 +356,91 @@ export class ServiceService {
 
   async getServicesByCategory(category: string): Promise<Service[]> {
     try {
-        const services = await this.serviceModel.find({ category: { $regex: category, $options: 'i' } }).exec();
-        if (!services || services.length === 0) {
-            throw new HttpException( `No services found in category '${category}'`, HttpStatus.NOT_FOUND );
-        }
-        return services;
-    } catch (error) {
-        throw new HttpException( error.message || 'Failed to fetch services by category', error.status || HttpStatus.INTERNAL_SERVER_ERROR );
-    }
-  }
-
-async getServiceById(serviceId: string): Promise<any> {
-  try {
-    const service = await this.serviceModel.findById(serviceId).lean().exec();
-
-    if (!service) {
-      throw new NotFoundException('Service not found');
-    }
-
-    const searchId = Types.ObjectId.isValid(service.providerId) 
-      ? new Types.ObjectId(service.providerId) 
-      : service.providerId;
-
-    const provider: any = await this.providerModel.findOne({ 
-      $or: [
-        { userId: searchId }, 
-        { _id: searchId } 
-      ]
-    }).lean().exec();
-
-    const priceObj = service.price || {};
-    const prices = Object.values(priceObj).filter(v => typeof v === 'number' && v > 0) as number[];
-    let priceRange = "N/A";
-    if (prices.length > 0) {
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      priceRange = minPrice === maxPrice ? `${minPrice}` : `${minPrice} - ${maxPrice}`;
-    }
-
-    return {
-      serviceName: service.serviceName,
-      companyName: service.companyName,
-      bookingType: service.bookingType,
-      description: service.description,
-      additionalInfo: service.additionalInfo, 
-      price: priceRange,              
-      allPrices: service.price || {},   
-      city: service.location?.city || "N/A",
-      longitude: service.location?.longitude || null,
-      latitude: service.location?.latitude || null,
-      rating: service.rating || 0,
-      
-      lastTwoReviews: (service.reviews || []).slice(-2).map((rev: any) => ({
-        rating: rev.rating,
-        images: rev.images || [],
-        date: rev.createdAt || rev.date,
-        description: rev.comment
-      })).reverse(),
-
-      companyInfo: {
-        name: service.companyName,
-        email: provider?.details?.email || provider?.email || "N/A",
-        phone: provider?.details?.phone || provider?.phone || "N/A"
+      const services = await this.serviceModel.find({ category: { $regex: category, $options: 'i' } }).exec();
+      if (!services || services.length === 0) {
+        throw new HttpException(`No services found in category '${category}'`, HttpStatus.NOT_FOUND);
       }
-    };
-  } catch (error) {
-    if (error instanceof NotFoundException) throw error;
-    this.logger.error(`Error in getServiceById: ${error.message}`);
-    throw new HttpException('Error retrieving service details', HttpStatus.INTERNAL_SERVER_ERROR);
+      return services;
+    } catch (error) {
+      throw new HttpException(error.message || 'Failed to fetch services by category', error.status || HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
-}
 
-  // 12. دالة جلب تفاصيل خدمات الفيندور (تم التعديل للحقول الجديدة)
+  async getServiceById(serviceId: string): Promise<any> {
+    try {
+      const service = await this.serviceModel.findById(serviceId).lean().exec();
+
+      if (!service) {
+        throw new NotFoundException('Service not found');
+      }
+
+      const searchId = Types.ObjectId.isValid(service.providerId) 
+        ? new Types.ObjectId(service.providerId) 
+        : service.providerId;
+
+      const provider: any = await this.providerModel.findOne({ 
+        $or: [
+          { userId: searchId }, 
+          { _id: searchId } 
+        ]
+      }).lean().exec();
+
+      // ✅ السعر الآن بسيط - number واحد أو undefined
+      const priceDisplay = service.price ? `${service.price}` : "N/A";
+
+      return {
+        serviceName: service.serviceName,
+        companyName: service.companyName,
+        bookingType: service.bookingType,
+        description: service.description,
+        additionalInfo: service.additionalInfo, 
+        price: priceDisplay,
+        payType: service.payType,
+        city: service.location?.city || "N/A",
+        longitude: service.location?.longitude || null,
+        latitude: service.location?.latitude || null,
+        rating: service.rating || 0,
+        
+        lastTwoReviews: (service.reviews || []).slice(-2).map((rev: any) => ({
+          rating: rev.rating,
+          images: rev.images || [],
+          date: rev.createdAt || rev.date,
+          description: rev.comment
+        })).reverse(),
+
+        companyInfo: {
+          name: service.companyName,
+          email: provider?.details?.email || provider?.email || "N/A",
+          phone: provider?.details?.phone || provider?.phone || "N/A"
+        }
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error(`Error in getServiceById: ${error.message}`);
+      throw new HttpException('Error retrieving service details', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  // 12. دالة جلب تفاصيل خدمات الفيندور
   async getVendorServicesDetails(providerId: string): Promise<any[]> {
     try {
-        const services = await this.serviceModel
-            .find({ providerId: providerId })
-            .select('_id serviceName price bookingType') 
-            .lean() 
-            .exec();
+      const services = await this.serviceModel
+        .find({ providerId: providerId })
+        .select('_id serviceName price bookingType payType') 
+        .lean() 
+        .exec();
 
-        return services.map(service => ({
-            _id: service._id.toString(),
-            name: service.serviceName, 
-            price: service.price, 
-            bookingType: service.bookingType
-        }));
+      return services.map(service => ({
+        _id: service._id.toString(),
+        name: service.serviceName, 
+        price: service.price || 0,
+        bookingType: service.bookingType,
+        payType: service.payType
+      }));
 
     } catch (error) {
-        this.logger.error(`Failed to fetch services for provider ${providerId}: ${error.stack}`);
-        throw new HttpException('Failed to fetch vendor services details', HttpStatus.INTERNAL_SERVER_ERROR);
+      this.logger.error(`Failed to fetch services for provider ${providerId}: ${error.stack}`);
+      throw new HttpException('Failed to fetch vendor services details', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
   
@@ -487,72 +457,37 @@ async getServiceById(serviceId: string): Promise<any> {
     return R * c;
   }
   private deg2rad(deg: number): number { return deg * (Math.PI / 180); }
-/**
-   * جلب الخدمات النشطة مع دعم التصفح (Pagination) وإرجاع تفاصيل محددة (للصفحة الرئيسية).
-   * @param limit عدد الخدمات في الصفحة الواحدة.
-   * @param page رقم الصفحة المطلوب (تبدأ من 1).
-   */
+
   async getPaginatedServicesWithDetails(limit: number, page: number): Promise<{ 
     services: any[], 
     totalCount: number 
   }> {
     const skip = (page - 1) * limit;
 
-    // 1. جلب العدد الكلي للخدمات أولاً (لإبلاغ الفرونت إند عن إجمالي الصفحات)
     const totalCount = await this.serviceModel.countDocuments({ isActive: true }).exec();
 
-    // 2. Aggregation Pipeline لجلب وتشكيل البيانات
-   const services = await this.serviceModel.aggregate([
-      // 1. التصفية: الخدمات النشطة والمتاحة فقط
+    const services = await this.serviceModel.aggregate([
       { $match: { isActive: true } }, 
-      
-      // 2. الترتيب: (الأحدث أولاً)
       { $sort: { createdAt: -1 } }, 
-      
-      // 3. التصفح: تخطي وتحديد
       { $skip: skip },
       { $limit: limit },
-
-      // 4. تشكيل (Projection) وحساب الحقول المطلوبة (الصيغة المصححة)
       { $project: {
           _id: 1,
           serviceName: 1,
-          
-          // الصورة الأولى فقط (نضمن أن images مصفوفة باستخدام $ifNull)
           firstImage: { $arrayElemAt: [{ $ifNull: ['$images', []] }, 0] },
-          
-          // إرجاع خيارات السعر بالكامل
-          priceOptions: '$price', 
-
-          // المدينة (افتراضاً: أنها موجودة ضمن حقل address في location)
-          city: '$location.address', 
-          
-          // اسم الشركة (من حقل companyName في Service Schema)
+          price: 1, // ✅ السعر الآن number بسيط
+          city: '$location.city', 
           companyName: '$companyName',
-
-          // ✅ التصحيح الأول: عدد الريفيوز. نستخدم $ifNull لضمان أن $reviews هي مصفوفة.
-          reviewCount: { $size: { $ifNull: ['$reviews', []] } },
-          
-          // ✅ التصحيح الثاني: عدد الحجوزات. نستخدم $ifNull على كل مصفوفة حجز بشكل منفصل.
-          bookingCount: {
-              $add: [
-                  { $size: { $ifNull: ['$bookingSlots.dailyBookings', []] } },
-                  { $size: { $ifNull: ['$bookingSlots.hourlyBookings', []] } },
-                  { $size: { $ifNull: ['$bookingSlots.capacityBookings', []] } },
-              ]
-          }
+          reviewCount: { $size: { $ifNull: ['$reviews', []] } }
       }},
-      
-      // 5. تنسيق الإخراج 
       { $project: {
           id: '$_id', 
           serviceName: 1,
           firstImage: 1,
-          priceOptions: 1,
+          price: 1,
           city: 1,
           companyName: 1,
           reviewCount: 1,
-          bookingCount: 1,
           _id: 0, 
       }}
     ]).exec();
@@ -560,72 +495,50 @@ async getServiceById(serviceId: string): Promise<any> {
     return { services, totalCount };
   }
 
-  // أضف هذه الدالة في ملف service.service.ts
+  async getHomepageServicesByCategories(): Promise<any> {
+    const categories = [
+      'Venues', 'Photographers', 'Catering', 'Cake', 
+      'Music & Entertainment', 'Wedding Planners', 'Decor & Lighting', 
+      'Car Rental', 'Flower Shops', 'Card Printing', 
+      'Jewelry & Accessories', 'Gift & Souvenir'
+    ];
 
-async getHomepageServicesByCategories(): Promise<any> {
-  const categories = [
-    'Venues', 'Photographers', 'Catering', 'Cake', 
-    'Music & Entertainment', 'Wedding Planners', 'Decor & Lighting', 
-    'Car Rental', 'Flower Shops', 'Card Printing', 
-    'Jewelry & Accessories', 'Gift & Souvenir'
-  ];
+    const results = {};
 
-  const results = {};
-
-  try {
-    for (const category of categories) {
-      const services = await this.serviceModel.aggregate([
-        // 1. التصفية حسب الفئة والخدمات النشطة فقط
-        { $match: { category: category, isActive: true } },
-        
-        // 2. اختيار عشوائي لـ 4 عناصر
-        { $sample: { size: 4 } },
-        
-        // 3. تحديد الحقول المطلوبة فقط لتقليل استهلاك البيانات
-        {
-          $project: {
-            serviceName: 1,
-            companyName: 1,
-            firstImage: { $arrayElemAt: ["$images", 0] },
-            rating: 1,
-            price: 1,
-            city: "$location.city",
-            _id: 1
+    try {
+      for (const category of categories) {
+        const services = await this.serviceModel.aggregate([
+          { $match: { category: category, isActive: true } },
+          { $sample: { size: 4 } },
+          {
+            $project: {
+              serviceName: 1,
+              companyName: 1,
+              firstImage: { $arrayElemAt: ["$images", 0] },
+              rating: 1,
+              price: 1, // ✅ السعر الآن number بسيط
+              city: "$location.city",
+              _id: 1
+            }
           }
-        }
-      ]).exec();
+        ]).exec();
 
-      // 4. تنسيق البيانات وحساب نطاق السعر
-      results[category] = services.map(service => {
-        const priceObj = service.price || {};
-        // استخراج كل القيم الرقمية من كائن السعر
-        const prices = Object.values(priceObj).filter(v => typeof v === 'number' && v > 0) as number[];
-        
-        let priceDisplay = "N/A";
-        if (prices.length > 0) {
-          const minPrice = Math.min(...prices);
-          const maxPrice = Math.max(...prices);
-          priceDisplay = minPrice === maxPrice 
-            ? `${minPrice}` 
-            : `${minPrice} - ${maxPrice}`;
-        }
-
-        return {
+        // ✅ تنسيق البيانات - السعر الآن بسيط
+        results[category] = services.map(service => ({
           id: service._id,
           serviceName: service.serviceName,
           companyName: service.companyName || "N/A",
           image: service.firstImage || null,
           rating: service.rating || 0,
-          price: priceDisplay,
+          price: service.price ? `${service.price}` : "N/A",
           city: service.city || "N/A"
-        };
-      });
-    }
+        }));
+      }
 
-    return results;
-  } catch (error) {
-    this.logger.error('Failed to fetch services by categories', error.stack);
-    throw new HttpException('Failed to fetch categorised services', HttpStatus.INTERNAL_SERVER_ERROR);
+      return results;
+    } catch (error) {
+      this.logger.error('Failed to fetch services by categories', error.stack);
+      throw new HttpException('Failed to fetch categorised services', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
-}
 }

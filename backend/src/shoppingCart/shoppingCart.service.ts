@@ -25,7 +25,6 @@ export class CartService {
         throw new HttpException('Service not found', HttpStatus.NOT_FOUND);
       }
 
-      // ✅ 1. التحقق من يوم العمل
       const bookingDate = new Date(addToCartDto.bookingDetails.date);
       const dayName = this.getDayName(bookingDate);
       
@@ -36,10 +35,8 @@ export class CartService {
         );
       }
 
-      // ✅ 2. التحقق من الحدود القصوى للخدمة
       this.validateServiceLimits(service, addToCartDto.bookingDetails);
 
-      // ✅ 3. التحقق من التوفر
       const isAvailable = await this.checkAvailability(
         service,
         bookingDate,
@@ -53,7 +50,6 @@ export class CartService {
         );
       }
 
-      // ✅ 4. حساب السعر
       const price = this.calculatePrice(service, addToCartDto.bookingDetails);
 
       let cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
@@ -66,7 +62,6 @@ export class CartService {
         });
       }
 
-      // Check if item already exists in cart
       const existingItemIndex = cart.items.findIndex(
         item => item.serviceId.toString() === addToCartDto.serviceId
       );
@@ -153,7 +148,6 @@ export class CartService {
         throw new HttpException('Service not found', HttpStatus.NOT_FOUND);
       }
 
-      // ✅ 1. التحقق من يوم العمل
       const bookingDate = new Date(updateCartItemDto.bookingDetails.date);
       const dayName = this.getDayName(bookingDate);
       
@@ -164,10 +158,8 @@ export class CartService {
         );
       }
 
-      // ✅ 2. التحقق من الحدود القصوى للخدمة
       this.validateServiceLimits(service, updateCartItemDto.bookingDetails);
 
-      // ✅ 3. التحقق من التوفر
       const isAvailable = await this.checkAvailability(
         service,
         bookingDate,
@@ -248,80 +240,55 @@ export class CartService {
     if (!startHour || !endHour || startHour >= endHour) {
       return false;
     }
-
-    const hourlyBookings = service.bookingSlots?.hourlyBookings || [];
-    
-    for (const booking of hourlyBookings) {
-      const bookingDate = new Date(booking.date);
-      bookingDate.setHours(0, 0, 0, 0);
-      
-      if (bookingDate.getTime() === date.getTime()) {
-        if (
-          (startHour >= booking.startHour && startHour < booking.endHour) ||
-          (endHour > booking.startHour && endHour <= booking.endHour) ||
-          (startHour <= booking.startHour && endHour >= booking.endHour)
-        ) {
-          return false;
-        }
-      }
-    }
-
+    // ✅ بما إنه تم حذف bookingSlots، نفترض الخدمة متاحة دائماً
+    // يمكن تطوير هذا لاحقاً للتحقق من جدول الحجوزات
     return true;
   }
 
   private checkDailyAvailability(service: Service, date: Date): boolean {
-    const dailyBookings = service.bookingSlots?.dailyBookings || [];
-    
-    return !dailyBookings.some(bookedDate => {
-      const bookedDateOnly = new Date(bookedDate);
-      bookedDateOnly.setHours(0, 0, 0, 0);
-      return bookedDateOnly.getTime() === date.getTime();
-    });
+    // ✅ بما إنه تم حذف bookingSlots، نفترض الخدمة متاحة دائماً
+    return true;
   }
 
   private checkCapacityAvailability(service: Service, date: Date, numberOfPeople: number): boolean {
     if (!service.maxCapacity) {
       return true;
     }
-
-    const capacityBookings = service.bookingSlots?.capacityBookings || [];
-    
-    let totalBooked = 0;
-    for (const booking of capacityBookings) {
-      const bookingDate = new Date(booking.date);
-      bookingDate.setHours(0, 0, 0, 0);
-      
-      if (bookingDate.getTime() === date.getTime()) {
-        totalBooked += booking.bookedCount;
-      }
-    }
-
-    return (totalBooked + numberOfPeople) <= service.maxCapacity;
+    // ✅ بما إنه تم حذف bookingSlots، نفترض الخدمة متاحة دائماً
+    // التحقق فقط من أن العدد لا يتجاوز السعة القصوى
+    return numberOfPeople <= service.maxCapacity;
   }
 
   private calculatePrice(service: Service, bookingDetails: any): number {
+    // ✅ استخدام price البسيط أولاً، ثم priceOptions للتوافق
+    const simplePrice = service.price || 0;
+    const priceOpts = service.priceOptions;
+
     switch (service.bookingType) {
       case BookingType.Hourly:
         const hours = bookingDetails.endHour - bookingDetails.startHour;
-        return (service.price.perHour || 0) * hours;
+        const perHour = priceOpts?.perHour || simplePrice;
+        return perHour * hours;
       
       case BookingType.Daily:
-        return service.price.perDay || 0;
+        return priceOpts?.perDay || simplePrice;
       
       case BookingType.Capacity:
-        return (service.price.perPerson || 0) * bookingDetails.numberOfPeople;
+        const perPerson = priceOpts?.perPerson || simplePrice;
+        return perPerson * bookingDetails.numberOfPeople;
       
       case BookingType.Display:
-        return service.price.basePrice || 0;
+        return priceOpts?.basePrice || simplePrice;
       
       case BookingType.Mixed:
         if (bookingDetails.isFullVenue) {
-          return service.price.fullVenue || 0;
+          return priceOpts?.fullVenue || simplePrice;
         }
-        return (service.price.perPerson || 0) * bookingDetails.numberOfPeople;
+        const perPersonMixed = priceOpts?.perPerson || simplePrice;
+        return perPersonMixed * bookingDetails.numberOfPeople;
       
       default:
-        return service.price.basePrice || 0;
+        return priceOpts?.basePrice || simplePrice;
     }
   }
 
@@ -330,11 +297,7 @@ export class CartService {
     return days[date.getDay()];
   }
 
-  /**
-   * ✅ التحقق من الحدود القصوى للخدمة
-   */
   private validateServiceLimits(service: Service, bookingDetails: any): void {
-    // للخدمات الساعية - التحقق من عدد الساعات المعقول
     if (service.bookingType === BookingType.Hourly) {
       if (!bookingDetails.startHour || !bookingDetails.endHour) {
         throw new HttpException(
@@ -360,7 +323,6 @@ export class CartService {
       }
     }
 
-    // للخدمات بالسعة - التحقق من عدد الأشخاص
     if (service.bookingType === BookingType.Capacity || service.bookingType === BookingType.Mixed) {
       if (!bookingDetails.isFullVenue && !bookingDetails.numberOfPeople) {
         throw new HttpException(
@@ -387,27 +349,21 @@ export class CartService {
     }
   }
 
-  /**
-   * ✅ إضافة باقة إلى السلة مع كل التحققات اللازمة
-   */
   async addPackageToCart(userId: string, dto: AddPackageToCartDto): Promise<Cart> {
     const userObjectId = new Types.ObjectId(userId);
     
-    // 1. جلب الباقة
     const pkg = await this.packageService.getPackageById(dto.packageId);
     
     if (!pkg.isActive) {
       throw new BadRequestException('This package is not currently available.');
     }
 
-    // 2. التحقق من أن عدد الخدمات المطلوبة يطابق عدد الخدمات في الباقة
     if (dto.serviceBookings.length !== pkg.services.length) {
       throw new BadRequestException(
         `Package requires booking all ${pkg.services.length} services. You provided ${dto.serviceBookings.length}.`
       );
     }
 
-    // 3. التحقق من كل خدمة
     for (const booking of dto.serviceBookings) {
       const serviceInPackage = pkg.services.find(
         s => s.serviceId.toString() === booking.serviceId.toString()
@@ -424,10 +380,8 @@ export class CartService {
 
       const bookingDate = new Date(booking.bookingDetails.date);
 
-      // ✅ 3.1: التحقق من أن التاريخ ضمن فترة الباقة
       await this.packageService.validatePackageBookingDate(dto.packageId, bookingDate);
 
-      // ✅ 3.2: التحقق من يوم العمل
       const dayName = this.getDayName(bookingDate);
       if (!service.workingDays || !service.workingDays.includes(dayName)) {
         throw new BadRequestException(
@@ -435,9 +389,7 @@ export class CartService {
         );
       }
 
-      // ✅ 3.3: التحقق من حدود الباقة (maxHours / maxCapacity)
       if (serviceInPackage.maxHours) {
-        // باقة بكمية محددة من الساعات
         if (!booking.bookingDetails.numberOfHours) {
           throw new BadRequestException(
             `Service "${service.serviceName}" requires numberOfHours (max: ${serviceInPackage.maxHours} hours).`
@@ -451,7 +403,6 @@ export class CartService {
       }
 
       if (serviceInPackage.maxCapacity) {
-        // باقة بكمية محددة من الأشخاص
         if (!booking.bookingDetails.numberOfPeople) {
           throw new BadRequestException(
             `Service "${service.serviceName}" requires numberOfPeople (max: ${serviceInPackage.maxCapacity} people).`
@@ -464,7 +415,6 @@ export class CartService {
         }
       }
 
-      // ✅ 3.4: التحقق من توفر الخدمة في التاريخ المطلوب
       let isAvailable = false;
 
       if (service.bookingType === BookingType.Hourly) {
@@ -472,7 +422,6 @@ export class CartService {
           throw new BadRequestException(`Service "${service.serviceName}" requires numberOfHours.`);
         }
         
-        // حساب الساعات (افتراضياً من 9 صباحاً)
         const startHour = 9;
         const endHour = startHour + booking.bookingDetails.numberOfHours;
         
@@ -489,7 +438,6 @@ export class CartService {
         isAvailable = this.checkDailyAvailability(service, bookingDate);
 
       } else {
-        // Display or other types
         isAvailable = true;
       }
 
@@ -500,16 +448,13 @@ export class CartService {
       }
     }
 
-    // 4. إضافة الخدمات إلى السلة
     let cart = await this.cartModel.findOne({ userId: userObjectId }).exec();
     if (!cart) {
       cart = new this.cartModel({ userId: userObjectId, items: [], totalAmount: 0 });
     }
 
-    // حذف أي خدمات موجودة من نفس الباقة (لتجنب التكرار)
     cart.items = cart.items.filter(item => item.packageId?.toString() !== dto.packageId);
 
-    // إضافة كل خدمة
     for (const booking of dto.serviceBookings) {
       const serviceInPackage = pkg.services.find(
         s => s.serviceId.toString() === booking.serviceId
@@ -524,12 +469,11 @@ export class CartService {
         throw new NotFoundException(`Service ${booking.serviceId} not found.`);
       }
 
-      // حساب startHour و endHour للخدمات الساعية
       let startHour: number | undefined;
       let endHour: number | undefined;
 
       if (service.bookingType === BookingType.Hourly && booking.bookingDetails.numberOfHours) {
-        startHour = 9; // افتراضي
+        startHour = 9;
         endHour = startHour + booking.bookingDetails.numberOfHours;
       }
 
@@ -553,7 +497,6 @@ export class CartService {
       } as CartItem);
     }
 
-    // 5. حساب المجموع الكلي (سعر الباقة)
     cart.totalAmount = pkg.newPrice;
     
     return await cart.save();

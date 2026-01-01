@@ -10,64 +10,31 @@ export enum BookingType {
     Mixed = 'mixed'          
 }
 
-// تعريف هيكلية السعر
+// ✅ إعادة PricingOptions للتوافق مع الكود القديم
 @Schema({ _id: false })
 export class PricingOptions {
     @Prop({ type: Number })
-    perHour?: number;        
+    perHour?: number;
 
     @Prop({ type: Number })
-    perDay?: number;         
+    perDay?: number;
 
     @Prop({ type: Number })
-    perPerson?: number;      
+    perPerson?: number;
 
     @Prop({ type: Number })
-    fullVenue?: number;      
+    fullVenue?: number;
     
     @Prop({ type: Number })
-    basePrice?: number;      
+    basePrice?: number;
 }
 
-// هياكل الحجوزات
-@Schema({ _id: false })
-export class HourlyBooking {
-    @Prop({ type: Date, required: true })
-    date: Date;
-    
-    @Prop({ type: Number, required: true })
-    startHour: number; 
-    
-    @Prop({ type: Number, required: true })
-    endHour: number; 
-}
-
-@Schema({ _id: false })
-export class CapacityBooking {
-    @Prop({ type: Date, required: true })
-    date: Date;
-    
-    @Prop({ type: Number, required: true })
-    bookedCount: number; 
-}
-
-@Schema({ _id: false })
-export class BookingSlots {
-    @Prop({ type: [Date], default: [] })
-    dailyBookings: Date[]; 
-    
-    @Prop({ type: [HourlyBooking], default: [] })
-    hourlyBookings: HourlyBooking[]; 
-    
-    @Prop({ type: [CapacityBooking], default: [] })
-    capacityBookings: CapacityBooking[]; 
-}
-
+// ✅ تعديل PayType - إزالة 'per event'
 export enum PayType { 
-    PerEvent = 'per event',
     PerHour = 'per hour',
     PerPerson = 'per person',
-    PerDay = 'per day'
+    PerDay = 'per day',
+    Display = 'display'  // 🆕 إضافة Display
 }
 
 @Schema({ _id: false }) 
@@ -79,19 +46,19 @@ export class Review {
     userName: string;
 
     @Prop({ type: Number, required: true, min: 1, max: 5 })
-    rating: number; // إلزامية كما طلبت
+    rating: number;
 
     @Prop({ 
         type: String, 
         required: true, 
-        enum: [PayType.PerEvent, PayType.PerHour, PayType.PerPerson] 
+        enum: [PayType.PerHour, PayType.PerPerson, PayType.PerDay, PayType.Display]
     })
     payType: PayType;
 
-    @Prop({ type: String, required: false }) // أصبح اختيارياً
+    @Prop({ type: String, required: false })
     comment: string;
 
-    @Prop({ type: [String], default: [] }) // حقل الصور الجديد داخل الريفيو
+    @Prop({ type: [String], default: [] })
     images: string[];
 
     @Prop({ type: Date, default: Date.now })
@@ -114,7 +81,7 @@ export class Service extends Document {
     @Prop({ type: [String], default: [] })
     images: string[];
 
-    @Prop({ type: String, default: '' }) // إضافة حقل الوصف
+    @Prop({ type: String, default: '' })
     description: string;
 
     @Prop({ 
@@ -125,7 +92,6 @@ export class Service extends Document {
     })
     bookingType: BookingType;
 
-    // ✅ تمت إضافة workingDays هنا (المكان الصحيح)
     @Prop({ 
         type: [String], 
         default: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
@@ -151,8 +117,13 @@ export class Service extends Document {
         country?: string;
     };
 
-    @Prop({ type: PricingOptions, default: {} })
-    price: PricingOptions;
+    // ✅ السعر: يمكن استخدام number بسيط أو PricingOptions للتوافق
+    @Prop({ type: Number, required: false })
+    price?: number;
+
+    // ✅ PricingOptions للتوافق مع الكود القديم (Packages & Cart)
+    @Prop({ type: PricingOptions })
+    priceOptions?: PricingOptions;
 
     @Prop({ type: String })
     externalLink?: string;
@@ -160,10 +131,11 @@ export class Service extends Document {
     @Prop({ required: true })
     category: string;
     
+    // ✅ تعديل PayType enum
     @Prop({ 
         type: String, 
         required: true, 
-        enum: [PayType.PerEvent, PayType.PerHour, PayType.PerPerson, PayType.PerDay] // 👈 أضف PayType.PerDay هنا
+        enum: [PayType.PerHour, PayType.PerPerson, PayType.PerDay, PayType.Display]
     })
     payType: PayType;
 
@@ -176,9 +148,7 @@ export class Service extends Document {
     @Prop({ required: false })
     companyName: string;
 
-    @Prop({ type: BookingSlots, default: { dailyBookings: [], hourlyBookings: [], capacityBookings: [] } })
-    bookingSlots: BookingSlots;
-
+    // ✅ الحقول الاختيارية المتبقية
     @Prop({ type: Number, min: 0 })
     maxCapacity?: number; 
 
@@ -193,11 +163,6 @@ export class Service extends Document {
 
     @Prop({ type: Number, default: 0, min: 0 })
     cleanupTimeMinutes?: number; 
-
-
-
-    @Prop({ type: Boolean, default: false })
-    allowFullVenueBooking?: boolean; 
 
     @Prop({ type: Number, default: 0, min: 0, max: 5 })
     rating: number;

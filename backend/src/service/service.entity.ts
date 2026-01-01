@@ -1,33 +1,43 @@
-import { BookingType, PricingOptions } from './service.schema'; // Import from schema
+import { BookingType } from './service.schema';
 
-export type PayType = 'per event' | 'per hour' | 'per person' | 'per day'; // 👈 أضف 'per day' هنا
-  export class Service {
+// ✅ تعديل PayType
+export type PayType = 'per hour' | 'per person' | 'per day' | 'display';
+
+export class Service {
   serviceId: number;
   providerId: string;
   serviceName: string;
   images: string[];
   reviews: any[];
   location: any;
-  // 🆕 السعر أصبح من نوع PricingOptions
-  price: PricingOptions; 
-  // 🆕 إضافة نوع الحجز والرابط
+  
+  // ✅ السعر أصبح number بسيط (اختياري)
+  price?: number;
+  
   bookingType: BookingType;
   externalLink?: string;
   
   category: string;
   additionalInfo?: any;
   createdAt: Date;
-  payType: PayType; // (يمكنك الاستغناء عنه لاحقاً والاعتماد على bookingType)
+  payType: PayType;
   updatedAt: Date;
-  bookedDates: Date[];
   rating: number; 
   isActive: boolean;
-description?: string; // إضافة الوصف للـ Entity
+  description?: string;
+
+  // ✅ الحقول الاختيارية
+  maxCapacity?: number;
+  minBookingHours?: number;
+  maxBookingHours?: number;
+  availableHours?: number[];
+  cleanupTimeMinutes?: number;
+  workingDays?: string[];
+
   constructor(data: Partial<Service>) {
     Object.assign(this, data);
-    this.bookedDates = data?.bookedDates || [];
     this.isActive = data?.isActive ?? true;
     this.rating = data?.rating || 0;
-    this.bookingType = data?.bookingType || BookingType.Hourly; // Default
+    this.bookingType = data?.bookingType || BookingType.Daily;
   }
 }

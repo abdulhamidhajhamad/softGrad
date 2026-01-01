@@ -17,9 +17,6 @@ export class PackageService {
     @InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>,
   ) {}
 
-  /**
-   * إنشاء باقة جديدة (CreatePackage)
-   */
   async createPackage(providerId: string, createPackageDto: CreatePackageDto): Promise<Package> {
     const provider = await this.providerModel
       .findOne({ userId: new Types.ObjectId(providerId) })
@@ -34,7 +31,6 @@ export class PackageService {
     const serviceItems: any[] = [];
     const serviceIds = createPackageDto.services.map(s => s.serviceId);
 
-    // جلب كل الخدمات دفعة واحدة
     const existingServices = await this.serviceModel.find({ 
       _id: { $in: serviceIds } 
     }).exec();
@@ -53,58 +49,47 @@ export class PackageService {
       let originalPrice: number;
       let newPrice: number;
 
-      // ========================================
-      // ⭐ المنطق المبسط والمرن
-      // ========================================
+      // ✅ استخدام price البسيط أولاً، ثم priceOptions للتوافق
+      const simplePrice = service.price;
+      const priceOpts = service.priceOptions;
       
       if (service.bookingType === 'hourly') {
-        // خدمة ساعية
-        const perHour = service.price?.perHour;
-        const basePrice = service.price?.basePrice;
+        const perHour = priceOpts?.perHour || simplePrice;
         
-        if (!perHour && !basePrice) {
+        if (!perHour) {
           throw new BadRequestException(`Service "${service.serviceName}" has invalid pricing configuration`);
         }
 
-        const unitPrice = (perHour || basePrice) as number; // ✅ نحن متأكدين أنه موجود بعد الـ if
-
         if (itemDto.maxHours && itemDto.maxHours > 0) {
-          // ✅ باقة ثابتة: 5 ساعات بـ 400 شيكل
-          originalPrice = unitPrice * itemDto.maxHours;
+          originalPrice = perHour * itemDto.maxHours;
           newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
         } else {
-          // ✅ سعر وحدة مخفض أو سعر ثابت
-          originalPrice = unitPrice;
+          originalPrice = perHour;
           newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
         }
 
       } else if (service.bookingType === 'capacity') {
-        // خدمة بالسعة (كيترينج، باصات، الخ)
-        const perPerson = service.price?.perPerson;
-        const basePrice = service.price?.basePrice;
+        const perPerson = priceOpts?.perPerson || simplePrice;
         
-        if (!perPerson && !basePrice) {
+        if (!perPerson) {
           throw new BadRequestException(`Service "${service.serviceName}" has invalid pricing configuration`);
         }
 
-        const unitPrice = (perPerson || basePrice) as number; // ✅ نحن متأكدين أنه موجود بعد الـ if
-
         if (itemDto.maxCapacity && itemDto.maxCapacity > 0) {
-          // ✅ باقة ثابتة: 50 شخص بـ 1000 شيكل
-          originalPrice = unitPrice * itemDto.maxCapacity;
+          originalPrice = perPerson * itemDto.maxCapacity;
           newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
         } else {
-          // ✅ سعر وحدة مخفض أو سعر ثابت
-          originalPrice = unitPrice;
+          originalPrice = perPerson;
           newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
         }
 
       } else {
-        // خدمة بسعر ثابت (تنسيق زهور، كوشة، الخ)
-        if (!service.price?.basePrice) {
+        const basePrice = priceOpts?.basePrice || simplePrice;
+        
+        if (!basePrice) {
           throw new BadRequestException(`Service "${service.serviceName}" has invalid base pricing`);
         }
-        originalPrice = service.price.basePrice;
+        originalPrice = basePrice;
         newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
       }
 
@@ -114,7 +99,7 @@ export class PackageService {
         serviceId: service._id,
         serviceName: service.serviceName,
         originalPrice: originalPrice,
-        newPrice: newPrice, // ✅ استخدام newPrice المحسوب
+        newPrice: newPrice,
         ...(itemDto.maxHours && { maxHours: itemDto.maxHours }),
         ...(itemDto.maxCapacity && { maxCapacity: itemDto.maxCapacity }),
       };
@@ -122,7 +107,6 @@ export class PackageService {
       serviceItems.push(packageServiceItem);
     }
 
-    // إنشاء الباقة
     const createdPackage = new this.packageModel({
       providerId: providerId,
       companyName: provider.companyName,
@@ -140,9 +124,6 @@ export class PackageService {
     return createdPackage.save();
   }
 
-  /**
-   * تحديث الباقة (UpdatePackage)
-   */
   async updatePackage(
     packageId: string,
     providerId: string,
@@ -157,7 +138,6 @@ export class PackageService {
       throw new NotFoundException('Package not found or you do not have permission.');
     }
 
-    // تحديث الخدمات إذا تم إرسالها
     if (updateDto.services) {
       let originalTotal = 0;
       const serviceItems: any[] = [];
@@ -171,7 +151,6 @@ export class PackageService {
         throw new NotFoundException('One or more services not found.');
       }
 
-      // نفس منطق createPackage
       for (const itemDto of updateDto.services) {
         const service = existingServices.find(s => (s as any)._id.toString() === itemDto.serviceId);
         
@@ -182,47 +161,47 @@ export class PackageService {
         let originalPrice: number;
         let newPrice: number;
 
+        // ✅ استخدام price البسيط أولاً، ثم priceOptions للتوافق
+        const simplePrice = service.price;
+        const priceOpts = service.priceOptions;
+
         if (service.bookingType === 'hourly') {
-          const perHour = service.price?.perHour;
-          const basePrice = service.price?.basePrice;
+          const perHour = priceOpts?.perHour || simplePrice;
           
-          if (!perHour && !basePrice) {
+          if (!perHour) {
             throw new BadRequestException(`Service "${service.serviceName}" has invalid pricing configuration`);
           }
 
-          const unitPrice = (perHour || basePrice) as number; // ✅ نحن متأكدين أنه موجود بعد الـ if
-
           if (itemDto.maxHours && itemDto.maxHours > 0) {
-            originalPrice = unitPrice * itemDto.maxHours;
+            originalPrice = perHour * itemDto.maxHours;
             newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
           } else {
-            originalPrice = unitPrice;
+            originalPrice = perHour;
             newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
           }
 
         } else if (service.bookingType === 'capacity') {
-          const perPerson = service.price?.perPerson;
-          const basePrice = service.price?.basePrice;
+          const perPerson = priceOpts?.perPerson || simplePrice;
           
-          if (!perPerson && !basePrice) {
+          if (!perPerson) {
             throw new BadRequestException(`Service "${service.serviceName}" has invalid pricing configuration`);
           }
 
-          const unitPrice = (perPerson || basePrice) as number; // ✅ نحن متأكدين أنه موجود بعد الـ if
-
           if (itemDto.maxCapacity && itemDto.maxCapacity > 0) {
-            originalPrice = unitPrice * itemDto.maxCapacity;
+            originalPrice = perPerson * itemDto.maxCapacity;
             newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
           } else {
-            originalPrice = unitPrice;
+            originalPrice = perPerson;
             newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
           }
 
         } else {
-          if (!service.price?.basePrice) {
+          const basePrice = priceOpts?.basePrice || simplePrice;
+          
+          if (!basePrice) {
             throw new BadRequestException(`Service "${service.serviceName}" has invalid base pricing`);
           }
-          originalPrice = service.price.basePrice;
+          originalPrice = basePrice;
           newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
         }
 
@@ -232,7 +211,7 @@ export class PackageService {
           serviceId: service._id,
           serviceName: service.serviceName,
           originalPrice: originalPrice,
-          newPrice: newPrice, // ✅ استخدام newPrice المحسوب
+          newPrice: newPrice,
           ...(itemDto.maxHours && { maxHours: itemDto.maxHours }),
           ...(itemDto.maxCapacity && { maxCapacity: itemDto.maxCapacity }),
         });
@@ -242,7 +221,6 @@ export class PackageService {
       pkg.originalTotalPrice = originalTotal;
     }
 
-    // تحديث باقي الحقول
     if (updateDto.packageName) pkg.packageName = updateDto.packageName;
     if (updateDto.newPrice !== undefined) pkg.newPrice = updateDto.newPrice;
     if (updateDto.startDate) pkg.startDate = new Date(updateDto.startDate);
@@ -303,7 +281,6 @@ export class PackageService {
     }
   }
 
-  // دالة للتحقق من صحة تاريخ الحجز
   async validatePackageBookingDate(packageId: string, bookingDate: Date): Promise<boolean> {
     const pkg = await this.getPackageById(packageId);
     

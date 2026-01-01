@@ -34,10 +34,11 @@ export class ServiceService {
     files?: Express.Multer.File[] 
   ): Promise<Service> {
     try {
-      // ✅ معالجة السعر - تحويله من string إلى number إذا لزم الأمر
-      if (typeof createServiceDto.price === 'string') {
-        const parsedPrice = parseFloat(createServiceDto.price);
-        createServiceDto.price = isNaN(parsedPrice) ? undefined : parsedPrice;
+      // ✅ تصحيح الخطأ: التعامل مع السعر كرقم مباشرة وإلغاء JSON.parse
+      if (createServiceDto.price) {
+        // تحويل القيمة إلى نص أولاً لإرضاء TypeScript ثم تحويلها لرقم
+        const priceVal = parseFloat(createServiceDto.price as unknown as string);
+        createServiceDto.price = isNaN(priceVal) ? 0 : priceVal;
       }
 
       // جلب اسم الشركة من نموذج المزود
@@ -111,10 +112,10 @@ export class ServiceService {
     files?: Express.Multer.File[] 
   ): Promise<Service> {
     try {
-      // ✅ معالجة السعر
-      if (updateServiceDto.price && typeof updateServiceDto.price === 'string') {
-        const parsedPrice = parseFloat(updateServiceDto.price as any);
-        updateServiceDto.price = isNaN(parsedPrice) ? undefined : parsedPrice;
+      // ✅ تصحيح الخطأ: معالجة السعر في التحديث أيضاً
+      if (updateServiceDto.price !== undefined) {
+         const priceVal = parseFloat(updateServiceDto.price as unknown as string);
+         updateServiceDto.price = isNaN(priceVal) ? undefined : priceVal;
       }
 
       const service = await this.serviceModel.findOne({ _id: serviceId, providerId });
@@ -206,10 +207,10 @@ export class ServiceService {
     files?: Express.Multer.File[]
   ): Promise<Service> {
     try {
-      // ✅ معالجة السعر
-      if (updateServiceDto.price && typeof updateServiceDto.price === 'string') {
-        const parsedPrice = parseFloat(updateServiceDto.price as any);
-        updateServiceDto.price = isNaN(parsedPrice) ? undefined : parsedPrice;
+      // ✅ تصحيح الخطأ: معالجة السعر
+      if (updateServiceDto.price !== undefined) {
+        const priceVal = parseFloat(updateServiceDto.price as unknown as string);
+        updateServiceDto.price = isNaN(priceVal) ? undefined : priceVal;
       }
 
       const service = await this.serviceModel.findOne({ serviceName, providerId });

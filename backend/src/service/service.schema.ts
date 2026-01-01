@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose'; 
 
-// تعريف أنواع الحجز
+// ... (BookingType, PayType, PricingOptions, ReviewSchema كما هي) ...
 export enum BookingType {
     Hourly = 'hourly',       
     Daily = 'daily',         
@@ -10,7 +10,6 @@ export enum BookingType {
     Mixed = 'mixed'          
 }
 
-// ✅ إعادة PricingOptions للتوافق مع الكود القديم
 @Schema({ _id: false })
 export class PricingOptions {
     @Prop({ type: Number })
@@ -29,16 +28,16 @@ export class PricingOptions {
     basePrice?: number;
 }
 
-// ✅ تعديل PayType - إزالة 'per event'
 export enum PayType { 
     PerHour = 'per hour',
     PerPerson = 'per person',
     PerDay = 'per day',
-    Display = 'display'  // 🆕 إضافة Display
+    Display = 'display'
 }
 
 @Schema({ _id: false }) 
 export class Review {
+   // ... (كما هو)
     @Prop({ type: String, required: true })
     userId: string; 
 
@@ -69,6 +68,7 @@ export const ReviewSchema = SchemaFactory.createForClass(Review);
 
 @Schema({ timestamps: true })
 export class Service extends Document {
+    // ... (الحقول الأساسية كما هي)
     @Prop({ required: true })
     providerId: string;
 
@@ -117,11 +117,9 @@ export class Service extends Document {
         country?: string;
     };
 
-    // ✅ السعر: يمكن استخدام number بسيط أو PricingOptions للتوافق
     @Prop({ type: Number, required: false })
     price?: number;
 
-    // ✅ PricingOptions للتوافق مع الكود القديم (Packages & Cart)
     @Prop({ type: PricingOptions })
     priceOptions?: PricingOptions;
 
@@ -131,7 +129,6 @@ export class Service extends Document {
     @Prop({ required: true })
     category: string;
     
-    // ✅ تعديل PayType enum
     @Prop({ 
         type: String, 
         required: true, 
@@ -148,9 +145,13 @@ export class Service extends Document {
     @Prop({ required: false })
     companyName: string;
 
-    // ✅ الحقول الاختيارية المتبقية
+    // ✅ الحقول الاختيارية
     @Prop({ type: Number, min: 0 })
     maxCapacity?: number; 
+
+    // 🆕 الديفولت 1 (للقاعات الفردية)، ويمكن تغييره لـ 5 مثلاً لشركة التصوير
+    @Prop({ type: Number, min: 1, default: 1 })
+    maxConcurrency?: number; 
 
     @Prop({ type: Number, min: 0 })
     minBookingHours?: number; 

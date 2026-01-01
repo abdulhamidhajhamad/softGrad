@@ -1,4 +1,4 @@
-// lib/screens/vendors.dart
+// lib/screens/services_customer_home.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart';
@@ -9,6 +9,7 @@ import 'favorites.dart';
 import 'compnay_insider_provider.dart';
 import 'cart.dart' as cart;
 import 'package:flutter_application_1/services/user_service/user_service_service.dart';
+import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 
 // =====================
 // 🎨 Black / White / Blue
@@ -285,7 +286,7 @@ class _ServiceMapSection extends StatelessWidget {
           TileLayer(
            urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
             subdomains: const ['a', 'b', 'c'],
-            userAgentPackageName: 'com.example.flutter_application_1', // ✅ غيّر هذا
+            userAgentPackageName: 'com.example.flutter_application_1',
           ),
           MarkerLayer(
             markers: [
@@ -1094,16 +1095,14 @@ class ServiceDetailsPage extends StatefulWidget {
   State<ServiceDetailsPage> createState() => _ServiceDetailsPageState();
 }
 
-// ✅ استبدل _ServiceDetailsPageState كاملة بهذا الكود
-
 class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
   bool _isLoading = true;
   ServiceItem? _service;
   Map<String, dynamic>? _serviceData;
-  
-  // ✅ إحداثيات الخريطة (من الـ API)
+
   double? _lat;
   double? _lng;
+  String? _bookingType;
 
   @override
   void initState() {
@@ -1118,25 +1117,24 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
   Future<void> _loadServiceDetails() async {
     try {
       setState(() => _isLoading = true);
-      final data = await UserServiceService.getServiceDetails(widget.serviceId);
-      
+      final data =
+          await UserServiceService.getServiceDetails(widget.serviceId);
+
       setState(() {
         _serviceData = data;
-        
-        // ✅ نجيب latitude و longitude من الـ API Response
+
         if (data['latitude'] != null) {
           _lat = double.tryParse(data['latitude'].toString());
         }
         if (data['longitude'] != null) {
           _lng = double.tryParse(data['longitude'].toString());
         }
-        
-        print('📍 Coordinates from API: lat=$_lat, lng=$_lng');
-        
+
+        _bookingType = data['bookingType']?.toString().toLowerCase();
+
         _isLoading = false;
       });
     } catch (e) {
-      print('❌ Error loading service details: $e');
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1151,36 +1149,22 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
 
   String _money(double v) => '₪${v.toStringAsFixed(0)}';
 
-  void _addToCart(BuildContext context, ServiceItem s) {
-    double finalPrice = s.price;
-    if (s.hasDiscount && s.discountPrice != null) {
-      finalPrice = s.discountPrice!;
-    }
-
-    final item = cart.CartItem(
-      id: s.id,
-      title: s.serviceName,
-      providerName: s.companyName,
-      price: finalPrice,
-      imageUrl: (s.imageUrl ?? '').trim(),
-      category: s.category,
-      city: s.city,
-    );
-
-    cart.CartStore.instance.add(item);
-
+ void _openBookingModal(BuildContext context, ServiceItem s) async {
+  // ✅ تحقق إذا السيرفس موجود في الكارت
+  final inCart = cart.CartStore.instance.contains(s.id);
+  
+  if (inCart) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: kText,
-        duration: const Duration(milliseconds: 1200),
+        backgroundColor: Colors.orange,
         content: Text(
-          'Added to cart: ${s.serviceName}',
+          'This service is already in your cart',
           style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
         ),
         action: SnackBarAction(
-          label: 'Open',
-          textColor: kBlue,
+          label: 'View Cart',
+          textColor: Colors.white,
           onPressed: () {
             Navigator.push(
               context,
@@ -1190,126 +1174,41 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
         ),
       ),
     );
+    return;
   }
 
-  String _getPayTypeLabel(String? payType) {
-    if (payType == null) return '';
-    switch (payType.toLowerCase()) {
-      case 'per event':
-        return 'Per Event';
-      case 'per hour':
-        return 'Per Hour';
-      case 'per person':
-        return 'Per Person';
-      case 'per day':
-        return 'Per Day';
-      default:
-        return payType;
-    }
+  // ✅ استخدم showBookingModal بدل BookingDetailsModal
+  if (_serviceData == null || _bookingType == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Service details not loaded yet'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return;
   }
 
-  Widget _buildPriceSection(Map<String, dynamic>? serviceData) {
-    final s = _service!;
-    final allPrices = serviceData?['allPrices'] as Map<String, dynamic>?;
-    
-    final List<MapEntry<String, double>> pricesList = [];
-    
-    if (allPrices != null) {
-      if (allPrices['perEvent'] != null && allPrices['perEvent'] > 0) {
-        pricesList.add(MapEntry('per event', (allPrices['perEvent'] as num).toDouble()));
-      }
-      if (allPrices['perHour'] != null && allPrices['perHour'] > 0) {
-        pricesList.add(MapEntry('per hour', (allPrices['perHour'] as num).toDouble()));
-      }
-      if (allPrices['perPerson'] != null && allPrices['perPerson'] > 0) {
-        pricesList.add(MapEntry('per person', (allPrices['perPerson'] as num).toDouble()));
-      }
-      if (allPrices['perDay'] != null && allPrices['perDay'] > 0) {
-        pricesList.add(MapEntry('per day', (allPrices['perDay'] as num).toDouble()));
-      }
-    }
-    
-    if (pricesList.isEmpty) {
-      pricesList.add(MapEntry(s.payType ?? 'per event', s.price));
-    }
-
-    if (pricesList.length == 1) {
-      final entry = pricesList.first;
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            _getPayTypeLabel(entry.key),
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: kMuted,
-            ),
+  await showBookingModal(
+    context: context,
+    serviceId: s.id,
+    serviceName: s.serviceName,
+    bookingTypeString: _bookingType!,
+    serviceData: _serviceData!,
+    onSuccess: () {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.green,
+          content: Text(
+            'Added to cart successfully!',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
           ),
-          Text(
-            _money(entry.value),
-            style: GoogleFonts.poppins(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: kBlue,
-            ),
-          ),
-        ],
+        ),
       );
-    } else {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Pricing Options:',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-              color: kText,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: pricesList.map((entry) {
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: kBlue.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: kBlue.withOpacity(0.20)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _getPayTypeLabel(entry.key),
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: kMuted,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _money(entry.value),
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: kBlue,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      );
-    }
-  }
+    },
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -1374,21 +1273,21 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
               Expanded(
                 child: ValueListenableBuilder<List<cart.CartItem>>(
                   valueListenable: cart.CartStore.instance.itemsListenable,
-                  builder: (_, __, ___) {
-                    final inCart = cart.CartStore.instance.contains(s.id);
+                  builder: (_, items, ___) {
+                    final inCart = items.any((item) => item.id == s.id);
 
                     return ElevatedButton.icon(
-                      onPressed: inCart ? null : () => _addToCart(context, s),
-                      icon: Icon(inCart ? Icons.check_rounded : Icons.add_shopping_cart_rounded),
+                      onPressed: (inCart || _isLoading) ? null : () => _openBookingModal(context, s),
+                      icon: Icon(inCart ? Icons.check_circle_rounded : Icons.add_shopping_cart_rounded),
                       label: Text(
-                        inCart ? 'Added' : 'Add to cart',
+                        inCart ? 'Already in cart' : 'Add to cart',
                         style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: kText,
+                        backgroundColor: inCart ? Colors.grey : kText,
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.black.withOpacity(0.14),
-                        disabledForegroundColor: kText,
+                        disabledBackgroundColor: Colors.grey.withOpacity(0.6),
+                        disabledForegroundColor: Colors.white70,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1522,7 +1421,7 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                       ],
                     )
                   else
-                    _buildPriceSection(_serviceData),
+                     _buildSimplePriceDisplay(),
                 ],
               ),
             ),
@@ -1607,11 +1506,11 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                             ),
                           ),
                           children: [
-                                    TileLayer(
-                                      urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-                                      subdomains: const ['a', 'b', 'c'],
-                                      userAgentPackageName: 'com.example.flutter_application_1', // نفس الاسم
-                                    ),  
+                            TileLayer(
+                              urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+                              subdomains: const ['a', 'b', 'c'],
+                              userAgentPackageName: 'com.example.flutter_application_1',
+                            ),
                             MarkerLayer(
                               markers: [
                                 Marker(
@@ -1677,10 +1576,133 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
       ),
     );
   }
+
+  Widget _buildSimplePriceDisplay() {
+    final s = _service!;
+    final allPrices = _serviceData?['allPrices'] as Map<String, dynamic>?;
+
+    // Helper function
+    String getPayTypeLabel(String? payType) {
+      if (payType == null) return '';
+      switch (payType.toLowerCase()) {
+        case 'per event':
+          return 'Per Event';
+        case 'per hour':
+          return 'Per Hour';
+        case 'per person':
+          return 'Per Person';
+        case 'per day':
+          return 'Per Day';
+        default:
+          return payType;
+      }
+    }
+
+    final List<MapEntry<String, double>> pricesList = [];
+
+    if (allPrices != null) {
+      if (allPrices['perEvent'] != null && allPrices['perEvent'] > 0) {
+        pricesList.add(
+            MapEntry('per event', (allPrices['perEvent'] as num).toDouble()));
+      }
+      if (allPrices['perHour'] != null && allPrices['perHour'] > 0) {
+        pricesList.add(
+            MapEntry('per hour', (allPrices['perHour'] as num).toDouble()));
+      }
+      if (allPrices['perPerson'] != null && allPrices['perPerson'] > 0) {
+        pricesList.add(
+            MapEntry('per person', (allPrices['perPerson'] as num).toDouble()));
+      }
+      if (allPrices['perDay'] != null && allPrices['perDay'] > 0) {
+        pricesList
+            .add(MapEntry('per day', (allPrices['perDay'] as num).toDouble()));
+      }
+    }
+
+    if (pricesList.isEmpty) {
+      pricesList.add(MapEntry(s.payType ?? 'per event', s.price));
+    }
+
+    if (pricesList.length == 1) {
+      final entry = pricesList.first;
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            getPayTypeLabel(entry.key),
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: kMuted,
+            ),
+          ),
+          Text(
+            _money(entry.value),
+            style: GoogleFonts.poppins(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: kBlue,
+            ),
+          ),
+        ],
+      );
+    } else {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Pricing Options:',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: kText,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: pricesList.map((entry) {
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: kBlue.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: kBlue.withOpacity(0.20)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      getPayTypeLabel(entry.key),
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: kMuted,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _money(entry.value),
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: kBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      );
+    }
+  }
 }
 
-// Rest of the widgets (Cart, Info, Search, Filter, etc.) remain exactly the same...
-// I'll add them in the next update
 // =====================
 // Cart icon with badge
 // =====================
@@ -3773,10 +3795,10 @@ class ReviewGalleryPage extends StatefulWidget {
   final int initialIndex;
 
   const ReviewGalleryPage({
-    super.key,
+    Key? key,
     required this.urls,
     this.initialIndex = 0,
-  });
+  }) : super(key: key);
 
   @override
   State<ReviewGalleryPage> createState() => _ReviewGalleryPageState();

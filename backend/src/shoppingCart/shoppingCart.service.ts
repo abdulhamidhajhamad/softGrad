@@ -7,6 +7,8 @@ import { Service, BookingType } from '../service/service.schema';
 import { AddToCartDto, RemoveFromCartDto, UpdateCartItemDto } from './shoppingCart.dto';
 import { AddPackageToCartDto } from '../Package/package.dto';
 import { PackageService } from '../Package/package.service';
+import { BookingStatus } from 'src/booking/booking.entity';
+import { Booking } from 'src/booking/booking.entity'; 
 
 @Injectable()
 export class CartService {
@@ -15,194 +17,202 @@ export class CartService {
   constructor(
     @InjectModel(Cart.name) private cartModel: Model<Cart>,
     @InjectModel(Service.name) private serviceModel: Model<Service>,
+    @InjectModel(Booking.name) private bookingModel: Model<Booking>,
     private packageService: PackageService,
   ) {}
 
+  // ... (addToCart, removeFromCart, updateCartItem, getCart, clearCart كما هي بدون تغيير) ...
   async addToCart(userId: string, addToCartDto: AddToCartDto): Promise<Cart> {
-    try {
-      const service = await this.serviceModel.findById(addToCartDto.serviceId);
-      if (!service) {
-        throw new HttpException('Service not found', HttpStatus.NOT_FOUND);
-      }
-
-      const bookingDate = new Date(addToCartDto.bookingDetails.date);
-      const dayName = this.getDayName(bookingDate);
-      
-      if (!service.workingDays || !service.workingDays.includes(dayName)) {
-        throw new HttpException(
-          `Service is not available on ${dayName}. Working days: ${service.workingDays.join(', ')}`,
-          HttpStatus.BAD_REQUEST
+      // (نفس الكود الأصلي)
+      try {
+        const service = await this.serviceModel.findById(addToCartDto.serviceId);
+        if (!service) {
+          throw new HttpException('Service not found', HttpStatus.NOT_FOUND);
+        }
+  
+        const bookingDate = new Date(addToCartDto.bookingDetails.date);
+        const dayName = this.getDayName(bookingDate);
+        
+        if (!service.workingDays || !service.workingDays.includes(dayName)) {
+          throw new HttpException(
+            `Service is not available on ${dayName}. Working days: ${service.workingDays.join(', ')}`,
+            HttpStatus.BAD_REQUEST
+          );
+        }
+  
+        this.validateServiceLimits(service, addToCartDto.bookingDetails);
+  
+        // 🚨 هنا سيتم استخدام دالة التحقق المعدلة
+        const isAvailable = await this.checkAvailability(
+          service,
+          bookingDate,
+          addToCartDto.bookingDetails
         );
-      }
-
-      this.validateServiceLimits(service, addToCartDto.bookingDetails);
-
-      const isAvailable = await this.checkAvailability(
-        service,
-        bookingDate,
-        addToCartDto.bookingDetails
-      );
-
-      if (!isAvailable) {
-        throw new HttpException(
-          'Service is not available for the selected date/time',
-          HttpStatus.CONFLICT
+  
+        if (!isAvailable) {
+          throw new HttpException(
+            'Service is not available for the selected date/time (Fully Booked)',
+            HttpStatus.CONFLICT
+          );
+        }
+  
+        const price = this.calculatePrice(service, addToCartDto.bookingDetails);
+  
+        let cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
+  
+        if (!cart) {
+          cart = new this.cartModel({
+            userId: new Types.ObjectId(userId),
+            items: [],
+            totalAmount: 0
+          });
+        }
+  
+        const existingItemIndex = cart.items.findIndex(
+          item => item.serviceId.toString() === addToCartDto.serviceId
         );
+  
+        if (existingItemIndex > -1) {
+          throw new HttpException(
+            'Service already in cart. Please update or remove it first.',
+            HttpStatus.CONFLICT
+          );
+        }
+  
+        const cartItem: CartItem = {
+          serviceId: new Types.ObjectId(addToCartDto.serviceId),
+          serviceName: service.serviceName,
+          providerId: service.providerId,
+          companyName: service.companyName,
+          bookingType: service.bookingType,
+          bookingDetails: {
+            date: new Date(addToCartDto.bookingDetails.date),
+            startHour: addToCartDto.bookingDetails.startHour,
+            endHour: addToCartDto.bookingDetails.endHour,
+            numberOfPeople: addToCartDto.bookingDetails.numberOfPeople,
+            isFullVenue: addToCartDto.bookingDetails.isFullVenue
+          },
+          price,
+          imageUrl: service.images?.[0]
+        } as CartItem;
+  
+        cart.items.push(cartItem);
+        cart.totalAmount = cart.items.reduce((sum, item) => sum + item.price, 0);
+  
+        await cart.save();
+        return cart;
+  
+      } catch (error) {
+        this.logger.error('Failed to add to cart:', error.stack);
+        if (error instanceof HttpException) throw error;
+        throw new HttpException('Failed to add to cart', HttpStatus.INTERNAL_SERVER_ERROR);
       }
-
-      const price = this.calculatePrice(service, addToCartDto.bookingDetails);
-
-      let cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
-
-      if (!cart) {
-        cart = new this.cartModel({
-          userId: new Types.ObjectId(userId),
-          items: [],
-          totalAmount: 0
-        });
-      }
-
-      const existingItemIndex = cart.items.findIndex(
-        item => item.serviceId.toString() === addToCartDto.serviceId
-      );
-
-      if (existingItemIndex > -1) {
-        throw new HttpException(
-          'Service already in cart. Please update or remove it first.',
-          HttpStatus.CONFLICT
-        );
-      }
-
-      const cartItem: CartItem = {
-        serviceId: new Types.ObjectId(addToCartDto.serviceId),
-        serviceName: service.serviceName,
-        providerId: service.providerId,
-        companyName: service.companyName,
-        bookingType: service.bookingType,
-        bookingDetails: {
-          date: new Date(addToCartDto.bookingDetails.date),
-          startHour: addToCartDto.bookingDetails.startHour,
-          endHour: addToCartDto.bookingDetails.endHour,
-          numberOfPeople: addToCartDto.bookingDetails.numberOfPeople,
-          isFullVenue: addToCartDto.bookingDetails.isFullVenue
-        },
-        price,
-        imageUrl: service.images?.[0]
-      } as CartItem;
-
-      cart.items.push(cartItem);
-      cart.totalAmount = cart.items.reduce((sum, item) => sum + item.price, 0);
-
-      await cart.save();
-      return cart;
-
-    } catch (error) {
-      this.logger.error('Failed to add to cart:', error.stack);
-      if (error instanceof HttpException) throw error;
-      throw new HttpException('Failed to add to cart', HttpStatus.INTERNAL_SERVER_ERROR);
     }
-  }
-
-  async removeFromCart(userId: string, removeFromCartDto: RemoveFromCartDto): Promise<Cart> {
-    try {
-      const cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
-      
-      if (!cart) {
-        throw new HttpException('Cart not found', HttpStatus.NOT_FOUND);
+    
+    async removeFromCart(userId: string, removeFromCartDto: RemoveFromCartDto): Promise<Cart> {
+        try {
+          const cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
+          
+          if (!cart) {
+            throw new HttpException('Cart not found', HttpStatus.NOT_FOUND);
+          }
+    
+          cart.items = cart.items.filter(
+            item => item.serviceId.toString() !== removeFromCartDto.serviceId
+          );
+    
+          cart.totalAmount = cart.items.reduce((sum, item) => sum + item.price, 0);
+    
+          await cart.save();
+          return cart;
+    
+        } catch (error) {
+          this.logger.error('Failed to remove from cart:', error.stack);
+          if (error instanceof HttpException) throw error;
+          throw new HttpException('Failed to remove from cart', HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+      }
+    
+      async updateCartItem(userId: string, updateCartItemDto: UpdateCartItemDto): Promise<Cart> {
+        try {
+          const cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
+          
+          if (!cart) {
+            throw new HttpException('Cart not found', HttpStatus.NOT_FOUND);
+          }
+    
+          const itemIndex = cart.items.findIndex(
+            item => item.serviceId.toString() === updateCartItemDto.serviceId
+          );
+    
+          if (itemIndex === -1) {
+            throw new HttpException('Item not found in cart', HttpStatus.NOT_FOUND);
+          }
+    
+          const service = await this.serviceModel.findById(updateCartItemDto.serviceId);
+          if (!service) {
+            throw new HttpException('Service not found', HttpStatus.NOT_FOUND);
+          }
+    
+          const bookingDate = new Date(updateCartItemDto.bookingDetails.date);
+          const dayName = this.getDayName(bookingDate);
+          
+          if (!service.workingDays || !service.workingDays.includes(dayName)) {
+            throw new HttpException(
+              `Service is not available on ${dayName}. Working days: ${service.workingDays.join(', ')}`,
+              HttpStatus.BAD_REQUEST
+            );
+          }
+    
+          this.validateServiceLimits(service, updateCartItemDto.bookingDetails);
+    
+          const isAvailable = await this.checkAvailability(
+            service,
+            bookingDate,
+            updateCartItemDto.bookingDetails
+          );
+    
+          if (!isAvailable) {
+            throw new HttpException(
+              'Service is not available for the selected date/time',
+              HttpStatus.CONFLICT
+            );
+          }
+    
+          const price = this.calculatePrice(service, updateCartItemDto.bookingDetails);
+    
+          cart.items[itemIndex].bookingDetails = {
+            date: new Date(updateCartItemDto.bookingDetails.date),
+            startHour: updateCartItemDto.bookingDetails.startHour,
+            endHour: updateCartItemDto.bookingDetails.endHour,
+            numberOfPeople: updateCartItemDto.bookingDetails.numberOfPeople,
+            isFullVenue: updateCartItemDto.bookingDetails.isFullVenue
+          };
+          cart.items[itemIndex].price = price;
+    
+          cart.totalAmount = cart.items.reduce((sum, item) => sum + item.price, 0);
+    
+          await cart.save();
+          return cart;
+    
+        } catch (error) {
+          this.logger.error('Failed to update cart item:', error.stack);
+          if (error instanceof HttpException) throw error;
+          throw new HttpException('Failed to update cart item', HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+      }
+    
+      async getCart(userId: string): Promise<Cart | null> {
+        return this.cartModel.findOne({ userId: new Types.ObjectId(userId) }).exec();
+      }
+    
+      async clearCart(userId: string): Promise<void> {
+        await this.cartModel.findOneAndDelete({ userId: new Types.ObjectId(userId) });
       }
 
-      cart.items = cart.items.filter(
-        item => item.serviceId.toString() !== removeFromCartDto.serviceId
-      );
-
-      cart.totalAmount = cart.items.reduce((sum, item) => sum + item.price, 0);
-
-      await cart.save();
-      return cart;
-
-    } catch (error) {
-      this.logger.error('Failed to remove from cart:', error.stack);
-      if (error instanceof HttpException) throw error;
-      throw new HttpException('Failed to remove from cart', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  async updateCartItem(userId: string, updateCartItemDto: UpdateCartItemDto): Promise<Cart> {
-    try {
-      const cart = await this.cartModel.findOne({ userId: new Types.ObjectId(userId) });
-      
-      if (!cart) {
-        throw new HttpException('Cart not found', HttpStatus.NOT_FOUND);
-      }
-
-      const itemIndex = cart.items.findIndex(
-        item => item.serviceId.toString() === updateCartItemDto.serviceId
-      );
-
-      if (itemIndex === -1) {
-        throw new HttpException('Item not found in cart', HttpStatus.NOT_FOUND);
-      }
-
-      const service = await this.serviceModel.findById(updateCartItemDto.serviceId);
-      if (!service) {
-        throw new HttpException('Service not found', HttpStatus.NOT_FOUND);
-      }
-
-      const bookingDate = new Date(updateCartItemDto.bookingDetails.date);
-      const dayName = this.getDayName(bookingDate);
-      
-      if (!service.workingDays || !service.workingDays.includes(dayName)) {
-        throw new HttpException(
-          `Service is not available on ${dayName}. Working days: ${service.workingDays.join(', ')}`,
-          HttpStatus.BAD_REQUEST
-        );
-      }
-
-      this.validateServiceLimits(service, updateCartItemDto.bookingDetails);
-
-      const isAvailable = await this.checkAvailability(
-        service,
-        bookingDate,
-        updateCartItemDto.bookingDetails
-      );
-
-      if (!isAvailable) {
-        throw new HttpException(
-          'Service is not available for the selected date/time',
-          HttpStatus.CONFLICT
-        );
-      }
-
-      const price = this.calculatePrice(service, updateCartItemDto.bookingDetails);
-
-      cart.items[itemIndex].bookingDetails = {
-        date: new Date(updateCartItemDto.bookingDetails.date),
-        startHour: updateCartItemDto.bookingDetails.startHour,
-        endHour: updateCartItemDto.bookingDetails.endHour,
-        numberOfPeople: updateCartItemDto.bookingDetails.numberOfPeople,
-        isFullVenue: updateCartItemDto.bookingDetails.isFullVenue
-      };
-      cart.items[itemIndex].price = price;
-
-      cart.totalAmount = cart.items.reduce((sum, item) => sum + item.price, 0);
-
-      await cart.save();
-      return cart;
-
-    } catch (error) {
-      this.logger.error('Failed to update cart item:', error.stack);
-      if (error instanceof HttpException) throw error;
-      throw new HttpException('Failed to update cart item', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  async getCart(userId: string): Promise<Cart | null> {
-    return this.cartModel.findOne({ userId: new Types.ObjectId(userId) }).exec();
-  }
-
-  async clearCart(userId: string): Promise<void> {
-    await this.cartModel.findOneAndDelete({ userId: new Types.ObjectId(userId) });
-  }
+  // ----------------------------------------------------------------
+  // ✅ التعديلات الأساسية هنا في الـ Availability Logic
+  // ----------------------------------------------------------------
 
   private async checkAvailability(
     service: Service,
@@ -212,55 +222,152 @@ export class CartService {
     const dateOnly = new Date(date);
     dateOnly.setHours(0, 0, 0, 0);
 
+    // 1. Global Check: Operating Hours
+    if (service.availableHours && service.availableHours.length > 0 && bookingDetails.startHour !== undefined) {
+      if (!service.availableHours.includes(Math.floor(bookingDetails.startHour))) {
+        throw new BadRequestException(`The service is not operational at ${bookingDetails.startHour}:00.`);
+      }
+    }
+
     switch (service.bookingType) {
       case BookingType.Hourly:
-        return this.checkHourlyAvailability(service, dateOnly, bookingDetails.startHour, bookingDetails.endHour);
+        return await this.checkHourlyAvailability(service, dateOnly, bookingDetails.startHour, bookingDetails.endHour);
       
       case BookingType.Daily:
-        return this.checkDailyAvailability(service, dateOnly);
+        return await this.checkDailyAvailability(service, dateOnly);
       
       case BookingType.Capacity:
-        return this.checkCapacityAvailability(service, dateOnly, bookingDetails.numberOfPeople);
+      case BookingType.Mixed:
+        if (bookingDetails.isFullVenue) {
+          return await this.checkDailyAvailability(service, dateOnly);
+        }
+        return await this.checkCapacityAvailability(service, dateOnly, bookingDetails.numberOfPeople);
       
       case BookingType.Display:
         return true;
       
-      case BookingType.Mixed:
-        if (bookingDetails.isFullVenue) {
-          return this.checkDailyAvailability(service, dateOnly);
-        }
-        return this.checkCapacityAvailability(service, dateOnly, bookingDetails.numberOfPeople);
-      
       default:
-        return false;
+        throw new BadRequestException('Unsupported booking type.');
     }
   }
 
-  private checkHourlyAvailability(service: Service, date: Date, startHour: number, endHour: number): boolean {
-    if (!startHour || !endHour || startHour >= endHour) {
-      return false;
+  /**
+   * ✅ تم التعديل: التحقق من التوفر بالساعة مع دعم الـ Concurrency
+   */
+  private async checkHourlyAvailability(
+    service: Service, 
+    date: Date, 
+    newStart: number, 
+    newEnd: number
+  ): Promise<boolean> {
+    if (newStart === undefined || newEnd === undefined) {
+      throw new BadRequestException('Start and End hours are required for hourly bookings.');
     }
-    // ✅ بما إنه تم حذف bookingSlots، نفترض الخدمة متاحة دائماً
-    // يمكن تطوير هذا لاحقاً للتحقق من جدول الحجوزات
+
+    const buffer = (service.cleanupTimeMinutes || 0) / 60;
+    // 🆕 استخدام القيمة الجديدة (default: 1)
+    const maxConcurrency = service.maxConcurrency || 1;
+
+    // جلب جميع الحجوزات القائمة لهذا اليوم
+    const existingBookings = await this.bookingModel.find({
+      serviceId: service._id,
+      'bookingDetails.date': date,
+      status: { $ne: BookingStatus.CANCELLED } 
+    }).exec();
+
+    let concurrentConflicts = 0;
+
+    for (const booking of existingBookings) {
+      const exStart = booking.bookingDetails.startHour ?? 0;
+      const exEnd = booking.bookingDetails.endHour ?? 0;    
+      
+      const exEndWithBuffer = exEnd + buffer;
+      const newEndWithBuffer = newEnd + buffer;
+
+      // هل يوجد تقاطع؟
+      // (Start A < End B) and (End A > Start B)
+      if (newStart < exEndWithBuffer && newEndWithBuffer > exStart) {
+        concurrentConflicts++;
+      }
+    }
+
+    // 🆕 المقارنة مع الحد الأقصى المسموح به
+    if (concurrentConflicts >= maxConcurrency) {
+      throw new HttpException(
+        `Time slot conflict: The selected time (${newStart}:00-${newEnd}:00) is fully booked. (Max capacity reached: ${maxConcurrency})`,
+        HttpStatus.CONFLICT
+      );
+    }
+
+    return true; // مسموح بالحجز
+  }
+
+  /**
+   * ✅ تم التعديل: التحقق من التوفر اليومي مع دعم الـ Concurrency
+   */
+  private async checkDailyAvailability(service: Service, date: Date): Promise<boolean> {
+    const maxConcurrency = service.maxConcurrency || 1;
+
+    const existingCount = await this.bookingModel.countDocuments({
+      serviceId: service._id,
+      'bookingDetails.date': date,
+      status: { $ne: BookingStatus.CANCELLED }
+    }).exec();
+
+    // 🆕 المقارنة بالعدد المسموح
+    if (existingCount >= maxConcurrency) {
+      throw new HttpException(
+        `Service is fully booked for the selected date. (Max daily events: ${maxConcurrency})`,
+        HttpStatus.CONFLICT
+      );
+    }
     return true;
   }
 
-  private checkDailyAvailability(service: Service, date: Date): boolean {
-    // ✅ بما إنه تم حذف bookingSlots، نفترض الخدمة متاحة دائماً
+  /**
+   * Capacity Availability (لم يتم تغييره لأنه يعتمد على عدد الأشخاص وليس عدد الفعاليات)
+   * ولكن يمكن إضافة منطق مشابه إذا أردت تقييد عدد المجموعات المنفصلة في القاعة الواحدة،
+   * لكن الكود الحالي يعتمد على مجموع الأشخاص وهو الأصح للـ Capacity.
+   */
+  private async checkCapacityAvailability(
+    service: Service, 
+    date: Date, 
+    numberOfPeople: number
+  ): Promise<boolean> {
+    if (!service.maxCapacity) return true;
+
+    if (!numberOfPeople || numberOfPeople <= 0) {
+      throw new BadRequestException('Please specify the number of people.');
+    }
+
+    if (numberOfPeople > service.maxCapacity) {
+      throw new BadRequestException(`Maximum capacity is ${service.maxCapacity}.`);
+    }
+
+    const bookingsAtSameDate = await this.bookingModel.find({
+      serviceId: service._id,
+      'bookingDetails.date': date,
+      status: { $ne: BookingStatus.CANCELLED }
+    }).exec();
+
+    const currentBookedCount = bookingsAtSameDate.reduce(
+      (sum, b) => sum + (b.bookingDetails.numberOfPeople || 0), 0
+    );
+
+    const availableSlots = service.maxCapacity - currentBookedCount;
+
+    if (numberOfPeople > availableSlots) {
+      throw new HttpException(
+        `Insufficient space: Only ${availableSlots} slots remaining for this date.`,
+        HttpStatus.CONFLICT
+      );
+    }
+
     return true;
   }
 
-  private checkCapacityAvailability(service: Service, date: Date, numberOfPeople: number): boolean {
-    if (!service.maxCapacity) {
-      return true;
-    }
-    // ✅ بما إنه تم حذف bookingSlots، نفترض الخدمة متاحة دائماً
-    // التحقق فقط من أن العدد لا يتجاوز السعة القصوى
-    return numberOfPeople <= service.maxCapacity;
-  }
-
+  // ... (calculatePrice, getDayName, validateServiceLimits, addPackageToCart كما هي بدون تغيير) ...
   private calculatePrice(service: Service, bookingDetails: any): number {
-    // ✅ استخدام price البسيط أولاً، ثم priceOptions للتوافق
     const simplePrice = service.price || 0;
     const priceOpts = service.priceOptions;
 
@@ -425,18 +532,16 @@ export class CartService {
         const startHour = 9;
         const endHour = startHour + booking.bookingDetails.numberOfHours;
         
-        isAvailable = this.checkHourlyAvailability(service, bookingDate, startHour, endHour);
-
+      isAvailable = await this.checkHourlyAvailability(service, bookingDate, startHour, endHour);
       } else if (service.bookingType === BookingType.Capacity) {
         if (!booking.bookingDetails.numberOfPeople) {
           throw new BadRequestException(`Service "${service.serviceName}" requires numberOfPeople.`);
         }
-        
-        isAvailable = this.checkCapacityAvailability(service, bookingDate, booking.bookingDetails.numberOfPeople);
+
+        isAvailable = await this.checkCapacityAvailability(service, bookingDate, booking.bookingDetails.numberOfPeople);
 
       } else if (service.bookingType === BookingType.Daily) {
-        isAvailable = this.checkDailyAvailability(service, bookingDate);
-
+      isAvailable = await this.checkDailyAvailability(service, bookingDate);
       } else {
         isAvailable = true;
       }

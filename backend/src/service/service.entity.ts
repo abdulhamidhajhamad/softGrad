@@ -27,7 +27,11 @@ export class Service {
   description?: string;
 
   // ✅ الحقول الاختيارية
-  maxCapacity?: number;
+  maxCapacity?: number; // سعة الأشخاص (للقاعات)
+  
+  // 🆕 إضافة حقل الحد الأقصى للحجوزات المتزامنة (default 1)
+  maxConcurrency?: number; 
+
   minBookingHours?: number;
   maxBookingHours?: number;
   availableHours?: number[];
@@ -39,5 +43,7 @@ export class Service {
     this.isActive = data?.isActive ?? true;
     this.rating = data?.rating || 0;
     this.bookingType = data?.bookingType || BookingType.Daily;
+    // 🆕 القيمة الافتراضية
+    this.maxConcurrency = data?.maxConcurrency || 1;
   }
 }

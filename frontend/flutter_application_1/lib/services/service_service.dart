@@ -178,6 +178,7 @@ class ServiceService {
     required List<Map<String, dynamic>> imageFilesData,
     required String category,
     required String priceType,
+    required String bookingType,
     double? latitude,
     double? longitude,
     required String address,
@@ -218,6 +219,7 @@ class ServiceService {
         'location': locationData,
         'price': price, // ✅ Simple number instead of object
         'payType': priceType, // ✅ per hour, per person, per day, display
+        'bookingType': bookingType,
         'additionalInfo': additionalInfo,
         'isActive': true,
       };
@@ -288,7 +290,7 @@ class ServiceService {
     final String category = (form['category'] ?? '').toString();
     final String title = (form['name'] ?? form['serviceName'] ?? '').toString();
     final String description = (form['description'] ?? '').toString();
-
+    final String bookingTypeRaw = (form['bookingType'] ?? 'daily').toString().toLowerCase();
     // ✅ Extract price
     final double price = _pickFirstDouble(
           form['price'],
@@ -380,6 +382,7 @@ class ServiceService {
       imageFilesData: imageFilesData,
       category: category,
       priceType: priceType,
+      bookingType: bookingTypeRaw, 
       latitude: latitude,
       longitude: longitude,
       address: address.trim(),

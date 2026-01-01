@@ -5,7 +5,7 @@ import {
 import { Type } from 'class-transformer';
 import { BookingType, PayType } from './service.schema';
 
-// ✅ إعادة PricingOptionsDto للتوافق
+// ... (PricingOptionsDto & LocationDto بقيت كما هي) ...
 export class PricingOptionsDto {
   @IsOptional()
   @IsNumber()
@@ -56,6 +56,7 @@ export class LocationDto {
 }
 
 export class CreateServiceDto {
+  // ... (الحقول السابقة كما هي) ...
   @IsString()
   serviceName: string;
 
@@ -75,7 +76,6 @@ export class CreateServiceDto {
   @Type(() => LocationDto)
   location: LocationDto;
 
-  // ✅ السعر أصبح number بسيط (اختياري - للـ display)
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -106,6 +106,12 @@ export class CreateServiceDto {
   @IsNumber()
   @Min(0)
   maxCapacity?: number;
+
+  // 🆕 حقل جديد: الحد الأقصى للفعاليات في نفس الوقت
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  maxConcurrency?: number;
 
   @IsOptional()
   @IsNumber()
@@ -138,6 +144,7 @@ export class CreateServiceDto {
 }
 
 export class UpdateServiceDto {
+  // ... (نفس التعديل هنا) ...
   @IsOptional()
   @IsString()
   serviceName?: string;
@@ -160,7 +167,6 @@ export class UpdateServiceDto {
   @Type(() => LocationDto)
   location?: LocationDto;
 
-  // ✅ السعر أصبح number بسيط (اختياري)
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -192,6 +198,12 @@ export class UpdateServiceDto {
   @IsNumber()
   @Min(0)
   maxCapacity?: number;
+
+  // 🆕 حقل جديد
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  maxConcurrency?: number;
 
   @IsOptional()
   @IsNumber()

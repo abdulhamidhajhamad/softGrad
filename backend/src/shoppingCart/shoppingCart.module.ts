@@ -7,12 +7,14 @@ import { CartService } from './shoppingCart.service';
 import { Cart, CartSchema } from './shoppingCart.schema';
 import { Service, ServiceSchema } from '../service/service.schema';
 import { PackageModule } from '../Package/package.module';
+import { Booking, BookingSchema } from 'src/booking/booking.entity';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Cart.name, schema: CartSchema },
       { name: Service.name, schema: ServiceSchema },
+      { name: Booking.name, schema: BookingSchema },
     ]),
          PackageModule,],
   controllers: [CartController],

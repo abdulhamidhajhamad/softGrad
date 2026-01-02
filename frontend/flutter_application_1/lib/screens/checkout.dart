@@ -1,60 +1,25 @@
 // lib/screens/checkout.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import 'payment.dart';
+import 'package:flutter_application_1/services/payment_service/cart_service.dart';
+import 'package:flutter_application_1/services/payment_service/payment_service.dart';
 
-// نفس ألوانك
+// نفس الألوان الأصلية
 const Color kPrimary = Color.fromARGB(215, 20, 20, 215);
 const Color kBg = Color(0xFFF6F7FB);
 const Color kText = Color(0xFF0B1220);
 const Color kMuted = Color(0xFF6B7280);
 
-/// إذا عندك Booking class بملف تاني، احذف هذا الكلاس واعمل import لملفّك.
-class Booking {
-  final String clientName;
-  final String eventType;
-  final String date;
-  final String time;
-  final String location;
-  String status;
-
-  Booking({
-    required this.clientName,
-    required this.eventType,
-    required this.date,
-    required this.time,
-    required this.location,
-    this.status = 'Pending',
-  });
-}
-
 class CheckoutPage extends StatefulWidget {
-  /// ✅ Flow 1: booking checkout
-  final Booking? booking;
-
-  /// ✅ Flow 2: cart checkout (نستقبلها كـ List raw لتجنب circular import)
-  final List? items;
-
-  /// amount النهائي قبل الرسوم/الخصم (أو total تبع الكارت)
-  final double amount;
-
-  final String currency; // "₪"
-
-  /// عشان نمسح الكارت بعد نجاح الدفع بدون ما نستورد CartStore هون
+  final CartResponse cartData;
   final VoidCallback? onPaymentSuccess;
 
   const CheckoutPage({
     super.key,
-    this.booking,
-    this.items,
-    required this.amount,
-    this.currency = '₪',
+    required this.cartData,
     this.onPaymentSuccess,
-  }) : assert(
-          booking != null || items != null,
-          'Provide either booking or items',
-        );
+  });
 
   @override
   State<CheckoutPage> createState() => _CheckoutPageState();
@@ -63,8 +28,10 @@ class CheckoutPage extends StatefulWidget {
 class _CheckoutPageState extends State<CheckoutPage> {
   final _promoCtrl = TextEditingController();
 
-  double _discount = 0.0;
+  String? _promoCodeApplied;
+  double? _discount;
   bool _applyingPromo = false;
+  bool _processingPayment = false;
 
   @override
   void dispose() {
@@ -72,80 +39,28 @@ class _CheckoutPageState extends State<CheckoutPage> {
     super.dispose();
   }
 
-  double get _subTotal => widget.amount;
+  double get _subTotal => widget.cartData.totalAmount;
   double get _serviceFee => (_subTotal * 0.03);
-  double get _total => (_subTotal + _serviceFee - _discount).clamp(0, 999999);
-
-  String _money(double v) => "${widget.currency}${v.toStringAsFixed(0)}";
-
-  Future<void> _applyPromo() async {
-    final code = _promoCtrl.text.trim().toUpperCase();
-    if (code.isEmpty) return;
-
-    setState(() => _applyingPromo = true);
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    double newDiscount = 0;
-    if (code == "SAVE10") {
-      newDiscount = (_subTotal * 0.10);
-    } else if (code == "FREEFEE") {
-      newDiscount = _serviceFee;
-    } else {
-      newDiscount = 0;
+  double get _finalAmount {
+    double total = _subTotal + _serviceFee;
+    if (_discount != null) {
+      total -= _discount!;
     }
-
-    setState(() {
-      _discount = newDiscount;
-      _applyingPromo = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: kText,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: Text(
-          newDiscount == 0 ? "Promo code not valid" : "Promo applied ✅",
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-          ),
-        ),
-      ),
-    );
+    return total.clamp(0, 999999);
   }
 
-  Future<void> _goToPayment() async {
-    final title = widget.booking?.eventType ?? "Cart Order";
-    final subtitle = widget.booking != null
-        ? "${widget.booking!.date} • ${widget.booking!.time}"
-        : "${(widget.items?.length ?? 0)} item(s)";
+  String _money(double v) => '₪${v.toStringAsFixed(0)}';
 
-    final res = await Navigator.push<PaymentResult>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PaymentPage(
-          amount: _total,
-          currency: widget.currency,
-          title: title,
-          subtitle: subtitle,
-        ),
-      ),
-    );
-
-    if (!mounted) return;
-
-    if (res?.success == true) {
-      // ✅ clear cart / do extra actions from caller
-      widget.onPaymentSuccess?.call();
-
+  Future<void> _applyPromoFromBackend() async {
+    final code = _promoCtrl.text.trim();
+    if (code.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: kText,
+          backgroundColor: Colors.orange.shade700,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           content: Text(
-            "Payment successful ✅  (${res!.methodLabel})",
+            'Please enter a promo code',
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.w700,
               color: Colors.white,
@@ -153,26 +68,159 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
         ),
       );
+      return;
+    }
 
-      Navigator.pop(context, res);
-    } else if (res != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          content: Text(
-            "Payment cancelled",
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+    setState(() => _applyingPromo = true);
+
+    try {
+      // Call backend to validate promo
+      final checkoutResponse = await PaymentService.checkout(
+        currency: 'ils', // ₪
+        promoCode: code,
+      );
+
+      setState(() {
+        _discount = checkoutResponse.discount;
+        _promoCodeApplied = checkoutResponse.promoCodeApplied;
+        _applyingPromo = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green.shade700,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            content: Text(
+              _discount != null && _discount! > 0
+                  ? 'Promo applied! Save ${_money(_discount!)} ✓'
+                  : 'Promo code not valid',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _applyingPromo = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red.shade700,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            content: Text(
+              'Invalid promo code',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _goToPayment() async {
+    setState(() => _processingPayment = true);
+
+    try {
+      // Step 1: Create Payment Intent
+      final checkoutResponse = await PaymentService.checkout(
+        currency: 'ils',
+        promoCode: _promoCodeApplied,
+      );
+
+      setState(() => _processingPayment = false);
+
+      if (!mounted) return;
+
+      // Step 2: Navigate to Payment Page
+      final paymentResult = await Navigator.push<PaymentResult>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentPage(
+            amount: checkoutResponse.finalAmount,
+            currency: '₪',
+            title: 'Cart Order',
+            subtitle: '${widget.cartData.items.length} item(s)',
+            clientSecret: checkoutResponse.clientSecret,
+            originalAmount: checkoutResponse.originalAmount,
+            discount: checkoutResponse.discount,
+            promoCode: checkoutResponse.promoCodeApplied,
           ),
         ),
       );
+
+      if (!mounted) return;
+
+      // Step 3: Handle Payment Result
+      if (paymentResult?.success == true) {
+        // Payment confirmed! Cart will be cleared by backend
+        widget.onPaymentSuccess?.call();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green.shade700,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            content: Text(
+              'Payment successful ✓  (${paymentResult!.methodLabel})',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        );
+
+        // Return to previous screen
+        Navigator.pop(context);
+      } else if (paymentResult != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.orange.shade700,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            content: Text(
+              'Payment cancelled',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _processingPayment = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red.shade700,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            content: Text(
+              'Failed to process payment: ${e.toString()}',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final b = widget.booking;
-
     return Scaffold(
       backgroundColor: kBg,
       appBar: AppBar(
@@ -198,25 +246,127 @@ class _CheckoutPageState extends State<CheckoutPage> {
           _StepHeader(current: 1),
           const SizedBox(height: 12),
 
-          // ✅ Booking / Cart Summary
-          _Card(
-            child: b != null ? _bookingSummary(b) : _cartSummary(),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Promo
+          // Order Summary
           _Card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Promo Code",
+                  "Order Summary",
                   style: GoogleFonts.poppins(
                     fontWeight: FontWeight.w900,
                     color: kText,
                     fontSize: 14,
                   ),
+                ),
+                const SizedBox(height: 10),
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: widget.cartData.items.length,
+                  separatorBuilder: (_, __) => Divider(
+                    color: Colors.black.withOpacity(0.06),
+                    height: 14,
+                  ),
+                  itemBuilder: (_, i) {
+                    final item = widget.cartData.items[i];
+                    return Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: kPrimary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.shopping_bag_rounded,
+                            color: kPrimary,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.serviceName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                item.companyName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w700,
+                                  color: kMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          _money(item.price),
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w900,
+                            color: kText,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Promo Code (Optional)
+          _Card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "Promo Code",
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w900,
+                          color: kText,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
+                      child: Text(
+                        'Optional',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.amber.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -229,18 +379,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           hintText: "e.g. SAVE10",
                           hintStyle: GoogleFonts.poppins(color: Colors.grey),
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
                           filled: true,
                           fillColor: Colors.grey.shade100,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide:
-                                BorderSide(color: Colors.black.withOpacity(0.08)),
+                            borderSide: BorderSide(
+                              color: Colors.black.withOpacity(0.08),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide:
-                                BorderSide(color: Colors.black.withOpacity(0.08)),
+                            borderSide: BorderSide(
+                              color: Colors.black.withOpacity(0.08),
+                            ),
                           ),
                         ),
                         style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
@@ -248,30 +402,63 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton(
-                      onPressed: _applyingPromo ? null : _applyPromo,
+                      onPressed: _applyingPromo ? null : _applyPromoFromBackend,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kPrimary,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                       child: _applyingPromo
                           ? const SizedBox(
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : Text(
                               "Apply",
-                              style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                     ),
                   ],
                 ),
+                if (_promoCodeApplied != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Code "$_promoCodeApplied" applied!',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w800,
+                              color: Colors.green.shade800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -294,15 +481,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 const SizedBox(height: 10),
                 _LineItem(title: "Subtotal", value: _money(_subTotal)),
                 _LineItem(title: "Service fee", value: _money(_serviceFee)),
-                _LineItem(
-                  title: "Discount",
-                  value: _discount <= 0 ? "—" : "- ${_money(_discount)}",
-                  valueColor: Colors.green.shade700,
-                ),
+                if (_discount != null && _discount! > 0)
+                  _LineItem(
+                    title: "Discount",
+                    value: "- ${_money(_discount!)}",
+                    valueColor: Colors.green.shade700,
+                  ),
                 const SizedBox(height: 8),
                 Divider(color: Colors.black.withOpacity(0.08)),
                 const SizedBox(height: 6),
-                _LineItem(title: "Total", value: _money(_total), bold: true),
+                _LineItem(
+                  title: "Total",
+                  value: _money(_finalAmount),
+                  bold: true,
+                ),
               ],
             ),
           ),
@@ -312,112 +504,36 @@ class _CheckoutPageState extends State<CheckoutPage> {
           SizedBox(
             height: 52,
             child: ElevatedButton.icon(
-              onPressed: _goToPayment,
-              icon: const Icon(Icons.lock_rounded),
+              onPressed: _processingPayment ? null : _goToPayment,
+              icon: _processingPayment
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.lock_rounded),
               label: Text(
-                "Proceed to Payment",
+                _processingPayment ? "Processing..." : "Proceed to Payment",
                 style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w900, fontSize: 15),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: kText,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _bookingSummary(Booking b) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Booking Summary",
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w900, fontSize: 14)),
-        const SizedBox(height: 10),
-        _InfoRow(icon: Icons.person, text: b.clientName),
-        _InfoRow(icon: Icons.event, text: b.eventType),
-        _InfoRow(icon: Icons.calendar_month, text: "${b.date} • ${b.time}"),
-        _InfoRow(icon: Icons.location_on, text: b.location),
-      ],
-    );
-  }
-
-  Widget _cartSummary() {
-    final list = widget.items ?? const [];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Order Summary",
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w900, fontSize: 14)),
-        const SizedBox(height: 10),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: list.length,
-          separatorBuilder: (_, __) =>
-              Divider(color: Colors.black.withOpacity(0.06), height: 14),
-          itemBuilder: (_, i) {
-            final it = list[i]; // dynamic
-            final title = (it?.title ?? "").toString();
-            final provider = (it?.providerName ?? "").toString();
-            final city = (it?.city ?? "").toString();
-            final price = (it?.price is num) ? (it.price as num).toDouble() : 0.0;
-
-            return Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: kPrimary.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.shopping_bag_rounded,
-                      color: kPrimary, size: 20),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 2),
-                      Text(
-                        "$provider • $city",
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w700,
-                          color: kMuted,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  _money(price),
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w900,
-                    color: kText,
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ],
     );
   }
 }
@@ -461,13 +577,16 @@ class _StepHeader extends StatelessWidget {
         children: [
           dot(current >= 1, "1"),
           const SizedBox(width: 10),
-          Text("Checkout", style: GoogleFonts.poppins(fontWeight: FontWeight.w800)),
+          Text("Checkout",
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w800)),
           const Spacer(),
-          Container(height: 2, width: 26, color: Colors.black.withOpacity(0.12)),
+          Container(
+              height: 2, width: 26, color: Colors.black.withOpacity(0.12)),
           const SizedBox(width: 10),
           dot(current >= 2, "2"),
           const SizedBox(width: 10),
-          Text("Payment", style: GoogleFonts.poppins(fontWeight: FontWeight.w800)),
+          Text("Payment",
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w800)),
         ],
       ),
     );
@@ -495,31 +614,6 @@ class _Card extends StatelessWidget {
         ],
       ),
       child: child,
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _InfoRow({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: Colors.grey.shade600),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: kText),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -78,14 +78,12 @@ class ServiceInsideSearchScreen extends StatelessWidget {
     final store = CartStore.instance;
 
     store.add(
-      CartItem(
+            CartItem(
         id: data.id,
-        title: data.serviceName,
-        providerName: data.companyName,
+        serviceName: data.serviceName,  // ✅ صح - استخدم serviceName بدل title
+        companyName: data.companyName,   // ✅ صح - استخدم companyName بدل providerName
         price: data.price,
         imageUrl: data.imageUrl,
-        category: data.category,
-        city: data.city,
       ),
     );
 

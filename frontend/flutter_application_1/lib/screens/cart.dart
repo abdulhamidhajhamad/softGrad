@@ -1,11 +1,10 @@
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'checkout.dart';
+import 'package:flutter_application_1/services/payment_service/cart_service.dart';
 
-// -----------------------------------------------------------------------------
-// Theme (keep same feel as your app)
-// -----------------------------------------------------------------------------
+// Theme (نفس الألوان الأصلية)
 const Color kPrimary = Color.fromARGB(215, 20, 20, 215);
 const Color kBg = Color(0xFFF6F7FB);
 const Color kText = Color(0xFF0B1220);
@@ -13,133 +12,173 @@ const Color kMuted = Color(0xFF6B7280);
 const Color kDanger = Color(0xFFEF4444);
 
 // -----------------------------------------------------------------------------
-// ✅ Booking type resolver (based on Category) + Order-only counter
-// -----------------------------------------------------------------------------
-String _bookingTypeForCategory(String category) {
-  switch (category) {
-    case 'Venues':
-    case 'Photographers':
-    case 'Music & Entertainment':
-    case 'Wedding Planners & Coordinators':
-      return 'hourly';
-
-    case 'Decor & Lighting':
-    case 'Car Rental & Transportation':
-      return 'full-day';
-
-    case 'Catering':
-    case 'Cake':
-      return 'capacity';
-
-    case 'Flower Shops':
-    case 'Card Printing':
-    case 'Jewelry & Accessories':
-    case 'Gift & Souvenir':
-      return 'order';
-
-    default:
-      return 'order';
-  }
-}
-
-int _orderOnlyCount(List<CartItem> items) {
-  int c = 0;
-  for (final it in items) {
-    if (_bookingTypeForCategory(it.category) == 'order') c++;
-  }
-  return c;
-}
-
-// -----------------------------------------------------------------------------
-// Cart Model
-// -----------------------------------------------------------------------------
-class CartItem {
-  final String id;
-  final String title;
-  final String providerName;
-  final double price;
-  final String imageUrl;
-  final String category;
-  final String city;
-
-  const CartItem({
-    required this.id,
-    required this.title,
-    required this.providerName,
-    required this.price,
-    required this.imageUrl,
-    required this.category,
-    required this.city,
-  });
-}
-
-// -----------------------------------------------------------------------------
-// Cart Store (singleton)
-// -----------------------------------------------------------------------------
-class CartStore {
-  CartStore._();
-  static final CartStore instance = CartStore._();
-
-  final ValueNotifier<List<CartItem>> _items = ValueNotifier<List<CartItem>>([]);
-  final ValueNotifier<int> count = ValueNotifier<int>(0);
-
-  ValueListenable<List<CartItem>> get itemsListenable => _items;
-  List<CartItem> get items => List.unmodifiable(_items.value);
-
-  bool contains(String id) => _items.value.any((e) => e.id == id);
-
-  void add(CartItem item) {
-    final list = [..._items.value];
-
-    // ✅ prevent duplicates (UX)
-    final exists = list.any((e) => e.id == item.id);
-    if (!exists) list.add(item);
-
-    _items.value = list;
-
-    // ✅ Badge count: ONLY "order" items
-    count.value = _orderOnlyCount(list);
-  }
-
-  void removeAt(int index) {
-    final list = [..._items.value];
-    if (index < 0 || index >= list.length) return;
-    list.removeAt(index);
-    _items.value = list;
-
-    // ✅ Badge count: ONLY "order" items
-    count.value = _orderOnlyCount(list);
-  }
-
-  void removeById(String id) {
-    final list = [..._items.value]..removeWhere((e) => e.id == id);
-    _items.value = list;
-
-    // ✅ Badge count: ONLY "order" items
-    count.value = _orderOnlyCount(list);
-  }
-
-  void clear() {
-    _items.value = [];
-
-    // ✅ Badge count: ONLY "order" items
-    count.value = 0;
-  }
-
-  double total() {
-    double s = 0;
-    for (final i in _items.value) {
-      s += i.price;
-    }
-    return s;
-  }
-}
-
-// -----------------------------------------------------------------------------
 // Cart Page
 // -----------------------------------------------------------------------------
-class CartPage extends StatelessWidget {
+class CartPage extends StatefulWidget {
   const CartPage({super.key});
+
+  @override
+  State<CartPage> createState() => _CartPageState();
+}
+
+class _CartPageState extends State<CartPage> {
+  bool _loading = true;
+  String? _error;
+  CartResponse? _cartData;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCart();
+  }
+
+  Future<void> _loadCart() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final cart = await CartService.getCart();
+      setState(() {
+        _cartData = cart;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _removeItem(String serviceId) async {
+    try {
+      // Show loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Removing item...',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
+          ),
+          duration: const Duration(milliseconds: 800),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: kText,
+        ),
+      );
+
+      final updatedCart = await CartService.removeFromCart(serviceId);
+      
+      setState(() {
+        _cartData = updatedCart;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Item removed ✓',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green.shade700,
+            duration: const Duration(milliseconds: 1100),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to remove: ${e.toString()}',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
+            ),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: kDanger,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _clearCart() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Clear Cart?',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
+        ),
+        content: Text(
+          'This will remove all items from your cart.',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kDanger,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              'Clear',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await CartService.clearCart();
+        setState(() {
+          _cartData = CartResponse(userId: '', items: [], totalAmount: 0.0);
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Cart cleared',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
+              ),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: kText,
+              duration: const Duration(milliseconds: 1100),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Failed to clear: ${e.toString()}',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
+              ),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: kDanger,
+            ),
+          );
+        }
+      }
+    }
+  }
 
   String _money(double v) => '₪${v.toStringAsFixed(0)}';
 
@@ -165,178 +204,233 @@ class CartPage extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              CartStore.instance.clear();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Cart cleared',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                  backgroundColor: kText,
-                  duration: const Duration(milliseconds: 1100),
+          if (_cartData != null && _cartData!.items.isNotEmpty)
+            TextButton(
+              onPressed: _clearCart,
+              child: Text(
+                'Clear',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w900,
+                  color: kPrimary,
                 ),
-              );
-            },
-            child: Text(
-              'Clear',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w900,
-                color: kPrimary,
               ),
             ),
-          ),
         ],
       ),
-      body: ValueListenableBuilder<List<CartItem>>(
-        valueListenable: CartStore.instance.itemsListenable,
-        builder: (_, items, __) {
-          if (items.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Text(
-                  'Your cart is empty.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w700,
-                    color: kMuted,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            );
-          }
-
-          return Stack(
-            children: [
-              ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 120),
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, i) {
-                  final it = items[i];
-                  return _CartCard(
-                    item: it,
-                    onRemove: () => CartStore.instance.removeAt(i),
-                  );
-                },
-              ),
-
-              // Bottom summary
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: SafeArea(
-                  top: false,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border(
-                        top: BorderSide(color: Colors.black.withOpacity(0.06)),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
-                          blurRadius: 24,
-                          offset: const Offset(0, -12),
-                        ),
-                      ],
-                    ),
-                    child: Row(
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: kPrimary),
+            )
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Total',
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w800,
-                                  color: kMuted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                _money(CartStore.instance.total()),
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w900,
-                                  color: kText,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
+                        Icon(Icons.error_outline, size: 64, color: kDanger),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Failed to load cart',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                            color: kText,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              final snapshot =
-                                  List<CartItem>.from(CartStore.instance.items);
-
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CheckoutPage(
-                                    items: snapshot,
-                                    amount: CartStore.instance.total(),
-                                    currency: '₪',
-                                    onPaymentSuccess: () =>
-                                        CartStore.instance.clear(),
-                                  ),
-                                ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: kText,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            color: kMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        ElevatedButton.icon(
+                          onPressed: _loadCart,
+                          icon: const Icon(Icons.refresh),
+                          label: Text(
+                            'Retry',
+                            style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kPrimary,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
                             ),
-                            icon: const Icon(Icons.lock_rounded,
-                                color: Color.fromARGB(165, 244, 255, 179)),
-                            label: Text(
-                              'Checkout',
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                              ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+                )
+              : _cartData == null || _cartData!.items.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.shopping_cart_outlined,
+                              size: 80,
+                              color: Colors.black.withOpacity(0.15),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Your cart is empty.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w700,
+                                color: kMuted,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Stack(
+                      children: [
+                        ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 120),
+                          itemCount: _cartData!.items.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (context, i) {
+                            final item = _cartData!.items[i];
+                            return _CartCard(
+                              item: item,
+                              onRemove: () => _removeItem(item.serviceId),
+                            );
+                          },
+                        ),
+
+                        // Bottom summary
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: SafeArea(
+                            top: false,
+                            child: Container(
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border(
+                                  top: BorderSide(
+                                      color: Colors.black.withOpacity(0.06)),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.12),
+                                    blurRadius: 24,
+                                    offset: const Offset(0, -12),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'Total',
+                                          style: GoogleFonts.poppins(
+                                            fontWeight: FontWeight.w800,
+                                            color: kMuted,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          _money(_cartData!.totalAmount),
+                                          style: GoogleFonts.poppins(
+                                            fontWeight: FontWeight.w900,
+                                            color: kText,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => CheckoutPage(
+                                              cartData: _cartData!,
+                                              onPaymentSuccess: () {
+                                                // Reload cart after successful payment
+                                                _loadCart();
+                                              },
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: kText,
+                                        elevation: 0,
+                                        padding:
+                                            const EdgeInsets.symmetric(vertical: 14),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(18),
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.lock_rounded,
+                                          color: Color.fromARGB(
+                                              165, 244, 255, 179)),
+                                      label: Text(
+                                        'Checkout',
+                                        style: GoogleFonts.poppins(
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
     );
   }
 }
 
 class _CartCard extends StatelessWidget {
-  final CartItem item;
+  final CartItemBackend item;
   final VoidCallback onRemove;
 
   const _CartCard({required this.item, required this.onRemove});
 
   String _money(double v) => '₪${v.toStringAsFixed(0)}';
 
+  String _formatDate(String isoDate) {
+    try {
+      final date = DateTime.parse(isoDate);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (_) {
+      return isoDate;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final hasImg = item.imageUrl.trim().isNotEmpty;
+    final hasImg = item.imageUrl != null && item.imageUrl!.trim().isNotEmpty;
 
     return Container(
       decoration: BoxDecoration(
@@ -354,6 +448,7 @@ class _CartCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
@@ -362,7 +457,7 @@ class _CartCard extends StatelessWidget {
                 height: 74,
                 child: hasImg
                     ? Image.network(
-                        item.imageUrl,
+                        item.imageUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => _ImgPlaceholder(),
                         loadingBuilder: (context, child, progress) {
@@ -387,7 +482,7 @@ class _CartCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.title,
+                    item.serviceName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
@@ -398,7 +493,7 @@ class _CartCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    item.providerName,
+                    item.companyName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
@@ -412,10 +507,44 @@ class _CartCard extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _Tag(text: item.category, icon: Icons.grid_view_rounded),
-                      _Tag(text: item.city, icon: Icons.location_on_rounded),
+                      _Tag(
+                        text: item.bookingType,
+                        icon: Icons.event_available_rounded,
+                      ),
+                      _Tag(
+                        text: _formatDate(item.bookingDetails.date),
+                        icon: Icons.calendar_month_rounded,
+                      ),
                     ],
                   ),
+                  if (item.packageName != null) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.inventory_2_rounded,
+                              size: 12, color: Colors.amber.shade800),
+                          const SizedBox(width: 4),
+                          Text(
+                            item.packageName!,
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.amber.shade800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -437,6 +566,8 @@ class _CartCard extends StatelessWidget {
                   icon: const Icon(Icons.delete_rounded),
                   color: kDanger,
                   tooltip: 'Remove',
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(8),
                 ),
               ],
             ),
@@ -489,5 +620,81 @@ class _Tag extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// أضف هذا الكود في نهاية ملف cart.dart
+
+// -----------------------------------------------------------------------------
+// CartStore - In-Memory Cart State Management
+// -----------------------------------------------------------------------------
+class CartItem {
+  final String id;
+  final String serviceName;
+  final String companyName;
+  final double price;
+  final String? imageUrl;
+
+  CartItem({
+    required this.id,
+    required this.serviceName,
+    required this.companyName,
+    required this.price,
+    this.imageUrl,
+  });
+}
+
+class CartStore {
+  // Singleton pattern
+  static final CartStore instance = CartStore._internal();
+  
+  factory CartStore() {
+    return instance;
+  }
+  
+  CartStore._internal();
+
+  // State
+  final ValueNotifier<int> count = ValueNotifier<int>(0);
+  final ValueNotifier<List<CartItem>> itemsListenable = ValueNotifier<List<CartItem>>([]);
+
+  // Getters
+  List<CartItem> get items => itemsListenable.value;
+
+  // Methods
+  bool contains(String serviceId) {
+    return items.any((item) => item.id == serviceId);
+  }
+
+  void add(CartItem item) {
+    if (!contains(item.id)) {
+      final newList = [...items, item];
+      itemsListenable.value = newList;
+      count.value = newList.length;
+    }
+  }
+
+  void remove(String serviceId) {
+    final newList = items.where((item) => item.id != serviceId).toList();
+    itemsListenable.value = newList;
+    count.value = newList.length;
+  }
+
+  void clear() {
+    itemsListenable.value = [];
+    count.value = 0;
+  }
+
+  void updateFromBackend(List<CartItemBackend> backendItems) {
+    final newList = backendItems.map((item) => CartItem(
+      id: item.serviceId,
+      serviceName: item.serviceName,
+      companyName: item.companyName,
+      price: item.price,
+      imageUrl: item.imageUrl,
+    )).toList();
+    
+    itemsListenable.value = newList;
+    count.value = newList.length;
   }
 }

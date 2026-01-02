@@ -1,5 +1,5 @@
 // package.dto.ts
-import { IsString, IsNumber, IsArray, ValidateNested, IsOptional, IsDateString, Min } from 'class-validator';
+import { IsString, IsNumber, IsArray, ValidateNested, IsOptional, IsDateString, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PackageServiceItemDto {
@@ -9,18 +9,17 @@ export class PackageServiceItemDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  newPrice?: number; // السعر الجديد (اختياري - إذا ما كان موجود بستخدم السعر الأصلي)
-
-  // ⭐ اختياري - إذا موجود = باقة ثابتة، إذا مش موجود = سعر وحدة مخفض
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  maxHours?: number; // عدد الساعات المحدد (للخدمات الساعية)
+  newPrice?: number;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
-  maxCapacity?: number; // عدد الأشخاص المحدد (للخدمات بالسعة)
+  maxHours?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  maxCapacity?: number;
 }
 
 export class CreatePackageDto {
@@ -103,6 +102,19 @@ export class BookingDetailsDto {
   @IsNumber()
   @Min(1)
   numberOfPeople?: number;
+
+  // 🆕 إضافة الحقول لخدمات Hourly
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(23)
+  startHour?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(23)
+  endHour?: number;
 }
 
 export class PackageServiceBookingDto {

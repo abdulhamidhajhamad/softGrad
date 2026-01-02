@@ -456,154 +456,193 @@ export class CartService {
     }
   }
 
-  async addPackageToCart(userId: string, dto: AddPackageToCartDto): Promise<Cart> {
-    const userObjectId = new Types.ObjectId(userId);
-    
-    const pkg = await this.packageService.getPackageById(dto.packageId);
-    
-    if (!pkg.isActive) {
-      throw new BadRequestException('This package is not currently available.');
-    }
-
-    if (dto.serviceBookings.length !== pkg.services.length) {
-      throw new BadRequestException(
-        `Package requires booking all ${pkg.services.length} services. You provided ${dto.serviceBookings.length}.`
-      );
-    }
-
-    for (const booking of dto.serviceBookings) {
-      const serviceInPackage = pkg.services.find(
-        s => s.serviceId.toString() === booking.serviceId.toString()
-      );
-
-      if (!serviceInPackage) {
-        throw new BadRequestException(`Service ${booking.serviceId} is not part of this package.`);
-      }
-
-      const service = await this.serviceModel.findById(booking.serviceId).exec();
-      if (!service) {
-        throw new NotFoundException(`Service ${booking.serviceId} not found.`);
-      }
-
-      const bookingDate = new Date(booking.bookingDetails.date);
-
-      await this.packageService.validatePackageBookingDate(dto.packageId, bookingDate);
-
-      const dayName = this.getDayName(bookingDate);
-      if (!service.workingDays || !service.workingDays.includes(dayName)) {
-        throw new BadRequestException(
-          `Service "${service.serviceName}" is not available on ${dayName}. Working days: ${service.workingDays.join(', ')}`
-        );
-      }
-
-      if (serviceInPackage.maxHours) {
-        if (!booking.bookingDetails.numberOfHours) {
-          throw new BadRequestException(
-            `Service "${service.serviceName}" requires numberOfHours (max: ${serviceInPackage.maxHours} hours).`
-          );
-        }
-        if (booking.bookingDetails.numberOfHours > serviceInPackage.maxHours) {
-          throw new BadRequestException(
-            `Service "${service.serviceName}" allows maximum ${serviceInPackage.maxHours} hours in this package. You requested ${booking.bookingDetails.numberOfHours} hours.`
-          );
-        }
-      }
-
-      if (serviceInPackage.maxCapacity) {
-        if (!booking.bookingDetails.numberOfPeople) {
-          throw new BadRequestException(
-            `Service "${service.serviceName}" requires numberOfPeople (max: ${serviceInPackage.maxCapacity} people).`
-          );
-        }
-        if (booking.bookingDetails.numberOfPeople > serviceInPackage.maxCapacity) {
-          throw new BadRequestException(
-            `Service "${service.serviceName}" allows maximum ${serviceInPackage.maxCapacity} people in this package. You requested ${booking.bookingDetails.numberOfPeople} people.`
-          );
-        }
-      }
-
-      let isAvailable = false;
-
-      if (service.bookingType === BookingType.Hourly) {
-        if (!booking.bookingDetails.numberOfHours) {
-          throw new BadRequestException(`Service "${service.serviceName}" requires numberOfHours.`);
-        }
-        
-        const startHour = 9;
-        const endHour = startHour + booking.bookingDetails.numberOfHours;
-        
-      isAvailable = await this.checkHourlyAvailability(service, bookingDate, startHour, endHour);
-      } else if (service.bookingType === BookingType.Capacity) {
-        if (!booking.bookingDetails.numberOfPeople) {
-          throw new BadRequestException(`Service "${service.serviceName}" requires numberOfPeople.`);
-        }
-
-        isAvailable = await this.checkCapacityAvailability(service, bookingDate, booking.bookingDetails.numberOfPeople);
-
-      } else if (service.bookingType === BookingType.Daily) {
-      isAvailable = await this.checkDailyAvailability(service, bookingDate);
-      } else {
-        isAvailable = true;
-      }
-
-      if (!isAvailable) {
-        throw new BadRequestException(
-          `Service "${service.serviceName}" is not available on ${bookingDate.toDateString()}.`
-        );
-      }
-    }
-
-    let cart = await this.cartModel.findOne({ userId: userObjectId }).exec();
-    if (!cart) {
-      cart = new this.cartModel({ userId: userObjectId, items: [], totalAmount: 0 });
-    }
-
-    cart.items = cart.items.filter(item => item.packageId?.toString() !== dto.packageId);
-
-    for (const booking of dto.serviceBookings) {
-      const serviceInPackage = pkg.services.find(
-        s => s.serviceId.toString() === booking.serviceId
-      );
-
-      if (!serviceInPackage) {
-        throw new BadRequestException('Service details not found in package definition.');
-      }
-
-      const service = await this.serviceModel.findById(booking.serviceId).exec();
-      if (!service) {
-        throw new NotFoundException(`Service ${booking.serviceId} not found.`);
-      }
-
-      let startHour: number | undefined;
-      let endHour: number | undefined;
-
-      if (service.bookingType === BookingType.Hourly && booking.bookingDetails.numberOfHours) {
-        startHour = 9;
-        endHour = startHour + booking.bookingDetails.numberOfHours;
-      }
-
-      cart.items.push({
-        serviceId: new Types.ObjectId(booking.serviceId),
-        serviceName: service.serviceName,
-        providerId: service.providerId,
-        companyName: service.companyName,
-        bookingType: service.bookingType,
-        bookingDetails: {
-          date: new Date(booking.bookingDetails.date),
-          startHour: startHour,
-          endHour: endHour,
-          numberOfPeople: booking.bookingDetails.numberOfPeople,
-          isFullVenue: false,
-        },
-        price: serviceInPackage.newPrice, 
-        imageUrl: service.images?.[0],
-        packageId: new Types.ObjectId(dto.packageId),
-        packageName: pkg.packageName,
-      } as CartItem);
-    }
-
-    cart.totalAmount = pkg.newPrice;
-    
-    return await cart.save();
+async addPackageToCart(userId: string, dto: AddPackageToCartDto): Promise<Cart> {
+  const userObjectId = new Types.ObjectId(userId);
+  
+  // ✅ Reuse existing package validation
+  const pkg = await this.packageService.getPackageById(dto.packageId);
+  
+  if (!pkg.isActive) {
+    throw new BadRequestException('This package is not currently available.');
   }
+
+  if (dto.serviceBookings.length !== pkg.services.length) {
+    throw new BadRequestException(
+      `Package requires booking all ${pkg.services.length} services. You provided ${dto.serviceBookings.length}.`
+    );
+  }
+
+  // ✅ Validate each service using EXISTING validation methods
+  for (const booking of dto.serviceBookings) {
+    const serviceInPackage = pkg.services.find(
+      s => s.serviceId.toString() === booking.serviceId.toString()
+    );
+
+    if (!serviceInPackage) {
+      throw new BadRequestException(`Service ${booking.serviceId} is not part of this package.`);
+    }
+
+    const service = await this.serviceModel.findById(booking.serviceId).exec();
+    if (!service) {
+      throw new NotFoundException(`Service ${booking.serviceId} not found.`);
+    }
+
+    const bookingDate = new Date(booking.bookingDetails.date);
+
+    // ✅ Reuse package date validation
+    await this.packageService.validatePackageBookingDate(dto.packageId, bookingDate);
+
+    // ✅ Reuse day validation
+    const dayName = this.getDayName(bookingDate);
+    if (!service.workingDays || !service.workingDays.includes(dayName)) {
+      throw new BadRequestException(
+        `Service "${service.serviceName}" is not available on ${dayName}. Working days: ${service.workingDays.join(', ')}`
+      );
+    }
+
+    // ✅ Validate service limits (hours/capacity constraints)
+    this.validateServiceLimits(service, booking.bookingDetails);
+
+    // ✅ Validate package-specific limits
+    if (serviceInPackage.maxHours) {
+      if (service.bookingType === BookingType.Hourly) {
+        if (booking.bookingDetails.startHour === undefined || booking.bookingDetails.endHour === undefined) {
+          throw new BadRequestException(
+            `Service "${service.serviceName}" requires startHour and endHour for hourly bookings.`
+          );
+        }
+        
+        const hoursBooked = booking.bookingDetails.endHour - booking.bookingDetails.startHour;
+        if (hoursBooked > serviceInPackage.maxHours) {
+          throw new BadRequestException(
+            `Service "${service.serviceName}" allows maximum ${serviceInPackage.maxHours} hours in this package. You requested ${hoursBooked} hours.`
+          );
+        }
+      }
+    }
+
+    if (serviceInPackage.maxCapacity) {
+      if (!booking.bookingDetails.numberOfPeople) {
+        throw new BadRequestException(
+          `Service "${service.serviceName}" requires numberOfPeople (max: ${serviceInPackage.maxCapacity} people).`
+        );
+      }
+      if (booking.bookingDetails.numberOfPeople > serviceInPackage.maxCapacity) {
+        throw new BadRequestException(
+          `Service "${service.serviceName}" allows maximum ${serviceInPackage.maxCapacity} people in this package.`
+        );
+      }
+    }
+
+    // ✅ Properly prepare booking details for availability check
+    const bookingDetailsForCheck = {
+      date: bookingDate,
+      startHour: booking.bookingDetails.startHour,
+      endHour: booking.bookingDetails.endHour,
+      numberOfPeople: booking.bookingDetails.numberOfPeople,
+      isFullVenue: false
+    };
+
+    // ✅ **CRITICAL:** Reuse existing availability check method
+    // This checks: availableHours, maxConcurrency, daily limits, capacity limits
+    const isAvailable = await this.checkAvailability(
+      service,
+      bookingDate,
+      bookingDetailsForCheck
+    );
+
+    if (!isAvailable) {
+      throw new BadRequestException(
+        `Service "${service.serviceName}" is not available on ${bookingDate.toDateString()}.`
+      );
+    }
+  }
+
+  // ✅ Add to cart (remove old package items if re-adding)
+  let cart = await this.cartModel.findOne({ userId: userObjectId }).exec();
+  if (!cart) {
+    cart = new this.cartModel({ userId: userObjectId, items: [], totalAmount: 0 });
+  }
+
+  // Remove existing package items
+  cart.items = cart.items.filter(item => item.packageId?.toString() !== dto.packageId);
+
+  // 🆕 Calculate actual total based on user input
+  let calculatedTotal = 0;
+
+  // Add new package items with CORRECT pricing
+  for (const booking of dto.serviceBookings) {
+    const serviceInPackage = pkg.services.find(
+      s => s.serviceId.toString() === booking.serviceId
+    );
+
+    if (!serviceInPackage) {
+      throw new BadRequestException('Service details not found in package definition.');
+    }
+
+    const service = await this.serviceModel.findById(booking.serviceId).exec();
+    if (!service) {
+      throw new NotFoundException(`Service ${booking.serviceId} not found.`);
+    }
+
+    let startHour: number | undefined;
+    let endHour: number | undefined;
+    let actualPrice = serviceInPackage.newPrice; // Default to package price
+
+    // 🆕 Calculate actual price based on booking type and user input
+    if (service.bookingType === BookingType.Hourly) {
+      if (booking.bookingDetails.startHour !== undefined && booking.bookingDetails.endHour !== undefined) {
+        startHour = booking.bookingDetails.startHour;
+        endHour = booking.bookingDetails.endHour;
+        const hoursBooked = endHour - startHour;
+        
+        // ✅ السعر الجديد × عدد الساعات المطلوبة
+        actualPrice = serviceInPackage.newPrice * hoursBooked;
+      }
+    } else if (service.bookingType === BookingType.Capacity) {
+      const numberOfPeople = booking.bookingDetails.numberOfPeople || 0;
+      
+      // ✅ السعر الجديد × عدد الأشخاص المطلوب
+      actualPrice = serviceInPackage.newPrice * numberOfPeople;
+    } else if (service.bookingType === BookingType.Daily) {
+      // ✅ السعر الثابت للباقة (يوم واحد)
+      actualPrice = serviceInPackage.newPrice;
+    } /*else if (service.bookingType === BookingType.Mixed) {
+      if (booking.bookingDetails.isFullVenue) {
+        actualPrice = serviceInPackage.newPrice; // Full venue price
+      } else {
+        const numberOfPeople = booking.bookingDetails.numberOfPeople || 0;
+        actualPrice = serviceInPackage.newPrice * numberOfPeople;
+      }
+    } */
+
+    // 🆕 Add to total
+    calculatedTotal += actualPrice;
+
+    cart.items.push({
+      serviceId: new Types.ObjectId(booking.serviceId),
+      serviceName: service.serviceName,
+      providerId: service.providerId,
+      companyName: service.companyName,
+      bookingType: service.bookingType,
+      bookingDetails: {
+        date: new Date(booking.bookingDetails.date),
+        startHour: startHour,
+        endHour: endHour,
+        numberOfPeople: booking.bookingDetails.numberOfPeople,
+        //isFullVenue: booking.bookingDetails.isFullVenue || false,
+      },
+      price: actualPrice, // 🆕 Use calculated price
+      imageUrl: service.images?.[0],
+      packageId: new Types.ObjectId(dto.packageId),
+      packageName: pkg.packageName,
+    } as CartItem);
+  }
+
+  // 🆕 Set total to calculated amount
+  cart.totalAmount = calculatedTotal;
+  
+  return await cart.save();
+}
+
 }

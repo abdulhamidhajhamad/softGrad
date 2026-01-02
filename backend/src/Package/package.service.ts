@@ -299,4 +299,41 @@ export class PackageService {
 
     return true;
   }
+
+  /**
+ * Get active packages with their service details populated
+ * Useful for frontend display
+ */
+async getActivePackagesWithDetails(): Promise<any[]> {
+  const now = new Date();
+  const packages = await this.packageModel.find({
+    isActive: true,
+    startDate: { $lte: now },
+    endDate: { $gte: now }
+  }).exec();
+
+  // Populate service details
+  const packagesWithDetails = await Promise.all(
+    packages.map(async (pkg) => {
+      const serviceIds = pkg.services.map(s => s.serviceId);
+      const services = await this.serviceModel.find({ 
+        _id: { $in: serviceIds } 
+      }).select('serviceName bookingType images availableHours workingDays').exec();
+
+      return {
+        ...pkg.toObject(),
+        servicesDetails: services.map(svc => ({
+          serviceId: svc._id,
+          serviceName: svc.serviceName,
+          bookingType: svc.bookingType,
+          image: svc.images?.[0],
+          availableHours: svc.availableHours,
+          workingDays: svc.workingDays
+        }))
+      };
+    })
+  );
+
+  return packagesWithDetails;
+}
 }

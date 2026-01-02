@@ -1,10 +1,15 @@
-
+// lib/screens/packages.dart (REFACTORED)
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 
-import 'cart.dart'; // ✅ CartStore + CartPage
+import 'cart.dart';
+import 'package:flutter_application_1/services/package_service/package_service.dart';
+import 'package:flutter_application_1/services/package_service/add_to_cart_packages.dart';
+import 'package:flutter_application_1/widgets/package_booking_modal.dart';
+import 'package:flutter_application_1/widgets/package_services_view.dart';
+import 'package:flutter_application_1/services/payment_service/cart_service.dart';
 
 /// ✅ Brand Blue (ARGB)
 const Color kBrandBlue = Color.fromARGB(215, 20, 20, 215);
@@ -24,194 +29,12 @@ class PackagesPage extends StatefulWidget {
   State<PackagesPage> createState() => _PackagesPageState();
 }
 
-// ------------------------------------------------------------
-// Models
-// ------------------------------------------------------------
-
-class ServiceInPackage {
-  final String id;
-  final String name;
-  final String category;
-  final String vendorName;
-  final double originalPrice;
-  final double packagePrice;
-
-  ServiceInPackage({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.vendorName,
-    required this.originalPrice,
-    required this.packagePrice,
-  });
-
-  double get discountAmount =>
-      (originalPrice - packagePrice).clamp(0, double.infinity);
-}
-
-class PackageItem {
-  final String id;
-  final String name;
-  final String companyName;
-  final String city;
-  final String imageUrl;
-
-  final DateTime startDate;
-  final DateTime endDate;
-
-  final List<String> categories;
-  final List<ServiceInPackage> services;
-
-  PackageItem({
-    required this.id,
-    required this.name,
-    required this.companyName,
-    required this.city,
-    required this.imageUrl,
-    required this.startDate,
-    required this.endDate,
-    required this.categories,
-    required this.services,
-  });
-
-  double get totalOriginal => services.fold(0.0, (s, x) => s + x.originalPrice);
-  double get totalPackage => services.fold(0.0, (s, x) => s + x.packagePrice);
-
-  double get offPercent {
-    final o = totalOriginal;
-    final p = totalPackage;
-    if (o <= 0) return 0;
-    return (((o - p) / o) * 100).clamp(0, 100);
-  }
-}
-
-// ------------------------------------------------------------
-// Demo Data
-// ------------------------------------------------------------
-
-List<PackageItem> demoPackages() {
-  final now = DateTime.now();
-  DateTime d(int add) => DateTime(now.year, now.month, now.day + add);
-
-  return [
-    PackageItem(
-      id: "demo-1",
-      name: "Royal Wedding Bundle",
-      companyName: "Golden Moments Co.",
-      city: "Nablus",
-      imageUrl:
-          "https://images.unsplash.com/photo-1529634806980-85c3dd6d34ac?auto=format&fit=crop&w=1200&q=60",
-      startDate: d(2),
-      endDate: d(30),
-      categories: const ["Venues", "Photographers", "Decor & Lighting"],
-      services: [
-        ServiceInPackage(
-          id: "s1",
-          name: "Luxury Venue (4 hours)",
-          category: "Venues",
-          vendorName: "Golden Hall",
-          originalPrice: 4500,
-          packagePrice: 3600,
-        ),
-        ServiceInPackage(
-          id: "s2",
-          name: "Photography + Highlights",
-          category: "Photographers",
-          vendorName: "Lens Studio",
-          originalPrice: 2500,
-          packagePrice: 2000,
-        ),
-        ServiceInPackage(
-          id: "s3",
-          name: "Decor & Lighting Basic",
-          category: "Decor & Lighting",
-          vendorName: "LightCraft",
-          originalPrice: 1800,
-          packagePrice: 1400,
-        ),
-      ],
-    ),
-    PackageItem(
-      id: "demo-2",
-      name: "Classic Engagement Package",
-      companyName: "White & Blue Events",
-      city: "Ramallah",
-      imageUrl:
-          "https://images.unsplash.com/photo-1529634897861-1f81e4a6f6d7?auto=format&fit=crop&w=1200&q=60",
-      startDate: d(1),
-      endDate: d(20),
-      categories: const ["Cake", "Flower Shops", "Card Printing"],
-      services: [
-        ServiceInPackage(
-          id: "s4",
-          name: "Engagement Cake (2-tier)",
-          category: "Cake",
-          vendorName: "SugarCraft",
-          originalPrice: 900,
-          packagePrice: 750,
-        ),
-        ServiceInPackage(
-          id: "s5",
-          name: "Bouquet + Table Flowers",
-          category: "Flower Shops",
-          vendorName: "Bloom House",
-          originalPrice: 650,
-          packagePrice: 520,
-        ),
-        ServiceInPackage(
-          id: "s6",
-          name: "Invitation Cards (100)",
-          category: "Card Printing",
-          vendorName: "Printy",
-          originalPrice: 400,
-          packagePrice: 320,
-        ),
-      ],
-    ),
-    PackageItem(
-      id: "demo-3",
-      name: "Music Night Pack",
-      companyName: "Vibe Entertainment",
-      city: "Bethlehem",
-      imageUrl:
-          "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=1200&q=60",
-      startDate: d(5),
-      endDate: d(40),
-      categories: const [
-        "Music & Entertainment",
-        "Car Rental & Transportation"
-      ],
-      services: [
-        ServiceInPackage(
-          id: "s7",
-          name: "DJ Set (3 hours)",
-          category: "Music & Entertainment",
-          vendorName: "Vibe DJ",
-          originalPrice: 1200,
-          packagePrice: 950,
-        ),
-        ServiceInPackage(
-          id: "s8",
-          name: "Wedding Car (1 day)",
-          category: "Car Rental & Transportation",
-          vendorName: "DriveLux",
-          originalPrice: 700,
-          packagePrice: 560,
-        ),
-      ],
-    ),
-  ];
-}
-
-// ------------------------------------------------------------
-// Page State
-// ------------------------------------------------------------
-
 class _PackagesPageState extends State<PackagesPage> {
   final _searchCtrl = TextEditingController();
 
   bool _loading = true;
-  List<PackageItem> _all = [];
+  String? _error;
+  List<PackageModel> _allPackages = [];
 
   String _city = 'All';
   String _category = 'All';
@@ -248,7 +71,7 @@ class _PackagesPageState extends State<PackagesPage> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadPackages();
     _searchCtrl.addListener(() => setState(() {}));
   }
 
@@ -258,13 +81,24 @@ class _PackagesPageState extends State<PackagesPage> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 250));
+  Future<void> _loadPackages() async {
     setState(() {
-      _all = demoPackages(); // ✅ front-end demo
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+
+    try {
+      final packages = await PackageService.getActivePackages();
+      setState(() {
+        _allPackages = packages;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
   }
 
   void _toast(String msg, {bool danger = false}) {
@@ -281,22 +115,20 @@ class _PackagesPageState extends State<PackagesPage> {
     );
   }
 
-  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
-
-  List<PackageItem> get _filtered {
+  List<PackageModel> get _filtered {
     final q = _searchCtrl.text.trim().toLowerCase();
 
-    return _all.where((p) {
+    return _allPackages.where((p) {
       final cityOk =
           (_city == 'All') || (p.city.toLowerCase() == _city.toLowerCase());
       final catOk = (_category == 'All') ||
           p.categories.any((c) => c.toLowerCase() == _category.toLowerCase());
 
       final searchOk = q.isEmpty ||
-          p.name.toLowerCase().contains(q) ||
+          p.packageName.toLowerCase().contains(q) ||
           p.companyName.toLowerCase().contains(q) ||
           p.city.toLowerCase().contains(q) ||
-          p.services.any((s) => s.name.toLowerCase().contains(q));
+          p.services.any((s) => s.serviceName.toLowerCase().contains(q));
 
       return cityOk && catOk && searchOk;
     }).toList();
@@ -307,6 +139,56 @@ class _PackagesPageState extends State<PackagesPage> {
       context,
       MaterialPageRoute(builder: (_) => const CartPage()),
     );
+  }
+
+  Future<void> _handleAddToCart(PackageModel package) async {
+    // 1. Show booking modal to collect service details
+    final bookings = await showPackageBookingModal(
+      context: context,
+      package: package,
+    );
+
+    if (bookings == null || bookings.isEmpty) {
+      // User cancelled
+      return;
+    }
+
+    // 2. Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: kBrandBlue),
+      ),
+    );
+
+    try {
+      // 3. Call API to add package to cart
+      final dto = AddPackageToCartDto(
+        packageId: package.id,
+        serviceBookings: bookings,
+      );
+
+      final cartResponse = await PackageCartService.addPackageToCart(dto);
+
+      // 4. Update cart store
+      CartStore.instance.updateFromBackend(cartResponse.items);
+
+      // 5. Close loading
+      if (mounted) Navigator.pop(context);
+
+      // 6. Show success
+      _toast('Package added to cart ✅');
+    } catch (e) {
+      // Close loading
+      if (mounted) Navigator.pop(context);
+
+      // Show error
+      _toast(
+        e.toString().replaceAll('Exception: ', ''),
+        danger: true,
+      );
+    }
   }
 
   @override
@@ -371,7 +253,7 @@ class _PackagesPageState extends State<PackagesPage> {
             },
           ),
           IconButton(
-            onPressed: _load,
+            onPressed: _loadPackages,
             icon: const Icon(Icons.refresh_rounded, color: kText),
           ),
           const SizedBox(width: 6),
@@ -394,53 +276,32 @@ class _PackagesPageState extends State<PackagesPage> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : list.isEmpty
-                    ? _EmptyState(onRefresh: _load)
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
-                        itemCount: list.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) {
-                          final pkg = list[i];
-
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(18),
-                            onTap: _goToCart,
-                            child: _PackageCard(
-                              item: pkg,
-                              onAdd: (p, chosenDate) async {
-                                // ✅ Validate date inside window
-                                final min = _dateOnly(p.startDate);
-                                final max = _dateOnly(p.endDate);
-                                final d = _dateOnly(chosenDate);
-
-                                if (d.isBefore(min) || d.isAfter(max)) {
-                                  _toast(
-                                    "Booking date must be within the package availability window.",
-                                    danger: true,
+                : _error != null
+                    ? _ErrorState(error: _error!, onRetry: _loadPackages)
+                    : list.isEmpty
+                        ? _EmptyState(onRefresh: _loadPackages)
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                            itemCount: list.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (_, i) {
+                              final pkg = list[i];
+                              return _PackageCard(
+                                package: pkg,
+                                onAdd: () => _handleAddToCart(pkg),
+                                onViewInside: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          PackageServicesViewPage(package: pkg),
+                                    ),
                                   );
-                                  return;
-                                }
-
-                                // ✅ Add to cart + badge updates + saved in cart page
-                                CartStore.instance.add(
-                                  CartItem(
-                                    id: 'pkg-${p.id}',
-                                    title: p.name, // ✅ تغيير serviceName إلى title
-                                    providerName: p.companyName, // ✅ تغيير companyName إلى providerName
-                                    price: p.totalPackage,
-                                    imageUrl: p.imageUrl,
-                                    category: 'Packages', // ✅ تغيير ليكون نفس التنسيق
-                                    city: p.city,
-                                  ),
-                                );
-
-                                _toast("Added to cart ✅");
-                              },
-                            ),
-                          );
-                        },
-                      ),
+                                },
+                              );
+                            },
+                          ),
           ),
         ],
       ),
@@ -484,7 +345,7 @@ class _TopControls extends StatelessWidget {
                 style: GoogleFonts.poppins(
                     fontSize: 13, fontWeight: FontWeight.w600, color: kText),
                 decoration: InputDecoration(
-                  hintText: "Search packages, company, service...",
+                  hintText: "Search packages...",
                   hintStyle: GoogleFonts.poppins(
                       fontSize: 12, fontWeight: FontWeight.w500, color: kMuted),
                   prefixIcon: const Icon(Icons.search_rounded, color: kMuted),
@@ -615,12 +476,14 @@ class _CategoryStrip extends StatelessWidget {
 }
 
 class _PackageCard extends StatefulWidget {
-  final PackageItem item;
-  final Future<void> Function(PackageItem pkg, DateTime chosenDate) onAdd;
+  final PackageModel package;
+  final VoidCallback onAdd;
+  final VoidCallback onViewInside;
 
   const _PackageCard({
-    required this.item,
+    required this.package,
     required this.onAdd,
+    required this.onViewInside,
   });
 
   @override
@@ -629,22 +492,18 @@ class _PackageCard extends StatefulWidget {
 
 class _PackageCardState extends State<_PackageCard> {
   bool _expanded = false;
-  DateTime? _selectedDate;
-  bool _busy = false;
 
   final _money = NumberFormat.currency(symbol: '₪ ', decimalDigits: 0);
 
-  DateTime _only(DateTime d) => DateTime(d.year, d.month, d.day);
-
   @override
   Widget build(BuildContext context) {
-    final p = widget.item;
+    final p = widget.package;
 
     final dateFmt = DateFormat('MMM d, yyyy');
     final rangeText =
         "${dateFmt.format(p.startDate)}  →  ${dateFmt.format(p.endDate)}";
 
-    final offText = "${p.offPercent.toStringAsFixed(0)}% OFF";
+    final offText = "${p.discountPercent.toStringAsFixed(0)}% OFF";
 
     return Container(
       decoration: BoxDecoration(
@@ -661,7 +520,7 @@ class _PackageCardState extends State<_PackageCard> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  _Image(p.imageUrl),
+                  _Image(p.imageUrl ?? ''),
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -703,7 +562,7 @@ class _PackageCardState extends State<_PackageCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          p.name,
+                          p.packageName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.poppins(
@@ -807,11 +666,11 @@ class _PackageCardState extends State<_PackageCard> {
                 const SizedBox(height: 10),
 
                 // ---------------------------
-                // ✅ Expand services
+                // ✅ What's inside button
                 // ---------------------------
                 InkWell(
                   borderRadius: BorderRadius.circular(12),
-                  onTap: () => setState(() => _expanded = !_expanded),
+                  onTap: widget.onViewInside,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
@@ -827,130 +686,15 @@ class _PackageCardState extends State<_PackageCard> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            "What’s inside (services)",
+                            "What's inside (services)",
                             style: GoogleFonts.poppins(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w900,
                                 color: kText),
                           ),
                         ),
-                        Icon(
-                          _expanded
-                              ? Icons.expand_less_rounded
-                              : Icons.expand_more_rounded,
-                          color: kMuted,
-                        ),
+                        const Icon(Icons.chevron_right_rounded, color: kMuted),
                       ],
-                    ),
-                  ),
-                ),
-                AnimatedCrossFade(
-                  crossFadeState: _expanded
-                      ? CrossFadeState.showSecond
-                      : CrossFadeState.showFirst,
-                  duration: const Duration(milliseconds: 180),
-                  firstChild: const SizedBox(height: 0),
-                  secondChild: Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Column(
-                      children: p.services.map((s) {
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: kCard,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: kBorder),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color: kBrandBlue.withOpacity(0.10),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(Icons.check_rounded,
-                                    color: kBrandBlue, size: 18),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      s.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w900,
-                                        color: kText,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      "${s.vendorName} • ${s.category}",
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: kMuted,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          _money.format(s.originalPrice),
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: kMuted,
-                                            decoration:
-                                                TextDecoration.lineThrough,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          _money.format(s.packagePrice),
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w900,
-                                            color: kText,
-                                          ),
-                                        ),
-                                        const Spacer(),
-                                        if (s.discountAmount > 0)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 10, vertical: 6),
-                                            decoration: BoxDecoration(
-                                              color: kBrandBlue,
-                                              borderRadius:
-                                                  BorderRadius.circular(999),
-                                            ),
-                                            child: Text(
-                                              "-${_money.format(s.discountAmount)}",
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w900,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
                     ),
                   ),
                 ),
@@ -958,147 +702,27 @@ class _PackageCardState extends State<_PackageCard> {
                 const SizedBox(height: 10),
 
                 // ---------------------------
-                // ✅ Date + Add
+                // ✅ Add to Cart Button (NO date picker here)
                 // ---------------------------
-                Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () async {
-                          // ✅ FIX: prevent disabled calendar
-                          var first = _only(p.startDate);
-                          var last = _only(p.endDate);
-
-                          if (last.isBefore(first)) {
-                            final tmp = first;
-                            first = last;
-                            last = tmp;
-                          }
-
-                          var initial = _selectedDate ?? _only(DateTime.now());
-                          if (initial.isBefore(first)) initial = first;
-                          if (initial.isAfter(last)) initial = last;
-
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: initial,
-                            firstDate: first,
-                            lastDate: last,
-                            builder: (ctx, child) {
-                              return Theme(
-                                data: Theme.of(ctx).copyWith(
-                                  colorScheme: const ColorScheme.light(
-                                    primary: kBrandBlue,
-                                    onPrimary: Colors.white,
-                                    onSurface: kText,
-                                  ),
-                                ),
-                                child: child!,
-                              );
-                            },
-                          );
-
-                          if (picked != null) {
-                            setState(() => _selectedDate = _only(picked));
-                          }
-                        },
-                        child: Container(
-                          height: 46,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: kCard,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: kBorder),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.event_rounded,
-                                  color: kMuted, size: 18),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _selectedDate == null
-                                      ? "Select booking date"
-                                      : DateFormat('MMM d, yyyy')
-                                          .format(_selectedDate!),
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w900,
-                                    color:
-                                        _selectedDate == null ? kMuted : kText,
-                                  ),
-                                ),
-                              ),
-                              const Icon(Icons.chevron_right_rounded,
-                                  color: kMuted),
-                            ],
-                          ),
-                        ),
-                      ),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kBrandBlue,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                     ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      height: 46,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: kBrandBlue,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                        ),
-                        onPressed: _busy
-                            ? null
-                            : () async {
-                                if (_selectedDate == null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        "Please select booking date first.",
-                                        style: GoogleFonts.poppins(
-                                            fontWeight: FontWeight.w800),
-                                      ),
-                                      behavior: SnackBarBehavior.floating,
-                                      backgroundColor: kText,
-                                      duration:
-                                          const Duration(milliseconds: 1000),
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                setState(() => _busy = true);
-                                try {
-                                  await widget.onAdd(p, _selectedDate!);
-                                } finally {
-                                  if (mounted) setState(() => _busy = false);
-                                }
-                              },
-                        child: Row(
-                          children: [
-                            if (_busy)
-                              const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white),
-                              )
-                            else
-                              const Icon(Icons.add_shopping_cart_rounded,
-                                  size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Add",
-                              style: GoogleFonts.poppins(
-                                  fontSize: 12, fontWeight: FontWeight.w900),
-                            ),
-                          ],
-                        ),
-                      ),
+                    onPressed: widget.onAdd,
+                    icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
+                    label: Text(
+                      "Add to Cart",
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, fontWeight: FontWeight.w900),
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -1232,6 +856,56 @@ class _EmptyState extends StatelessWidget {
                 "Refresh",
                 style: GoogleFonts.poppins(
                     fontWeight: FontWeight.w900, color: kBrandBlue),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String error;
+  final VoidCallback onRetry;
+
+  const _ErrorState({required this.error, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: kDanger, size: 48),
+            const SizedBox(height: 12),
+            Text(
+              "Failed to load packages",
+              style: GoogleFonts.poppins(
+                  fontSize: 14, fontWeight: FontWeight.w900, color: kText),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: kMuted),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: onRetry,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kBrandBlue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(
+                "Retry",
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
               ),
             ),
           ],

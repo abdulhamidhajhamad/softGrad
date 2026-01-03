@@ -17,112 +17,118 @@ export class PackageService {
     @InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>,
   ) {}
 
-  async createPackage(providerId: string, createPackageDto: CreatePackageDto): Promise<Package> {
-    const provider = await this.providerModel
-      .findOne({ userId: new Types.ObjectId(providerId) })
-      .select('companyName')
-      .exec();
+ // package.service.ts - Updated createPackage with category
 
-    if (!provider || !provider.companyName) {
-      throw new BadRequestException('Provider profile not found or company name is missing.');
+async createPackage(providerId: string, createPackageDto: CreatePackageDto): Promise<Package> {
+  const provider = await this.providerModel
+    .findOne({ userId: new Types.ObjectId(providerId) })
+    .select('companyName location') // ✅ جلب location أيضاً
+    .exec();
+
+  if (!provider || !provider.companyName) {
+    throw new BadRequestException('Provider profile not found or company name is missing.');
+  }
+
+  let originalTotal = 0;
+  const serviceItems: any[] = [];
+  const serviceIds = createPackageDto.services.map(s => s.serviceId);
+
+  // ✅ جلب الخدمات مع category و bookingType
+  const existingServices = await this.serviceModel.find({ 
+    _id: { $in: serviceIds } 
+  }).select('_id serviceName category bookingType price priceOptions').exec();
+
+  if (existingServices.length !== serviceIds.length) {
+    throw new NotFoundException('One or more services not found.');
+  }
+
+  for (const itemDto of createPackageDto.services) {
+    const service = existingServices.find(s => (s as any)._id.toString() === itemDto.serviceId);
+    
+    if (!service) {
+      throw new NotFoundException(`Service with ID ${itemDto.serviceId} not found.`);
     }
 
-    let originalTotal = 0;
-    const serviceItems: any[] = [];
-    const serviceIds = createPackageDto.services.map(s => s.serviceId);
+    let originalPrice: number;
+    let newPrice: number;
 
-    const existingServices = await this.serviceModel.find({ 
-      _id: { $in: serviceIds } 
-    }).exec();
-
-    if (existingServices.length !== serviceIds.length) {
-      throw new NotFoundException('One or more services not found.');
-    }
-
-    for (const itemDto of createPackageDto.services) {
-      const service = existingServices.find(s => (s as any)._id.toString() === itemDto.serviceId);
+    const simplePrice = service.price;
+    const priceOpts = service.priceOptions;
+    
+    if (service.bookingType === 'hourly') {
+      const perHour = priceOpts?.perHour || simplePrice;
       
-      if (!service) {
-        throw new NotFoundException(`Service with ID ${itemDto.serviceId} not found.`);
+      if (!perHour) {
+        throw new BadRequestException(`Service "${service.serviceName}" has invalid pricing configuration`);
       }
 
-      let originalPrice: number;
-      let newPrice: number;
-
-      // ✅ استخدام price البسيط أولاً، ثم priceOptions للتوافق
-      const simplePrice = service.price;
-      const priceOpts = service.priceOptions;
-      
-      if (service.bookingType === 'hourly') {
-        const perHour = priceOpts?.perHour || simplePrice;
-        
-        if (!perHour) {
-          throw new BadRequestException(`Service "${service.serviceName}" has invalid pricing configuration`);
-        }
-
-        if (itemDto.maxHours && itemDto.maxHours > 0) {
-          originalPrice = perHour * itemDto.maxHours;
-          newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
-        } else {
-          originalPrice = perHour;
-          newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
-        }
-
-      } else if (service.bookingType === 'capacity') {
-        const perPerson = priceOpts?.perPerson || simplePrice;
-        
-        if (!perPerson) {
-          throw new BadRequestException(`Service "${service.serviceName}" has invalid pricing configuration`);
-        }
-
-        if (itemDto.maxCapacity && itemDto.maxCapacity > 0) {
-          originalPrice = perPerson * itemDto.maxCapacity;
-          newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
-        } else {
-          originalPrice = perPerson;
-          newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
-        }
-
+      if (itemDto.maxHours && itemDto.maxHours > 0) {
+        originalPrice = perHour * itemDto.maxHours;
+        newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
       } else {
-        const basePrice = priceOpts?.basePrice || simplePrice;
-        
-        if (!basePrice) {
-          throw new BadRequestException(`Service "${service.serviceName}" has invalid base pricing`);
-        }
-        originalPrice = basePrice;
+        originalPrice = perHour;
         newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
       }
 
-      originalTotal += originalPrice;
+    } else if (service.bookingType === 'capacity') {
+      const perPerson = priceOpts?.perPerson || simplePrice;
+      
+      if (!perPerson) {
+        throw new BadRequestException(`Service "${service.serviceName}" has invalid pricing configuration`);
+      }
 
-      const packageServiceItem = {
-        serviceId: service._id,
-        serviceName: service.serviceName,
-        originalPrice: originalPrice,
-        newPrice: newPrice,
-        ...(itemDto.maxHours && { maxHours: itemDto.maxHours }),
-        ...(itemDto.maxCapacity && { maxCapacity: itemDto.maxCapacity }),
-      };
+      if (itemDto.maxCapacity && itemDto.maxCapacity > 0) {
+        originalPrice = perPerson * itemDto.maxCapacity;
+        newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
+      } else {
+        originalPrice = perPerson;
+        newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
+      }
 
-      serviceItems.push(packageServiceItem);
+    } else {
+      const basePrice = priceOpts?.basePrice || simplePrice;
+      
+      if (!basePrice) {
+        throw new BadRequestException(`Service "${service.serviceName}" has invalid base pricing`);
+      }
+      originalPrice = basePrice;
+      newPrice = itemDto.newPrice !== undefined ? itemDto.newPrice : originalPrice;
     }
 
-    const createdPackage = new this.packageModel({
-      providerId: providerId,
-      companyName: provider.companyName,
-      packageName: createPackageDto.packageName,
-      description: createPackageDto.description,
-      services: serviceItems,
-      originalTotalPrice: originalTotal,
-      newPrice: createPackageDto.newPrice,
-      startDate: createPackageDto.startDate,
-      endDate: createPackageDto.endDate,
-      packageImageUrl: createPackageDto.packageImageUrl,
-      isActive: true,
-    });
+    originalTotal += originalPrice;
 
-    return createdPackage.save();
+    const packageServiceItem = {
+      serviceId: service._id,
+      serviceName: service.serviceName,
+      category: service.category, // ✅ إضافة category
+      originalPrice: originalPrice,
+      newPrice: newPrice,
+      ...(itemDto.maxHours && { maxHours: itemDto.maxHours }),
+      ...(itemDto.maxCapacity && { maxCapacity: itemDto.maxCapacity }),
+    };
+
+    serviceItems.push(packageServiceItem);
   }
+
+  const createdPackage = new this.packageModel({
+    providerId: providerId,
+    companyName: provider.companyName,
+    city: provider.location?.city || 'Unknown', // ✅ إضافة city
+    packageName: createPackageDto.packageName,
+    description: createPackageDto.description,
+    services: serviceItems,
+    originalTotalPrice: originalTotal,
+    newPrice: createPackageDto.newPrice,
+    startDate: createPackageDto.startDate,
+    endDate: createPackageDto.endDate,
+    packageImageUrl: createPackageDto.packageImageUrl,
+    isActive: true,
+  });
+
+  return createdPackage.save();
+}
+
+
 
   async updatePackage(
     packageId: string,
@@ -235,22 +241,105 @@ export class PackageService {
     return await this.packageModel.find({ providerId }).exec();
   }
 
-  async getActivePackages(): Promise<Package[]> {
-    const now = new Date();
-    return await this.packageModel.find({
-      isActive: true,
-      startDate: { $lte: now },
-      endDate: { $gte: now }
-    }).exec();
+// package.service.ts - FIXED TypeScript errors
+
+async getActivePackages(): Promise<any[]> {
+  const now = new Date();
+  const packages = await this.packageModel.find({
+    isActive: true,
+    startDate: { $lte: now },
+    endDate: { $gte: now }
+  }).exec();
+
+  const packagesWithDetails = await Promise.all(
+    packages.map(async (pkg) => {
+      const serviceIds = pkg.services.map(s => s.serviceId);
+      
+      const services = await this.serviceModel.find({ 
+        _id: { $in: serviceIds } 
+      }).select('_id bookingType category').exec(); // ✅ أضف category
+
+      const enrichedServices = pkg.services.map(pkgService => {
+        const fullService = services.find(
+          // ✅ FIX: استخدم as any لتجنب خطأ TypeScript
+          s => (s._id as any).toString() === pkgService.serviceId.toString()
+        );
+
+        return {
+          serviceId: pkgService.serviceId.toString(),
+          serviceName: pkgService.serviceName,
+          category: pkgService.category || fullService?.category || 'General', // ✅ استخدم category من Package أو Service
+          bookingType: fullService?.bookingType || 'display',
+          originalPrice: pkgService.originalPrice,
+          newPrice: pkgService.newPrice,
+          maxHours: pkgService.maxHours,
+          maxCapacity: pkgService.maxCapacity,
+        };
+      });
+
+      return {
+        // ✅ FIX: استخدم as any لتجنب خطأ TypeScript
+        _id: (pkg._id as any).toString(),
+        packageName: pkg.packageName,
+        companyName: pkg.companyName,
+        city: pkg.city || 'Unknown', // ✅ استخدم city من Package
+        startDate: pkg.startDate,
+        endDate: pkg.endDate,
+        categories: [...new Set(enrichedServices.map(s => s.category))], // ✅ categories فريدة
+        services: enrichedServices,
+        imageUrl: pkg.packageImageUrl,
+        isActive: pkg.isActive,
+      };
+    })
+  );
+
+  return packagesWithDetails;
+}
+
+// ✅ FIX: getPackageById with same fixes
+async getPackageById(packageId: string): Promise<any> {
+  const pkg = await this.packageModel.findById(packageId).exec();
+  if (!pkg) {
+    throw new NotFoundException('Package not found');
   }
 
-  async getPackageById(packageId: string): Promise<Package> {
-    const pkg = await this.packageModel.findById(packageId).exec();
-    if (!pkg) {
-      throw new NotFoundException('Package not found');
-    }
-    return pkg;
-  }
+  const serviceIds = pkg.services.map(s => s.serviceId);
+  const services = await this.serviceModel.find({ 
+    _id: { $in: serviceIds } 
+  }).select('_id bookingType category').exec();
+
+  const enrichedServices = pkg.services.map(pkgService => {
+    const fullService = services.find(
+      // ✅ FIX: as any
+      s => (s._id as any).toString() === pkgService.serviceId.toString()
+    );
+
+    return {
+      serviceId: pkgService.serviceId.toString(),
+      serviceName: pkgService.serviceName,
+      category: pkgService.category || fullService?.category || 'General',
+      bookingType: fullService?.bookingType || 'display',
+      originalPrice: pkgService.originalPrice,
+      newPrice: pkgService.newPrice,
+      maxHours: pkgService.maxHours,
+      maxCapacity: pkgService.maxCapacity,
+    };
+  });
+
+  return {
+    // ✅ FIX: as any
+    _id: (pkg._id as any).toString(),
+    packageName: pkg.packageName,
+    companyName: pkg.companyName,
+    city: pkg.city || 'Unknown',
+    startDate: pkg.startDate,
+    endDate: pkg.endDate,
+    categories: [...new Set(enrichedServices.map(s => s.category))],
+    services: enrichedServices,
+    imageUrl: pkg.packageImageUrl,
+    isActive: pkg.isActive,
+  };
+}
 
   async updatePackageStatus(
     packageId: string,

@@ -1,4 +1,4 @@
-// package.entity.ts
+// package.entity.ts - Updated with category
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
@@ -10,13 +10,15 @@ export class PackageServiceItem {
   @Prop({ type: String, required: true })
   serviceName: string;
 
-  @Prop({ type: Number, required: true })
-  originalPrice: number; // السعر الأصلي
+  @Prop({ type: String }) // ✅ إضافة category
+  category?: string;
 
   @Prop({ type: Number, required: true })
-  newPrice: number; // السعر الجديد في الباقة
+  originalPrice: number;
 
-  // ⭐ إذا موجود = باقة بكمية ثابتة، إذا null = سعر وحدة مخفض
+  @Prop({ type: Number, required: true })
+  newPrice: number;
+
   @Prop({ type: Number })
   maxHours?: number;
 
@@ -42,10 +44,10 @@ export class Package extends Document {
   services: PackageServiceItem[];
 
   @Prop({ type: Number, required: true })
-  originalTotalPrice: number; // مجموع الأسعار الأصلية
+  originalTotalPrice: number;
 
   @Prop({ type: Number, required: true })
-  newPrice: number; // سعر الباقة النهائي
+  newPrice: number;
 
   @Prop({ type: Date, required: true })
   startDate: Date;
@@ -61,6 +63,9 @@ export class Package extends Document {
 
   @Prop({ type: String })
   description?: string;
+
+  @Prop({ type: String }) // ✅ إضافة city
+  city?: string;
 }
 
 export const PackageSchema = SchemaFactory.createForClass(Package);

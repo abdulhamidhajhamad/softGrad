@@ -6,16 +6,18 @@ import { Service, BookingType, PayType } from './service.schema';
 import { CreateServiceDto, UpdateServiceDto } from './service.dto'; 
 import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
 import { ServiceProvider } from '../providers/provider.entity'; 
+import { Review } from '../review/review.schema';
 
 @Injectable()
 export class ServiceService {
   private readonly logger = new Logger(ServiceService.name);
   
-  constructor(
-    @InjectModel(Service.name) private serviceModel: Model<Service>,
-    @InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>,
-    private supabaseStorage: SupabaseStorageService,
-  ) {}
+constructor(
+  @InjectModel(Service.name) private serviceModel: Model<Service>,
+  @InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>,
+  @InjectModel(Review.name) private reviewModel: Model<Review>, // ✅ NEW
+  private supabaseStorage: SupabaseStorageService,
+) {}
 
   // 1. جلب جميع الخدمات
   async getAllServices(): Promise<Service[]> {
@@ -367,60 +369,69 @@ export class ServiceService {
     }
   }
 
-  async getServiceById(serviceId: string): Promise<any> {
-    try {
-      const service = await this.serviceModel.findById(serviceId).lean().exec();
+async getServiceById(serviceId: string): Promise<any> {
+  try {
+    const service = await this.serviceModel.findById(serviceId).lean().exec();
 
-      if (!service) {
-        throw new NotFoundException('Service not found');
-      }
-
-      const searchId = Types.ObjectId.isValid(service.providerId) 
-        ? new Types.ObjectId(service.providerId) 
-        : service.providerId;
-
-      const provider: any = await this.providerModel.findOne({ 
-        $or: [
-          { userId: searchId }, 
-          { _id: searchId } 
-        ]
-      }).lean().exec();
-
-      // ✅ السعر الآن بسيط - number واحد أو undefined
-      const priceDisplay = service.price ? `${service.price}` : "N/A";
-
-      return {
-        serviceName: service.serviceName,
-        companyName: service.companyName,
-        bookingType: service.bookingType,
-        description: service.description,
-        additionalInfo: service.additionalInfo, 
-        price: priceDisplay,
-        payType: service.payType,
-        city: service.location?.city || "N/A",
-        longitude: service.location?.longitude || null,
-        latitude: service.location?.latitude || null,
-        rating: service.rating || 0,
-        
-        lastTwoReviews: (service.reviews || []).slice(-2).map((rev: any) => ({
-          rating: rev.rating,
-          images: rev.images || [],
-          date: rev.createdAt || rev.date,
-          description: rev.comment
-        })).reverse(),
-
-        companyInfo: {
-          name: service.companyName,
-          email: provider?.details?.email || provider?.email || "N/A",
-          phone: provider?.details?.phone || provider?.phone || "N/A"
-        }
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      this.logger.error(`Error in getServiceById: ${error.message}`);
-      throw new HttpException('Error retrieving service details', HttpStatus.INTERNAL_SERVER_ERROR);
+    if (!service) {
+      throw new NotFoundException('Service not found');
     }
+
+    const searchId = Types.ObjectId.isValid(service.providerId)
+      ? new Types.ObjectId(service.providerId)
+      : service.providerId;
+
+    const provider: any = await this.providerModel.findOne({
+      $or: [
+        { userId: searchId },
+        { _id: searchId }
+      ]
+    }).lean().exec();
+
+    const priceDisplay = service.price ? `${service.price}` : "N/A";
+
+    // ✅ جلب آخر تقييمين من جدول Reviews المنفصل
+    const lastTwoReviews = await this.reviewModel
+      .find({ serviceId: new Types.ObjectId(serviceId), isVisible: true })
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .select('rating images createdAt comment')
+      .lean()
+      .exec();
+
+    return {
+      serviceName: service.serviceName,
+      companyName: service.companyName,
+      bookingType: service.bookingType,
+      description: service.description,
+      additionalInfo: service.additionalInfo,
+      price: priceDisplay,
+      payType: service.payType,
+      city: service.location?.city || "N/A",
+      longitude: service.location?.longitude || null,
+      latitude: service.location?.latitude || null,
+      rating: service.averageRating || 0, // ✅ استخدام averageRating
+      totalReviews: service.totalReviews || 0, // ✅ إضافة عدد التقييمات
+
+      lastTwoReviews: lastTwoReviews.map((rev: any) => ({
+        rating: rev.rating,
+        images: rev.images || [],
+        date: rev.createdAt,
+        description: rev.comment
+      })),
+
+      companyInfo: {
+        name: service.companyName,
+        email: provider?.details?.email || provider?.email || "N/A",
+        phone: provider?.details?.phone || provider?.phone || "N/A"
+      }
+    };
+  } catch (error) {
+    if (error instanceof NotFoundException) throw error;
+    this.logger.error(`Error in getServiceById: ${error.message}`);
+    throw new HttpException('Error retrieving service details', HttpStatus.INTERNAL_SERVER_ERROR);
   }
+}
 
   // 12. دالة جلب تفاصيل خدمات الفيندور
   async getVendorServicesDetails(providerId: string): Promise<any[]> {

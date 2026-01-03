@@ -6,7 +6,7 @@ import { BookingType } from '../service/service.schema';
 export enum BookingStatus {
   PENDING = 'pending',
   CONFIRMED = 'confirmed',
-  CANCELLED = 'cancelled', // 👈 حالة الإلغاء لبوكينج واحد
+  CANCELLED = 'cancelled',
   COMPLETED = 'completed'
 }
 
@@ -30,24 +30,21 @@ export class BookingDetails {
 
 @Schema({ timestamps: true })
 export class Booking extends Document {
-  // 🔗 هذا المعرف يربط هذا الحجز بالـ Payment Intent
   @Prop({ type: String, required: true })
   paymentIntentId: string;
-    
+
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;
 
-  // معلومات الخدمة
   @Prop({ type: Types.ObjectId, ref: 'Service', required: true })
   serviceId: Types.ObjectId;
 
   @Prop({ type: String, required: true })
   serviceName: string;
 
-  // معلومات البائع
   @Prop({ type: String, required: true })
-  providerId: string; // Vendor ID
-    
+  providerId: string;
+
   @Prop({ type: String, required: true })
   companyName: string;
 
@@ -58,20 +55,26 @@ export class Booking extends Document {
   bookingDetails: BookingDetails;
 
   @Prop({ type: Number, required: true })
-  price: number; // 💰 سعر الخدمة الواحدة (مهم للريفند)
+  price: number;
 
-  @Prop({ type: String, enum: Object.values(BookingStatus), default: BookingStatus.PENDING }) // 👈 تبدأ PENDING بعد الدفع
+  @Prop({ type: String, enum: Object.values(BookingStatus), default: BookingStatus.PENDING })
   status: BookingStatus;
-    
-  @Prop({ type: Boolean, default: false }) // 💰 حقل لتسجيل عملية الـ Refund
+
+  @Prop({ type: Boolean, default: false })
   refunded: boolean;
-    
-  @Prop({ type: String, required: false }) // 📝 سبب الإلغاء
+
+  @Prop({ type: String, required: false })
   cancellationReason?: string;
 
-  // 🟢 الحقل الجديد: لتحديد ما إذا كان البائع قد شاهد الحجز
   @Prop({ type: Boolean, default: false })
   seen: boolean;
+
+  // ✅ NEW: Review Tracking
+  @Prop({ type: Boolean, default: false })
+  isReviewed: boolean;
+
+  @Prop({ type: Date })
+  reviewedAt?: Date;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);

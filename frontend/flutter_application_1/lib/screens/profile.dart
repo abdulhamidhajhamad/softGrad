@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'edit_profile_customer.dart';
 import 'security_password.dart';
-import 'provider.dart';
+import 'package:flutter_application_1/screens/review_screen/my_bookings_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 
 /// Simple user data model for the profile screen
@@ -42,11 +42,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   late User _currentUser;
   bool _isLoading = true;
+  String? _userRole; // ✅ ADDED
 
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+    _loadUserRole(); // ✅ ADDED
+  }
+
+  // ✅ NEW METHOD: Load User Role
+  Future<void> _loadUserRole() async {
+    final role = await AuthService.getUserRole();
+    setState(() {
+      _userRole = role?.toLowerCase(); // Normalize to lowercase
+    });
+    print('🔑 User Role: $_userRole'); // Debug
   }
 
   Future<void> _loadUserProfile() async {
@@ -122,7 +133,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Scaffold(
         backgroundColor: backgroundColor,
         appBar: AppBar(
-          automaticallyImplyLeading: false, // ✅ removes back arrow
+          automaticallyImplyLeading: false,
           backgroundColor: backgroundColor,
           elevation: 0,
           centerTitle: true,
@@ -206,6 +217,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+
+              // ✅ MY BOOKINGS - ONLY FOR REGULAR USERS
+              if (_userRole == 'user' || _userRole == 'customer') ...[
+                Text('My Bookings', style: sectionTitleStyle),
+                const SizedBox(height: 8),
+                _SectionCard(
+                  backgroundColor: cardColor,
+                  child: ListTile(
+                    leading: Icon(Icons.event_note_outlined, color: iconColor),
+                    title: Text(
+                      'My Bookings',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: textPrimary,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'View and manage your bookings',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: textSecondary,
+                      ),
+                    ),
+                    trailing: Icon(Icons.chevron_right_rounded, color: iconColor),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MyBookingsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
 
               // Settings Section
               Text('Settings', style: sectionTitleStyle),

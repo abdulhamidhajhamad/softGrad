@@ -4,13 +4,16 @@ import { ServiceController } from './service.controller';
 import { ServiceService } from './service.service';
 import { ServiceSchema } from './service.schema';
 import { SupabaseStorageModule } from '../subbase/supabaseStorage.module';
-// 🆕 استيراد نموذج المزود
-import { ServiceProvider, ServiceProviderSchema } from '../providers/provider.entity'; // ⚠️ تأكد من صحة المسار
+import { ServiceProvider, ServiceProviderSchema } from '../providers/provider.entity';
+import { Review, ReviewSchema } from '../review/review.schema'; // ✅ NEW
+
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: 'Service', schema: ServiceSchema }]),
-    // 🆕 تسجيل نموذج ServiceProvider
-    MongooseModule.forFeature([{ name: ServiceProvider.name, schema: ServiceProviderSchema }]), 
+    MongooseModule.forFeature([
+      { name: 'Service', schema: ServiceSchema },
+      { name: ServiceProvider.name, schema: ServiceProviderSchema },
+      { name: Review.name, schema: ReviewSchema }, // ✅ NEW
+    ]),
     SupabaseStorageModule, 
   ],
   controllers: [ServiceController],

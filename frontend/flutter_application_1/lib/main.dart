@@ -23,6 +23,11 @@ import 'package:flutter_application_1/screens/forgot_password/forgot_password_re
 import 'package:flutter_application_1/screens/forgot_password/reset_password.dart';
 import 'package:flutter_application_1/screens/Ai_Screen/ai_screen_layout.dart';
 
+// ✅ Review System Screens
+import 'package:flutter_application_1/screens/review_screen/my_bookings_screen.dart';
+import 'package:flutter_application_1/screens/review_screen/pending_reviews_screen.dart';
+import 'package:flutter_application_1/screens/review_screen/my_reviews_screen.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   setupServiceLocator();
@@ -69,6 +74,11 @@ class MyApp extends StatelessWidget {
         '/templates': (_) => const TemplatesPage(),
         '/forgot-password': (_) => const ForgotPasswordRequestScreen(),
         '/ai-generator': (context) => const AiScreenLayout(),
+        
+        // ✅ Review System Routes
+        '/my-bookings': (_) => const MyBookingsScreen(),
+        '/pending-reviews': (_) => const PendingReviewsScreen(),
+        '/my-reviews': (_) => const MyReviewsScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/verification') {
@@ -78,7 +88,6 @@ class MyApp extends StatelessWidget {
           );
         }
         
-        // ✅ FIXED: Changed ResetPasswordWebScreen to ResetPasswordScreen
         if (settings.name == '/reset-password') {
           return MaterialPageRoute(
             builder: (_) => ResetPasswordScreen(),

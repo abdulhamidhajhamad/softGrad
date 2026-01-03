@@ -108,27 +108,20 @@ class AuthService {
 
   // ====================== USER ROLE =========================
 
-  /// Extract user role from token
+  /// Get user role from stored user data
   static Future<String?> getUserRole() async {
-    final token = await getToken();
-    if (token == null) return null;
-
     try {
-      final parts = token.split('.');
-      if (parts.length != 3) return null;
-      
-      final payload = parts[1];
-      String normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
-      while (normalized.length % 4 != 0) {
-        normalized += '=';
+      final userData = await getUserData();
+      if (userData == null) {
+        print('⚠️ No user data found, cannot get role');
+        return null;
       }
       
-      final payloadData = utf8.decode(base64Decode(normalized));
-      final decodedPayload = json.decode(payloadData);
-      
-      return decodedPayload['role'] ?? decodedPayload['userRole'] as String?;
+      final role = userData['role'] as String?;
+      print('✅ User Role from userData: $role');
+      return role?.toLowerCase(); // Normalize to lowercase
     } catch (e) {
-      print('❌ Error decoding token payload: $e');
+      print('❌ Error getting user role: $e');
       return null;
     }
   }

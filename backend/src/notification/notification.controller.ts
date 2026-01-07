@@ -19,18 +19,29 @@ import { RecipientType } from './notification.schema';
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
+  // ✅ Helper function لتحويل role إلى RecipientType
+  private getRoleAsRecipientType(userRole:  string): RecipientType {
+    if (userRole === 'vendor') {
+      return RecipientType. VENDOR;
+    } else if (userRole === 'admin') {
+      return RecipientType.ADMIN;
+    } else {
+      return RecipientType.USER;
+    }
+  }
+
   // GET /notifications
   @Get()
   async getNotifications(@Request() req) {
-    const userId = req.user.userId || req.user.id;
+    const userId = req. user.userId || req.user.id;
     const userRole = req.user.role;
     
-    // Convert role to RecipientType
-    const recipientType = userRole === 'vendor' ? RecipientType.VENDOR : RecipientType.USER;
+    // ✅ تعديل:  دعم admin
+    const recipientType = this.getRoleAsRecipientType(userRole);
     
     console.log('🔔 Fetching notifications for:', { userId, userRole, recipientType });
     
-    return this.notificationService.getNotifications(
+    return this. notificationService.getNotifications(
       new Types.ObjectId(userId), 
       recipientType
     );
@@ -42,12 +53,12 @@ export class NotificationController {
     const userId = req.user.userId || req.user.id;
     const userRole = req.user.role;
     
-    // Convert role to RecipientType
-    const recipientType = userRole === 'vendor' ? RecipientType.VENDOR : RecipientType.USER;
+    // ✅ تعديل: دعم admin
+    const recipientType = this.getRoleAsRecipientType(userRole);
     
     console.log('🔔 Fetching unread count for:', { userId, userRole, recipientType });
     
-    const count = await this.notificationService.getUnreadCount(
+    const count = await this.notificationService. getUnreadCount(
       new Types.ObjectId(userId), 
       recipientType
     );
@@ -64,12 +75,12 @@ export class NotificationController {
     const userId = req.user.userId || req.user.id;
     const userRole = req.user.role;
     
-    // Convert role to RecipientType
-    const recipientType = userRole === 'vendor' ? RecipientType.VENDOR : RecipientType.USER;
+    // ✅ تعديل: دعم admin
+    const recipientType = this.getRoleAsRecipientType(userRole);
     
     console.log('✅ Marking all as read for:', { userId, userRole, recipientType });
     
-    await this.notificationService.markAllAsRead(
+    await this.notificationService. markAllAsRead(
       new Types.ObjectId(userId), 
       recipientType
     );
@@ -87,7 +98,7 @@ export class NotificationController {
     console.log('🗑️ Deleting notification:', { notificationId, userId });
     
     await this.notificationService.deleteNotification(
-      new Types.ObjectId(notificationId), 
+      new Types. ObjectId(notificationId), 
       new Types.ObjectId(userId)
     );
   }

@@ -5,6 +5,7 @@ import 'package:flutter_application_1/services/auth_service.dart'; // Import Aut
 import 'package:flutter_application_1/screens/home_provider.dart';
 import 'package:flutter_application_1/services/fcm_service.dart';
 import 'package:flutter_application_1/screens/forgot_password/forgot_password_request.dart';
+import 'package:flutter_application_1/screens/admin/admin_main_screen.dart'; // Import Admin Screen
 
 /// Sign In screen for existing users
 class SignInScreen extends StatefulWidget {
@@ -125,6 +126,14 @@ Future<String?> _getFCMToken() async {
                     reviews: _getStatCount(userData, 'reviews'),
                   ),
                 ),
+              ),
+            );
+          } else if (userRole == 'admin') {
+            // ✅ Navigate to Admin Dashboard
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AdminMainScreen(adminName: userName),
               ),
             );
           } else {

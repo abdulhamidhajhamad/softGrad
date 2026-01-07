@@ -1,12 +1,12 @@
-import 'dart:typed_data'; // Fixed library name
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'booking_common_widgets.dart'; 
 import 'package:flutter_application_1/services/service_service.dart';
 
-// Added kTextColor to the hide list to resolve the ambiguity error
 import '../map_location_picker.dart' hide kPrimaryColor, kTextColor;
+
 class AddHourlyService extends StatefulWidget {
   final String category;
   final String bookingType;
@@ -30,7 +30,7 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
   final addressCtrl = TextEditingController();
   final latitudeCtrl = TextEditingController();
   final longitudeCtrl = TextEditingController();
-  final priceCtrl = TextEditingController(); // per hour
+  final priceCtrl = TextEditingController();
   final discountCtrl = TextEditingController();
 
   String? _selectedCity;
@@ -44,9 +44,13 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
   // ✅ live pricing preview
   double? _finalPrice;
   double? _savedAmount;
-    double? _selectedLat;
-    double? _selectedLng;
-    bool _hasLocationSet = false;
+  double? _selectedLat;
+  double? _selectedLng;
+  bool _hasLocationSet = false;
+
+  // 🆕 Venue Type (Indoor/Outdoor) - Default: Indoor
+  String _venueType = "indoor";
+
   // hourly-specific (min must allow 1 hour)
   final minHoursCtrl = TextEditingController(text: "1");
   final maxHoursCtrl = TextEditingController(text: "8");
@@ -70,7 +74,7 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
   RangeValues _hoursRange = const RangeValues(1, 8);
 
   // Daily capacity planner (suggested only)
-  double _gapMinutes = 0; // time between events (minutes)
+  double _gapMinutes = 0;
 
   // ✅ NEW: choose suggested slots (count = seats per day)
   final Set<String> _selectedSuggestedSlots = {};
@@ -90,7 +94,6 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
       (safeMax < safeMin ? safeMin : safeMax).toDouble(),
     );
 
-    // sensible defaults
     _gapMinutes = 0;
 
     // ✅ live price calc
@@ -99,7 +102,6 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     _recalcPrice();
   }
 
-  // ✅ compute final price as user types
   void _recalcPrice() {
     final price = double.tryParse(priceCtrl.text.trim());
     final disc = double.tryParse(discountCtrl.text.trim());
@@ -118,7 +120,6 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     final finalP = price * (1 - d / 100.0);
     final saved = price - finalP;
 
-    // reduce useless rebuilds
     if (_finalPrice == finalP && _savedAmount == saved) return;
 
     setState(() {
@@ -136,7 +137,6 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     setState(() => _coverImage = bytes);
   }
 
-  // ✅ highlights dialog: Key + Value
   Future<void> _addHighlight() async {
     final keyCtrl = TextEditingController();
     final valCtrl = TextEditingController();
@@ -224,172 +224,165 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     return TimeOfDay(hour: h, minute: mm);
   }
 
-  // ✅ helper: first 3 letters
   String _day3(String d) => d.length <= 3 ? d : d.substring(0, 3);
 
-  // ✅ summary: show first 3 letters too
   String _daysSummary() {
     if (_selectedDays.isEmpty) return "No days selected";
     if (_selectedDays.length == _weekdays.length) return "Every day";
 
     final ordered = _weekdays.where(_selectedDays.contains).toList();
-    return ordered.map(_day3).join(", "); // ✅ Mon, Tue, Fri...
+    return ordered.map(_day3).join(", ");
   }
 
   void _syncHoursCtrls(RangeValues v) {
     minHoursCtrl.text = v.start.round().toString();
     maxHoursCtrl.text = v.end.round().toString();
-
   }
 
-int _eventsPerDay() {
-  if (_from == null || _to == null) return 0;
+  int _eventsPerDay() {
+    if (_from == null || _to == null) return 0;
 
-  final fromMin = _toMinutes(_from!);
-  final toMin = _toMinutes(_to!);
+    final fromMin = _toMinutes(_from!);
+    final toMin = _toMinutes(_to!);
 
-  final usable = toMin - fromMin;
-  
-  // ✅ استخدم minHours بدل _eventHours
-  final minHours = double.tryParse(minHoursCtrl.text.trim()) ?? 1.0;
-  final eventMin = (minHours * 60).round();
-  final gapMin = _gapMinutes.round();
+    final usable = toMin - fromMin;
+    
+    final minHours = double.tryParse(minHoursCtrl.text.trim()) ?? 1.0;
+    final eventMin = (minHours * 60).round();
+    final gapMin = _gapMinutes.round();
 
-  if (usable <= 0 || eventMin <= 0) return 0;
-  if (usable < eventMin) return 0;
+    if (usable <= 0 || eventMin <= 0) return 0;
+    if (usable < eventMin) return 0;
 
-  // n events need: n*event + (n-1)*gap <= usable
-  final n = ((usable + gapMin) / (eventMin + gapMin)).floor();
-  return n.clamp(0, 50);
-}
-
-List<Map<String, String>> _buildSlotsPreview() {
-  if (_from == null || _to == null) return [];
-
-  final n = _eventsPerDay();
-  if (n <= 0) return [];
-
-  final toMin = _toMinutes(_to!);
-  final start = _toMinutes(_from!);
-  
-  // ✅ استخدم minHours بدل _eventHours
-  final minHours = double.tryParse(minHoursCtrl.text.trim()) ?? 1.0;
-  final eventMin = (minHours * 60).round();
-  final gapMin = _gapMinutes.round();
-
-  var cur = start;
-  final slots = <Map<String, String>>[];
-
-  for (int i = 0; i < n; i++) {
-    final s = cur;
-    final e = cur + eventMin;
-    if (e > toMin) break;
-
-    slots.add({
-      "start": _fmtTime(_fromMinutes(s)),
-      "end": _fmtTime(_fromMinutes(e)),
-    });
-
-    cur = e + gapMin;
+    final n = ((usable + gapMin) / (eventMin + gapMin)).floor();
+    return n.clamp(0, 50);
   }
-  return slots;
-}
+
+  List<Map<String, String>> _buildSlotsPreview() {
+    if (_from == null || _to == null) return [];
+
+    final n = _eventsPerDay();
+    if (n <= 0) return [];
+
+    final toMin = _toMinutes(_to!);
+    final start = _toMinutes(_from!);
+    
+    final minHours = double.tryParse(minHoursCtrl.text.trim()) ?? 1.0;
+    final eventMin = (minHours * 60).round();
+    final gapMin = _gapMinutes.round();
+
+    var cur = start;
+    final slots = <Map<String, String>>[];
+
+    for (int i = 0; i < n; i++) {
+      final s = cur;
+      final e = cur + eventMin;
+      if (e > toMin) break;
+
+      slots.add({
+        "start": _fmtTime(_fromMinutes(s)),
+        "end": _fmtTime(_fromMinutes(e)),
+      });
+
+      cur = e + gapMin;
+    }
+    return slots;
+  }
 
   String _slotKey(Map<String, String> s) => '${s["start"]}-${s["end"]}';
 
   bool _saving = false;
 
-Future<void> _trySave() async {
-  final ok = _formKey.currentState?.validate() ?? false;
-  if (!ok) return;
+  Future<void> _trySave() async {
+    final ok = _formKey.currentState?.validate() ?? false;
+    if (!ok) return;
 
-  if (_selectedDays.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Select at least one day", style: GoogleFonts.poppins())),
-    );
-    return;
+    if (_selectedDays.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Select at least one day", style: GoogleFonts.poppins())),
+      );
+      return;
+    }
+
+    if (_from == null || _to == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Set time range", style: GoogleFonts.poppins())),
+      );
+      return;
+    }
+
+    if (_toMinutes(_to!) <= _toMinutes(_from!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("End time must be after start time", style: GoogleFonts.poppins())),
+      );
+      return;
+    }
+
+    if (_selectedCity == null || _selectedCity!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Select a city", style: GoogleFonts.poppins())),
+      );
+      return;
+    }
+
+    final form = {
+      "category": widget.category,
+      "bookingType": "hourly",
+
+      "name": nameCtrl.text.trim(),
+      "description": descCtrl.text.trim(),
+
+      "address": addressCtrl.text.trim(),
+      "city": _selectedCity,
+      "latitude": _selectedLat?.toString() ?? "",
+      "longitude": _selectedLng?.toString() ?? "",
+
+      "price": priceCtrl.text.trim(),
+      "discount": discountCtrl.text.trim(),
+
+      "finalPrice": _finalPrice?.toStringAsFixed(2),
+      "savedAmount": _savedAmount?.toStringAsFixed(2),
+
+      "coverImage": _coverImage,
+      "highlights": _highlights,
+      "visibleInSearch": _visibleInSearch,
+
+      "pricingModel": "per_hour",
+      "minHours": minHoursCtrl.text.trim(),
+      "maxHours": maxHoursCtrl.text.trim(),
+      "days": _selectedDays.toList(),
+      "timeFrom": _fmtTime(_from),
+      "timeTo": _fmtTime(_to),
+
+      if (_gapMinutes > 0) "breakMinutes": _gapMinutes.round().toString(),
+      
+      "slotsPreview": _buildSlotsPreview(),
+      "selectedSuggestedSlots": _selectedSuggestedSlots.toList(),
+      "seatsPerDay": _selectedSuggestedSlots.length,
+
+      // 🆕 إضافة venueType للقاعات فقط
+      if (widget.category == "Venues") "venueType": _venueType,
+    };
+
+    setState(() => _saving = true);
+
+    try {
+      await ServiceService.addServiceFromBookingForm(form);
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Service created successfully ✅", style: GoogleFonts.poppins())),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed: $e", style: GoogleFonts.poppins())),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
-
-  if (_from == null || _to == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Set time range", style: GoogleFonts.poppins())),
-    );
-    return;
-  }
-
-  if (_toMinutes(_to!) <= _toMinutes(_from!)) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("End time must be after start time", style: GoogleFonts.poppins())),
-    );
-    return;
-  }
-
-  if (_selectedCity == null || _selectedCity!.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Select a city", style: GoogleFonts.poppins())),
-    );
-    return;
-  }
-
-
- final form = {
-  "category": widget.category,
-  "bookingType": "hourly",
-
-  "name": nameCtrl.text.trim(),
-  "description": descCtrl.text.trim(),
-
-  "address": addressCtrl.text.trim(),
-  "city": _selectedCity,
-  "latitude": _selectedLat?.toString() ?? "",
-  "longitude": _selectedLng?.toString() ?? "",
-
-  "price": priceCtrl.text.trim(),
-  "discount": discountCtrl.text.trim(),
-
-  "finalPrice": _finalPrice?.toStringAsFixed(2),
-  "savedAmount": _savedAmount?.toStringAsFixed(2),
-
-  "coverImage": _coverImage,
-  "highlights": _highlights,
-  "visibleInSearch": _visibleInSearch,
-
-  "pricingModel": "per_hour",
-  "minHours": minHoursCtrl.text.trim(),
-  "maxHours": maxHoursCtrl.text.trim(),
-  "days": _selectedDays.toList(),
-  "timeFrom": _fmtTime(_from),
-  "timeTo": _fmtTime(_to),
-
-  // ✅ Break اختياري
-  if (_gapMinutes > 0) "breakMinutes": _gapMinutes.round().toString(),
-  
-  // ✅ Suggested schedule data
-  "slotsPreview": _buildSlotsPreview(),
-  "selectedSuggestedSlots": _selectedSuggestedSlots.toList(),
-  "seatsPerDay": _selectedSuggestedSlots.length,
-};
-
-  setState(() => _saving = true);
-
-  try {
-    await ServiceService.addServiceFromBookingForm(form);
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Service created successfully ✅", style: GoogleFonts.poppins())),
-    );
-    Navigator.pop(context, true);
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Failed: $e", style: GoogleFonts.poppins())),
-    );
-  } finally {
-    if (mounted) setState(() => _saving = false);
-  }
-}
-
 
   @override
   void dispose() {
@@ -597,242 +590,416 @@ Future<void> _trySave() async {
   }
 
   Widget _dailyCapacityCard(int eventsCount, List<Map<String, String>> slots) {
-  // ✅ تنظيف selected slots
-  final validKeys = slots.map(_slotKey).toSet();
-  _selectedSuggestedSlots.removeWhere((k) => !validKeys.contains(k));
+    final validKeys = slots.map(_slotKey).toSet();
+    _selectedSuggestedSlots.removeWhere((k) => !validKeys.contains(k));
 
-  // ✅ حساب minHours من الـ controller
-  final minHours = double.tryParse(minHoursCtrl.text.trim()) ?? 1.0;
+    final minHours = double.tryParse(minHoursCtrl.text.trim()) ?? 1.0;
 
-  return Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: kPrimaryColor.withOpacity(0.08),
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: kPrimaryColor.withOpacity(0.14)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              height: 32,
-              width: 32,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.auto_awesome_rounded,
-                  color: kPrimaryColor, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                "Daily capacity",
-                style: GoogleFonts.poppins(
-                    fontSize: 14, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          "Set optional break time between bookings.",
-          style: GoogleFonts.poppins(
-              fontSize: 11, color: Colors.grey.shade700),
-        ),
-        
-        // ✅ Break slider (اختياري - حذفنا Event Duration)
-        const SizedBox(height: 12),
-        Text(
-          "Break between events (optional)",
-          style: GoogleFonts.poppins(
-              fontSize: 12, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: Slider(
-                value: _gapMinutes.clamp(0, 180),
-                min: 0,
-                max: 180,
-                divisions: 36,
-                label: _gapMinutes == 0 
-                    ? "No break" 
-                    : "${_gapMinutes.round()} min",
-                onChanged: (v) {
-                  setState(() {
-                    final rounded = (v / 5).round() * 5;
-                    _gapMinutes = rounded.toDouble().clamp(0, 180);
-                  });
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                _gapMinutes == 0 
-                    ? "None" 
-                    : "${_gapMinutes.round()} min",
-                style: GoogleFonts.poppins(
-                    fontSize: 12, fontWeight: FontWeight.w800),
-              ),
-            )
-          ],
-        ),
-        
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _infoPill(
-              icon: Icons.event_note_rounded,
-              text: "$eventsCount events/day",
-            ),
-            _infoPill(
-              icon: Icons.timer_rounded,
-              text: "${minHours.toStringAsFixed(1)}h each", // ✅ من minHours
-            ),
-            if (_gapMinutes > 0)
-              _infoPill(
-                icon: Icons.more_time_rounded,
-                text: "${_gapMinutes.round()}m break",
-              ),
-          ],
-        ),
-        
-        const SizedBox(height: 12),
-        Text(
-          "Suggested schedule",
-          style: GoogleFonts.poppins(
-              fontSize: 12, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 10),
-        
-        // ✅ Suggested Schedule (نفسه)
-        if (_from == null || _to == null)
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline_rounded, color: kPrimaryColor),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    "Set your working hours first (Availability).",
-                    style: GoogleFonts.poppins(
-                        fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kPrimaryColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: kPrimaryColor.withOpacity(0.14)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                height: 32,
+                width: 32,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
-            ),
-          )
-        else if (slots.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              "Not enough time to fit an event with the current settings.",
-              style: GoogleFonts.poppins(
-                  fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          )
-        else ...[
+                child: const Icon(Icons.auto_awesome_rounded,
+                    color: kPrimaryColor, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "Daily capacity",
+                  style: GoogleFonts.poppins(
+                      fontSize: 14, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Set optional break time between bookings.",
+            style: GoogleFonts.poppins(
+                fontSize: 11, color: Colors.grey.shade700),
+          ),
+          
+          const SizedBox(height: 12),
+          Text(
+            "Break between events (optional)",
+            style: GoogleFonts.poppins(
+                fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  value: _gapMinutes.clamp(0, 180),
+                  min: 0,
+                  max: 180,
+                  divisions: 36,
+                  label: _gapMinutes == 0 
+                      ? "No break" 
+                      : "${_gapMinutes.round()} min",
+                  onChanged: (v) {
+                    setState(() {
+                      final rounded = (v / 5).round() * 5;
+                      _gapMinutes = rounded.toDouble().clamp(0, 180);
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  _gapMinutes == 0 
+                      ? "None" 
+                      : "${_gapMinutes.round()} min",
+                  style: GoogleFonts.poppins(
+                      fontSize: 12, fontWeight: FontWeight.w800),
+                ),
+              )
+            ],
+          ),
+          
+          const SizedBox(height: 10),
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: slots.take(12).map((s) {
-              final key = _slotKey(s);
-              final selected = _selectedSuggestedSlots.contains(key);
-
-              return InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: () {
-                  setState(() {
-                    if (selected) {
-                      _selectedSuggestedSlots.remove(key);
-                    } else {
-                      _selectedSuggestedSlots.add(key);
-                    }
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? kPrimaryColor.withOpacity(0.10)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: selected
-                          ? kPrimaryColor.withOpacity(0.35)
-                          : Colors.white.withOpacity(0.9),
-                    ),
-                  ),
-                  child: Text(
-                    '${s["start"]} - ${s["end"]}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: selected ? kPrimaryColor : Colors.black,
-                    ),
-                  ),
+            children: [
+              _infoPill(
+                icon: Icons.event_note_rounded,
+                text: "$eventsCount events/day",
+              ),
+              _infoPill(
+                icon: Icons.timer_rounded,
+                text: "${minHours.toStringAsFixed(1)}h each",
+              ),
+              if (_gapMinutes > 0)
+                _infoPill(
+                  icon: Icons.more_time_rounded,
+                  text: "${_gapMinutes.round()}m break",
                 ),
-              );
-            }).toList(),
+            ],
           ),
-
-          // ✅ Seats per day
+          
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
+          Text(
+            "Suggested schedule",
+            style: GoogleFonts.poppins(
+                fontSize: 12, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          
+          if (_from == null || _to == null)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: kPrimaryColor),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "Set your working hours first (Availability).",
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (slots.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                "Not enough time to fit an event with the current settings.",
+                style: GoogleFonts.poppins(
+                    fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            )
+          else ...[
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: slots.take(12).map((s) {
+                final key = _slotKey(s);
+                final selected = _selectedSuggestedSlots.contains(key);
+
+                return InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: () {
+                    setState(() {
+                      if (selected) {
+                        _selectedSuggestedSlots.remove(key);
+                      } else {
+                        _selectedSuggestedSlots.add(key);
+                      }
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? kPrimaryColor.withOpacity(0.10)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: selected
+                            ? kPrimaryColor.withOpacity(0.35)
+                            : Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                    child: Text(
+                      '${s["start"]} - ${s["end"]}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: selected ? kPrimaryColor : Colors.black,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.event_seat_rounded,
-                    color: kPrimaryColor, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    "Seats per day",
+
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.event_seat_rounded,
+                      color: kPrimaryColor, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "Seats per day",
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  Text(
+                    "${_selectedSuggestedSlots.length}",
                     style: GoogleFonts.poppins(
-                        fontSize: 12, fontWeight: FontWeight.w700),
+                        fontSize: 13, fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // 🆕 Widget للـ Venue Type (Indoor/Outdoor) - Modern UI/UX
+  Widget _buildVenueTypeSelector() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: kPrimaryColor.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.location_city_rounded,
+                  color: kPrimaryColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                "Venue Type",
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: kTextColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "Select whether your venue is indoors or outdoors",
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Radio Buttons - Modern Design
+          Row(
+            children: [
+              // Indoor Option
+              Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => _venueType = "indoor"),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _venueType == "indoor"
+                          ? kPrimaryColor.withOpacity(0.12)
+                          : const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _venueType == "indoor"
+                            ? kPrimaryColor
+                            : Colors.grey.shade300,
+                        width: _venueType == "indoor" ? 2 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _venueType == "indoor"
+                                ? Colors.white
+                                : Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.home_rounded,
+                            color: _venueType == "indoor"
+                                ? kPrimaryColor
+                                : Colors.grey.shade600,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          "Indoor",
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _venueType == "indoor"
+                                ? kPrimaryColor
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Inside venue",
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                Text(
-                  "${_selectedSuggestedSlots.length}",
-                  style: GoogleFonts.poppins(
-                      fontSize: 13, fontWeight: FontWeight.w900),
+              ),
+              
+              const SizedBox(width: 12),
+              
+              // Outdoor Option
+              Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => _venueType = "outdoor"),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _venueType == "outdoor"
+                          ? kPrimaryColor.withOpacity(0.12)
+                          : const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _venueType == "outdoor"
+                            ? kPrimaryColor
+                            : Colors.grey.shade300,
+                        width: _venueType == "outdoor" ? 2 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _venueType == "outdoor"
+                                ? Colors.white
+                                : Colors.grey.shade100,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.park_rounded,
+                            color: _venueType == "outdoor"
+                                ? kPrimaryColor
+                                : Colors.grey.shade600,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          "Outdoor",
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _venueType == "outdoor"
+                                ? kPrimaryColor
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Open space",
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
-      ],
-    ),
-  );
-}
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -881,6 +1048,10 @@ Future<void> _trySave() async {
                       (v == null || v.trim().isEmpty) ? "Required" : null,
                 ),
               ),
+              
+              // 🆕 Venue Type Section (يظهر فقط للـ Venues)
+              if (widget.category == "Venues") _buildVenueTypeSelector(),
+              
               sectionLabel("Availability"),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -1055,162 +1226,160 @@ Future<void> _trySave() async {
                 child: _dailyCapacityCard(eventsCount, slots),
               ),
               sectionLabel("Location"),
-Container(
-  padding: const EdgeInsets.all(16),
-  margin: const EdgeInsets.only(bottom: 16),
-  decoration: cardDecoration(),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          const Icon(Icons.location_on_rounded,
-              color: kPrimaryColor, size: 18),
-          const SizedBox(width: 8),
-          Text(
-            "Where is your service?",
-            style: GoogleFonts.poppins(
-                fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-      const SizedBox(height: 12),
-      TextFormField(
-        controller: addressCtrl,
-        decoration: inputStyle("Address"),
-        validator: (v) =>
-            (v == null || v.trim().isEmpty) ? "Required" : null,
-      ),
-      const SizedBox(height: 12),
-      DropdownButtonFormField<String>(
-        value: _selectedCity,
-        decoration: inputStyle("City"),
-        items: kCities
-            .map((c) => DropdownMenuItem(
-                  value: c,
-                  child: Text(c,
-                      style: GoogleFonts.poppins(fontSize: 13)),
-                ))
-            .toList(),
-        onChanged: (v) => setState(() => _selectedCity = v),
-        validator: (v) =>
-            (v == null || v.isEmpty) ? "Required" : null,
-      ),
-      const SizedBox(height: 14),
-      
-      // ✅ NEW: Map Location Picker Button
-      Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF9FAFB),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Map coordinates (optional)",
-              style: GoogleFonts.poppins(
-                  fontSize: 12, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kPrimaryColor,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                onPressed: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => MapLocationPicker(
-                        initialLat: _selectedLat,
-                        initialLng: _selectedLng,
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: cardDecoration(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_rounded,
+                            color: kPrimaryColor, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Where is your service?",
+                          style: GoogleFonts.poppins(
+                              fontSize: 13, fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: addressCtrl,
+                      decoration: inputStyle("Address"),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? "Required" : null,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _selectedCity,
+                      decoration: inputStyle("City"),
+                      items: kCities
+                          .map((c) => DropdownMenuItem(
+                                value: c,
+                                child: Text(c,
+                                    style: GoogleFonts.poppins(fontSize: 13)),
+                              ))
+                          .toList(),
+                      onChanged: (v) => setState(() => _selectedCity = v),
+                      validator: (v) =>
+                          (v == null || v.isEmpty) ? "Required" : null,
+                    ),
+                    const SizedBox(height: 14),
+                    
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Map coordinates (optional)",
+                            style: GoogleFonts.poppins(
+                                fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: kPrimaryColor,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              onPressed: () async {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => MapLocationPicker(
+                                      initialLat: _selectedLat,
+                                      initialLng: _selectedLng,
+                                    ),
+                                  ),
+                                );
+
+                                if (result != null && result is Map) {
+                                  setState(() {
+                                    _selectedLat = result['latitude'];
+                                    _selectedLng = result['longitude'];
+                                    _hasLocationSet = true;
+                                  });
+                                }
+                              },
+                              icon: Icon(
+                                _hasLocationSet
+                                    ? Icons.check_circle_rounded
+                                    : Icons.map_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              label: Text(
+                                _hasLocationSet
+                                    ? "Location Set ✅"
+                                    : "Add Map Location",
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                          
+                          if (_hasLocationSet && _selectedLat != null && _selectedLng != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: kPrimaryColor.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.location_pin,
+                                        color: kPrimaryColor, size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        "Lat: ${_selectedLat!.toStringAsFixed(5)}, Lng: ${_selectedLng!.toStringAsFixed(5)}",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: kPrimaryColor,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.close_rounded,
+                                          size: 18, color: kPrimaryColor),
+                                      onPressed: () {
+                                        setState(() {
+                                          _selectedLat = null;
+                                          _selectedLng = null;
+                                          _hasLocationSet = false;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  );
-
-                  if (result != null && result is Map) {
-                    setState(() {
-                      _selectedLat = result['latitude'];
-                      _selectedLng = result['longitude'];
-                      _hasLocationSet = true;
-                    });
-                  }
-                },
-                icon: Icon(
-                  _hasLocationSet
-                      ? Icons.check_circle_rounded
-                      : Icons.map_rounded,
-                  color: Colors.white,
-                  size: 18,
-                ),
-                label: Text(
-                  _hasLocationSet
-                      ? "Location Set ✅"
-                      : "Add Map Location",
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: Colors.white,
-                  ),
+                  ],
                 ),
               ),
-            ),
-            
-            // Show coordinates after selection
-            if (_hasLocationSet && _selectedLat != null && _selectedLng != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: kPrimaryColor.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.location_pin,
-                          color: kPrimaryColor, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          "Lat: ${_selectedLat!.toStringAsFixed(5)}, Lng: ${_selectedLng!.toStringAsFixed(5)}",
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: kPrimaryColor,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded,
-                            size: 18, color: kPrimaryColor),
-                        onPressed: () {
-                          setState(() {
-                            _selectedLat = null;
-                            _selectedLng = null;
-                            _hasLocationSet = false;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    ],
-  ),
-),
               sectionLabel("Pricing"),
               Container(
                 padding: const EdgeInsets.all(16),

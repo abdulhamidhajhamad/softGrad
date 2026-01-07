@@ -6,10 +6,10 @@ import { CreateReviewDto, GetReviewsQueryDto, GetMyReviewsQueryDto } from './rev
 import { Review } from './review.schema';
 import { Service } from '../service/service.schema';
 import { Booking, BookingStatus } from '../booking/booking.entity';
-import { User } from '../auth/user.entity';
-import { AiAnalysisService, AiAnalysisUpdate } from '../ai-analysis/ai-analysis.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType, RecipientType } from '../notification/notification.schema';
+import { User } from '../auth/user.entity';
+import { AiAnalysisService, AiAnalysisUpdate } from '../ai-analysis/ai-analysis.service';
 
 @Injectable()
 export class ReviewService {
@@ -117,6 +117,15 @@ export class ReviewService {
       rating, 
       (newReview._id as Types.ObjectId).toString()
     );
+
+    // 🔔 8. إرسال إشعار للـ Admin (جديد)
+await this.sendReviewNotificationToAdmin(
+  service,
+  user.userName,
+  rating,
+  (newReview._id as Types.ObjectId).toString()
+);
+
 
     return newReview;
   }
@@ -308,4 +317,60 @@ export class ReviewService {
       totalPages: Math.ceil(totalCount / limit),
     };
   }
+  /**
+ * 🔔 إرسال إشعار للـ Admin عند إضافة Review جديد
+ */
+private async sendReviewNotificationToAdmin(
+  service:  Service,
+  userName:  string,
+  rating: number,
+  reviewId: string,
+): Promise<void> {
+  try {
+    // جلب جميع الـ Admins
+    const admins = await this. userModel
+      . find({ role: 'admin' })
+      .select('_id fcmToken')
+      .lean()
+      .exec();
+
+    if (!admins || admins. length === 0) {
+      this. logger.warn('⚠️ No admins found to notify about new review');
+      return;
+    }
+
+    const notificationBody = `⭐ ${userName} rated "${service.serviceName}" with ${rating} stars`;
+
+    for (const admin of admins) {
+      try {
+        await this.notificationService.createNotification(
+          {
+            recipientId: new Types.ObjectId(String(admin._id)),
+            recipientType: RecipientType.ADMIN,
+            title: '⭐ New Review Posted',
+            body:  notificationBody,
+            type: NotificationType.NEW_REVIEW,
+            metadata: {
+              reviewId: reviewId,
+              serviceId: (service._id as Types.ObjectId).toString(),
+              serviceName: service.serviceName,
+              vendorId: service.providerId?. toString(),
+              rating: rating,
+              userName: userName,
+              timestamp: new Date().toISOString(),
+            }
+          },
+          (admin as any).fcmToken || ''
+        );
+      } catch (notifError) {
+        this.logger.error(`Failed to send review notification to admin ${admin._id}:`, notifError);
+      }
+    }
+
+    this.logger.log(`✅ New review notifications sent to ${admins.length} admin(s)`);
+  } catch (error) {
+    this.logger.error('❌ Failed to notify admins of new review:', error);
+  }
+}
+
 }

@@ -204,5 +204,121 @@ export class AdminController {
     }
   }
 
+
+  // ========== ✅ Endpoints جديدة ==========
+
+@Get('stats/bookings')
+@HttpCode(HttpStatus.OK)
+async getBookingStats() {
+  return await this.adminService.getBookingStats();
+}
+
+@Get('stats/services')
+@HttpCode(HttpStatus.OK)
+async getServicesCount() {
+  return await this. adminService.getServicesCount();
+}
+
+@Get('stats/packages')
+@HttpCode(HttpStatus.OK)
+async getPackagesCount() {
+  return await this.adminService. getPackagesCount();
+}
+
+@Get('stats/users')
+@HttpCode(HttpStatus.OK)
+async getRegularUsersCount() {
+  return await this.adminService.getRegularUsersCount();
+}
+
+@Get('stats/providers')
+@HttpCode(HttpStatus.OK)
+async getProvidersCount() {
+  return await this.adminService.getProvidersCount();
+}
+
+@Get('stats/sales')
+@HttpCode(HttpStatus.OK)
+async getSalesBreakdown() {
+  return await this.adminService.getSalesBreakdown();
+}
+
+@Get('stats/top-providers')
+@HttpCode(HttpStatus.OK)
+async getTopProviderSales(@Query('limit') limit?:  string) {
+  return await this.adminService.getTopProviderSales(limit ?  parseInt(limit) : 10);
+}
+
+@Get('stats/comprehensive')
+@HttpCode(HttpStatus.OK)
+async getComprehensiveStats() {
+  return await this.adminService.getComprehensiveStats();
+}
+
+@Delete('users/by-email/: email')
+@HttpCode(HttpStatus.OK)
+async deleteUserByEmail(@Param('email') email: string) {
+  return await this.adminService.deleteUserByEmail(email);
+}
+
+@Delete('providers/by-email/: email')
+@HttpCode(HttpStatus.OK)
+async deleteProviderByEmail(@Param('email') email: string) {
+  return await this.adminService.deleteProviderByEmail(email);
+}
+
+@Delete('services/by-name/:name')
+@HttpCode(HttpStatus.OK)
+async deleteServiceByName(@Param('name') name: string) {
+  return await this. adminService.deleteServiceByName(name);
+}
+
+@Delete('packages/by-name/:name')
+@HttpCode(HttpStatus.OK)
+async deletePackageByName(@Param('name') name: string) {
+  return await this.adminService.deletePackageByName(name);
+}
+
+// أضف هذه الـ endpoints في نهاية الـ AdminController (قبل القوس الأخير)
+
+// ========== ✅ Dashboard Endpoints ==========
+
+@Get('dashboard/summary')
+@HttpCode(HttpStatus.OK)
+async getDashboardSummary() {
+  return await this.adminService.getAdminDashboardSummary();
+}
+
+@Get('stats/revenue')
+@HttpCode(HttpStatus.OK)
+async getTotalRevenue() {
+  return await this.adminService.getTotalRevenue();
+}
+
+@Get('stats/financial-growth')
+@HttpCode(HttpStatus.OK)
+async getFinancialGrowth() {
+  return await this. adminService.getFinancialGrowth();
+}
+
+@Get('stats/service-sales')
+@HttpCode(HttpStatus.OK)
+async getServiceSales() {
+  return await this.adminService. getServiceSales();
+}
+
+@Get('stats/package-sales')
+@HttpCode(HttpStatus.OK)
+async getPackageSales() {
+  return await this.adminService. getPackageSales();
+}
+
+@Get('reviews')
+@HttpCode(HttpStatus.OK)
+async getAllReviews(@Query('filter') filter?: 'all' | 'good' | 'bad') {
+  return await this.adminService. getAllReviews(filter);
+}
+
+
   
 }

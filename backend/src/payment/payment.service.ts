@@ -1,4 +1,5 @@
-// payment.service.ts - النسخة المحدثة مع MailService الموجود
+// payment.service.ts - إضافات فقط بدون حذف
+
 import { Injectable, BadRequestException, HttpException, HttpStatus, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
@@ -7,8 +8,10 @@ import Stripe from 'stripe';
 import { Cart } from '../shoppingCart/shoppingCart.schema';
 import { BookingService } from '../booking/booking.service';
 import { PromotionService } from '../promotion/promotion.service';
-import { MailService } from '../auth/mail.service'; // 🆕 استخدام MailService الموجود
-import { User } from '../auth/user.entity'; // 🆕 إضافة User Schema
+import { MailService } from '../auth/mail.service';
+import { User } from '../auth/user.entity';
+import { NotificationService } from '../notification/notification.service'; // ✅ إضافة
+import { NotificationType, RecipientType } from '../notification/notification.schema'; // ✅ إضافة
 
 interface CheckoutDto {
   currency: string;
@@ -23,38 +26,35 @@ export class PaymentService {
   constructor(
     private configService: ConfigService,
     @InjectModel(Cart.name) private cartModel: Model<Cart>,
-    @InjectModel(User.name) private userModel: Model<User>, // 🆕 إضافة User Model
+    @InjectModel(User.name) private userModel: Model<User>,
     @Inject(forwardRef(() => BookingService))
     private bookingService: BookingService,
     private promotionService: PromotionService,
-    private mailService: MailService, // 🆕 حقن MailService
+    private mailService:  MailService,
+    private notificationService: NotificationService, // ✅ إضافة
   ) {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (!secretKey) {
       throw new Error('STRIPE_SECRET_KEY is not set in environment variables.');
     }
     this.stripe = new Stripe(secretKey!, { 
-      apiVersion: '2025-11-17.clover' as any,
+      apiVersion: '2025-11-17. clover' as any,
     });
   }
 
-  /**
-   * Create payment intent from cart with optional promo code
-   */
   async createPaymentIntentFromCart(
     userId: string, 
     dto: CheckoutDto
   ): Promise<{ 
     clientSecret: string; 
     originalAmount: number;
-    discount?: number;
+    discount?:  number;
     finalAmount: number;
     promoCodeApplied?: string;
   }> {
     try {
       this.logger.log(`Creating payment intent for user: ${userId}`); 
 
-      // Find cart
       let cart = await this.cartModel.findOne({ userId: userId });
       
       if (!cart && Types.ObjectId.isValid(userId)) {
@@ -71,7 +71,6 @@ export class PaymentService {
       let discount = 0;
       let promoCodeApplied = '';
 
-      // Apply promo code if provided
       if (dto.promoCode) {
         const validation = await this.promotionService.validatePromoCode(
           userId,
@@ -82,9 +81,9 @@ export class PaymentService {
         if (validation.valid && validation.discount && validation.finalAmount) {
           discount = validation.discount;
           finalAmount = validation.finalAmount;
-          promoCodeApplied = dto.promoCode.toUpperCase();
+          promoCodeApplied = dto.promoCode. toUpperCase();
           
-          this.logger.log(`Promo code ${promoCodeApplied} applied: -$${discount}`);
+          this.logger.log(`Promo code ${promoCodeApplied} applied:  -$${discount}`);
         } else {
           throw new BadRequestException(validation.message || 'Invalid promo code');
         }
@@ -96,12 +95,12 @@ export class PaymentService {
 
       const amountInCents = Math.round(finalAmount * 100);
 
-      const paymentIntent = await this.stripe.paymentIntents.create({
+      const paymentIntent = await this.stripe.paymentIntents. create({
         amount: amountInCents,
-        currency: dto.currency || 'usd',
+        currency:  dto.currency || 'usd',
         metadata: { 
           userId: userId,
-          cartItemCount: cart.items.length.toString(),
+          cartItemCount: cart.items.length. toString(),
           originalAmount: originalAmount.toString(),
           discount: discount.toString(),
           promoCode: promoCodeApplied,
@@ -119,9 +118,9 @@ export class PaymentService {
       return { 
         clientSecret: paymentIntent.client_secret,
         originalAmount,
-        discount: discount > 0 ? discount : undefined,
+        discount:  discount > 0 ? discount : undefined,
         finalAmount,
-        promoCodeApplied: promoCodeApplied || undefined,
+        promoCodeApplied:  promoCodeApplied || undefined,
       };
 
     } catch (error) {
@@ -136,9 +135,6 @@ export class PaymentService {
     }
   }
 
-  /**
-   * Confirm payment and create bookings
-   */
   async confirmPaymentAndCreateBookings(userId: string, paymentIntentId: string): Promise<any> {
     try {
       const validPaymentIntentId = paymentIntentId.split('_secret_')[0];
@@ -146,37 +142,38 @@ export class PaymentService {
 
       let paymentIntent = await this.stripe.paymentIntents.retrieve(validPaymentIntentId);
       
-      // Handle payment confirmation if needed
       if (paymentIntent.status === 'requires_payment_method' || paymentIntent.status === 'requires_action') {
-        this.logger.warn(`PaymentIntent requires action, attempting confirm...`);
+        this.logger. warn(`PaymentIntent requires action, attempting confirm...`);
         
-        paymentIntent = await this.stripe.paymentIntents.confirm(validPaymentIntentId, {
+        paymentIntent = await this.stripe. paymentIntents.confirm(validPaymentIntentId, {
           payment_method: 'pm_card_visa', 
           return_url: 'http://localhost:3000/payment/stripe-callback',
         });
       }
 
-      if (paymentIntent.status !== 'succeeded') {
+      if (paymentIntent. status !== 'succeeded') {
+        // ✅ إضافة:  إرسال إشعار للـ Admin عند فشل الدفع
+        await this.notifyAdminPaymentFailed(userId, paymentIntent, `Payment not successful.  Status: ${paymentIntent.status}`);
+        
         throw new BadRequestException(`Payment not successful. Status: ${paymentIntent.status}`);
       }
 
-      // Mark promo code as used if it was applied
       const promoCode = paymentIntent.metadata?.promoCode;
       if (promoCode) {
         await this.promotionService.markPromoCodeAsUsed(promoCode, userId);
         this.logger.log(`Promo code ${promoCode} marked as used by user ${userId}`);
       }
 
-      // Create bookings
       const bookings = await this.bookingService.createBookingsFromCart(userId, validPaymentIntentId);
 
-      // 🆕 الحصول على معلومات المستخدم لإرسال الإيميل
       const user = await this.getUserInfo(userId);
       
-      // 🆕 إرسال إيميل التأكيد
+      // ✅ إضافة: إرسال إشعار للـ Admin عند نجاح الدفع
+      await this.notifyAdminPaymentSuccess(user, paymentIntent, bookings. length);
+
       if (user && user.email) {
         await this.sendPaymentConfirmationEmail(user.email, {
-          userName: user.name || user.email,
+          userName: user.name || user. email,
           originalAmount: parseFloat(paymentIntent.metadata?.originalAmount || '0'),
           discount: parseFloat(paymentIntent.metadata?.discount || '0'),
           finalAmount: paymentIntent.amount / 100,
@@ -185,18 +182,17 @@ export class PaymentService {
         });
       }
 
-      // 🆕 حذف السلة بعد إتمام الدفع بنجاح
       await this.clearUserCart(userId);
-      this.logger.log(`✅ Cart cleared for user: ${userId}`);
+      this.logger.log(`✅ Cart cleared for user:  ${userId}`);
 
       return {
         success: true,
         message: 'Payment confirmed and bookings created successfully',
         bookings: bookings,
         paymentIntent: {
-          id: paymentIntent.id,
+          id: paymentIntent. id,
           amount: paymentIntent.amount / 100,
-          originalAmount: parseFloat(paymentIntent.metadata?.originalAmount || '0'),
+          originalAmount: parseFloat(paymentIntent.metadata?. originalAmount || '0'),
           discount: parseFloat(paymentIntent.metadata?.discount || '0'),
           promoCode: paymentIntent.metadata?.promoCode,
           status: paymentIntent.status,
@@ -205,6 +201,13 @@ export class PaymentService {
 
     } catch (error) {
       this.logger.error('Failed to confirm payment:', error);
+      
+      // ✅ إضافة: إرسال إشعار للـ Admin عند حدوث خطأ
+      try {
+        await this.notifyAdminPaymentFailed(userId, null, error.message);
+      } catch (notifError) {
+        this.logger.error('Failed to send admin notification:', notifError);
+      }
       
       if ((error as any).type === 'StripeInvalidRequestError') {
          throw new BadRequestException(`Stripe Error: ${(error as any).message}`);
@@ -224,16 +227,16 @@ export class PaymentService {
         const amountInCents = Math.round(amount * 100); 
         const paymentIntent = await this.stripe.paymentIntents.create({
           amount: amountInCents,
-          currency: currency,
+          currency:  currency,
           metadata: { bookingId: 'BOOKING_ID_FROM_REQUEST' }, 
           automatic_payment_methods: {
               enabled: true,
               allow_redirects: 'never',
           }
         });
-        return { clientSecret: paymentIntent.client_secret! }; 
+        return { clientSecret: paymentIntent.client_secret!  }; 
       } catch (error) {
-        this.logger.error('Stripe Payment Intent Error:', error);
+        this.logger. error('Stripe Payment Intent Error:', error);
         if (error && (error as any).type === 'StripeInvalidRequestError') {
           throw new BadRequestException(`Stripe Failed: ${(error as any).message}`);
         }
@@ -262,36 +265,33 @@ export class PaymentService {
       this.logger.log(`✅ Partial refund of $${amountToRefund} processed successfully for PI: ${paymentIntentId}`);
 
     } catch (error) {
-      this.logger.error(`❌ Failed to process partial refund for PI: ${paymentIntentId}`, error.message);
-      throw new HttpException('Refund operation failed at the payment gateway.', HttpStatus.INTERNAL_SERVER_ERROR);
+      this.logger.error(`❌ Failed to process partial refund for PI:  ${paymentIntentId}`, error. message);
+      throw new HttpException('Refund operation failed at the payment gateway. ', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
-  // 🆕 دالة حذف السلة
   private async clearUserCart(userId: string): Promise<void> {
     try {
-      const objectId = Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId;
+      const objectId = Types.ObjectId. isValid(userId) ? new Types.ObjectId(userId) : userId;
       const result = await this.cartModel.findOneAndDelete({ userId: objectId });
       
       if (result) {
         this.logger.log(`✅ Cart cleared successfully for user: ${userId}`);
       } else {
-        this.logger.warn(`⚠️ No cart found to clear for user: ${userId}`);
+        this. logger.warn(`⚠️ No cart found to clear for user: ${userId}`);
       }
     } catch (error) {
-      this.logger.error(`❌ Failed to clear cart for user ${userId}:`, error);
-      // لا نرمي خطأ هنا لأن الدفع تم بنجاح، فقط نسجل الخطأ
+      this.logger.error(`❌ Failed to clear cart for user ${userId}: `, error);
     }
   }
 
-  // 🆕 دالة الحصول على معلومات المستخدم
   private async getUserInfo(userId: string): Promise<any> {
     try {
       const objectId = Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId;
-      const user = await this.userModel.findById(objectId).select('email name').exec();
+      const user = await this. userModel.findById(objectId).select('email name').exec();
       
-      if (!user) {
-        this.logger.warn(`⚠️ User not found: ${userId}`);
+      if (! user) {
+        this.logger.warn(`⚠️ User not found:  ${userId}`);
         return null;
       }
       
@@ -302,7 +302,6 @@ export class PaymentService {
     }
   }
 
-  // 🆕 دالة إرسال إيميل التأكيد باستخدام MailService
   private async sendPaymentConfirmationEmail(email: string, paymentDetails: any): Promise<void> {
     try {
       const hasDiscount = paymentDetails.discount > 0;
@@ -323,7 +322,7 @@ export class PaymentService {
                     padding: 0;
                 }
                 .container {
-                    max-width: 600px;
+                    max-width:  600px;
                     margin: 20px auto;
                     background-color: #ffffff;
                     border-radius: 8px;
@@ -331,7 +330,7 @@ export class PaymentService {
                     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
                 }
                 .header {
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    background:  linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     color: white;
                     padding: 30px 20px;
                     text-align: center;
@@ -341,14 +340,14 @@ export class PaymentService {
                     font-size: 28px;
                 }
                 .success-icon {
-                    font-size: 48px;
+                    font-size:  48px;
                     margin-bottom: 10px;
                 }
-                .content {
+                . content {
                     padding: 30px 20px;
                 }
                 .greeting {
-                    font-size: 18px;
+                    font-size:  18px;
                     margin-bottom: 20px;
                     color: #333;
                 }
@@ -356,7 +355,7 @@ export class PaymentService {
                     background-color: #f8f9fa;
                     border-radius: 6px;
                     padding: 20px;
-                    margin: 20px 0;
+                    margin:  20px 0;
                 }
                 .detail-row {
                     display: flex;
@@ -371,7 +370,7 @@ export class PaymentService {
                     font-weight: 600;
                     color: #555;
                 }
-                .detail-value {
+                . detail-value {
                     color: #333;
                 }
                 .discount-row {
@@ -381,12 +380,12 @@ export class PaymentService {
                 .total-row {
                     font-size: 20px;
                     font-weight: bold;
-                    color: #667eea;
+                    color:  #667eea;
                     margin-top: 10px;
                     padding-top: 10px;
                     border-top: 2px solid #667eea;
                 }
-                .message {
+                . message {
                     text-align: center;
                     padding: 20px;
                     color: #666;
@@ -401,12 +400,12 @@ export class PaymentService {
                 .promo-badge {
                     display: inline-block;
                     background-color: #28a745;
-                    color: white;
+                    color:  white;
                     padding: 4px 12px;
                     border-radius: 20px;
                     font-size: 12px;
                     font-weight: bold;
-                    margin-top: 15px;
+                    margin-top:  15px;
                 }
             </style>
         </head>
@@ -423,14 +422,14 @@ export class PaymentService {
                         Hello ${paymentDetails.userName},
                     </div>
                     
-                    <p>Thank you for your payment! Your booking has been confirmed successfully.</p>
+                    <p>Thank you for your payment!  Your booking has been confirmed successfully.</p>
                     
                     <div class="payment-details">
                         <h3 style="margin-top: 0; color: #667eea;">Payment Summary</h3>
                         
                         <div class="detail-row">
                             <span class="detail-label">Original Amount:</span>
-                            <span class="detail-value">$${paymentDetails.originalAmount.toFixed(2)}</span>
+                            <span class="detail-value">$${paymentDetails.originalAmount. toFixed(2)}</span>
                         </div>
                         
                         ${hasDiscount ? `
@@ -438,13 +437,13 @@ export class PaymentService {
                             <span class="detail-label">
                                 Discount ${paymentDetails.promoCode ? `(${paymentDetails.promoCode})` : ''}:
                             </span>
-                            <span class="detail-value">-$${paymentDetails.discount.toFixed(2)}</span>
+                            <span class="detail-value">-$${paymentDetails. discount.toFixed(2)}</span>
                         </div>
                         ` : ''}
                         
                         <div class="detail-row total-row">
                             <span class="detail-label">Total Paid:</span>
-                            <span class="detail-value">$${paymentDetails.finalAmount.toFixed(2)}</span>
+                            <span class="detail-value">$${paymentDetails.finalAmount. toFixed(2)}</span>
                         </div>
                         
                         <div class="detail-row">
@@ -467,7 +466,7 @@ export class PaymentService {
                 
                 <div class="footer">
                     <p>If you have any questions, please contact our support team.</p>
-                    <p style="margin: 0; color: #999; font-size: 12px;">
+                    <p style="margin:  0; color: #999; font-size: 12px;">
                         This is an automated email. Please do not reply to this message.
                     </p>
                 </div>
@@ -478,14 +477,135 @@ export class PaymentService {
 
       await this.mailService.sendHtmlEmail(
         email,
-        'Payment Confirmation - Your Booking is Confirmed! ✅',
+        'Payment Confirmation - Your Booking is Confirmed!  ✅',
         htmlContent
       );
 
-      this.logger.log(`✅ Payment confirmation email sent to: ${email}`);
+      this.logger.log(`✅ Payment confirmation email sent to:  ${email}`);
     } catch (error) {
       this.logger.error(`❌ Failed to send confirmation email to ${email}:`, error);
-      // لا نرمي خطأ هنا لأن الدفع تم بنجاح
+    }
+  }
+
+  // ✅ دالة جديدة:  إرسال إشعار للـ Admin عند نجاح الدفع
+ // ✅ دالة جديدة:  إرسال إشعار للـ Admin عند نجاح الدفع
+private async notifyAdminPaymentSuccess(
+  user: any, 
+  paymentIntent:  Stripe.PaymentIntent, 
+  bookingsCount: number
+): Promise<void> {
+  try {
+    const admins = await this. userModel
+      .find({ role: 'admin' })
+      .select('_id fcmToken')
+      .lean()
+      .exec();
+
+    if (! admins || admins.length === 0) {
+      this.logger.warn('⚠️ No admins found to notify');
+      return;
+    }
+
+    const userName = user?.name || user?.email || 'Unknown User';
+    const amount = (paymentIntent.amount / 100).toFixed(2);
+    const originalAmount = parseFloat(paymentIntent.metadata?.originalAmount || '0');
+    const discount = parseFloat(paymentIntent.metadata?.discount || '0');
+    const promoCode = paymentIntent.metadata?.promoCode;
+
+    let notificationBody = `💰 New payment of $${amount} from ${userName}`;
+    
+    if (discount > 0 && promoCode) {
+      notificationBody += ` (Original: $${originalAmount. toFixed(2)}, Discount: $${discount.toFixed(2)} with code ${promoCode})`;
+    }
+    
+    notificationBody += `. ${bookingsCount} booking(s) created.`;
+
+    for (const admin of admins) {
+      try {
+        await this.notificationService.createNotification(
+          {
+            recipientId:  new Types.ObjectId(String(admin._id)),
+            recipientType:  RecipientType. ADMIN,
+            title: '💳 Payment Successful',
+            body: notificationBody,
+            type: NotificationType.PAYMENT_SUCCESS,
+            metadata: {
+              // ✅ صحيح
+            userId: user?._id?.toString(),
+              userName:  userName,
+              paymentIntentId: paymentIntent. id,
+              amount: amount,
+              originalAmount: originalAmount,
+              discount:  discount,
+              promoCode: promoCode || null,
+              bookingsCount: bookingsCount,
+              timestamp: new Date().toISOString(),
+            }
+          },
+          (admin as any).fcmToken || ''
+        );
+      } catch (notifError) {
+        this.logger.error(`Failed to send notification to admin ${admin._id}: `, notifError);
+      }
+    }
+
+    this. logger.log(`✅ Payment success notifications sent to ${admins.length} admin(s)`);
+  } catch (error) {
+    this.logger.error('❌ Failed to notify admins of payment success:', error);
+  }
+}
+
+  // ✅ دالة جديدة: إرسال إشعار للـ Admin عند فشل الدفع
+  private async notifyAdminPaymentFailed(
+    userId: string, 
+    paymentIntent: Stripe.PaymentIntent | null, 
+    errorMessage:  string
+  ): Promise<void> {
+    try {
+      const admins = await this.userModel
+        .find({ role: 'admin' })
+        .select('_id fcmToken')
+        .lean()
+        .exec();
+
+      if (!admins || admins.length === 0) {
+        this.logger. warn('⚠️ No admins found to notify');
+        return;
+      }
+
+      const user = await this.getUserInfo(userId);
+      const userName = user?.name || user?. email || 'Unknown User';
+
+      const notificationBody = `❌ Payment failed for ${userName}.  Reason: ${errorMessage}`;
+
+      for (const admin of admins) {
+        try {
+          await this.notificationService.createNotification(
+            {
+              recipientId: new Types.ObjectId(String(admin._id)),
+              recipientType: RecipientType.ADMIN,
+              title: '⚠️ Payment Failed',
+              body: notificationBody,
+              type: NotificationType. PAYMENT_FAILED,
+              metadata: {
+                userId: userId,
+                userName: userName,
+                paymentIntentId: paymentIntent?.id || 'N/A',
+                status: paymentIntent?.status || 'unknown',
+                errorMessage: errorMessage,
+                timestamp: new Date().toISOString(),
+              }
+            },
+            (admin as any).fcmToken || ''
+          );
+        } catch (notifError) {
+          this.logger.error(`Failed to send notification to admin ${admin._id}: `, notifError);
+        }
+      }
+
+      this.logger.log(`✅ Payment failure notifications sent to ${admins.length} admin(s)`);
+    } catch (error) {
+      this.logger.error('❌ Failed to notify admins of payment failure:', error);
     }
   }
 }

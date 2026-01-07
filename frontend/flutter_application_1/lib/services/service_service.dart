@@ -170,232 +170,243 @@ class ServiceService {
   }
 
   // ====================== 2. POST create service (multipart) =========================
-  static Future<Map<String, dynamic>> addService({
-    required String title,
-    required String description,
-    required double price,
-    required List<Map<String, String>> highlights,
-    required List<Map<String, dynamic>> imageFilesData,
-    required String category,
-    required String priceType,
-    required String bookingType,
-    double? latitude,
-    double? longitude,
-    required String address,
-    required String city,
-    required String companyName,
-    // ✅ NEW: Optional fields
-    int? maxCapacity,
-    int? minBookingHours,
-    int? maxBookingHours,
-    List<int>? availableHours,
-    int? cleanupTimeMinutes,
-    List<String>? workingDays,
-  }) async {
-    try {
-      final token = await AuthService.getToken();
-      if (token == null) throw Exception('Authentication token not found.');
+static Future<Map<String, dynamic>> addService({
+  required String title,
+  required String description,
+  required double price,
+  required List<Map<String, String>> highlights,
+  required List<Map<String, dynamic>> imageFilesData,
+  required String category,
+  required String priceType,
+  required String bookingType,
+  double? latitude,
+  double? longitude,
+  required String address,
+  required String city,
+  required String companyName,
+  int? maxCapacity,
+  int? minBookingHours,
+  int? maxBookingHours,
+  List<int>? availableHours,
+  int? cleanupTimeMinutes,
+  List<String>? workingDays,
+  String? venueType, // 🆕 إضافة venueType parameter
+}) async {
+  try {
+    final token = await AuthService.getToken();
+    if (token == null) throw Exception('Authentication token not found.');
 
-      final url = Uri.parse('$baseUrl/services');
-      final request = http.MultipartRequest('POST', url);
+    final url = Uri.parse('$baseUrl/services');
+    final request = http.MultipartRequest('POST', url);
 
-      request.headers.addAll({'Authorization': 'Bearer $token'});
+    request.headers.addAll({'Authorization': 'Bearer $token'});
 
-      final Map<String, dynamic> locationData = {
-        'latitude': latitude ?? 0.0,
-        'longitude': longitude ?? 0.0,
-        'address': address,
-        'city': city,
-      };
+    final Map<String, dynamic> locationData = {
+      'latitude': latitude ?? 0.0,
+      'longitude': longitude ?? 0.0,
+      'address': address,
+      'city': city,
+    };
 
-      final Map<String, dynamic> additionalInfo = {
-        'description': description,
-      };
+    final Map<String, dynamic> additionalInfo = {
+      'description': description,
+    };
 
-      // ✅ NEW: Build service data with simple price structure
-      final createServiceDtoForJson = {
-        'serviceName': title,
-        'category': category,
-        'location': locationData,
-        'price': price, // ✅ Simple number instead of object
-        'payType': priceType, // ✅ per hour, per person, per day, display
-        'bookingType': bookingType,
-        'additionalInfo': additionalInfo,
-        'isActive': true,
-      };
-
-      // ✅ Add optional fields only if provided
-      if (maxCapacity != null) {
-        createServiceDtoForJson['maxCapacity'] = maxCapacity;
-      }
-      if (minBookingHours != null) {
-        createServiceDtoForJson['minBookingHours'] = minBookingHours;
-      }
-      if (maxBookingHours != null) {
-        createServiceDtoForJson['maxBookingHours'] = maxBookingHours;
-      }
-      if (availableHours != null && availableHours.isNotEmpty) {
-        createServiceDtoForJson['availableHours'] = availableHours;
-      }
-      if (cleanupTimeMinutes != null) {
-        createServiceDtoForJson['cleanupTimeMinutes'] = cleanupTimeMinutes;
-      }
-      if (workingDays != null && workingDays.isNotEmpty) {
-        createServiceDtoForJson['workingDays'] = workingDays;
-      }
-
-      request.fields['data'] = jsonEncode(createServiceDtoForJson);
-
-      // Upload images
-      for (final fileData in imageFilesData) {
-        final bytesAny = fileData['bytes'];
-        final String fileName = (fileData['name'] as String?) ?? 'image.jpg';
-
-        List<int> fileBytes = [];
-        if (bytesAny is Uint8List) fileBytes = bytesAny.toList();
-        if (bytesAny is List<int>) fileBytes = bytesAny;
-
-        if (fileBytes.isNotEmpty) {
-          request.files.add(
-            http.MultipartFile.fromBytes(
-              'images',
-              fileBytes,
-              filename: fileName,
-            ),
-          );
-        }
-      }
-
-      final streamed = await request.send();
-      final res = await http.Response.fromStream(streamed);
-
-      final data = _decodeJsonSafe(res.body);
-
-      if (res.statusCode == 201 || res.statusCode == 200) {
-        if (data is Map<String, dynamic>) return data;
-        if (data is Map) return Map<String, dynamic>.from(data);
-        return {'success': true};
-      }
-
-      throw Exception(_extractMessage(data) ?? 'Failed to create service.');
-    } catch (e) {
-      print('❌ Error in addService with file upload: $e');
-      rethrow;
+    // 🆕 إضافة venueType في additionalInfo للقاعات
+    if (venueType != null && category == 'Venues') {
+      additionalInfo['venueType'] = venueType;
     }
+
+    final createServiceDtoForJson = {
+      'serviceName': title,
+      'category': category,
+      'location': locationData,
+      'price': price,
+      'payType': priceType,
+      'bookingType': bookingType,
+      'additionalInfo': additionalInfo,
+      'isActive': true,
+    };
+
+    // Add optional fields only if provided
+    if (maxCapacity != null) {
+      createServiceDtoForJson['maxCapacity'] = maxCapacity;
+    }
+    if (minBookingHours != null) {
+      createServiceDtoForJson['minBookingHours'] = minBookingHours;
+    }
+    if (maxBookingHours != null) {
+      createServiceDtoForJson['maxBookingHours'] = maxBookingHours;
+    }
+    if (availableHours != null && availableHours.isNotEmpty) {
+      createServiceDtoForJson['availableHours'] = availableHours;
+    }
+    if (cleanupTimeMinutes != null) {
+      createServiceDtoForJson['cleanupTimeMinutes'] = cleanupTimeMinutes;
+    }
+    if (workingDays != null && workingDays.isNotEmpty) {
+      createServiceDtoForJson['workingDays'] = workingDays;
+    }
+
+    request.fields['data'] = jsonEncode(createServiceDtoForJson);
+
+    // Upload images
+    for (final fileData in imageFilesData) {
+      final bytesAny = fileData['bytes'];
+      final String fileName = (fileData['name'] as String?) ?? 'image.jpg';
+
+      List<int> fileBytes = [];
+      if (bytesAny is Uint8List) fileBytes = bytesAny.toList();
+      if (bytesAny is List<int>) fileBytes = bytesAny;
+
+      if (fileBytes.isNotEmpty) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'images',
+            fileBytes,
+            filename: fileName,
+          ),
+        );
+      }
+    }
+
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
+
+    final data = _decodeJsonSafe(res.body);
+
+    if (res.statusCode == 201 || res.statusCode == 200) {
+      if (data is Map<String, dynamic>) return data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      return {'success': true};
+    }
+
+    throw Exception(_extractMessage(data) ?? 'Failed to create service.');
+  } catch (e) {
+    print('❌ Error in addService with file upload: $e');
+    rethrow;
   }
+}
 
   // ====================== ✅ Unified method for ALL Add screens =========================
   static Future<Map<String, dynamic>> addServiceFromBookingForm(
-      Map<String, dynamic> form) async {
-    final String category = (form['category'] ?? '').toString();
-    final String title = (form['name'] ?? form['serviceName'] ?? '').toString();
-    final String description = (form['description'] ?? '').toString();
-    final String bookingTypeRaw = (form['bookingType'] ?? 'daily').toString().toLowerCase();
-    // ✅ Extract price
-    final double price = _pickFirstDouble(
-          form['price'],
-          form['pricePerUnit'],
-          form['finalPrice'],
-          form['finalPricePerUnit'],
-        ) ??
-        0.0;
+    Map<String, dynamic> form) async {
+  final String category = (form['category'] ?? '').toString();
+  final String title = (form['name'] ?? form['serviceName'] ?? '').toString();
+  final String description = (form['description'] ?? '').toString();
+  final String bookingTypeRaw = (form['bookingType'] ?? 'daily').toString().toLowerCase();
+  
+  // ✅ Extract price
+  final double price = _pickFirstDouble(
+        form['price'],
+        form['pricePerUnit'],
+        form['finalPrice'],
+        form['finalPricePerUnit'],
+      ) ??
+      0.0;
 
-    // ✅ Determine payType based on form data
-    String priceType = (form['priceType'] ?? '').toString().trim();
-    if (priceType.isEmpty) {
-      final String bookingType = (form['bookingType'] ?? '').toString().toLowerCase();
-      final String pricingModel = (form['pricingModel'] ?? '').toString();
+  // ✅ Determine payType based on form data
+  String priceType = (form['priceType'] ?? '').toString().trim();
+  if (priceType.isEmpty) {
+    final String bookingType = (form['bookingType'] ?? '').toString().toLowerCase();
+    final String pricingModel = (form['pricingModel'] ?? '').toString();
 
-      if (pricingModel == 'per_hour' || bookingType.contains('hour')) {
-        priceType = 'per hour';
-      } else if (pricingModel == 'per_day' || bookingType.contains('day') || bookingType.contains('full')) {
-        priceType = 'per day';
-      } else if (pricingModel.contains('capacity') || bookingType.contains('capacity')) {
-        final unit = (form['capacityUnit'] ?? '').toString();
-        priceType = unit == 'piece' ? 'per piece' : 'per person';
-      } else if (pricingModel == 'per_item' || bookingType.contains('order') || bookingType.contains('display')) {
-        priceType = 'display'; // ✅ For order-based services
-      } else {
-        priceType = 'per hour'; // default
-      }
+    if (pricingModel == 'per_hour' || bookingType.contains('hour')) {
+      priceType = 'per hour';
+    } else if (pricingModel == 'per_day' || bookingType.contains('day') || bookingType.contains('full')) {
+      priceType = 'per day';
+    } else if (pricingModel.contains('capacity') || bookingType.contains('capacity')) {
+      final unit = (form['capacityUnit'] ?? '').toString();
+      priceType = unit == 'piece' ? 'per piece' : 'per person';
+    } else if (pricingModel == 'per_item' || bookingType.contains('order') || bookingType.contains('display')) {
+      priceType = 'display';
+    } else {
+      priceType = 'per hour'; // default
     }
-
-    final String address = (form['address'] ?? '').toString();
-    final String city = (form['city'] ?? '').toString();
-
-    final double? latitude = _toDoubleOrNull(form['latitude']);
-    final double? longitude = _toDoubleOrNull(form['longitude']);
-
-    final highlights = _normalizeHighlights(form['highlights']);
-    final imageFilesData = _normalizeImages(form['coverImage'], form['images']);
-
-    String companyName = (form['companyName'] ?? '').toString().trim();
-    if (companyName.isEmpty) {
-      companyName = (await fetchCompanyName()) ?? '';
-    }
-
-    // ✅ Validation
-    if (category.isEmpty) throw Exception('Category is required.');
-    if (title.trim().isEmpty) throw Exception('Service name is required.');
-    if (description.trim().isEmpty) throw Exception('Description is required.');
-    if (address.trim().isEmpty) throw Exception('Address is required.');
-    if (city.trim().isEmpty) throw Exception('City is required.');
-    
-    // ✅ Price validation - only for non-display services
-    if (priceType != 'display' && price <= 0) {
-      throw Exception('Price must be > 0.');
-    }
-
-    // ✅ Extract optional fields
-    int? maxCapacity;
-    int? minBookingHours;
-    int? maxBookingHours;
-    List<int>? availableHours;
-    int? cleanupTimeMinutes;
-    List<String>? workingDays;
-
-    if (form['maxCapacity'] != null) {
-      maxCapacity = int.tryParse(form['maxCapacity'].toString());
-    }
-    if (form['minHours'] != null) {
-      minBookingHours = int.tryParse(form['minHours'].toString());
-    }
-    if (form['maxHours'] != null) {
-      maxBookingHours = int.tryParse(form['maxHours'].toString());
-    }
-    if (form['breakMinutes'] != null) {
-      cleanupTimeMinutes = int.tryParse(form['breakMinutes'].toString());
-    }
-    
-    // Working days - ✅ تحويلهم lowercase
-    if (form['days'] is List) {
-      workingDays = (form['days'] as List)
-          .map((day) => day.toString().toLowerCase())
-          .toList();
-    }
-
-    return addService(
-      title: title.trim(),
-      description: description.trim(),
-      price: price,
-      highlights: highlights,
-      imageFilesData: imageFilesData,
-      category: category,
-      priceType: priceType,
-      bookingType: bookingTypeRaw, 
-      latitude: latitude,
-      longitude: longitude,
-      address: address.trim(),
-      city: city.trim(),
-      companyName: companyName,
-      maxCapacity: maxCapacity,
-      minBookingHours: minBookingHours,
-      maxBookingHours: maxBookingHours,
-      availableHours: availableHours,
-      cleanupTimeMinutes: cleanupTimeMinutes,
-      workingDays: workingDays,
-    );
   }
+
+  final String address = (form['address'] ?? '').toString();
+  final String city = (form['city'] ?? '').toString();
+
+  final double? latitude = _toDoubleOrNull(form['latitude']);
+  final double? longitude = _toDoubleOrNull(form['longitude']);
+
+  final highlights = _normalizeHighlights(form['highlights']);
+  final imageFilesData = _normalizeImages(form['coverImage'], form['images']);
+
+  String companyName = (form['companyName'] ?? '').toString().trim();
+  if (companyName.isEmpty) {
+    companyName = (await fetchCompanyName()) ?? '';
+  }
+
+  // ✅ Validation
+  if (category.isEmpty) throw Exception('Category is required.');
+  if (title.trim().isEmpty) throw Exception('Service name is required.');
+  if (description.trim().isEmpty) throw Exception('Description is required.');
+  if (address.trim().isEmpty) throw Exception('Address is required.');
+  if (city.trim().isEmpty) throw Exception('City is required.');
+  
+  if (priceType != 'display' && price <= 0) {
+    throw Exception('Price must be > 0.');
+  }
+
+  // ✅ Extract optional fields
+  int? maxCapacity;
+  int? minBookingHours;
+  int? maxBookingHours;
+  List<int>? availableHours;
+  int? cleanupTimeMinutes;
+  List<String>? workingDays;
+
+  if (form['maxCapacity'] != null) {
+    maxCapacity = int.tryParse(form['maxCapacity'].toString());
+  }
+  if (form['minHours'] != null) {
+    minBookingHours = int.tryParse(form['minHours'].toString());
+  }
+  if (form['maxHours'] != null) {
+    maxBookingHours = int.tryParse(form['maxHours'].toString());
+  }
+  if (form['breakMinutes'] != null) {
+    cleanupTimeMinutes = int.tryParse(form['breakMinutes'].toString());
+  }
+  
+  // Working days
+  if (form['days'] is List) {
+    workingDays = (form['days'] as List)
+        .map((day) => day.toString().toLowerCase())
+        .toList();
+  }
+
+  // 🆕 استخراج venueType من الـ form
+  String? venueType;
+  if (category == 'Venues' && form['venueType'] != null) {
+    venueType = form['venueType'].toString().toLowerCase();
+  }
+
+  return addService(
+    title: title.trim(),
+    description: description.trim(),
+    price: price,
+    highlights: highlights,
+    imageFilesData: imageFilesData,
+    category: category,
+    priceType: priceType,
+    bookingType: bookingTypeRaw, 
+    latitude: latitude,
+    longitude: longitude,
+    address: address.trim(),
+    city: city.trim(),
+    companyName: companyName,
+    maxCapacity: maxCapacity,
+    minBookingHours: minBookingHours,
+    maxBookingHours: maxBookingHours,
+    availableHours: availableHours,
+    cleanupTimeMinutes: cleanupTimeMinutes,
+    workingDays: workingDays,
+    venueType: venueType, // 🆕 تمرير venueType
+  );
+}
 
   // ====================== 3. DELETE =========================
   static Future<void> deleteService(String serviceId) async {

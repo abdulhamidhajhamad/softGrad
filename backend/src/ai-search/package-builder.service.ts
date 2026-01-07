@@ -248,11 +248,12 @@ export class PackageBuilderService {
         const scoredServices = services.map(service => {
             let score = 0;
 
-            // ✅ FIX: استخدام averageRating بدلاً من rating
+            // ✅ استخدام averageRating بدلاً من rating
             const rating = (service as any).averageRating || 0;
             score += rating * 30;
 
-            const serviceTags = service.additionalInfo?.aiAnalysis?.tags || [];
+            // ✅ FIX: aiAnalysis موجود على مستوى الـ service مباشرة مش داخل additionalInfo
+            const serviceTags = (service as any).aiAnalysis?.tags || [];
             const tagMatches = targetTags.filter(tag => 
                 serviceTags.some((sTag: string) => 
                     sTag.toLowerCase().includes(tag.toLowerCase()) ||

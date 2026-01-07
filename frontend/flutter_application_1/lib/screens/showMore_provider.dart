@@ -1,4 +1,4 @@
-// lib/screens/showMore_provider.dart
+﻿// lib/screens/showMore_provider.dart
 
 import 'dart:io';
 import 'package:flutter/foundation.dart'; // NEW: إضافة مكتبة kIsWeb

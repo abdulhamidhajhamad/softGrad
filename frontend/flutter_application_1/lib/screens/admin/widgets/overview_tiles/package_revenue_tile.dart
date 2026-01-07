@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../theme/app_theme.dart';
+import '../../../../services/admin_service/admin_service.dart';
 
 class PackageRevenueTile extends StatefulWidget {
   final VoidCallback? onTap;
@@ -13,17 +14,54 @@ class PackageRevenueTile extends StatefulWidget {
 }
 
 class _PackageRevenueTileState extends State<PackageRevenueTile> {
-  final List<_Pkg> _pkgs = [
-    _Pkg('Silver Package', 950),
-    _Pkg('Gold Package', 1650),
-    _Pkg('VIP Package', 2400),
-  ];
+  double _revenue = 0.0;
+  bool _isLoading = true;
+  final List<_Pkg> _pkgs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRevenue();
+  }
+
+  Future<void> _fetchRevenue() async {
+    try {
+      final packages = await AdminService.getPackageSales();
+      final total = packages.fold<double>(
+        0,
+        (sum, item) => sum + (item['totalRevenue'] ?? 0).toDouble(),
+      );
+      
+      // Convert to _Pkg list
+      final pkgList = packages.map((pkg) {
+        return _Pkg(
+          pkg['packageName'] ?? pkg['name'] ?? 'Unknown',
+          (pkg['discountedPrice'] ?? pkg['originalPrice'] ?? pkg['price'] ?? 0).toInt(),
+          pkg['packageId'] ?? pkg['_id'] ?? pkg['id'] ?? '',
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _revenue = total;
+          _pkgs.clear();
+          _pkgs.addAll(pkgList);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching package revenue: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return _OverviewTile(
       label: 'Package Revenue',
-      value: '₪53,260',
+      value: _isLoading ? '...' : '₪${_revenue.toStringAsFixed(0)}',
       icon: LucideIcons.dollarSign,
       color: Colors.blue,
       bgColor: Colors.blue[50]!,
@@ -66,63 +104,123 @@ class _PackageRevenueTileState extends State<PackageRevenueTile> {
               ),
             ),
             Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-                itemCount: _pkgs.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (_, i) {
-                  final p = _pkgs[i];
-                  return Dismissible(
-                    key: ValueKey('${p.name}-$i'),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade600,
-                        borderRadius: BorderRadius.circular(16),
+              child: _pkgs.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No packages found',
+                        style: GoogleFonts.poppins(color: Colors.grey[600]),
                       ),
-                      child:
-                          const Icon(LucideIcons.trash2, color: Colors.white),
-                    ),
-                    onDismissed: (_) => setState(() => _pkgs.removeAt(i)),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              p.name,
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w700,
-                                color: kTextColor,
-                              ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                      itemCount: _pkgs.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) {
+                        final p = _pkgs[i];
+                        return Dismissible(
+                          key: ValueKey(p.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade600,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(LucideIcons.trash2,
+                                color: Colors.white),
+                          ),
+                          confirmDismiss: (_) async {
+                            try {
+                              await AdminService.deletePackageByName(p.name);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Package deleted',
+                                        style: GoogleFonts.poppins()),
+                                  ),
+                                );
+                              }
+                              return true;
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error deleting package: $e',
+                                        style: GoogleFonts.poppins()),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                              return false;
+                            }
+                          },
+                          onDismissed: (_) =>
+                              setState(() => _pkgs.removeAt(i)),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    p.name,
+                                    style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.w700,
+                                      color: kTextColor,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '₪${p.price}',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w800,
+                                    color: kTextColor,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: Icon(LucideIcons.trash2,
+                                      size: 18, color: Colors.red.shade600),
+                                  onPressed: () async {
+                                    try {
+                                      await AdminService.deletePackageByName(
+                                          p.name);
+                                      setState(() => _pkgs.removeAt(i));
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text('Package deleted',
+                                                style: GoogleFonts.poppins()),
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                'Error deleting package: $e',
+                                                style: GoogleFonts.poppins()),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                ),
+                              ],
                             ),
                           ),
-                          Text(
-                            '₪${p.price}',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w800,
-                              color: kTextColor,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: Icon(LucideIcons.trash2,
-                                size: 18, color: Colors.red.shade600),
-                            onPressed: () => setState(() => _pkgs.removeAt(i)),
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         ),
@@ -134,7 +232,8 @@ class _PackageRevenueTileState extends State<PackageRevenueTile> {
 class _Pkg {
   final String name;
   final int price;
-  _Pkg(this.name, this.price);
+  final String id;
+  _Pkg(this.name, this.price, this.id);
 }
 
 class _OverviewTile extends StatelessWidget {

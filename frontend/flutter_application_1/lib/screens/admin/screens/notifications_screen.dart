@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:async';
 import '../theme/app_theme.dart';
-import '../data/mock_data.dart';
+import '../models/notification_item.dart';
+import '../../../services/admin_service/admin_service.dart';
+import '../../../services/socket_service.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -11,13 +14,53 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
-  late final List<dynamic> _notifications;
+class _NotificationsScreenState extends State<NotificationsScreen> with AutomaticKeepAliveClientMixin {
+  List<NotificationItem> _notifications = [];
+  bool _isLoading = true;
+  StreamSubscription? _notificationSubscription;
+
+  @override
+  bool get wantKeepAlive => false; // Don't keep alive - refresh on each visit
 
   @override
   void initState() {
     super.initState();
-    _notifications = List<dynamic>.from(mockNotifications);
+    _fetchNotifications();
+    _setupRealtimeUpdates();
+  }
+
+  @override
+  void dispose() {
+    _notificationSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchNotifications() async {
+    try {
+      setState(() => _isLoading = true);
+      final notificationsData = await AdminService.getNotifications();
+      
+      if (mounted) {
+        setState(() {
+          _notifications = notificationsData.map((n) => NotificationItem.fromJson(n)).toList();
+          _isLoading = false;
+        });
+        // الإشعارات غير المقروءة تبقى bold مع الدائرة البنفسجية
+        // سيتم تحويلها لـ read عند الخروج من الصفحة
+      }
+    } catch (e) {
+      print('❌ Error fetching notifications: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _setupRealtimeUpdates() {
+    _notificationSubscription = SocketService.notificationStream.listen((data) {
+      print('📨 New notification received in real-time');
+      _fetchNotifications();
+    });
   }
 
   IconData _getNotificationIcon(String type) {
@@ -52,6 +95,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     final unreadCount = _notifications.where((n) => !(n.read == true)).length;
 
     final baseTheme = Theme.of(context);
@@ -157,8 +204,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  void _toggleRead(dynamic n) {
+  void _toggleRead(NotificationItem n) {
     setState(() => n.read = !(n.read == true));
+  }
+
+  /// ✅ Auto mark all as read (called when entering the screen)
+  void _autoMarkAllRead() async {
+    try {
+      await AdminService.markAllNotificationsAsRead();
+      setState(() {
+        for (final n in _notifications) {
+          n.read = true;
+        }
+      });
+    } catch (e) {
+      print('❌ Error auto-marking notifications as read: $e');
+    }
   }
 
   void _markAllRead() {
@@ -167,6 +228,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         n.read = true;
       }
     });
+
+    // ✅ Also call API to persist the change
+    AdminService.markAllNotificationsAsRead();
 
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -177,7 +241,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Future<bool?> _confirmDelete(BuildContext context, dynamic n) {
+  Future<bool?> _confirmDelete(BuildContext context, NotificationItem n) {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -206,7 +270,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  void _deleteNotification(BuildContext context, dynamic n) {
+  void _deleteNotification(BuildContext context, NotificationItem n) {
     final removedIndex = _notifications.indexOf(n);
     if (removedIndex == -1) return;
 
@@ -227,10 +291,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _restoreAll() {
-    setState(() {
-      _notifications.clear();
-      _notifications.addAll(List<dynamic>.from(mockNotifications));
-    });
+    _fetchNotifications();
   }
 }
 

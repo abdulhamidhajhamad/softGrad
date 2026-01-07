@@ -28,18 +28,44 @@ class Review {
   });
 
   factory Review.fromJson(Map<String, dynamic> json) {
+    // Handle userId - can be string or object
+    String parsedUserId = '';
+    String parsedUserName = 'Anonymous';
+    String? parsedUserPhoto;
+    
+    if (json['userId'] is Map) {
+      parsedUserId = json['userId']['_id']?.toString() ?? '';
+      parsedUserName = json['userId']['userName']?.toString() ?? 'Anonymous';
+      parsedUserPhoto = json['userId']['imageUrl']?.toString();
+    } else {
+      parsedUserId = json['userId']?.toString() ?? '';
+      parsedUserName = json['userName']?.toString() ?? 'Anonymous';
+    }
+    
+    // Handle serviceId - can be string or object
+    String parsedServiceId = '';
+    String parsedServiceName = '';
+    
+    if (json['serviceId'] is Map) {
+      parsedServiceId = json['serviceId']['_id']?.toString() ?? '';
+      parsedServiceName = json['serviceId']['serviceName']?.toString() ?? '';
+    } else {
+      parsedServiceId = json['serviceId']?.toString() ?? '';
+      parsedServiceName = json['serviceName']?.toString() ?? '';
+    }
+    
     return Review(
-      id: json['_id'] ?? '',
-      userId: json['userId']?['_id'] ?? json['userId'] ?? '',
-      userName: json['userId']?['userName'] ?? json['userName'] ?? 'Anonymous',
-      userPhoto: json['userId']?['imageUrl'],
-      serviceId: json['serviceId']?['_id'] ?? json['serviceId'] ?? '',
-      serviceName: json['serviceId']?['serviceName'] ?? json['serviceName'] ?? '',
-      rating: json['rating'] ?? 0,
-      comment: json['comment'],
+      id: json['_id']?.toString() ?? '',
+      userId: parsedUserId,
+      userName: parsedUserName,
+      userPhoto: parsedUserPhoto,
+      serviceId: parsedServiceId,
+      serviceName: parsedServiceName,
+      rating: json['rating'] is int ? json['rating'] : int.tryParse(json['rating']?.toString() ?? '0') ?? 0,
+      comment: json['comment']?.toString(),
       tags: List<String>.from(json['tags'] ?? []),
       images: List<String>.from(json['images'] ?? []),
-      reviewDate: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
+      reviewDate: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
     );
   }
 
@@ -71,12 +97,18 @@ class PendingReview {
   });
 
   factory PendingReview.fromJson(Map<String, dynamic> json) {
+    print('🔍 PendingReview.fromJson:');
+    print('   bookingId: ${json['bookingId']}');
+    print('   serviceId: ${json['serviceId']}');
+    print('   serviceName: ${json['serviceName']}');
+    print('   companyName: ${json['companyName']}');
+    
     return PendingReview(
-      bookingId: json['bookingId'] ?? '',
-      serviceId: json['serviceId'] ?? '',
-      serviceName: json['serviceName'] ?? 'Service',
-      serviceImage: json['serviceImage'],
-      companyName: json['companyName'] ?? '',
+      bookingId: json['bookingId']?.toString() ?? '',
+      serviceId: json['serviceId']?.toString() ?? '',
+      serviceName: json['serviceName']?.toString() ?? 'Service',
+      serviceImage: json['serviceImage']?.toString(),
+      companyName: json['companyName']?.toString() ?? '',
       bookingDate: DateTime.parse(json['bookingDate'] ?? DateTime.now().toIso8601String()),
     );
   }

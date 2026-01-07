@@ -255,13 +255,13 @@ async getComprehensiveStats() {
   return await this.adminService.getComprehensiveStats();
 }
 
-@Delete('users/by-email/: email')
+@Delete('users/by-email/:email')
 @HttpCode(HttpStatus.OK)
 async deleteUserByEmail(@Param('email') email: string) {
   return await this.adminService.deleteUserByEmail(email);
 }
 
-@Delete('providers/by-email/: email')
+@Delete('providers/by-email/:email')
 @HttpCode(HttpStatus.OK)
 async deleteProviderByEmail(@Param('email') email: string) {
   return await this.adminService.deleteProviderByEmail(email);
@@ -322,3 +322,4 @@ async getAllReviews(@Query('filter') filter?: 'all' | 'good' | 'bad') {
 
   
 }
+

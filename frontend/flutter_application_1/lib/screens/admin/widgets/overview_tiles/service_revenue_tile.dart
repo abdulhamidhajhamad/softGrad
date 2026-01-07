@@ -2,21 +2,57 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../theme/app_theme.dart';
+import '../../../../services/admin_service/admin_service.dart';
 
-class ServiceRevenueTile extends StatelessWidget {
+class ServiceRevenueTile extends StatefulWidget {
   final VoidCallback? onTap;
 
   const ServiceRevenueTile({super.key, this.onTap});
 
   @override
+  State<ServiceRevenueTile> createState() => _ServiceRevenueTileState();
+}
+
+class _ServiceRevenueTileState extends State<ServiceRevenueTile> {
+  double _revenue = 0.0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRevenue();
+  }
+
+  Future<void> _fetchRevenue() async {
+    try {
+      final services = await AdminService.getServiceSales();
+      final total = services.fold<double>(
+        0,
+        (sum, item) => sum + (item['totalRevenue'] ?? 0).toDouble(),
+      );
+      if (mounted) {
+        setState(() {
+          _revenue = total;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching service revenue: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return _OverviewTile(
       label: 'Service Revenue',
-      value: '\$89,240',
+      value: _isLoading ? '...' : '\$${_revenue.toStringAsFixed(0)}',
       icon: LucideIcons.dollarSign,
       color: Colors.green,
       bgColor: Colors.green[50]!,
-      onTap: onTap,
+      onTap: widget.onTap,
     );
   }
 }

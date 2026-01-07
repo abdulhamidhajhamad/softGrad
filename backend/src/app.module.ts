@@ -16,7 +16,7 @@ import { PackageModule } from './Package/package.module'; // 💡 يجب است�
 // ✅ NEW MODULE IMPORTS
 import { NotificationModule } from './notification/notification.module';
 import { PromotionModule } from './promotion/promotion.module';
-//import { ReviewModule } from './review/review.module';
+import { ReviewModule } from './review/review.module';
 import { AiSearchModule } from './ai-search/ai-search.module';
 @Module({
   imports: [
@@ -55,7 +55,7 @@ import { AiSearchModule } from './ai-search/ai-search.module';
     PackageModule,
     CartModule,
     ChatModule,
-    //ReviewModule,
+    ReviewModule,
     PaymentModule,
     NotificationModule,
     PromotionModule,

@@ -190,6 +190,7 @@ Future<void> _loadBookings() async {
   final serviceName = booking['serviceName'] ?? 'Service';
   final status = booking['status'] ?? 'confirmed';
   final bookingDateStr = booking['bookingDate'] ?? '';
+  final isReviewed = booking['isReviewed'] == true;
   
   DateTime? bookingDate;
   String formattedDate = 'N/A';
@@ -275,37 +276,63 @@ Future<void> _loadBookings() async {
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => WriteReviewScreen(
-                        bookingId: booking['bookingId'] ?? booking['_id'] ?? '',
-                        serviceId: booking['serviceId'] ?? '',
-                        serviceName: serviceName,
-                        companyName: booking['companyName'] ?? '',
+              child: isReviewed
+                  // ✅ Reviewed Button - Disabled with different style
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green.shade400, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Reviewed',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.green.shade400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  // ✅ Rate Now Button - Active
+                  : ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => WriteReviewScreen(
+                              bookingId: booking['bookingId'] ?? booking['_id'] ?? '',
+                              serviceId: booking['serviceId'] ?? '',
+                              serviceName: serviceName,
+                              companyName: booking['companyName'] ?? '',
+                            ),
+                          ),
+                        ).then((_) => _loadBookings());
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kBrandBlue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Rate Now ⭐',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ).then((_) => _loadBookings());
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kBrandBlue,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'Rate Now ⭐',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
             ),
           ],
         ],

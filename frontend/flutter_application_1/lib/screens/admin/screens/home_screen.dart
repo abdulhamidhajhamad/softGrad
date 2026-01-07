@@ -3,13 +3,16 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
-import '../data/mock_data.dart';
 import 'service_sales_screen.dart';
 import 'package_sales_screen.dart';
 import '../widgets/overview_tiles/service_revenue_tile.dart';
 import '../widgets/overview_tiles/package_revenue_tile.dart';
 import '../widgets/overview_tiles/total_users_tile.dart';
 import '../widgets/overview_tiles/providers_count_tile.dart';
+import '../../../services/admin_service/admin_service.dart';
+import '../../../services/socket_service.dart';
+import 'dart:async';
+import '../models/user.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,11 +22,36 @@ class HomeScreen extends StatefulWidget {
 }
 
 class DiscountCode {
+  final String id;
   final String code;
   final int percent;
-  final String expires; // keep simple as String
-  const DiscountCode(
-      {required this.code, required this.percent, required this.expires});
+  final String expires;
+  const DiscountCode({
+    required this.id,
+    required this.code,
+    required this.percent,
+    required this.expires,
+  });
+
+  factory DiscountCode.fromJson(Map<String, dynamic> json) {
+    // Handle discountValue as either int or double
+    final discountValue = json['discountValue'];
+    int percentValue = 0;
+    if (discountValue is int) {
+      percentValue = discountValue;
+    } else if (discountValue is double) {
+      percentValue = discountValue.toInt();
+    } else if (discountValue is String) {
+      percentValue = int.tryParse(discountValue) ?? 0;
+    }
+    
+    return DiscountCode(
+      id: json['_id'] ?? json['id'] ?? '',
+      code: json['code'] ?? '',
+      percent: percentValue,
+      expires: json['expiryDate'] ?? '',
+    );
+  }
 }
 
 class ProviderSales {
@@ -33,29 +61,145 @@ class ProviderSales {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final List<DiscountCode> _codes = [
-    const DiscountCode(code: 'WED10', percent: 10, expires: '2026-02-01'),
-    const DiscountCode(code: 'VIP15', percent: 15, expires: '2026-03-10'),
-  ];
+  // Loading states
+  bool _isLoadingDashboard = true;
+  bool _isLoadingFinancial = true;
+  bool _isLoadingTopProviders = true;
+  bool _isLoadingCodes = true;
+
+  // Data
+  double _totalRevenue = 0.0;
+  int _canceledBookings = 0;
+  List<Map<String, dynamic>> _financialData = [];
+  List<ProviderSales> _topSales = [];
+  List<DiscountCode> _codes = [];
+  List<User> _users = [];
 
   String _period = 'Last 30 Days';
+  StreamSubscription? _dashboardSubscription;
 
-  // mock top providers sales (غيرهم براحتك)
-  List<ProviderSales> get _topSales {
-    if (_period == 'Last 7 Days') {
-      return const [
-        ProviderSales('Sophie Turner', 12000),
-        ProviderSales('Robert Wilson', 8600),
-        ProviderSales('Jessica Brown', 5400),
-        ProviderSales('Amanda White', 4200),
-      ];
+  @override
+  void initState() {
+    super.initState();
+    _initializeData();
+    _setupRealtimeUpdates();
+  }
+
+  @override
+  void dispose() {
+    _dashboardSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initializeData() async {
+    await Future.wait([
+      _fetchDashboardSummary(),
+      _fetchFinancialGrowth(),
+      _fetchTopProviders(),
+      _fetchPromoCodes(),
+    ]);
+  }
+
+  void _setupRealtimeUpdates() {
+    _dashboardSubscription = SocketService.dashboardStream.listen((data) {
+      if (mounted) {
+        // Refresh data when dashboard updates
+        _fetchDashboardSummary();
+        _fetchTopProviders();
+      }
+    });
+  }
+
+  Future<void> _fetchDashboardSummary() async {
+    try {
+      final summary = await AdminService.getDashboardSummary();
+      if (mounted) {
+        setState(() {
+          _totalRevenue = (summary['totalRevenue'] ?? 0).toDouble();
+          _canceledBookings = summary['canceledBookings'] ?? 0;
+          _isLoadingDashboard = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching dashboard: $e');
+      if (mounted) setState(() => _isLoadingDashboard = false);
     }
-    return const [
-      ProviderSales('Sophie Turner', 48000),
-      ProviderSales('Robert Wilson', 33600),
-      ProviderSales('Jessica Brown', 21500),
-      ProviderSales('Amanda White', 16800),
-    ];
+  }
+
+  Future<void> _fetchFinancialGrowth() async {
+    try {
+      final growth = await AdminService.getFinancialGrowth();
+      if (mounted) {
+        setState(() {
+          _financialData = growth;
+          _isLoadingFinancial = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching financial growth: $e');
+      if (mounted) setState(() => _isLoadingFinancial = false);
+    }
+  }
+
+  Future<void> _fetchTopProviders() async {
+    try {
+      final response = await AdminService.getTopProviderSales(limit: 4);
+      // Backend returns 'topProviders' array with 'companyName' and 'totalSales'
+      final providers = response['topProviders'] ?? response['providers'] ?? response['data'] ?? [];
+      
+      print('📊 Top providers response: $response');
+      
+      final sales = (providers as List).map((p) {
+        return ProviderSales(
+          p['companyName'] ?? p['name'] ?? 'Unknown',
+          (p['totalSales'] ?? p['revenue'] ?? 0).toDouble(),
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _topSales = sales;
+          _isLoadingTopProviders = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching top providers: $e');
+      if (mounted) setState(() => _isLoadingTopProviders = false);
+    }
+  }
+
+  Future<void> _fetchPromoCodes() async {
+    try {
+      final codes = await AdminService.getPromoCodes();
+      print('📦 Promo codes received: ${codes.length} codes');
+      print('📦 Promo codes data: $codes');
+      
+      final codeList = codes.map((c) => DiscountCode.fromJson(c)).toList();
+      
+      if (mounted) {
+        setState(() {
+          _codes = codeList;
+          _isLoadingCodes = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching promo codes: $e');
+      if (mounted) setState(() => _isLoadingCodes = false);
+    }
+  }
+
+  Future<void> _fetchUsers() async {
+    try {
+      final response = await AdminService.getAllUsers();
+      final usersList = response['users'] ?? response['data'] ?? [];
+      final users = (usersList as List).map((u) => User.fromJson(u)).toList();
+      
+      if (mounted) {
+        setState(() => _users = users);
+      }
+    } catch (e) {
+      print('❌ Error fetching users: $e');
+    }
   }
 
   @override
@@ -236,7 +380,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              '\$142.5k',
+              _isLoadingDashboard 
+                  ? 'Loading...' 
+                  : '\$${(_totalRevenue / 1000).toStringAsFixed(1)}k',
               style: GoogleFonts.poppins(
                   color: Colors.white,
                   fontSize: 24,
@@ -292,7 +438,8 @@ class _HomeScreenState extends State<HomeScreen> {
               letterSpacing: 0.6),
         ),
         const SizedBox(height: 6),
-        Text('4',
+        Text(
+            _isLoadingDashboard ? '...' : '$_canceledBookings',
             style: GoogleFonts.poppins(
                 color: kTextColor, fontSize: 24, fontWeight: FontWeight.w900)),
         const SizedBox(height: 10),
@@ -305,7 +452,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const Icon(LucideIcons.arrowDownRight, color: Colors.red, size: 14),
             const SizedBox(width: 6),
-            Text('2 this week',
+            Text('this month',
                 style: GoogleFonts.poppins(
                     color: Colors.red,
                     fontSize: 11,
@@ -359,32 +506,41 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 10),
           Expanded(
-            child: LineChart(
-              LineChartData(
-                gridData: const FlGridData(show: false),
-                titlesData: const FlTitlesData(show: false),
-                borderData: FlBorderData(show: false),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: const [
-                      FlSpot(0, 1),
-                      FlSpot(1, 1.5),
-                      FlSpot(2, 1.4),
-                      FlSpot(3, 2.2),
-                      FlSpot(4, 2.8),
-                      FlSpot(5, 2.6),
-                      FlSpot(6, 3.2),
-                    ],
-                    isCurved: true,
-                    color: kPrimaryColor,
-                    barWidth: 3.2,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                        show: true, color: kPrimaryColor.withOpacity(0.12)),
-                  ),
-                ],
-              ),
-            ),
+            child: _isLoadingFinancial
+                ? Center(
+                    child: CircularProgressIndicator(color: kPrimaryColor),
+                  )
+                : _financialData.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No data available',
+                          style: GoogleFonts.poppins(color: Colors.grey[600]),
+                        ),
+                      )
+                    : LineChart(
+                        LineChartData(
+                          gridData: const FlGridData(show: false),
+                          titlesData: const FlTitlesData(show: false),
+                          borderData: FlBorderData(show: false),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: _financialData.asMap().entries.map((e) {
+                                return FlSpot(
+                                  e.key.toDouble(),
+                                  ((e.value['value'] ?? 0) / 10000).toDouble(),
+                                );
+                              }).toList(),
+                              isCurved: true,
+                              color: kPrimaryColor,
+                              barWidth: 3.2,
+                              dotData: const FlDotData(show: false),
+                              belowBarData: BarAreaData(
+                                  show: true,
+                                  color: kPrimaryColor.withOpacity(0.12)),
+                            ),
+                          ],
+                        ),
+                      ),
           ),
         ],
       ),
@@ -427,7 +583,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          if (_codes.isEmpty)
+          if (_isLoadingCodes)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(),
+            )
+          else if (_codes.isEmpty)
             Align(
               alignment: Alignment.centerLeft,
               child: Text('No codes yet',
@@ -439,33 +600,74 @@ class _HomeScreenState extends State<HomeScreen> {
               children: _codes.map((c) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: kPrimaryColor.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: kPrimaryColor.withOpacity(0.18)),
+                  child: Dismissible(
+                    key: ValueKey(c.id),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade600,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(LucideIcons.trash2, color: Colors.white),
+                    ),
+                    confirmDismiss: (_) async {
+                      try {
+                        await AdminService.deletePromoCode(c.id);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Code deleted',
+                                  style: GoogleFonts.poppins()),
+                            ),
+                          );
+                        }
+                        return true;
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error: $e',
+                                  style: GoogleFonts.poppins()),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                        return false;
+                      }
+                    },
+                    onDismissed: (_) {
+                      setState(() => _codes.removeWhere((code) => code.id == c.id));
+                    },
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: kPrimaryColor.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: kPrimaryColor.withOpacity(0.18)),
+                          ),
+                          child: Text(c.code,
+                              style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w900,
+                                  color: kPrimaryColor)),
                         ),
-                        child: Text(c.code,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '${c.percent}% off • expires ${c.expires.split('T')[0]}',
                             style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w900,
-                                color: kPrimaryColor)),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '${c.percent}% off • expires ${c.expires}',
-                          style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.grey[700],
-                              fontSize: 12.5),
+                                fontWeight: FontWeight.w700,
+                                color: Colors.grey[700],
+                                fontSize: 12.5),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 );
               }).toList(),
@@ -478,7 +680,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openAddCodeDialog() async {
     final codeCtrl = TextEditingController();
     final percentCtrl = TextEditingController();
-    final expCtrl = TextEditingController(text: '2026-12-31');
+    final descCtrl = TextEditingController();
+    final expCtrl = TextEditingController(
+        text: DateTime.now().add(const Duration(days: 30)).toString().split(' ')[0]);
 
     final ok = await showDialog<bool>(
       context: context,
@@ -492,7 +696,15 @@ class _HomeScreenState extends State<HomeScreen> {
               controller: codeCtrl,
               style: GoogleFonts.poppins(),
               decoration: InputDecoration(
-                  labelText: 'Code',
+                  labelText: 'Code (e.g., SAVE20)',
+                  labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: descCtrl,
+              style: GoogleFonts.poppins(),
+              decoration: InputDecoration(
+                  labelText: 'Description',
                   labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
             ),
             const SizedBox(height: 10),
@@ -501,7 +713,7 @@ class _HomeScreenState extends State<HomeScreen> {
               keyboardType: TextInputType.number,
               style: GoogleFonts.poppins(),
               decoration: InputDecoration(
-                  labelText: 'Percent (e.g. 10)',
+                  labelText: 'Discount Percent (e.g. 10)',
                   labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
             ),
             const SizedBox(height: 10),
@@ -531,19 +743,56 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (ok == true) {
       final code = codeCtrl.text.trim();
+      final desc = descCtrl.text.trim();
       final percent = int.tryParse(percentCtrl.text.trim()) ?? 0;
       final exp = expCtrl.text.trim();
 
-      if (code.isEmpty || percent <= 0) return;
+      if (code.isEmpty || percent <= 0 || desc.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please fill all fields',
+                style: GoogleFonts.poppins()),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
-      setState(() {
-        _codes.insert(
-            0,
-            DiscountCode(
-                code: code,
-                percent: percent,
-                expires: exp.isEmpty ? '—' : exp));
-      });
+      try {
+        final result = await AdminService.createPromoCode(
+          code: code,
+          description: desc,
+          discountValue: percent,
+          expiryDate: exp,
+        );
+
+        if (mounted) {
+          setState(() {
+            _codes.insert(
+              0,
+              DiscountCode.fromJson(result),
+            );
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Code created successfully', style: GoogleFonts.poppins()),
+              backgroundColor: kSuccessColor,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error creating code: $e',
+                  style: GoogleFonts.poppins()),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -579,116 +828,121 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontWeight: FontWeight.w900, fontSize: 14),
                 ),
               ),
-              PopupMenuButton<String>(
-                onSelected: (v) => setState(() => _period = v),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                      value: 'Last 7 Days', child: Text('Last 7 Days')),
-                  PopupMenuItem(
-                      value: 'Last 30 Days', child: Text('Last 30 Days')),
-                ],
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: kBackgroundColor,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Text(_period,
-                          style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.grey[800])),
-                      const SizedBox(width: 6),
-                      Icon(LucideIcons.chevronDown,
-                          size: 16, color: Colors.grey[700]),
-                    ],
-                  ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: kBackgroundColor,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.grey.shade200),
                 ),
+                child: Text(_period,
+                    style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.grey[800])),
               ),
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              SizedBox(
-                height: 140,
-                width: 140,
-                child: PieChart(
-                  PieChartData(
-                    centerSpaceRadius: 48, // donut
-                    sectionsSpace: 2,
-                    sections: List.generate(top.length, (i) {
-                      final p = top[i];
-                      final percent = total == 0 ? 0 : (p.sales / total) * 100;
-                      // بدون ألوان محددة؟ هنا بنستخدم درجات بسيطة من primary عبر opacity
-                      final color = kPrimaryColor
-                          .withOpacity(0.25 + (i * 0.15))
-                          .withOpacity(1.0);
+          if (_isLoadingTopProviders)
+            const Padding(
+              padding: EdgeInsets.all(40.0),
+              child: CircularProgressIndicator(),
+            )
+          else if (top.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(40.0),
+              child: Text(
+                'No data available',
+                style: GoogleFonts.poppins(color: Colors.grey[600]),
+              ),
+            )
+          else
+            Row(
+              children: [
+                SizedBox(
+                  height: 140,
+                  width: 140,
+                  child: PieChart(
+                    PieChartData(
+                      centerSpaceRadius: 48,
+                      sectionsSpace: 2,
+                      sections: List.generate(top.length, (i) {
+                        final p = top[i];
+                        final percent = total == 0 ? 0 : (p.sales / total) * 100;
+                        final color = kPrimaryColor
+                            .withOpacity(0.25 + (i * 0.15))
+                            .withOpacity(1.0);
 
-                      return PieChartSectionData(
-                        value: p.sales,
-                        radius: 28,
-                        color: color,
-                        title: '${percent.toStringAsFixed(0)}%',
-                        titleStyle: GoogleFonts.poppins(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white),
-                      );
-                    }),
+                        return PieChartSectionData(
+                          value: p.sales,
+                          radius: 28,
+                          color: color,
+                          title: '${percent.toStringAsFixed(0)}%',
+                          titleStyle: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white),
+                        );
+                      }),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  children: top.map((p) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        children: [
-                          Container(
-                            height: 10,
-                            width: 10,
-                            decoration: BoxDecoration(
-                              color: kPrimaryColor.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(999),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    children: top.map((p) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              height: 10,
+                              width: 10,
+                              decoration: BoxDecoration(
+                                color: kPrimaryColor.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(p.name,
-                                style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.grey[800],
-                                    fontSize: 12.5)),
-                          ),
-                          Text(
-                            '\$${p.sales.toStringAsFixed(0)}',
-                            style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w900,
-                                color: kTextColor,
-                                fontSize: 12.5),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              )
-            ],
-          ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(p.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.grey[800],
+                                      fontSize: 12.5)),
+                            ),
+                            Text(
+                              '\$${p.sales.toStringAsFixed(0)}',
+                              style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w900,
+                                  color: kTextColor,
+                                  fontSize: 12.5),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                )
+              ],
+            ),
         ],
       ),
     );
   }
 
   // ---------------- Users Modal (كما هو عندك) ----------------
-  void _showUsersModal(BuildContext context) {
+  void _showUsersModal(BuildContext context) async {
+    // Fetch users if not already loaded
+    if (_users.isEmpty) {
+      await _fetchUsers();
+    }
+
+    if (!context.mounted) return;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -731,62 +985,117 @@ class _HomeScreenState extends State<HomeScreen> {
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 ),
+                onChanged: (value) {
+                  // TODO: Implement search filter
+                },
               ),
             ),
             const SizedBox(height: 10),
             Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: mockUsers.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final user = mockUsers[index];
-                  return Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.grey.shade200),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
-                            blurRadius: 18,
-                            offset: const Offset(0, 10))
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: kPrimaryColor.withOpacity(0.12),
-                          child: Text(
-                            user.name[0],
-                            style: GoogleFonts.poppins(
-                                color: kPrimaryColor,
-                                fontWeight: FontWeight.w900),
+              child: _users.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No users found',
+                        style: GoogleFonts.poppins(color: Colors.grey[600]),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _users.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final user = _users[index];
+                        return Dismissible(
+                          key: ValueKey(user.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade600,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(LucideIcons.trash2,
+                                color: Colors.white),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          confirmDismiss: (_) async {
+                            if (user.email == null) return false;
+                            try {
+                              await AdminService.deleteUserByEmail(user.email!);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('User deleted',
+                                        style: GoogleFonts.poppins()),
+                                  ),
+                                );
+                              }
+                              return true;
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error deleting user: $e',
+                                        style: GoogleFonts.poppins()),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                              return false;
+                            }
+                          },
+                          onDismissed: (_) {
+                            setState(() => _users.removeAt(index));
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(color: Colors.grey.shade200),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: Colors.black.withOpacity(0.03),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 10))
+                              ],
+                            ),
+                            child: Row(
                               children: [
-                                Text(user.name,
+                                CircleAvatar(
+                                  backgroundColor: kPrimaryColor.withOpacity(0.12),
+                                  child: Text(
+                                    user.name.isEmpty ? '?' : user.name[0],
                                     style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.w900)),
-                                const SizedBox(height: 2),
-                                Text(user.role,
-                                    style: GoogleFonts.poppins(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
-                                        fontWeight: FontWeight.w600)),
-                              ]),
-                        ),
-                        Icon(LucideIcons.chevronRight, color: Colors.grey[400]),
-                      ],
+                                        color: kPrimaryColor,
+                                        fontWeight: FontWeight.w900),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(user.name,
+                                            style: GoogleFonts.poppins(
+                                                fontWeight: FontWeight.w900)),
+                                        const SizedBox(height: 2),
+                                        Text(user.role,
+                                            style: GoogleFonts.poppins(
+                                                fontSize: 12,
+                                                color: Colors.grey[600],
+                                                fontWeight: FontWeight.w600)),
+                                      ]),
+                                ),
+                                Icon(LucideIcons.chevronRight,
+                                    color: Colors.grey[400]),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         ),

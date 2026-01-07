@@ -1,12 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../theme/app_theme.dart';
-import '../data/mock_data.dart';
 import '../models/sales_item.dart';
+import '../models/review.dart';
 import '../widgets/review_card.dart';
+import '../../../services/admin_service/admin_service.dart';
 
-class PackageSalesScreen extends StatelessWidget {
+class PackageSalesScreen extends StatefulWidget {
   const PackageSalesScreen({super.key});
+
+  @override
+  State<PackageSalesScreen> createState() => _PackageSalesScreenState();
+}
+
+class _PackageSalesScreenState extends State<PackageSalesScreen> {
+  List<SalesItem> _packages = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPackages();
+  }
+
+  Future<void> _fetchPackages() async {
+    try {
+      final packagesData = await AdminService.getPackageSales();
+      final packages = packagesData
+          .map((p) => SalesItem.fromJson(p, 'package'))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _packages = packages;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching packages: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,23 +63,41 @@ class PackageSalesScreen extends StatelessWidget {
           ),
         ),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(20),
-        itemCount: mockPackages.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          final package = mockPackages[index];
-          return _PackageCard(
-            package: package,
-            onTap: () => _showPackageDetail(context, package),
-          );
-        },
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _packages.isEmpty
+              ? const Center(child: Text('No packages found'))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: _packages.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final package = _packages[index];
+                    return _PackageCard(
+                      package: package,
+                      onTap: () => _showPackageDetail(context, package),
+                    );
+                  },
+                ),
     );
   }
 
-  void _showPackageDetail(BuildContext context, SalesItem package) {
-    final reviews = getReviewsForPackage(package.id);
+  void _showPackageDetail(BuildContext context, SalesItem package) async {
+    // Fetch reviews for this package
+    List<Review> reviews = [];
+    try {
+      final reviewsData = await AdminService.getAllReviews();
+      final allReviews = (reviewsData['reviews'] ?? reviewsData['data'] ?? []) as List;
+      reviews = allReviews
+          .where((r) => r['packageId'] == package.id || r['package']?['_id'] == package.id)
+          .map((r) => Review.fromJson(r))
+          .toList();
+    } catch (e) {
+      print('❌ Error fetching reviews: $e');
+    }
+
+    if (!context.mounted) return;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -62,7 +116,7 @@ class PackageSalesScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                 image: DecorationImage(
-                  image: NetworkImage(package.imageUrl),
+                  image: NetworkImage(package.fullImageUrl),
                   fit: BoxFit.cover,
                 ),
               ),
@@ -297,7 +351,7 @@ class _PackageCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.network(
-                package.imageUrl,
+                package.fullImageUrl,
                 width: 60,
                 height: 60,
                 fit: BoxFit.cover,

@@ -354,9 +354,11 @@ async createBookingsFromCart(userId: string, paymentIntentId: string): Promise<B
             return {
                 bookingId: bookingObject._id,
                 serviceName: bookingObject.serviceName, // ✅ اسم الحجز
+                serviceId: bookingObject.serviceId, //  معرف الخدمة للريفيو
                 status: bookingObject.status, // ✅ حالته
                 cancellationReason: bookingObject.cancellationReason || null, // ✅ سبب الإلغاء
-                bookingDate: bookingObject.bookingDetails?.date // إضافة التاريخ للمستخدم
+                bookingDate: bookingObject.bookingDetails?.date , // إضافة التاريخ للمستخدم
+                isReviewed: bookingObject.isReviewed || false, //  حالة الريفيو
             };
         }
     });

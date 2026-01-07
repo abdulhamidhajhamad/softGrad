@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'dart:async';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/reviews_screen.dart';
@@ -8,6 +9,8 @@ import 'screens/messages_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'package:flutter_application_1/screens/signin.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
+import 'package:flutter_application_1/services/admin_service/admin_service.dart';
+import 'package:flutter_application_1/services/socket_service.dart';
 
 class AdminMainScreen extends StatefulWidget {
   final String adminName;
@@ -23,13 +26,56 @@ class AdminMainScreen extends StatefulWidget {
 
 class _AdminMainScreenState extends State<AdminMainScreen> {
   int _currentIndex = 0;
+  int _unreadNotifications = 0;
+  int _unreadMessages = 0;
+  StreamSubscription? _notificationSubscription;
+  StreamSubscription? _messageSubscription;
+  int _notificationKey = 0; // Key to force rebuild NotificationsScreen
 
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    ReviewsScreen(),
-    MessagesScreen(),
-    NotificationsScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchUnreadCounts();
+    _setupRealtimeUpdates();
+  }
+
+  @override
+  void dispose() {
+    _notificationSubscription?.cancel();
+    _messageSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchUnreadCounts() async {
+    try {
+      // Only fetch counts if not on that specific screen
+      if (_currentIndex != 3) {
+        final notifCount = await AdminService.getUnreadNotificationsCount();
+        if (mounted && _currentIndex != 3) {
+          setState(() => _unreadNotifications = notifCount);
+        }
+      }
+      
+      if (_currentIndex != 2) {
+        final msgCount = await AdminService.getUnreadMessagesCount();
+        if (mounted && _currentIndex != 2) {
+          setState(() => _unreadMessages = msgCount);
+        }
+      }
+    } catch (e) {
+      print('❌ Error fetching unread counts: $e');
+    }
+  }
+
+  void _setupRealtimeUpdates() {
+    _notificationSubscription = SocketService.notificationStream.listen((data) {
+      _fetchUnreadCounts();
+    });
+    
+    _messageSubscription = SocketService.messageStream.listen((data) {
+      _fetchUnreadCounts();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +142,12 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
       ),
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: [
+          const HomeScreen(),
+          const ReviewsScreen(),
+          const MessagesScreen(),
+          NotificationsScreen(key: ValueKey(_notificationKey)), // Rebuild on key change
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -117,8 +168,8 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
               children: [
                 _buildNavItem(0, LucideIcons.home, 'Home'),
                 _buildNavItem(1, LucideIcons.star, 'Reviews'),
-                _buildNavItem(2, LucideIcons.messageCircle, 'Messages'),
-                _buildNavItem(3, LucideIcons.bell, 'Notifications'),
+                _buildNavItem(2, LucideIcons.messageCircle, 'Messages', badgeCount: _unreadMessages),
+                _buildNavItem(3, LucideIcons.bell, 'Notifications', badgeCount: _unreadNotifications),
               ],
             ),
           ),
@@ -142,11 +193,38 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
     }
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
+  Widget _buildNavItem(int index, IconData icon, String label, {int badgeCount = 0}) {
     final isSelected = _currentIndex == index;
     
     return InkWell(
-      onTap: () => setState(() => _currentIndex = index),
+      onTap: () async {
+        // عند الخروج من الإشعارات (كان في 3 وراح لمكان تاني)
+        if (_currentIndex == 3 && index != 3) {
+          // Mark all notifications as read when leaving - wait for it
+          try {
+            await AdminService.markAllNotificationsAsRead();
+            print('✅ All notifications marked as read on exit');
+            // Increment key to force rebuild NotificationsScreen next time
+            _notificationKey++;
+          } catch (e) {
+            print('❌ Error marking notifications: $e');
+          }
+        }
+        
+        if (mounted) {
+          setState(() {
+            _currentIndex = index;
+            // Reset badge IMMEDIATELY for the specific screen entered
+            if (index == 2) {
+              // Messages tab - reset messages badge only
+              _unreadMessages = 0;
+            } else if (index == 3) {
+              // Notifications tab - reset notifications badge only
+              _unreadNotifications = 0;
+            }
+          });
+        }
+      },
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -158,10 +236,41 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isSelected ? kPrimaryColor : Colors.grey[500],
-              size: 22,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? kPrimaryColor : Colors.grey[500],
+                  size: 22,
+                ),
+                // ✅ Red badge for unread count
+                if (badgeCount > 0)
+                  Positioned(
+                    right: -8,
+                    top: -6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        badgeCount > 9 ? '9+' : '$badgeCount',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(

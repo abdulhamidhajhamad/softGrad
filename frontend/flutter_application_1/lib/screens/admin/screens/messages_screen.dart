@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:async';
 import '../theme/app_theme.dart';
-import '../data/mock_data.dart';
+import '../models/message.dart';
+import '../../../services/admin_service/admin_service.dart';
+import '../../../services/socket_service.dart';
+import '../../../services/auth_service.dart';
+import 'admin_chat_screen.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
@@ -11,17 +16,142 @@ class MessagesScreen extends StatefulWidget {
   State<MessagesScreen> createState() => _MessagesScreenState();
 }
 
-class _MessagesScreenState extends State<MessagesScreen> {
-  late final List<dynamic> _messages;
+class _MessagesScreenState extends State<MessagesScreen> with WidgetsBindingObserver {
+  List<Message> _messages = [];
+  bool _isLoading = true;
+  bool _hasError = false;
+  String _errorMessage = '';
+  StreamSubscription? _messageSubscription;
+  String? _currentAdminId;
 
   @override
   void initState() {
     super.initState();
-    _messages = List<dynamic>.from(mockMessages); // local list to allow delete
+    print('🟢 MessagesScreen initState() called');
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      print('🟢 PostFrameCallback - calling _fetchMessages');
+      _initializeAndFetch();
+    });
+    _setupRealtimeUpdates();
+  }
+
+  Future<void> _initializeAndFetch() async {
+    // Get current admin user ID
+    final userData = await AuthService.getUserData();
+    _currentAdminId = userData?['_id']?.toString() ?? userData?['id']?.toString();
+    print('🔑 Current Admin ID: $_currentAdminId');
+    await _fetchMessages();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _messageSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _fetchMessages();
+    }
+  }
+
+  Future<void> _fetchMessages() async {
+    print('📨 _fetchMessages() called');
+    try {
+      if (_isLoading) {
+        // Already loading, don't set state again
+      } else {
+        if (mounted) setState(() => _isLoading = true);
+      }
+      
+      print('📨 Calling AdminService.getChats()...');
+      final chatsData = await AdminService.getChats();
+      print('📨 Got ${chatsData.length} chats from API');
+      print('📨 Current Admin ID for filtering: $_currentAdminId');
+      
+      if (mounted) {
+        setState(() {
+          _messages = chatsData.map((m) {
+            print('📨 Parsing message: ${m['_id']}');
+            return Message.fromJson(m, currentUserId: _currentAdminId);
+          }).toList();
+          print('📨 Parsed ${_messages.length} messages');
+          _isLoading = false;
+          _hasError = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching messages: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+          _errorMessage = e.toString();
+        });
+      }
+    }
+  }
+
+  void _setupRealtimeUpdates() {
+    _messageSubscription = SocketService.messageStream.listen((data) {
+      print('📨 Real-time update received - refreshing chats');
+      _fetchMessages();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    print('🔵 MessagesScreen build() - isLoading: $_isLoading, hasError: $_hasError, messages: ${_messages.length}');
+    
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(LucideIcons.alertCircle, size: 64, color: Colors.red[300]),
+            const SizedBox(height: 16),
+            Text(
+              'Failed to load messages',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.red[400],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                _errorMessage,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _fetchMessages,
+              icon: const Icon(LucideIcons.refreshCw, size: 18),
+              label: Text('Retry', style: GoogleFonts.poppins()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimaryColor,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final unreadCount = _messages.where((m) => m.unread).length;
 
     return SafeArea(
@@ -53,7 +183,33 @@ class _MessagesScreenState extends State<MessagesScreen> {
             ),
           ),
           Expanded(
-            child: ListView.separated(
+            child: _messages.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(LucideIcons.messageSquare, size: 64, color: Colors.grey[300]),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No messages yet',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Your conversations will appear here',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: _messages.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -66,25 +222,27 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   background: _DeleteBackground(),
                   confirmDismiss: (_) => _confirmDelete(context, message),
                   onDismissed: (_) => _deleteMessage(context, message),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: message.unread
-                          ? kPrimaryColor.withOpacity(0.05)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
+                  child: GestureDetector(
+                    onTap: () => _openChat(context, message),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
                         color: message.unread
-                            ? kPrimaryColor.withOpacity(0.2)
-                            : Colors.grey[200]!,
+                            ? kPrimaryColor.withOpacity(0.05)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: message.unread
+                              ? kPrimaryColor.withOpacity(0.2)
+                              : Colors.grey[200]!,
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Stack(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: kPrimaryColor.withOpacity(0.1),
+                      child: Row(
+                        children: [
+                          Stack(
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: kPrimaryColor.withOpacity(0.1),
                               radius: 24,
                               child: Text(
                                 message.senderName[0].toUpperCase(),
@@ -163,6 +321,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       ],
                     ),
                   ),
+                  ),
                 );
               },
             ),
@@ -171,6 +330,22 @@ class _MessagesScreenState extends State<MessagesScreen> {
         ],
       ),
     );
+  }
+
+  void _openChat(BuildContext context, Message message) async {
+    // Navigate to chat screen
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AdminChatScreen(
+          chatId: message.id,
+          participantName: message.senderName,
+          participantAvatar: message.avatarUrl,
+        ),
+      ),
+    );
+    // Refresh messages when returning
+    _fetchMessages();
   }
 
   Future<bool?> _confirmDelete(BuildContext context, dynamic message) {

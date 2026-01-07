@@ -19,6 +19,11 @@ class ReviewService {
     List<String>? images,
   }) async {
     try {
+      print('📤 Creating review with:');
+      print('   bookingId: $bookingId');
+      print('   serviceId: $serviceId');
+      print('   rating: $rating');
+      
       final token = await AuthService.getToken();
       if (token == null) throw Exception('No authentication token found');
 
@@ -67,10 +72,15 @@ class ReviewService {
       );
 
       print('📥 Pending Reviews Response: ${response.statusCode}');
+      print('📥 Pending Reviews Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        return data.map((item) => PendingReview.fromJson(item)).toList();
+        print('📥 Parsed pending reviews: $data');
+        return data.map((item) {
+          print('📥 Parsing item: $item');
+          return PendingReview.fromJson(item);
+        }).toList();
       } else {
         throw Exception('Failed to fetch pending reviews');
       }

@@ -1,4 +1,4 @@
-// chat.service.ts - FIXED VERSION (No DB notification for messages)
+﻿// chat.service.ts - FIXED VERSION (No DB notification for messages)
 import { Injectable, NotFoundException , forwardRef, Inject, Logger} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Chat, LastReadStatus } from './chat.schema';
@@ -54,18 +54,18 @@ export class ChatService {
   }
 
   async sendMessage(senderId: string, chatId: string, content: string): Promise<{ message: Message, recipientId: string | null, newUnreadCount: number }> {
-    this.logger.log(`\n🔵 ===== SEND MESSAGE START =====`);
+    this.logger.log(`\nðŸ”µ ===== SEND MESSAGE START =====`);
     this.logger.log(`Sender: ${senderId}, Chat: ${chatId}`);
     
     const chat = await this.chatModel.findById(chatId);
     if (!chat) {
-      this.logger.error(`❌ Chat not found: ${chatId}`);
+      this.logger.error(`âŒ Chat not found: ${chatId}`);
       throw new NotFoundException('Chat not found');
     }
 
     // Create message
     const message = await this.messageModel.create({ sender: senderId, chatId, content });
-    this.logger.log(`✅ Message created with ID: ${message._id}`);
+    this.logger.log(`âœ… Message created with ID: ${message._id}`);
     
     chat.lastMessage = content;
     
@@ -74,7 +74,7 @@ export class ChatService {
       (p) => p.toString() !== senderId.toString()
     );
     const recipientId: string | null = participantObject ? participantObject.toString() : null;
-    this.logger.log(`📤 Recipient ID: ${recipientId}`);
+    this.logger.log(`ðŸ“¤ Recipient ID: ${recipientId}`);
 
     // Update lastRead status
     chat.lastRead = chat.lastRead.map(status => {
@@ -87,26 +87,26 @@ export class ChatService {
     });
 
     await chat.save();
-    this.logger.log(`✅ Chat updated`);
+    this.logger.log(`âœ… Chat updated`);
     
     // Send via WebSocket
     try {
       this.chatGateway.sendNewMessageToRoom(chatId, message);
-      this.logger.log(`✅ Message sent to WebSocket room`);
+      this.logger.log(`âœ… Message sent to WebSocket room`);
     } catch (wsError) {
-      this.logger.error(`❌ WebSocket error: ${wsError.message}`);
+      this.logger.error(`âŒ WebSocket error: ${wsError.message}`);
     }
     
     // Get sender info
     const sender = await this.userModel.findById(senderId).exec();
     if (!sender) {
-      this.logger.error(`❌ Sender not found: ${senderId}`);
+      this.logger.error(`âŒ Sender not found: ${senderId}`);
       throw new NotFoundException('Sender user not found'); 
     }
     
     let notificationTitle: string;
     const senderRole = sender['role'] as string;
-    this.logger.log(`📋 Sender role: ${senderRole}`);
+    this.logger.log(`ðŸ“‹ Sender role: ${senderRole}`);
     
     if (senderRole === 'vendor') {
       try {
@@ -126,56 +126,56 @@ export class ChatService {
     let newUnreadCount = 0;
     
     if (recipientId) {
-      this.logger.log(`\n📬 Processing notification for recipient: ${recipientId}`);
+      this.logger.log(`\nðŸ“¬ Processing notification for recipient: ${recipientId}`);
       
       newUnreadCount = await this.getUnreadChatsCount(recipientId);
-      this.logger.log(`📊 Unread count: ${newUnreadCount}`);
+      this.logger.log(`ðŸ“Š Unread count: ${newUnreadCount}`);
 
       const recipient = await this.userModel.findById(recipientId);
       if (!recipient) {
-        this.logger.warn(`⚠️ Recipient not found: ${recipientId}`);
+        this.logger.warn(`âš ï¸ Recipient not found: ${recipientId}`);
       } else {
-        this.logger.log(`✅ Recipient found: ${recipient['userName']}`);
+        this.logger.log(`âœ… Recipient found: ${recipient['userName']}`);
         
         const fcmToken = recipient['fcmToken'] as string | undefined;
         const recipientRole = recipient['role'] as string;
         
-        this.logger.log(`📱 FCM Token: ${fcmToken ? 'EXISTS' : 'MISSING'}`);
-        this.logger.log(`👤 Recipient role: ${recipientRole}`);
+        this.logger.log(`ðŸ“± FCM Token: ${fcmToken ? 'EXISTS' : 'MISSING'}`);
+        this.logger.log(`ðŸ‘¤ Recipient role: ${recipientRole}`);
         
-        // ✅ التحقق من حالة اتصال المستخدم
+        // âœ… Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø­Ø§Ù„Ø© Ø§ØªØµØ§Ù„ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…
         const isRecipientOnline = this.notificationsGateway.isUserConnected(recipientId);
-        this.logger.log(`🔌 Recipient online status: ${isRecipientOnline}`);
+        this.logger.log(`ðŸ”Œ Recipient online status: ${isRecipientOnline}`);
         
-        // ✅ إرسال FCM فقط إذا كان المستخدم offline و عنده token
+        // âœ… Ø¥Ø±Ø³Ø§Ù„ FCM ÙÙ‚Ø· Ø¥Ø°Ø§ ÙƒØ§Ù† Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… offline Ùˆ Ø¹Ù†Ø¯Ù‡ token
         const shouldSendFCM = !isRecipientOnline && fcmToken && fcmToken.trim() !== '';
         
         if (shouldSendFCM) {
-          this.logger.log(`🚀 Recipient is OFFLINE - Sending FCM notification ONLY`);
+          this.logger.log(`ðŸš€ Recipient is OFFLINE - Sending FCM notification ONLY`);
           
           try {
-            // ✅ إرسال FCM مباشرة بدون حفظ في قاعدة البيانات
+            // âœ… Ø¥Ø±Ø³Ø§Ù„ FCM Ù…Ø¨Ø§Ø´Ø±Ø© Ø¨Ø¯ÙˆÙ† Ø­ÙØ¸ ÙÙŠ Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
             await this.notificationService.sendNotification(
               fcmToken!,
               notificationTitle,
               content.substring(0, 100) + (content.length > 100 ? '...' : '')
             );
             
-            this.logger.log(`✅ FCM notification sent successfully (no DB save)`);
+            this.logger.log(`âœ… FCM notification sent successfully (no DB save)`);
           } catch (fcmError) {
-            this.logger.error(`❌ Error sending FCM notification: ${fcmError.message}`);
+            this.logger.error(`âŒ Error sending FCM notification: ${fcmError.message}`);
           }
         } else if (isRecipientOnline) {
-          this.logger.log(`✅ Recipient is ONLINE - Message delivered via WebSocket (no FCM needed)`);
+          this.logger.log(`âœ… Recipient is ONLINE - Message delivered via WebSocket (no FCM needed)`);
         } else if (!fcmToken) {
-          this.logger.log(`⚠️ No FCM token - Cannot send push notification`);
+          this.logger.log(`âš ï¸ No FCM token - Cannot send push notification`);
         }
       }
     } else {
-      this.logger.warn(`⚠️ No recipient found in chat`);
+      this.logger.warn(`âš ï¸ No recipient found in chat`);
     }
     
-    this.logger.log(`🔵 ===== SEND MESSAGE END =====\n`);
+    this.logger.log(`ðŸ”µ ===== SEND MESSAGE END =====\n`);
     return { message, recipientId, newUnreadCount };
   }
 
@@ -187,26 +187,10 @@ export class ChatService {
   }
 
   async getUserChats(userId: string) {
-    const chats = await this.chatModel
+    return this.chatModel
       .find({ participants: userId })
       .populate('participants', 'userName imageUrl role')
-      .sort({ updatedAt: -1 })
-      .lean();
-    
-    for (const chat of chats) {
-      for (const participant of chat.participants as any[]) {
-        if (participant && participant.role === 'vendor') {
-          try {
-            const companyName = await this.providerService.findCompanyNameByUserId(participant._id.toString());
-            participant.companyName = companyName;
-          } catch (e) {
-            participant.companyName = participant.userName;
-          }
-        }
-      }
-    }
-    
-    return chats;
+      .sort({ updatedAt: -1 });
   }
 
   async deleteChat(userId: string, chatId: string): Promise<any> {
@@ -227,7 +211,7 @@ export class ChatService {
   }
 
   async markMessagesAsRead(userId: string, chatId: string): Promise<{ messagesMarkedReadCount: number, newUnreadCount: number }> {
-    console.log(`\n🔵 ===== MARK AS READ DEBUG START (Bulk Update) =====`);
+    console.log(`\nðŸ”µ ===== MARK AS READ DEBUG START (Bulk Update) =====`);
     
     let userIdObj: Types.ObjectId;
     
@@ -259,9 +243,9 @@ export class ChatService {
     
     const messagesMarkedReadCount = updateResult.modifiedCount;
     
-    console.log(`✅ Bulk Update executed. Messages marked as read: ${messagesMarkedReadCount}`);
+    console.log(`âœ… Bulk Update executed. Messages marked as read: ${messagesMarkedReadCount}`);
 
-    console.log(`📖 Updating lastRead in Chat document...`);
+    console.log(`ðŸ“– Updating lastRead in Chat document...`);
     
     let lastReadUpdated = false;
     for (const status of chat.lastRead) {
@@ -295,16 +279,16 @@ export class ChatService {
         }
         
         chat.lastRead = initialStatuses;
-        console.log(`✅ Initialized lastRead array`);
+        console.log(`âœ… Initialized lastRead array`);
     }
     
     await chat.save(); 
-    console.log(`✅ Chat document saved`);
+    console.log(`âœ… Chat document saved`);
 
     const newUnreadCount = await this.getUnreadChatsCount(userId);
     
-    console.log(`📊 New unread count for user: ${newUnreadCount}`);
-    console.log(`🔵 ===== MARK AS READ DEBUG END (Bulk Update) =====\n`);
+    console.log(`ðŸ“Š New unread count for user: ${newUnreadCount}`);
+    console.log(`ðŸ”µ ===== MARK AS READ DEBUG END (Bulk Update) =====\n`);
 
     return { messagesMarkedReadCount, newUnreadCount };
   }
@@ -335,23 +319,23 @@ async getUnreadCountsPerChat(userId: string) {
   const unreadCounts = await this.messageModel.aggregate([
     {
       $match: {
-        // 1. استبعاد الرسائل التي أرسلها المستخدم نفسه
+        // 1. Ø§Ø³ØªØ¨Ø¹Ø§Ø¯ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ Ø§Ù„ØªÙŠ Ø£Ø±Ø³Ù„Ù‡Ø§ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ù†ÙØ³Ù‡
         sender: { $ne: new Types.ObjectId(userId) },
-        // 2. جلب الرسائل غير المقروءة فقط
+        // 2. Ø¬Ù„Ø¨ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ ØºÙŠØ± Ø§Ù„Ù…Ù‚Ø±ÙˆØ¡Ø© ÙÙ‚Ø·
         isRead: false,
       },
     },
     {
       $group: {
-        // 3. تجميع النتائج حسب معرف الشات
+        // 3. ØªØ¬Ù…ÙŠØ¹ Ø§Ù„Ù†ØªØ§Ø¦Ø¬ Ø­Ø³Ø¨ Ù…Ø¹Ø±Ù Ø§Ù„Ø´Ø§Øª
         _id: '$chatId',
-        // 4. حساب عدد الرسائل في كل مجموعة
+        // 4. Ø­Ø³Ø§Ø¨ Ø¹Ø¯Ø¯ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ ÙÙŠ ÙƒÙ„ Ù…Ø¬Ù…ÙˆØ¹Ø©
         count: { $sum: 1 },
       },
     },
   ]);
 
-  // تنسيق النتيجة لتكون أسهل في القراءة للفرونت إند
+  // ØªÙ†Ø³ÙŠÙ‚ Ø§Ù„Ù†ØªÙŠØ¬Ø© Ù„ØªÙƒÙˆÙ† Ø£Ø³Ù‡Ù„ ÙÙŠ Ø§Ù„Ù‚Ø±Ø§Ø¡Ø© Ù„Ù„ÙØ±ÙˆÙ†Øª Ø¥Ù†Ø¯
   return unreadCounts.map((item) => ({
     chatId: item._id,
     unreadCount: item.count,

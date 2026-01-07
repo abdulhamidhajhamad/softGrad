@@ -943,7 +943,7 @@ async getAllReviews(filter?:  'all' | 'good' | 'bad') {
 
     const reviews = await Review.find(query)
       .populate('userId', 'userName imageUrl')
-      .populate('serviceId', 'serviceName images')
+      .populate('serviceId', 'serviceName images providerId')
       .sort({ createdAt:  -1 })
       .lean();
 
@@ -951,17 +951,20 @@ async getAllReviews(filter?:  'all' | 'good' | 'bad') {
       total: reviews.length,
       goodCount: reviews.filter((r: any) => r.rating >= 4).length,
       badCount: reviews.filter((r: any) => r.rating <= 2).length,
-      reviews: reviews. map((r: any) => ({
+      reviews: reviews.map((r: any) => ({
         _id: r._id,
-        userName:  r.userId?.userName || r.userName || 'Anonymous',
-        userImage: r.userId?. imageUrl || '',
+        userId: r.userId?._id || r.userId,
+        userName: r.userId?.userName || r.userName || 'Anonymous',
+        userImage: r.userId?.imageUrl || '',
+        serviceId: r.serviceId?._id || r.serviceId,
         serviceName: r.serviceId?.serviceName || 'Unknown Service',
         serviceImage: r.serviceId?.images?.[0] || '',
-        rating: r. rating,
+        providerId: r.serviceId?.providerId,
+        rating: r.rating,
         comment: r.comment,
         images: r.images || [],
         isPositive: r.rating >= 4,
-        createdAt: r. createdAt
+        createdAt: r.createdAt
       }))
     };
   } catch (error) {
@@ -1009,5 +1012,4 @@ async getAdminDashboardSummary() {
     throw new BadRequestException('Failed to fetch dashboard summary');
   }
 }
-
 }

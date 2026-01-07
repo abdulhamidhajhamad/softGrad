@@ -1,12 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../theme/app_theme.dart';
-import '../data/mock_data.dart';
 import '../models/sales_item.dart';
+import '../models/review.dart';
 import '../widgets/review_card.dart';
+import '../../../services/admin_service/admin_service.dart';
 
-class ServiceSalesScreen extends StatelessWidget {
+class ServiceSalesScreen extends StatefulWidget {
   const ServiceSalesScreen({super.key});
+
+  @override
+  State<ServiceSalesScreen> createState() => _ServiceSalesScreenState();
+}
+
+class _ServiceSalesScreenState extends State<ServiceSalesScreen> {
+  List<SalesItem> _services = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchServices();
+  }
+
+  Future<void> _fetchServices() async {
+    try {
+      final servicesData = await AdminService.getServiceSales();
+      final services = servicesData
+          .map((s) => SalesItem.fromJson(s, 'service'))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _services = services;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching services: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,23 +63,41 @@ class ServiceSalesScreen extends StatelessWidget {
           ),
         ),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(20),
-        itemCount: mockServices.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          final service = mockServices[index];
-          return _ServiceCard(
-            service: service,
-            onTap: () => _showServiceDetail(context, service),
-          );
-        },
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _services.isEmpty
+              ? const Center(child: Text('No services found'))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: _services.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final service = _services[index];
+                    return _ServiceCard(
+                      service: service,
+                      onTap: () => _showServiceDetail(context, service),
+                    );
+                  },
+                ),
     );
   }
 
-  void _showServiceDetail(BuildContext context, SalesItem service) {
-    final reviews = getReviewsForService(service.id);
+  void _showServiceDetail(BuildContext context, SalesItem service) async {
+    // Fetch reviews for this service - adjust based on your backend API
+    List<Review> reviews = [];
+    try {
+      final reviewsData = await AdminService.getAllReviews();
+      final allReviews = (reviewsData['reviews'] ?? reviewsData['data'] ?? []) as List;
+      reviews = allReviews
+          .where((r) => r['serviceId'] == service.id || r['service']?['_id'] == service.id)
+          .map((r) => Review.fromJson(r))
+          .toList();
+    } catch (e) {
+      print('❌ Error fetching reviews: $e');
+    }
+
+    if (!context.mounted) return;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -62,7 +116,7 @@ class ServiceSalesScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                 image: DecorationImage(
-                  image: NetworkImage(service.imageUrl),
+                  image: NetworkImage(service.fullImageUrl),
                   fit: BoxFit.cover,
                 ),
               ),
@@ -305,7 +359,7 @@ class _ServiceCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.network(
-                service.imageUrl,
+                service.fullImageUrl,
                 width: 60,
                 height: 60,
                 fit: BoxFit.cover,

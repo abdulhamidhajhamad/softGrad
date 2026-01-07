@@ -270,6 +270,7 @@ await this.sendReviewNotificationToAdmin(
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // First get bookings WITHOUT populate to preserve serviceId
     const bookings = await this.bookingModel
       .find({
         userId: new Types.ObjectId(userId),
@@ -277,18 +278,34 @@ await this.sendReviewNotificationToAdmin(
         'bookingDetails.date': { $lt: today },
         isReviewed: false,
       })
-      .populate('serviceId', 'serviceName images')
       .sort({ 'bookingDetails.date': -1 })
       .lean()
       .exec();
 
-    return bookings.map(b => ({
-      bookingId: b._id,
-      serviceId: (b.serviceId as any)?._id,
-      serviceName: (b.serviceId as any)?.serviceName,
-      serviceImage: (b.serviceId as any)?.images?.[0],
-      bookingDate: b.bookingDetails.date,
-    }));
+    // Get service details separately
+    const result: any[] = [];
+    for (const booking of bookings) {
+      const service = await this.serviceModel.findById(booking.serviceId).select('serviceName images companyName').lean().exec();
+      
+        console.log('Full booking:', JSON.stringify(booking, null, 2));
+        console.log('Booking serviceId:', booking.serviceId, 'type:', typeof booking.serviceId);
+        
+        // Skip if no serviceId
+        if (!booking.serviceId) {
+          console.log('Skipping booking without serviceId:', booking._id);
+          continue;
+        }
+      result.push({
+        bookingId: (booking._id as Types.ObjectId).toString(),
+        serviceId: booking.serviceId.toString(),
+        serviceName: service?.serviceName || booking.serviceName || '',
+        serviceImage: service?.images?.[0] || null,
+        companyName: service?.companyName || booking.companyName || '',
+        bookingDate: booking.bookingDetails.date,
+      });
+    }
+
+    return result;
   }
 
   /**

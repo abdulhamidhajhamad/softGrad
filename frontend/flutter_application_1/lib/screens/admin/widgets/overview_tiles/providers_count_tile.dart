@@ -2,12 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../theme/app_theme.dart';
+import '../../../../services/admin_service/admin_service.dart';
 
 class AdminProvider {
   final String name;
   final String email;
+  final String id;
 
-  const AdminProvider({required this.name, required this.email});
+  const AdminProvider({
+    required this.name,
+    required this.email,
+    required this.id,
+  });
+
+  factory AdminProvider.fromJson(Map<String, dynamic> json) {
+    return AdminProvider(
+      name: json['companyName'] ?? json['userName'] ?? 'Unknown',
+      email: json['email'] ?? json['details']?['email'] ?? '',
+      id: json['_id'] ?? json['id'] ?? '',
+    );
+  }
 }
 
 class ProvidersCountTile extends StatefulWidget {
@@ -18,17 +32,43 @@ class ProvidersCountTile extends StatefulWidget {
 }
 
 class _ProvidersCountTileState extends State<ProvidersCountTile> {
-  final List<AdminProvider> _providers = const [
-    AdminProvider(name: 'Sophie Turner', email: 'sophie@demo.com'),
-    AdminProvider(name: 'Robert Wilson', email: 'robert@demo.com'),
-    AdminProvider(name: 'Jessica Brown', email: 'jessica@demo.com'),
-  ];
+  List<AdminProvider> _providers = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProviders();
+  }
+
+  Future<void> _fetchProviders() async {
+    try {
+      final response = await AdminService.getAllProviders();
+      final providersList = response['providers'] ?? response['data'] ?? [];
+      
+      final providers = (providersList as List)
+          .map((json) => AdminProvider.fromJson(json))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _providers = providers;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching providers: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return _OverviewTile(
       label: 'Number of Providers',
-      value: _providers.length.toString(),
+      value: _isLoading ? '...' : _providers.length.toString(),
       icon: LucideIcons.briefcase,
       color: Colors.purple,
       bgColor: Colors.purple[50]!,
@@ -71,69 +111,114 @@ class _ProvidersCountTileState extends State<ProvidersCountTile> {
               ),
             ),
             Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-                itemCount: _providers.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, i) {
-                  final p = _providers[i];
-                  return Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.grey.shade200),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 18,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 22,
-                          backgroundColor: Colors.purple.withOpacity(0.12),
-                          child: Text(
-                            p.name.isEmpty ? '?' : p.name[0].toUpperCase(),
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w900,
-                              color: Colors.purple[700],
+              child: _providers.isEmpty
+                  ? Center(
+                      child: Text(
+                        _isLoading ? 'Loading...' : 'No providers found',
+                        style: GoogleFonts.poppins(color: Colors.grey[600]),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                      itemCount: _providers.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, i) {
+                        final p = _providers[i];
+                        return Dismissible(
+                          key: ValueKey(p.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade600,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: const Icon(LucideIcons.trash2,
+                                color: Colors.white),
+                          ),
+                          confirmDismiss: (_) async {
+                            try {
+                              await AdminService.deleteProviderByEmail(p.email);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Provider deleted',
+                                      style: GoogleFonts.poppins()),
+                                ),
+                              );
+                              return true;
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error deleting provider: $e',
+                                      style: GoogleFonts.poppins()),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return false;
+                            }
+                          },
+                          onDismissed: (_) {
+                            setState(() => _providers.removeAt(i));
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: Colors.grey.shade200),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.03),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor: Colors.purple.withOpacity(0.12),
+                                  child: Text(
+                                    p.name.isEmpty ? '?' : p.name[0].toUpperCase(),
+                                    style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.purple[700],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        p.name,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w900,
+                                          color: kTextColor,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        p.email,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                p.name,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w900,
-                                  color: kTextColor,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                p.email,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         ),

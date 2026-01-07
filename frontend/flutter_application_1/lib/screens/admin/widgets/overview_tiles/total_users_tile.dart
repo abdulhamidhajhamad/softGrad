@@ -2,21 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../theme/app_theme.dart';
+import '../../../../services/admin_service/admin_service.dart';
 
-class TotalUsersTile extends StatelessWidget {
+class TotalUsersTile extends StatefulWidget {
   final VoidCallback? onTap;
 
   const TotalUsersTile({super.key, this.onTap});
 
   @override
+  State<TotalUsersTile> createState() => _TotalUsersTileState();
+}
+
+class _TotalUsersTileState extends State<TotalUsersTile> {
+  int _count = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCount();
+  }
+
+  Future<void> _fetchCount() async {
+    try {
+      final count = await AdminService.getUsersCount();
+      if (mounted) {
+        setState(() {
+          _count = count;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching users count: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return _OverviewTile(
       label: 'Total Users',
-      value: '2,543',
+      value: _isLoading ? '...' : '$_count',
       icon: LucideIcons.users,
       color: Colors.amber[800]!,
       bgColor: Colors.amber[50]!,
-      onTap: onTap,
+      onTap: widget.onTap,
     );
   }
 }

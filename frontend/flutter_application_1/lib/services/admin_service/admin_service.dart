@@ -4,6 +4,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../auth_service.dart';
+import '../socket_service.dart';
 
 class AdminService {
   static String get baseUrl => AuthService.baseUrl;
@@ -18,7 +19,7 @@ class AdminService {
   }
 
   // ====================== DASHBOARD =========================
-  
+
   /// Get complete dashboard summary
   static Future<Map<String, dynamic>> getDashboardSummary() async {
     try {
@@ -106,12 +107,12 @@ class AdminService {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/admin/stats/top-providers? limit=$limit'),
+        Uri.parse('$baseUrl/admin/stats/top-providers?limit=$limit'),
         headers: headers,
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response. body);
+        return json.decode(response.body);
       } else {
         throw Exception('Failed to fetch top providers');
       }
@@ -254,12 +255,19 @@ class AdminService {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/admin/reviews? filter=$filter'),
+        Uri.parse('$baseUrl/admin/reviews?filter=$filter'),
         headers: headers,
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response. body);
+        final data = json.decode(response.body);
+        
+        // Debug: Print first review structure
+        if (data['reviews'] != null && (data['reviews'] as List).isNotEmpty) {
+          print('📝 First review structure: ${json.encode(data['reviews'][0])}');
+        }
+        
+        return data;
       } else {
         throw Exception('Failed to fetch reviews');
       }
@@ -275,15 +283,30 @@ class AdminService {
   static Future<List<Map<String, dynamic>>> getPromoCodes() async {
     try {
       final headers = await _getAuthHeaders();
+      print('🔑 Headers: $headers');
+      print('🌐 URL: $baseUrl/promotion/admin/codes');
+      
       final response = await http.get(
-        Uri. parse('$baseUrl/promotion/admin/codes'),
+        Uri.parse('$baseUrl/promotion/admin/codes'),
         headers: headers,
       );
 
+      print('📦 Promo codes status: ${response.statusCode}');
+      print('📦 Promo codes response: ${response.body}');
+
       if (response.statusCode == 200) {
-        return List<Map<String, dynamic>>. from(json.decode(response.body));
+        final decoded = json.decode(response.body);
+        if (decoded is List) {
+          return List<Map<String, dynamic>>.from(decoded);
+        } else if (decoded is Map && decoded['data'] != null) {
+          return List<Map<String, dynamic>>.from(decoded['data']);
+        } else if (decoded is Map && decoded['codes'] != null) {
+          return List<Map<String, dynamic>>.from(decoded['codes']);
+        }
+        return [];
       } else {
-        throw Exception('Failed to fetch promo codes');
+        print('❌ Failed with status: ${response.statusCode}');
+        throw Exception('Failed to fetch promo codes: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error fetching promo codes: $e');
@@ -402,11 +425,13 @@ class AdminService {
   /// Mark all notifications as read
   static Future<void> markAllNotificationsAsRead() async {
     try {
+      print('📝 Marking all notifications as read...');
       final headers = await _getAuthHeaders();
-      await http.patch(
-        Uri. parse('$baseUrl/notifications/mark-all-read'),
+      final response = await http.patch(
+        Uri.parse('$baseUrl/notifications/mark-all-read'),
         headers: headers,
       );
+      print('✅ Mark all read response: ${response.statusCode}');
     } catch (e) {
       print('❌ Error marking notifications as read: $e');
       rethrow;
@@ -438,8 +463,13 @@ class AdminService {
         headers: headers,
       );
 
+      print('📨 Get chats response: ${response.statusCode}');
+      print('📨 Get chats body: ${response.body}');
+
       if (response.statusCode == 200) {
-        return List<Map<String, dynamic>>.from(json.decode(response.body));
+        final chats = List<Map<String, dynamic>>.from(json.decode(response.body));
+        print('📨 Found ${chats.length} chats');
+        return chats;
       } else {
         throw Exception('Failed to fetch chats');
       }
@@ -452,21 +482,18 @@ class AdminService {
   /// Get unread messages count
   static Future<int> getUnreadMessagesCount() async {
     try {
-      final headers = await _getAuthHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/chat/unread-count'),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return data['count'] ?? 0;
-      } else {
-        throw Exception('Failed to fetch unread messages count');
+      // Get chats and count unread ones locally
+      final chats = await getChats();
+      int unreadCount = 0;
+      for (final chat in chats) {
+        if (chat['hasUnread'] == true || chat['unread'] == true) {
+          unreadCount++;
+        }
       }
+      return unreadCount;
     } catch (e) {
       print('❌ Error fetching unread messages count: $e');
-      rethrow;
+      return 0;
     }
   }
 
@@ -510,6 +537,57 @@ class AdminService {
       }
     } catch (e) {
       print('❌ Error sending message: $e');
+      rethrow;
+    }
+  }
+
+  /// Start or get existing chat with a user
+  static Future<Map<String, dynamic>> startChatWithUser(String userId, String initialMessage) async {
+    try {
+      final headers = await _getAuthHeaders();
+      
+      print('🔄 Starting chat with user: $userId');
+      
+      // First, try to create or get existing chat using /chat/create endpoint
+      final chatResponse = await http.post(
+        Uri.parse('$baseUrl/chat/create'),
+        headers: headers,
+        body: json.encode({
+          'receiverId': userId,
+        }),
+      );
+
+      print('📦 Chat create response: ${chatResponse.statusCode} - ${chatResponse.body}');
+
+      if (chatResponse.statusCode == 200 || chatResponse.statusCode == 201) {
+        final chatData = json.decode(chatResponse.body);
+        final chatId = chatData['_id'] ?? chatData['id'];
+        
+        print('✅ Chat created/found: $chatId');
+        
+        // Send the initial message using /chat/send endpoint
+        if (initialMessage.isNotEmpty && chatId != null) {
+          final msgResponse = await http.post(
+            Uri.parse('$baseUrl/chat/send'),
+            headers: headers,
+            body: json.encode({
+              'chatId': chatId,
+              'content': initialMessage,
+            }),
+          );
+          print('📨 Message send response: ${msgResponse.statusCode}');
+          
+          // Trigger chat list refresh for real-time update
+          SocketService.triggerChatRefresh({'chatId': chatId, 'type': 'new-message'});
+        }
+        
+        return chatData;
+      } else {
+        print('❌ Chat create failed: ${chatResponse.body}');
+        throw Exception('Failed to start chat: ${chatResponse.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error starting chat: $e');
       rethrow;
     }
   }

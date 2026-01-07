@@ -3,7 +3,7 @@ class NotificationItem {
   final String title;
   final String description;
   final String time;
-  final bool read;
+  bool read;
   final String type;
 
   NotificationItem({
@@ -14,4 +14,15 @@ class NotificationItem {
     required this.read,
     required this.type,
   });
+
+  factory NotificationItem.fromJson(Map<String, dynamic> json) {
+    return NotificationItem(
+      id: json['_id'] ?? json['id'] ?? '',
+      title: json['title'] ?? '',
+      description: json['message'] ?? json['description'] ?? '',
+      time: json['createdAt'] ?? json['time'] ?? '',
+      read: json['read'] ?? json['isRead'] ?? false,
+      type: json['type'] ?? 'system',
+    );
+  }
 }

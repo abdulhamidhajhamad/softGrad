@@ -132,6 +132,11 @@ class CartService {
       print('📥 Cart Response: ${response.statusCode}');
 
       if (response.statusCode == 200) {
+        // Handle empty response body
+        if (response.body.isEmpty || response.body.trim().isEmpty) {
+          return CartResponse(userId: '', items: [], totalAmount: 0.0);
+        }
+        
         final data = json.decode(response.body);
         
         // Handle empty cart (backend might return null)
@@ -146,6 +151,10 @@ class CartService {
         // Empty cart
         return CartResponse(userId: '', items: [], totalAmount: 0.0);
       } else {
+        // Handle empty error response
+        if (response.body.isEmpty || response.body.trim().isEmpty) {
+          throw Exception('Failed to load cart');
+        }
         final error = json.decode(response.body);
         throw Exception(error['message'] ?? 'Failed to load cart');
       }

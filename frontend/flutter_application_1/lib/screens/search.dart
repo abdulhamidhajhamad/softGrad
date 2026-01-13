@@ -16,6 +16,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 // ✅ NEW: use your external details + cart files
 import 'service_inside_search.dart';
 import 'cart.dart';
+import 'package:flutter_application_1/services/user_service/home_user_service.dart';
 
 // -----------------------------------------------------------------------------
 // Theme
@@ -125,15 +126,54 @@ class _SearchScreenState extends State<SearchScreen> {
   String _category = kAll;
   String _city = kAll;
 
-  // Demo data
-  late final List<SearchResultModel> _allResults = _dummyResults();
+  // Data from API
+  List<SearchResultModel> _allResults = [];
   List<SearchResultModel> _visible = const [];
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _visible = _allResults;
+    _loadServices();
     _queryCtrl.addListener(_onQueryChanged);
+  }
+
+  Future<void> _loadServices() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final services = await HomeUserService.getAllServicesForBrowse();
+      
+      _allResults = services.map((s) => SearchResultModel(
+        id: s.id,
+        serviceName: s.serviceName,
+        providerName: s.providerName,
+        providerEmail: s.providerEmail,
+        providerPhone: s.providerPhone,
+        imageUrl: s.imageUrl.isNotEmpty 
+            ? s.imageUrl 
+            : 'https://images.unsplash.com/photo-1529634806980-85c3dd6d34ac?auto=format&fit=crop&q=80&w=1200',
+        city: s.city,
+        category: s.category,
+        price: s.price,
+        oldPrice: s.oldPrice,
+        description: s.description,
+      )).toList();
+
+      _visible = _allResults;
+      
+      setState(() => _isLoading = false);
+    } catch (e) {
+      print('❌ Error loading services: $e');
+      setState(() {
+        _isLoading = false;
+        _error = 'Failed to load services';
+      });
+    }
   }
 
   @override
@@ -285,6 +325,55 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Show loading state
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: kBg,
+        appBar: _SearchAppBar(onBack: () => Navigator.pop(context)),
+        body: const Center(
+          child: CircularProgressIndicator(color: kPrimary),
+        ),
+      );
+    }
+
+    // Show error state
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: kBg,
+        appBar: _SearchAppBar(onBack: () => Navigator.pop(context)),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, color: kPrimary, size: 48),
+              const SizedBox(height: 16),
+              Text(
+                _error!,
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700,
+                  color: kText,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadServices,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kPrimary,
+                ),
+                child: Text(
+                  'Retry',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: kBg,
       appBar: _SearchAppBar(onBack: () => Navigator.pop(context)),
@@ -481,127 +570,6 @@ class _SearchScreenState extends State<SearchScreen> {
     final s = items.toSet().toList();
     s.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return s;
-  }
-
-  List<SearchResultModel> _dummyResults() {
-    return const [
-      SearchResultModel(
-        id: '1',
-        serviceName: 'Grand Pearl Hall',
-        providerName: 'Pearl Group',
-        providerEmail: 'contact@pearlgroup.ps',
-        providerPhone: '+970 599 123 456',
-        city: 'Nablus',
-        category: 'Venues',
-        price: 2400,
-        oldPrice: 2800,
-        description:
-            'Luxury hall with premium lighting, seating layout, and full event staff. Suitable for large weddings.',
-        imageUrl:
-            'https://images.unsplash.com/photo-1529634806980-85c3dd6d34ac?auto=format&fit=crop&q=80&w=1200',
-      ),
-      SearchResultModel(
-        id: '2',
-        serviceName: 'Golden Lens Studio',
-        providerName: 'Golden Lens',
-        providerEmail: 'hello@goldenlens.ps',
-        providerPhone: '+970 598 222 333',
-        city: 'Ramallah',
-        category: 'Photographers',
-        price: 950,
-        description:
-            'Cinematic photo + video package with editing, highlights, and same-day teaser.',
-        imageUrl:
-            'https://images.unsplash.com/photo-1520854221256-17451cc330e7?auto=format&fit=crop&q=80&w=1200',
-      ),
-      SearchResultModel(
-        id: '3',
-        serviceName: 'Royal Catering',
-        providerName: 'Royal Taste',
-        providerEmail: 'orders@royaltaste.ps',
-        providerPhone: '+970 597 777 888',
-        city: 'Hebron',
-        category: 'Catering',
-        price: 1800,
-        oldPrice: 2100,
-        description:
-            'Full buffet menu options with staff, setup, and premium desserts. Customizable per guests.',
-        imageUrl:
-            'https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?auto=format&fit=crop&q=80&w=1200',
-      ),
-      SearchResultModel(
-        id: '4',
-        serviceName: 'Signature Cake',
-        providerName: 'SweetCraft',
-        providerEmail: 'sweet@sweetcraft.ps',
-        providerPhone: '+970 592 444 555',
-        city: 'Jenin',
-        category: 'Cake',
-        price: 420,
-        description:
-            'Multi-tier wedding cake with custom flavors, design consultation, and delivery.',
-        imageUrl:
-            'https://images.unsplash.com/photo-1541783245831-57d6fb0926d3?auto=format&fit=crop&q=80&w=1200',
-      ),
-      SearchResultModel(
-        id: '5',
-        serviceName: 'DJ Pulse - Premium Set',
-        providerName: 'SoundWave',
-        providerEmail: 'book@soundwave.ps',
-        providerPhone: '+970 595 666 777',
-        city: 'Ramallah',
-        category: 'Music & Entertainment',
-        price: 520,
-        oldPrice: 650,
-        description:
-            'DJ set with pro sound system, lighting, MC hosting, and custom playlist.',
-        imageUrl:
-            'https://images.unsplash.com/photo-1516280440614-6697288d5d38?auto=format&fit=crop&q=80&w=1200',
-      ),
-      SearchResultModel(
-        id: '6',
-        serviceName: 'Bloom & Co. Bouquet',
-        providerName: 'Florist Team',
-        providerEmail: 'flowers@bloomco.ps',
-        providerPhone: '+970 596 101 202',
-        city: 'Tulkarm',
-        category: 'Flower Shops',
-        price: 260,
-        description:
-            'Fresh bouquet + venue floral styling. Seasonal options and color theme matching.',
-        imageUrl:
-            'https://images.unsplash.com/photo-1522673607200-1645062cd495?auto=format&fit=crop&q=80&w=1200',
-      ),
-      SearchResultModel(
-        id: '7',
-        serviceName: 'Elegant Invitations Pack',
-        providerName: 'Card House',
-        providerEmail: 'prints@cardhouse.ps',
-        providerPhone: '+970 594 808 909',
-        city: 'Qalqilya',
-        category: 'Card Printing',
-        price: 160,
-        oldPrice: 220,
-        description:
-            'Invitation set with premium paper, envelopes, and custom typography design.',
-        imageUrl:
-            'https://images.unsplash.com/photo-1520975958225-9cc2f4b7c3b2?auto=format&fit=crop&q=80&w=1200',
-      ),
-      SearchResultModel(
-        id: '8',
-        serviceName: 'Diamond Touch Set',
-        providerName: 'Jewelry Hub',
-        providerEmail: 'support@jewelryhub.ps',
-        providerPhone: '+970 590 303 404',
-        city: 'Nablus',
-        category: 'Jewelry & Accessories',
-        price: 1200,
-        description:
-            'Accessories set with premium finishing. Options available for custom sizing.',
-        imageUrl:
-            'https://images.unsplash.com/photo-1522312346375-d1a52e2b99b3?auto=format&fit=crop&q=80&w=1200',
-      ),
-    ];
   }
 }
 

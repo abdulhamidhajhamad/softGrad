@@ -42,6 +42,32 @@ async getHomepageCategoriesPreview() {
   }
 }
 
+  // ✅ Homepage endpoint - Get 5 random trending services (Public - no auth required)
+  @Get('home/trending')
+  async getRandomServicesForHome() {
+    try {
+      return await this.serviceService.getRandomServicesForHome(5);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch trending services',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // ✅ Search/Browse endpoint - Get all services formatted for search display (Public)
+  @Get('browse/all')
+  async getAllServicesForBrowse() {
+    try {
+      return await this.serviceService.getAllServicesForBrowse();
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch services for browse',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 10)) 

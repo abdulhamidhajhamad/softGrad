@@ -1,14 +1,19 @@
 // lib/screens/home_customer.dart
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_application_1/screens/search.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
+import 'package:flutter_application_1/services/user_service/home_user_service.dart';
+import 'package:flutter_application_1/services/user_service/chat_user_service.dart';
+import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 
 import 'favorites.dart';
 import 'package:flutter_application_1/screens/Ai_Screen/ai_screen_layout.dart';
@@ -66,7 +71,7 @@ class _HomePageState extends State<HomePage> {
         ),
         onOpenVendors: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const VendorsListPage()),
+          MaterialPageRoute(builder: (_) => const SearchScreen()),
         ),
       ),
 
@@ -536,7 +541,7 @@ IconButton(
                           _HeaderWithAction(
                             title: "Trending Services",
                             actionText: "View more",
-                            onAction: widget.onOpenSearch,
+                            onAction: widget.onOpenVendors,
                           ),
                           const SizedBox(height: 12),
                           HomeTrendingRail(
@@ -917,6 +922,7 @@ class HomeTrendingService {
   final String id;
   final String name;
   final String company;
+  final String providerId;
   final String category;
   final double price;
   final String imageUrl;
@@ -926,6 +932,7 @@ class HomeTrendingService {
     required this.id,
     required this.name,
     required this.company,
+    required this.providerId,
     required this.category,
     required this.price,
     required this.imageUrl,
@@ -941,78 +948,43 @@ class HomePayload {
 
 class HomeRepository {
   Future<HomePayload> loadHome({bool forceRefresh = false}) async {
-    await Future.delayed(const Duration(milliseconds: 450));
+    try {
+      // Fetch data from backend API
+      final homeData = await HomeUserService.getHomeData();
 
-    final packages = [
-      HomePackageDeal(
-        id: "p1",
-        imageUrl:
-            "https://images.unsplash.com/photo-1519225468359-2996bc01c5dc?auto=format&fit=crop&q=80&w=1200",
-        title: "Elegant Classic Pack",
-        company: "Royal Events Co.",
-        services: ["Full Decor", "Catering", "Photo", "Live Band"],
-        price: 4500,
-        originalPrice: 5500,
-        validity: "Valid until Dec 31",
-      ),
-      HomePackageDeal(
-        id: "p2",
-        imageUrl:
-            "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&q=80&w=1200",
-        title: "Premium Luxe Pack",
-        company: "Elite Weddings",
-        services: ["Luxury Venue", "Gourmet", "Cinema", "Suite"],
-        price: 8200,
-        originalPrice: 9500,
-        validity: "Valid until Mar 15",
-      ),
-      HomePackageDeal(
-        id: "p3",
-        imageUrl:
-            "https://images.unsplash.com/photo-1469334031218-e382a71b716b?auto=format&fit=crop&q=80&w=1200",
-        title: "Intimate Garden Pack",
-        company: "Nature's Vows",
-        services: ["Garden Venue", "Floral Arch", "Acoustic", "Organic Menu"],
-        price: 3200,
-        originalPrice: 3800,
-        validity: "Valid until Jun 30",
-      ),
-    ];
+      // Convert API models to UI models
+      final packages = homeData.packages.map((pkg) => HomePackageDeal(
+        id: pkg.id,
+        imageUrl: pkg.imageUrl.isNotEmpty 
+            ? pkg.imageUrl 
+            : 'https://images.unsplash.com/photo-1519225468359-2996bc01c5dc?auto=format&fit=crop&q=80&w=1200',
+        title: pkg.title,
+        company: pkg.company,
+        services: pkg.services,
+        price: pkg.price,
+        originalPrice: pkg.originalPrice,
+        validity: pkg.validity,
+      )).toList();
 
-    final trending = [
-      HomeTrendingService(
-        id: "s1",
-        name: "Floral Dreams",
-        company: "Bloom & Co.",
-        category: "Decor",
-        price: 500,
-        imageUrl:
-            "https://images.unsplash.com/photo-1522673607200-1645062cd495?auto=format&fit=crop&q=80&w=600",
-        desc: "Exquisite floral arrangements",
-      ),
-      HomeTrendingService(
-        id: "s2",
-        name: "Candid Moments",
-        company: "Lens Magic",
-        category: "Photo",
-        price: 1200,
-        imageUrl:
-            "https://images.unsplash.com/photo-1520854221256-17451cc330e7?auto=format&fit=crop&q=80&w=600",
-        desc: "Award-winning photography",
-      ),
-      HomeTrendingService(
-        id: "s3",
-        name: "DJ Pulse",
-        company: "SoundWave",
-        category: "Music",
-        price: 800,
-        imageUrl:
-            "https://images.unsplash.com/photo-1516280440614-6697288d5d38?auto=format&fit=crop&q=80&w=600",
-        desc: "High energy entertainment",
-      ),
-    ];
+      final trending = homeData.trending.map((svc) => HomeTrendingService(
+        id: svc.id,
+        name: svc.name,
+        company: svc.company,
+        providerId: svc.providerId,
+        category: svc.category,
+        price: svc.price,
+        imageUrl: svc.imageUrl.isNotEmpty 
+            ? svc.imageUrl 
+            : 'https://images.unsplash.com/photo-1522673607200-1645062cd495?auto=format&fit=crop&q=80&w=600',
+        desc: svc.desc.isNotEmpty ? svc.desc : 'Quality service for your special day',
+      )).toList();
 
-    return HomePayload(packages: packages, trending: trending);
+      return HomePayload(packages: packages, trending: trending);
+    } catch (e) {
+      print('❌ Error loading home data: $e');
+      // Return empty data on error - UI will show error state
+      return HomePayload(packages: [], trending: []);
+    }
   }
 }
 
@@ -1466,65 +1438,501 @@ class _TrendingCard extends StatelessWidget {
   }
 }
 
-class ServiceDetailsPage extends StatelessWidget {
+class ServiceDetailsPage extends StatefulWidget {
   final HomeTrendingService service;
   const ServiceDetailsPage({super.key, required this.service});
 
   @override
+  State<ServiceDetailsPage> createState() => _ServiceDetailsPageState();
+}
+
+class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
+  bool _isLoading = true;
+  Map<String, dynamic>? _serviceData;
+  String? _bookingType;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadServiceDetails();
+  }
+
+  Future<void> _loadServiceDetails() async {
+    try {
+      setState(() => _isLoading = true);
+      
+      // Import user_service_service for API call
+      final response = await _fetchServiceDetails(widget.service.id);
+      
+      setState(() {
+        _serviceData = response;
+        _bookingType = response['bookingType']?.toString().toLowerCase();
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('❌ Error loading service details: $e');
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load service details: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchServiceDetails(String serviceId) async {
+    final token = await AuthService.getToken();
+    if (token == null) throw Exception('Not authenticated');
+
+    final response = await http.get(
+      Uri.parse('${AuthService.baseUrl}/services/$serviceId'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to load service');
+    }
+  }
+
+  String _money(double v) => '₪${v.toStringAsFixed(0)}';
+
+  Future<void> _startChat() async {
+    if (widget.service.providerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot start chat: Provider not available'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: kNavBlue),
+      ),
+    );
+
+    try {
+      final chatService = ChatUserService();
+      await chatService.initializeUserId();
+      await chatService.initSocket();
+      
+      final chatId = await chatService.createChat(widget.service.providerId);
+      
+      if (mounted) Navigator.pop(context); // Close loading
+      
+      if (chatId != null && mounted) {
+        // Navigate to chat - using the ChatThreadPage
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatThreadPage(
+              thread: ChatThreadModel(
+                id: chatId,
+                type: ThreadType.vendor,
+                title: widget.service.company,
+                lastMessage: '',
+                lastTime: DateTime.now(),
+                unreadCount: 0,
+                online: false,
+              ),
+            ),
+          ),
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to start chat'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Close loading
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _openBookingModal() async {
+    if (_serviceData == null || _bookingType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Service details not loaded yet'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Check if already in cart
+    final inCart = CartStore.instance.contains(widget.service.id);
+    if (inCart) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.orange,
+          content: Text(
+            'This service is already in your cart',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
+          ),
+          action: SnackBarAction(
+            label: 'View Cart',
+            textColor: Colors.white,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CartPage()),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    await showBookingModal(
+      context: context,
+      serviceId: widget.service.id,
+      serviceName: widget.service.name,
+      bookingTypeString: _bookingType!,
+      serviceData: _serviceData!,
+      onSuccess: () {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green,
+            content: Text(
+              'Added to cart successfully!',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w800),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final s = widget.service;
+    
     return Scaffold(
       backgroundColor: kPageBg,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 0.6,
+        iconTheme: const IconThemeData(color: Color(0xFF0B1220)),
         title: Text(
-          "Service",
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
+          "Service Details",
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFF0B1220),
+          ),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      bottomNavigationBar: SafeArea(
+        top: false,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Colors.black.withOpacity(0.06)),
+            border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Text(
-                service.name,
-                style: GoogleFonts.poppins(
-                    fontSize: 20, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                service.company,
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF64748B),
+              Expanded(
+                child: ValueListenableBuilder<List<CartItem>>(
+                  valueListenable: CartStore.instance.itemsListenable,
+                  builder: (_, items, ___) {
+                    final inCart = items.any((item) => item.id == s.id);
+
+                    return ElevatedButton.icon(
+                      onPressed: (inCart || _isLoading) ? null : _openBookingModal,
+                      icon: Icon(inCart ? Icons.check_circle_rounded : Icons.add_shopping_cart_rounded),
+                      label: Text(
+                        inCart ? 'In Cart' : 'Add to Cart',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: inCart ? Colors.grey : const Color(0xFF0B1220),
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.withOpacity(0.6),
+                        disabledForegroundColor: Colors.white70,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    );
+                  },
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                service.desc,
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                "\$${service.price.toStringAsFixed(0)}",
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: kNavBlue,
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _startChat,
+                  icon: const Icon(Icons.chat_bubble_rounded),
+                  label: Text(
+                    'Start Chat',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kNavBlue,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
                 ),
               ),
             ],
           ),
         ),
       ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: kNavBlue))
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Hero Image
+                if (s.imageUrl.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: CachedNetworkImage(
+                      imageUrl: s.imageUrl,
+                      height: 220,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(
+                        height: 220,
+                        color: const Color(0xFFF1F5F9),
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        height: 220,
+                        color: const Color(0xFFF1F5F9),
+                        child: const Icon(Icons.image, size: 48),
+                      ),
+                    ),
+                  ),
+                
+                const SizedBox(height: 16),
+                
+                // Service Info Card
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: Colors.black.withOpacity(0.06)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: kNavBlue.withOpacity(0.10),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              s.category,
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: kNavBlue,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          Row(
+                            children: [
+                              const Icon(Icons.star_rounded, size: 18, color: Colors.amber),
+                              const SizedBox(width: 4),
+                              Text(
+                                _serviceData?['rating']?.toString() ?? '0',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFF0B1220),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        s.name,
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF0B1220),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        s.company,
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _serviceData?['payType']?.toString() ?? 'Per Service',
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                          Text(
+                            _money(s.price),
+                            style: GoogleFonts.poppins(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: kNavBlue,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Description
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: Colors.black.withOpacity(0.06)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Description',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF0B1220),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        (_serviceData?['description']?.toString().trim().isNotEmpty == true)
+                            ? _serviceData!['description'].toString()
+                            : s.desc.isNotEmpty ? s.desc : 'No description available.',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF64748B),
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Company Info
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: Colors.black.withOpacity(0.06)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Company Info',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF0B1220),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _InfoRow(
+                        icon: Icons.business_rounded,
+                        text: _serviceData?['companyInfo']?['name'] ?? s.company,
+                      ),
+                      const SizedBox(height: 8),
+                      _InfoRow(
+                        icon: Icons.location_on_rounded,
+                        text: _serviceData?['city'] ?? 'N/A',
+                      ),
+                      const SizedBox(height: 8),
+                      _InfoRow(
+                        icon: Icons.email_rounded,
+                        text: _serviceData?['companyInfo']?['email'] ?? 'N/A',
+                      ),
+                      const SizedBox(height: 8),
+                      _InfoRow(
+                        icon: Icons.phone_rounded,
+                        text: _serviceData?['companyInfo']?['phone'] ?? 'N/A',
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 100), // Space for bottom bar
+              ],
+            ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  
+  const _InfoRow({required this.icon, required this.text});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: kNavBlue),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

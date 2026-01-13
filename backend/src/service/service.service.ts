@@ -553,4 +553,113 @@ async getServiceById(serviceId: string): Promise<any> {
       throw new HttpException('Failed to fetch categorised services', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
+  /**
+   * Get random services for homepage display
+   * Returns 5 random active services with formatted data for trending section
+   */
+  async getRandomServicesForHome(limit: number = 5): Promise<any[]> {
+    try {
+      const services = await this.serviceModel.aggregate([
+        { $match: { isActive: true } },
+        { $sample: { size: limit } },
+        {
+          $project: {
+            _id: 1,
+            serviceName: 1,
+            companyName: 1,
+            providerId: 1,
+            category: 1,
+            description: 1,
+            price: 1,
+            averageRating: 1,
+            firstImage: { $arrayElemAt: ['$images', 0] },
+          }
+        }
+      ]).exec();
+
+      return services.map(service => ({
+        id: service._id.toString(),
+        name: service.serviceName,
+        company: service.companyName || 'Unknown',
+        providerId: service.providerId?.toString() || '',
+        category: service.category || 'General',
+        desc: service.description || '',
+        price: service.price || 0,
+        rating: service.averageRating || 0,
+        imageUrl: service.firstImage || '',
+      }));
+    } catch (error) {
+      this.logger.error('Failed to fetch random services for home', error.stack);
+      throw new HttpException('Failed to fetch trending services', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * Get all services for browse/search display
+   * Returns all active services formatted for SearchResultModel in Flutter
+   */
+  async getAllServicesForBrowse(): Promise<any[]> {
+    try {
+      const services = await this.serviceModel.aggregate([
+        { $match: { isActive: true } },
+        {
+          $lookup: {
+            from: 'serviceproviders',
+            let: { providerId: '$providerId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $or: [
+                      { $eq: ['$userId', { $toObjectId: '$$providerId' }] },
+                      { $eq: ['$_id', { $toObjectId: '$$providerId' }] }
+                    ]
+                  }
+                }
+              }
+            ],
+            as: 'provider'
+          }
+        },
+        { $unwind: { path: '$provider', preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1,
+            serviceName: 1,
+            companyName: 1,
+            category: 1,
+            description: 1,
+            price: 1,
+            discountPrice: 1,
+            city: '$location.city',
+            firstImage: { $arrayElemAt: ['$images', 0] },
+            providerEmail: { $ifNull: ['$provider.details.email', '$provider.email'] },
+            providerPhone: { $ifNull: ['$provider.details.phone', '$provider.phone'] },
+          }
+        }
+      ]).exec();
+
+      return services.map(service => ({
+        id: service._id.toString(),
+        serviceName: service.serviceName || 'Unknown Service',
+        providerName: service.companyName || 'Unknown',
+        providerEmail: service.providerEmail || '',
+        providerPhone: service.providerPhone || '',
+        imageUrl: service.firstImage || '',
+        city: service.city || 'Unknown',
+        category: service.category || 'General',
+        price: service.discountPrice && service.discountPrice < service.price 
+          ? service.discountPrice 
+          : (service.price || 0),
+        oldPrice: service.discountPrice && service.discountPrice < service.price 
+          ? service.price 
+          : null,
+        description: service.description || '',
+      }));
+    } catch (error) {
+      this.logger.error('Failed to fetch services for browse', error.stack);
+      throw new HttpException('Failed to fetch services', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 }

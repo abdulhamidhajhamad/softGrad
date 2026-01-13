@@ -370,6 +370,49 @@ async getPackageById(packageId: string): Promise<any> {
     }
   }
 
+  /**
+   * Get random packages for homepage display
+   * Returns 5 random active packages with formatted data
+   */
+  async getRandomPackagesForHome(limit: number = 5): Promise<any[]> {
+    const now = new Date();
+    
+    const packages = await this.packageModel.aggregate([
+      { 
+        $match: { 
+          isActive: true,
+          startDate: { $lte: now },
+          endDate: { $gte: now }
+        } 
+      },
+      { $sample: { size: limit } },
+      {
+        $project: {
+          _id: 1,
+          packageName: 1,
+          companyName: 1,
+          packageImageUrl: 1,
+          newPrice: 1,
+          originalTotalPrice: 1,
+          startDate: 1,
+          endDate: 1,
+          services: 1,
+        }
+      }
+    ]).exec();
+
+    return packages.map(pkg => ({
+      id: pkg._id.toString(),
+      title: pkg.packageName,
+      company: pkg.companyName || 'Unknown',
+      imageUrl: pkg.packageImageUrl || '',
+      price: pkg.newPrice || 0,
+      originalPrice: pkg.originalTotalPrice || pkg.newPrice || 0,
+      validity: pkg.endDate ? `Valid until ${new Date(pkg.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : '',
+      services: (pkg.services || []).map((s: any) => s.serviceName || 'Service'),
+    }));
+  }
+
   async validatePackageBookingDate(packageId: string, bookingDate: Date): Promise<boolean> {
     const pkg = await this.getPackageById(packageId);
     

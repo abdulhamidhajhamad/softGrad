@@ -5,17 +5,24 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreatePackageDto, UpdatePackageDto, UpdatePackageStatusDto } from './package.dto';
 
 @Controller('packages')
-@UseGuards(JwtAuthGuard)
 export class PackageController {
   constructor(private readonly packageService: PackageService) {}
 
+  // ✅ Homepage endpoint - Get 5 random packages (Public - no auth required)
+  @Get('home/random')
+  async getRandomPackagesForHome() {
+    return this.packageService.getRandomPackagesForHome(5);
+  }
+
   @Post()
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   async createPackage(@Request() req, @Body() createDto: CreatePackageDto) {
     return this.packageService.createPackage(req.user.userId, createDto);
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   async getPackages(@Request() req) {
     const userRole = req.user.role;
     

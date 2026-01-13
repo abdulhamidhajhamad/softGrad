@@ -201,18 +201,34 @@ class _CheckoutPageState extends State<CheckoutPage> {
       setState(() => _processingPayment = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red.shade700,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            content: Text(
-              'Failed to process payment: ${e.toString()}',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
+        // Show error dialog instead of snackbar for better visibility
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 28),
+                const SizedBox(width: 10),
+                Text(
+                  'Payment Error',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
+                ),
+              ],
             ),
+            content: Text(
+              e.toString().replaceAll('Exception: ', ''),
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: kMuted),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'OK',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kPrimary),
+                ),
+              ),
+            ],
           ),
         );
       }

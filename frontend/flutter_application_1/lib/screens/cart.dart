@@ -44,6 +44,11 @@ class _CartPageState extends State<CartPage> {
         _cartData = cart;
         _loading = false;
       });
+      
+      // ✅ Sync local CartStore with backend data
+      if (cart != null) {
+        CartStore.instance.updateFromBackend(cart.items);
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -72,6 +77,9 @@ class _CartPageState extends State<CartPage> {
       setState(() {
         _cartData = updatedCart;
       });
+
+      // ✅ Update local CartStore so the service can be added again
+      CartStore.instance.remove(serviceId);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -149,6 +157,9 @@ class _CartPageState extends State<CartPage> {
         setState(() {
           _cartData = CartResponse(userId: '', items: [], totalAmount: 0.0);
         });
+
+        // ✅ Clear local CartStore so services can be added again
+        CartStore.instance.clear();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

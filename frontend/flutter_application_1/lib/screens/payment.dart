@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/payment_service/payment_service.dart';
+import 'cart.dart' show CartStore;
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -127,6 +128,9 @@ class _PaymentPageState extends State<PaymentPage> {
       if (!mounted) return;
 
       if (result.success) {
+        // ✅ Clear local CartStore after successful payment
+        CartStore.instance.clear();
+        
         // Show success dialog
         await showDialog(
           context: context,
@@ -258,20 +262,34 @@ class _PaymentPageState extends State<PaymentPage> {
       setState(() => _loading = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red.shade700,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+        // Show error dialog for better visibility
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 28),
+                const SizedBox(width: 10),
+                Text(
+                  'Payment Failed',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
+                ),
+              ],
             ),
             content: Text(
-              "Payment failed: ${e.toString()}",
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
+              e.toString().replaceAll('Exception: ', ''),
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: Colors.grey),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'OK',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kPrimaryColor),
+                ),
+              ),
+            ],
           ),
         );
       }

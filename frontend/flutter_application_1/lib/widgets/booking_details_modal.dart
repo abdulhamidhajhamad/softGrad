@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../services/payment_service/add_to_cart_service.dart';
+import '../services/payment_service/cart_service.dart';
+import '../screens/cart.dart' show CartStore, CartItem;
 
 // =====================
 // 🎨 Design Tokens (from services_customer_home.dart)
@@ -412,6 +414,33 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
       );
 
       if (result['success'] == true) {
+        // ✅ Update local CartStore with the new item
+        final cartData = result['cart'];
+        if (cartData != null) {
+          try {
+            final cartResponse = CartResponse.fromJson(cartData);
+            CartStore.instance.updateFromBackend(cartResponse.items);
+          } catch (e) {
+            // Fallback: add item manually to local store
+            CartStore.instance.add(CartItem(
+              id: widget.serviceId,
+              serviceName: widget.serviceName,
+              companyName: widget.serviceData['companyName']?.toString() ?? 'Provider',
+              price: (widget.serviceData['price'] as num?)?.toDouble() ?? 0.0,
+              imageUrl: widget.serviceData['imageUrl']?.toString(),
+            ));
+          }
+        } else {
+          // Fallback: add item manually to local store
+          CartStore.instance.add(CartItem(
+            id: widget.serviceId,
+            serviceName: widget.serviceName,
+            companyName: widget.serviceData['companyName']?.toString() ?? 'Provider',
+            price: (widget.serviceData['price'] as num?)?.toDouble() ?? 0.0,
+            imageUrl: widget.serviceData['imageUrl']?.toString(),
+          ));
+        }
+        
         setState(() => _isLoading = false);
         Navigator.pop(context);
         _showSuccessDialog();

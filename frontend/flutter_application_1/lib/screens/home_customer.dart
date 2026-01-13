@@ -1661,21 +1661,48 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
           ),
           child: Row(
             children: [
+              // ✅ Start Chat button (LEFT)
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _startChat,
+                  icon: Icon(Icons.chat_bubble_rounded, color: kNavBlue),
+                  label: Text(
+                    'Start Chat',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: const Color(0xFF0B1220)),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.black.withOpacity(0.14)),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // ✅ Add to Cart button (RIGHT)
               Expanded(
                 child: ValueListenableBuilder<List<CartItem>>(
                   valueListenable: CartStore.instance.itemsListenable,
                   builder: (_, items, ___) {
                     final inCart = items.any((item) => item.id == s.id);
+                    final isDisplayOnly = _bookingType?.toLowerCase() == 'display';
 
                     return ElevatedButton.icon(
-                      onPressed: (inCart || _isLoading) ? null : _openBookingModal,
-                      icon: Icon(inCart ? Icons.check_circle_rounded : Icons.add_shopping_cart_rounded),
+                      onPressed: (inCart || _isLoading || isDisplayOnly) ? null : _openBookingModal,
+                      icon: Icon(
+                        inCart ? Icons.check_circle_rounded 
+                            : isDisplayOnly ? Icons.visibility_rounded 
+                            : Icons.add_shopping_cart_rounded,
+                        color: (inCart || isDisplayOnly) ? Colors.white70 : kNavBlue,
+                      ),
                       label: Text(
-                        inCart ? 'In Cart' : 'Add to Cart',
+                        inCart ? 'In Cart' 
+                            : isDisplayOnly ? 'Display Only' 
+                            : 'Add to Cart',
                         style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: inCart ? Colors.grey : const Color(0xFF0B1220),
+                        backgroundColor: (inCart || isDisplayOnly) ? Colors.grey : const Color(0xFF0B1220),
                         foregroundColor: Colors.white,
                         disabledBackgroundColor: Colors.grey.withOpacity(0.6),
                         disabledForegroundColor: Colors.white70,
@@ -1685,24 +1712,6 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                       ),
                     );
                   },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _startChat,
-                  icon: const Icon(Icons.chat_bubble_rounded),
-                  label: Text(
-                    'Start Chat',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kNavBlue,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
                 ),
               ),
             ],
@@ -1800,113 +1809,245 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      
+                      // ✅ Price with booking type indicator
+                      _buildPriceSection(),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Description - only show if has content
+                if (_hasDescription())
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: Colors.black.withOpacity(0.06)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _serviceData?['payType']?.toString() ?? 'Per Service',
+                            'Description',
                             style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF64748B),
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF0B1220),
                             ),
                           ),
+                          const SizedBox(height: 8),
                           Text(
-                            _money(s.price),
+                            _getDescription(),
                             style: GoogleFonts.poppins(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: kNavBlue,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF64748B),
+                              height: 1.5,
                             ),
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
                 
-                const SizedBox(height: 12),
-                
-                // Description
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: Colors.black.withOpacity(0.06)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Description',
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF0B1220),
+                // Company Info - only show if has any data
+                if (_hasCompanyInfo())
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: Colors.black.withOpacity(0.06)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Company Info',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF0B1220),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        (_serviceData?['description']?.toString().trim().isNotEmpty == true)
-                            ? _serviceData!['description'].toString()
-                            : s.desc.isNotEmpty ? s.desc : 'No description available.',
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF64748B),
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        ..._buildCompanyInfoRows(),
+                      ],
+                    ),
                   ),
-                ),
-                
-                const SizedBox(height: 12),
-                
-                // Company Info
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: Colors.black.withOpacity(0.06)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Company Info',
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF0B1220),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _InfoRow(
-                        icon: Icons.business_rounded,
-                        text: _serviceData?['companyInfo']?['name'] ?? s.company,
-                      ),
-                      const SizedBox(height: 8),
-                      _InfoRow(
-                        icon: Icons.location_on_rounded,
-                        text: _serviceData?['city'] ?? 'N/A',
-                      ),
-                      const SizedBox(height: 8),
-                      _InfoRow(
-                        icon: Icons.email_rounded,
-                        text: _serviceData?['companyInfo']?['email'] ?? 'N/A',
-                      ),
-                      const SizedBox(height: 8),
-                      _InfoRow(
-                        icon: Icons.phone_rounded,
-                        text: _serviceData?['companyInfo']?['phone'] ?? 'N/A',
-                      ),
-                    ],
-                  ),
-                ),
                 
                 const SizedBox(height: 100), // Space for bottom bar
               ],
             ),
+    );
+  }
+
+  // ✅ Helper methods for clean display
+  bool _hasDescription() {
+    final desc1 = _serviceData?['description']?.toString().trim() ?? '';
+    final desc2 = widget.service.desc.trim();
+    return desc1.isNotEmpty || desc2.isNotEmpty;
+  }
+
+  String _getDescription() {
+    final desc1 = _serviceData?['description']?.toString().trim() ?? '';
+    if (desc1.isNotEmpty) return desc1;
+    return widget.service.desc.isNotEmpty ? widget.service.desc : '';
+  }
+
+  bool _hasCompanyInfo() {
+    final companyName = _serviceData?['companyInfo']?['name']?.toString().trim() ?? 
+                        _serviceData?['companyName']?.toString().trim() ??
+                        widget.service.company.trim();
+    final city = _serviceData?['city']?.toString().trim() ?? '';
+    final email = _serviceData?['companyInfo']?['email']?.toString().trim() ?? '';
+    final phone = _serviceData?['companyInfo']?['phone']?.toString().trim() ?? '';
+    
+    return (companyName.isNotEmpty && companyName != 'Unknown' && companyName != 'N/A') ||
+           (city.isNotEmpty && city != 'N/A') ||
+           (email.isNotEmpty && email != 'N/A') ||
+           (phone.isNotEmpty && phone != 'N/A');
+  }
+
+  List<Widget> _buildCompanyInfoRows() {
+    final rows = <Widget>[];
+    
+    // Company Name - from API or fallback to widget
+    final companyName = _serviceData?['companyInfo']?['name']?.toString().trim() ?? 
+                        _serviceData?['companyName']?.toString().trim() ??
+                        widget.service.company.trim();
+    if (companyName.isNotEmpty && companyName != 'Unknown' && companyName != 'N/A') {
+      rows.add(_InfoRow(icon: Icons.business_rounded, text: companyName));
+    }
+    
+    // City/Location
+    final city = _serviceData?['city']?.toString().trim() ?? '';
+    if (city.isNotEmpty && city != 'N/A') {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 8));
+      rows.add(_InfoRow(icon: Icons.location_on_rounded, text: city));
+    }
+    
+    // Email
+    final email = _serviceData?['companyInfo']?['email']?.toString().trim() ?? '';
+    if (email.isNotEmpty && email != 'N/A') {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 8));
+      rows.add(_InfoRow(icon: Icons.email_rounded, text: email));
+    }
+    
+    // Phone
+    final phone = _serviceData?['companyInfo']?['phone']?.toString().trim() ?? '';
+    if (phone.isNotEmpty && phone != 'N/A') {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 8));
+      rows.add(_InfoRow(icon: Icons.phone_rounded, text: phone));
+    }
+    
+    return rows;
+  }
+
+  Widget _buildPriceSection() {
+    final allPrices = _serviceData?['allPrices'] as Map<String, dynamic>?;
+    final bookingType = _bookingType?.toLowerCase() ?? 'daily';
+    
+    String priceLabel;
+    double displayPrice = widget.service.price;
+    IconData priceIcon;
+    
+    switch (bookingType) {
+      case 'hourly':
+        priceLabel = 'per hour';
+        priceIcon = Icons.schedule_rounded;
+        displayPrice = (allPrices?['perHour'] as num?)?.toDouble() ?? widget.service.price;
+        break;
+      case 'capacity':
+        priceLabel = 'per person';
+        priceIcon = Icons.person_rounded;
+        displayPrice = (allPrices?['perPerson'] as num?)?.toDouble() ?? widget.service.price;
+        break;
+      case 'daily':
+        priceLabel = 'per day';
+        priceIcon = Icons.calendar_today_rounded;
+        displayPrice = (allPrices?['perDay'] as num?)?.toDouble() ?? widget.service.price;
+        break;
+      case 'mixed':
+        priceLabel = 'per event';
+        priceIcon = Icons.event_rounded;
+        displayPrice = (allPrices?['perEvent'] as num?)?.toDouble() ?? widget.service.price;
+        break;
+      case 'display':
+        priceLabel = 'display only';
+        priceIcon = Icons.visibility_rounded;
+        displayPrice = (allPrices?['displayPrice'] as num?)?.toDouble() ?? widget.service.price;
+        break;
+      default:
+        priceLabel = 'per service';
+        priceIcon = Icons.payments_rounded;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [kNavBlue.withOpacity(0.08), kNavBlue.withOpacity(0.04)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kNavBlue.withOpacity(0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: kNavBlue.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(priceIcon, color: kNavBlue, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _money(displayPrice),
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: kNavBlue,
+                  ),
+                ),
+                Text(
+                  priceLabel,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (bookingType == 'display')
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'View Only',
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.orange.shade800,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1937,6 +2078,7 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
+// ✅ Helper function - مرة واحدة بس!
 int _discountPercent(double original, double discounted) {
   if (original <= 0) return 0;
   final v = ((original - discounted) / original) * 100;

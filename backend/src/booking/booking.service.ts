@@ -31,7 +31,7 @@ export class BookingService {
     if (!secretKey) {
       throw new Error('STRIPE_SECRET_KEY is not set');
     }
-    this.stripe = new Stripe(secretKey!, { apiVersion: '2025-11-17.clover' });
+this.stripe = new Stripe(secretKey);
   }
 
 

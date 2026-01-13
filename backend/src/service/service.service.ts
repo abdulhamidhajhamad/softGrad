@@ -399,9 +399,16 @@ async getServiceById(serviceId: string): Promise<any> {
       .lean()
       .exec();
 
+    // ✅ Get company name from service or provider
+    const companyName = service.companyName || 
+                        provider?.details?.companyName || 
+                        provider?.companyName || 
+                        provider?.details?.name ||
+                        'Unknown';
+
     return {
       serviceName: service.serviceName,
-      companyName: service.companyName,
+      companyName: companyName,
       bookingType: service.bookingType,
       description: service.description,
       additionalInfo: service.additionalInfo,
@@ -421,7 +428,7 @@ async getServiceById(serviceId: string): Promise<any> {
       })),
 
       companyInfo: {
-        name: service.companyName,
+        name: companyName,
         email: provider?.details?.email || provider?.email || "N/A",
         phone: provider?.details?.phone || provider?.phone || "N/A"
       }
@@ -564,6 +571,26 @@ async getServiceById(serviceId: string): Promise<any> {
         { $match: { isActive: true } },
         { $sample: { size: limit } },
         {
+          $lookup: {
+            from: 'serviceproviders',
+            let: { providerId: '$providerId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $or: [
+                      { $eq: ['$userId', { $toObjectId: '$$providerId' }] },
+                      { $eq: ['$_id', { $toObjectId: '$$providerId' }] }
+                    ]
+                  }
+                }
+              }
+            ],
+            as: 'provider'
+          }
+        },
+        { $unwind: { path: '$provider', preserveNullAndEmptyArrays: true } },
+        {
           $project: {
             _id: 1,
             serviceName: 1,
@@ -574,14 +601,20 @@ async getServiceById(serviceId: string): Promise<any> {
             price: 1,
             averageRating: 1,
             firstImage: { $arrayElemAt: ['$images', 0] },
+            providerCompanyName: { 
+              $ifNull: [
+                '$provider.details.companyName', 
+                { $ifNull: ['$provider.companyName', '$provider.details.name'] }
+              ] 
+            },
           }
         }
       ]).exec();
 
       return services.map(service => ({
         id: service._id.toString(),
-        name: service.serviceName,
-        company: service.companyName || 'Unknown',
+        name: service.serviceName || 'Unknown Service',
+        company: service.companyName || service.providerCompanyName || 'Unknown',
         providerId: service.providerId?.toString() || '',
         category: service.category || 'General',
         desc: service.description || '',

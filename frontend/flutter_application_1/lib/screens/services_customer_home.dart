@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'favorites.dart';
 import 'compnay_insider_provider.dart';
 import 'cart.dart' as cart;
+import 'chat_inside_search.dart' as chat;
 import 'package:flutter_application_1/services/user_service/user_service_service.dart';
 import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 
@@ -1227,8 +1228,12 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
     }
 
     final s = _service!;
-    final companyEmail = _serviceData?['companyInfo']?['email'] ?? s.companyEmail;
-    final companyPhone = _serviceData?['companyInfo']?['phone'] ?? s.companyPhone;
+    // ✅ Get company info from API response with fallback
+    final companyName = _serviceData?['companyInfo']?['name']?.toString().trim() ?? 
+                        _serviceData?['companyName']?.toString().trim() ?? 
+                        s.companyName;
+    final companyEmail = _serviceData?['companyInfo']?['email']?.toString().trim() ?? s.companyEmail;
+    final companyPhone = _serviceData?['companyInfo']?['phone']?.toString().trim() ?? s.companyPhone;
     final reviews = kSeedReviewsByServiceId[s.id] ?? const <ReviewItem>[];
 
     return Scaffold(
@@ -1270,21 +1275,59 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
           ),
           child: Row(
             children: [
+              // ✅ Start Chat button (LEFT)
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => chat.ChatInsideSearchScreen(
+                          providerName: s.companyName,
+                          providerEmail: companyEmail,
+                          providerPhone: companyPhone,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: Icon(Icons.chat_bubble_rounded, color: kBlue),
+                  label: Text(
+                    'Start Chat',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.black.withOpacity(0.14)),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // ✅ Add to Cart button (RIGHT)
               Expanded(
                 child: ValueListenableBuilder<List<cart.CartItem>>(
                   valueListenable: cart.CartStore.instance.itemsListenable,
                   builder: (_, items, ___) {
                     final inCart = items.any((item) => item.id == s.id);
+                    final isDisplayOnly = _bookingType?.toLowerCase() == 'display';
 
                     return ElevatedButton.icon(
-                      onPressed: (inCart || _isLoading) ? null : () => _openBookingModal(context, s),
-                      icon: Icon(inCart ? Icons.check_circle_rounded : Icons.add_shopping_cart_rounded),
+                      onPressed: (inCart || _isLoading || isDisplayOnly) ? null : () => _openBookingModal(context, s),
+                      icon: Icon(
+                        inCart ? Icons.check_circle_rounded 
+                            : isDisplayOnly ? Icons.visibility_rounded 
+                            : Icons.add_shopping_cart_rounded,
+                        color: (inCart || isDisplayOnly) ? Colors.white70 : kBlue,
+                      ),
                       label: Text(
-                        inCart ? 'Already in cart' : 'Add to cart',
+                        inCart ? 'In Cart' 
+                            : isDisplayOnly ? 'Display Only' 
+                            : 'Add to Cart',
                         style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: inCart ? Colors.grey : kText,
+                        backgroundColor: (inCart || isDisplayOnly) ? Colors.grey : kText,
                         foregroundColor: Colors.white,
                         disabledBackgroundColor: Colors.grey.withOpacity(0.6),
                         disabledForegroundColor: Colors.white70,
@@ -1296,285 +1339,313 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                   },
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CompanyInsiderProviderPage(
-                          companyName: s.companyName,
-                          companyEmail: companyEmail,
-                          companyPhone: companyPhone,
-                          city: s.city,
-                          services: widget.companyServices,
-                        ),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kText,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: Text(
-                    'Company profile',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+      body: _isLoading 
+          ? const Center(child: CircularProgressIndicator(color: kBlue))
+          : ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          _BigHeroImage(url: s.imageUrl),
-          const SizedBox(height: 12),
+          // ✅ Hero Image
+          if (s.imageUrl != null && s.imageUrl!.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: Image.network(
+                s.imageUrl!,
+                height: 220,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 220,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: const Center(child: Icon(Icons.image, size: 48, color: Colors.grey)),
+                ),
+              ),
+            ),
           
-          // ✅ Service Info Container
+          const SizedBox(height: 16),
+          
+          // ✅ Service Info Card (like home_customer.dart)
           Container(
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(22),
               border: Border.all(color: Colors.black.withOpacity(0.06)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 18,
-                  offset: const Offset(0, 12),
-                ),
-              ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(width: 10, height: 48),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              s.serviceName,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: kText,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${s.category} • ${s.city}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: kMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.04),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.black.withOpacity(0.06)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.star_rounded, size: 20, color: Color.fromARGB(255, 255, 128, 0)),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${s.rating.toStringAsFixed(1)} (${s.reviewsCount})',
-                              style: GoogleFonts.poppins(
-                                fontWeight: FontWeight.w800,
-                                color: kBlue,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (s.price <= 0)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Contact for pricing', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: kMuted)),
-                        Text('Ask for price', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w900, color: kText)),
-                      ],
-                    )
-                  else
-                     _buildSimplePriceDisplay(),
-                ],
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 12),
-          
-          // ✅ Description Container
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.black.withOpacity(0.06)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 18,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Description', style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText)),
-                  const SizedBox(height: 8),
-                  Text(
-                    (_serviceData?['description']?.toString().trim().isEmpty ?? true)
-                        ? 'No description yet.'
-                        : _serviceData!['description'].toString(),
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: kMuted, height: 1.35),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          
-          // ✅✅✅ MAP SECTION - بعد الـ Description وقبل الـ Reviews
-          if (_lat != null && _lng != null) ...[
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.black.withOpacity(0.06)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 18,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
+                    // Category Pill
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: kBlue.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        s.category,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: kBlue,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    // Rating
                     Row(
                       children: [
-                        Icon(Icons.location_on, color: kBlue, size: 20),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.star_rounded, size: 18, color: Colors.amber),
+                        const SizedBox(width: 4),
                         Text(
-                          'Location',
-                          style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText),
+                          _serviceData?['rating']?.toString() ?? s.rating.toStringAsFixed(1),
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w900,
+                            color: kText,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: SizedBox(
-                        height: 220,
-                        child: FlutterMap(
-                          options: MapOptions(
-                            initialCenter: LatLng(_lat!, _lng!),
-                            initialZoom: 15.0,
-                            interactionOptions: const InteractionOptions(
-                              flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-                            ),
-                          ),
-                          children: [
-                            TileLayer(
-                              urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-                              subdomains: const ['a', 'b', 'c'],
-                              userAgentPackageName: 'com.example.flutter_application_1',
-                            ),
-                            MarkerLayer(
-                              markers: [
-                                Marker(
-                                  point: LatLng(_lat!, _lng!),
-                                  width: 40,
-                                  height: 40,
-                                  child: const Icon(
-                                    Icons.location_on,
-                                    color: Colors.red,
-                                    size: 40,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Service Name
+                Text(
+                  s.serviceName,
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: kText,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Company Name
+                Text(
+                  companyName,
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    color: kMuted,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // ✅ Price Section
+                if (s.price > 0)
+                  _buildPriceSection(),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // ✅ Description - only show if has content
+          if (_hasDescription())
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.black.withOpacity(0.06)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Description',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w900,
+                        color: kText,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _getDescription(),
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        color: kMuted,
+                        height: 1.5,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-          ],
           
-          const SizedBox(height: 12),
-          
-          // ✅ Reviews Section
-          _ReviewsSection(serviceName: s.serviceName, reviews: reviews),
-          
-          const SizedBox(height: 12),
-          
-          // ✅ Company Info
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.black.withOpacity(0.06)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 18,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Padding(
+          // ✅ Company Info - only show if has data
+          if (_hasCompanyInfo(companyName, companyEmail, companyPhone))
+            Container(
               padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.black.withOpacity(0.06)),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Company info', style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText)),
-                  const SizedBox(height: 15),
-                  _InfoRow(icon: Icons.business_rounded, text: s.companyName),
-                  const SizedBox(height: 8),
-                  _InfoRow(icon: Icons.email_rounded, text: companyEmail),
-                  const SizedBox(height: 8),
-                  _InfoRow(icon: Icons.phone_rounded, text: companyPhone),
+                  Text(
+                    'Company Info',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w900,
+                      color: kText,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._buildCompanyInfoRows(companyName, companyEmail, companyPhone),
                 ],
               ),
+            ),
+          
+          const SizedBox(height: 100), // Space for bottom bar
+        ],
+      ),
+    );
+  }
+
+  // ✅ Build Price Section (like home_customer.dart)
+  Widget _buildPriceSection() {
+    final s = _service!;
+    final allPrices = _serviceData?['allPrices'] as Map<String, dynamic>?;
+    final bookingType = _bookingType?.toLowerCase() ?? 'daily';
+    
+    String priceLabel;
+    double displayPrice = s.price;
+    IconData priceIcon;
+    
+    switch (bookingType) {
+      case 'hourly':
+        priceLabel = 'per hour';
+        priceIcon = Icons.schedule_rounded;
+        displayPrice = (allPrices?['perHour'] as num?)?.toDouble() ?? s.price;
+        break;
+      case 'capacity':
+        priceLabel = 'per person';
+        priceIcon = Icons.person_rounded;
+        displayPrice = (allPrices?['perPerson'] as num?)?.toDouble() ?? s.price;
+        break;
+      case 'daily':
+        priceLabel = 'per day';
+        priceIcon = Icons.calendar_today_rounded;
+        displayPrice = (allPrices?['perDay'] as num?)?.toDouble() ?? s.price;
+        break;
+      case 'mixed':
+        priceLabel = 'per event';
+        priceIcon = Icons.event_rounded;
+        displayPrice = (allPrices?['perEvent'] as num?)?.toDouble() ?? s.price;
+        break;
+      case 'display':
+        priceLabel = 'display only';
+        priceIcon = Icons.visibility_rounded;
+        displayPrice = (allPrices?['displayPrice'] as num?)?.toDouble() ?? s.price;
+        break;
+      default:
+        priceLabel = 'per service';
+        priceIcon = Icons.payments_rounded;
+    }
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [kBlue.withOpacity(0.08), kBlue.withOpacity(0.04)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBlue.withOpacity(0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: kBlue.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(priceIcon, color: kBlue, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _money(displayPrice),
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: kBlue,
+                  ),
+                ),
+                Text(
+                  priceLabel,
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    color: kMuted,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  // ✅ Helper: Check if has description
+  bool _hasDescription() {
+    final desc = _serviceData?['description']?.toString().trim() ?? '';
+    return desc.isNotEmpty && desc != 'No description yet.';
+  }
+
+  // ✅ Helper: Get description text
+  String _getDescription() {
+    return _serviceData?['description']?.toString().trim() ?? 'No description yet.';
+  }
+
+  // ✅ Helper: Check if has any company info
+  bool _hasCompanyInfo(String name, String email, String phone) {
+    return (name.isNotEmpty && name != 'Unknown' && name != 'N/A') ||
+           (email.isNotEmpty && email != 'N/A') ||
+           (phone.isNotEmpty && phone != 'N/A');
+  }
+
+  // ✅ Helper: Build company info rows
+  List<Widget> _buildCompanyInfoRows(String name, String email, String phone) {
+    final rows = <Widget>[];
+    
+    if (name.isNotEmpty && name != 'Unknown' && name != 'N/A') {
+      rows.add(_InfoRow(icon: Icons.business_rounded, text: name));
+    }
+    
+    // Get city from service data
+    final city = _serviceData?['city']?.toString().trim() ?? '';
+    if (city.isNotEmpty && city != 'N/A') {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 8));
+      rows.add(_InfoRow(icon: Icons.location_on_rounded, text: city));
+    }
+    
+    if (email.isNotEmpty && email != 'N/A') {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 8));
+      rows.add(_InfoRow(icon: Icons.email_rounded, text: email));
+    }
+    
+    if (phone.isNotEmpty && phone != 'N/A') {
+      if (rows.isNotEmpty) rows.add(const SizedBox(height: 8));
+      rows.add(_InfoRow(icon: Icons.phone_rounded, text: phone));
+    }
+    
+    return rows;
   }
 
   Widget _buildSimplePriceDisplay() {

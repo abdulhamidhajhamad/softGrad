@@ -62,6 +62,8 @@ class HomeTrendingModel {
   final double price;
   final double rating;
   final String imageUrl;
+  final double? latitude;
+  final double? longitude;
 
   HomeTrendingModel({
     required this.id,
@@ -73,6 +75,8 @@ class HomeTrendingModel {
     required this.price,
     required this.rating,
     required this.imageUrl,
+    this.latitude,
+    this.longitude,
   });
 
   factory HomeTrendingModel.fromJson(Map<String, dynamic> json) {
@@ -86,6 +90,8 @@ class HomeTrendingModel {
       price: _parseDouble(json['price']),
       rating: _parseDouble(json['rating']),
       imageUrl: json['imageUrl']?.toString() ?? '',
+      latitude: json['latitude'] != null ? _parseDouble(json['latitude']) : null,
+      longitude: json['longitude'] != null ? _parseDouble(json['longitude']) : null,
     );
   }
 

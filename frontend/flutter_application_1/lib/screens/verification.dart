@@ -4,8 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/verification_service.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 // استيراد شاشات التنقل
-import 'home_customer.dart';
-import 'home_provider.dart';
+import 'user/home/home_customer.dart';
+import 'package:flutter_application_1/screens/provider/home_provider.dart';
 import 'signup_provider.dart'; // ✅ NEW: استيراد شاشة إكمال بيانات المزود
 
 class VerificationScreen extends StatefulWidget {

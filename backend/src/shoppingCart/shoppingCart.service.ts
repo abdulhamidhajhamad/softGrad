@@ -90,7 +90,10 @@ export class CartService {
             startHour: addToCartDto.bookingDetails.startHour,
             endHour: addToCartDto.bookingDetails.endHour,
             numberOfPeople: addToCartDto.bookingDetails.numberOfPeople,
-            isFullVenue: addToCartDto.bookingDetails.isFullVenue
+            isFullVenue: addToCartDto.bookingDetails.isFullVenue,
+            // 🆕 موقع العميل ووصف الحجز
+            clientLocation: addToCartDto.bookingDetails.clientLocation,
+            bookingDescription: addToCartDto.bookingDetails.bookingDescription,
           },
           price,
           imageUrl: service.images?.[0]
@@ -186,7 +189,10 @@ export class CartService {
             startHour: updateCartItemDto.bookingDetails.startHour,
             endHour: updateCartItemDto.bookingDetails.endHour,
             numberOfPeople: updateCartItemDto.bookingDetails.numberOfPeople,
-            isFullVenue: updateCartItemDto.bookingDetails.isFullVenue
+            isFullVenue: updateCartItemDto.bookingDetails.isFullVenue,
+            // 🆕 موقع العميل ووصف الحجز
+            clientLocation: updateCartItemDto.bookingDetails.clientLocation,
+            bookingDescription: updateCartItemDto.bookingDetails.bookingDescription,
           };
           cart.items[itemIndex].price = price;
     

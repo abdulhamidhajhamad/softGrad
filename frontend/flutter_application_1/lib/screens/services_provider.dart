@@ -3,10 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:flutter_application_1/screens/add_service/add_service_provider.dart';
+import 'package:flutter_application_1/screens/provider/add_service/add_service_provider.dart';
 import 'package:flutter_application_1/services/service_service.dart';
-import 'show more/showMore_provider.dart';
-import 'edit_service_provider.dart';
+import 'showMore_provider.dart';
+import 'provider/edit_service_provider.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;

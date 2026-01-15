@@ -26,6 +26,29 @@ export class BookingDetails {
 
   @Prop({ type: Boolean, default: false })
   isFullVenue?: boolean;
+
+  // 🆕 موقع العميل (للخدمات التي تذهب للعميل مثل الكيترينج)
+  @Prop({
+    type: {
+      latitude: { type: Number },
+      longitude: { type: Number },
+      address: { type: String },
+      city: { type: String },
+      locationDescription: { type: String } // 🆕 وصف الموقع (landmark)
+    },
+    required: false
+  })
+  clientLocation?: {
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+    city?: string;
+    locationDescription?: string; // 🆕 وصف الموقع (landmark)
+  };
+
+  // 🆕 وصف الحجز (ملاحظات خاصة من العميل)
+  @Prop({ type: String, required: false })
+  bookingDescription?: string;
 }
 
 @Schema({ timestamps: true })

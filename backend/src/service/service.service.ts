@@ -417,8 +417,17 @@ async getServiceById(serviceId: string): Promise<any> {
       city: service.location?.city || "N/A",
       longitude: service.location?.longitude || null,
       latitude: service.location?.latitude || null,
+      hasFixedLocation: service.hasFixedLocation ?? true, // 🆕 إضافة hasFixedLocation
       rating: service.averageRating || 0, // ✅ استخدام averageRating
       totalReviews: service.totalReviews || 0, // ✅ إضافة عدد التقييمات
+
+      // 🆕 إضافة حقول التحقق من الحجز
+      workingDays: service.workingDays || [],
+      availableHours: service.availableHours || [],
+      minBookingHours: service.minBookingHours || null,
+      maxBookingHours: service.maxBookingHours || null,
+      maxCapacity: service.maxCapacity || null,
+      cleanupTimeMinutes: service.cleanupTimeMinutes || 0,
 
       lastTwoReviews: lastTwoReviews.map((rev: any) => ({
         rating: rev.rating,
@@ -601,6 +610,8 @@ async getServiceById(serviceId: string): Promise<any> {
             price: 1,
             averageRating: 1,
             firstImage: { $arrayElemAt: ['$images', 0] },
+            latitude: '$location.latitude',
+            longitude: '$location.longitude',
             providerCompanyName: { 
               $ifNull: [
                 '$provider.details.companyName', 
@@ -621,6 +632,8 @@ async getServiceById(serviceId: string): Promise<any> {
         price: service.price || 0,
         rating: service.averageRating || 0,
         imageUrl: service.firstImage || '',
+        latitude: service.latitude || null,
+        longitude: service.longitude || null,
       }));
     } catch (error) {
       this.logger.error('Failed to fetch random services for home', error.stack);

@@ -1,5 +1,5 @@
 // cart.dto.ts
-import { IsString, IsNumber, IsOptional, IsBoolean, IsDateString, ValidateNested, Min, Max, IsArray, IsEnum } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, IsDateString, ValidateNested, Min, Max, IsArray, IsEnum, IsObject, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum DayOfWeek {
@@ -10,6 +10,30 @@ export enum DayOfWeek {
   THURSDAY = 'thursday',
   FRIDAY = 'friday',
   SATURDAY = 'saturday'
+}
+
+// 🆕 DTO لموقع العميل
+export class ClientLocationDto {
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  locationDescription?: string;
 }
 
 export class BookingDetailsDto {
@@ -36,6 +60,18 @@ export class BookingDetailsDto {
   @IsOptional()
   @IsBoolean()
   isFullVenue?: boolean;
+
+  // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ClientLocationDto)
+  clientLocation?: ClientLocationDto;
+
+  // 🆕 وصف الحجز (ملاحظات خاصة من العميل)
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  bookingDescription?: string;
 }
 
 export class AddToCartDto {

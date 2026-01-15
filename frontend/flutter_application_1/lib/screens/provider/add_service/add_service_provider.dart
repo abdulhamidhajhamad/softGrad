@@ -8,13 +8,14 @@ import 'add_hourly_service.dart';
 import 'add_full_day_service.dart';
 import 'add_capacity_service.dart';
 import 'add_order_service.dart';
+import 'add_other_service.dart'; // 🆕 صفحة Other الجديدة
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kBackgroundColor = Color(0xFFF3F4F6);
 const Color kTextColor = Color(0xFF111827);
 
 // ----------------------------------------------------------------------
-// 🔥 Service Categories (نفس الـ 12 كاتيجوري)
+// 🔥 Service Categories (نفس الـ 12 كاتيجوري + Other)
 // ----------------------------------------------------------------------
 
 const List<Map<String, dynamic>> kServiceCategories = [
@@ -70,6 +71,12 @@ const List<Map<String, dynamic>> kServiceCategories = [
     'label': 'Gift & Souvenir',
     'icon': Icons.card_giftcard_outlined
   },
+  // 🆕 Other category للخدمات المخصصة
+  {
+    'value': 'Other',
+    'label': 'Other',
+    'icon': Icons.add_circle_outline_rounded
+  },
 ];
 
 // ----------------------------------------------------------------------
@@ -98,6 +105,9 @@ String _bookingTypeKey(String category) {
     case 'Gift & Souvenir':
       return 'order';
 
+    case 'Other':
+      return 'other'; // 🆕
+
     default:
       return 'hourly';
   }
@@ -111,6 +121,8 @@ String _bookingTypeLabel(String key) {
       return 'Full-Day Booking';
     case 'capacity':
       return 'Capacity Booking';
+    case 'other':
+      return 'Custom Booking'; // 🆕
     case 'order':
     default:
       return 'Order-Based Booking';
@@ -149,6 +161,10 @@ class AddServiceProviderScreen extends StatelessWidget {
           category: category,
           bookingType: typeLabel,
         );
+        break;
+
+      case 'other': // 🆕 صفحة Other الديناميكية
+        page = const AddOtherService();
         break;
 
       case 'order':

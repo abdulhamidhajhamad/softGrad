@@ -141,6 +141,11 @@ export class CreateServiceDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  // 🆕 هل الخدمة لها موقع ثابت
+  @IsOptional()
+  @IsBoolean()
+  hasFixedLocation?: boolean;
 }
 
 export class UpdateServiceDto {
@@ -233,4 +238,9 @@ export class UpdateServiceDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  // 🆕 هل الخدمة لها موقع ثابت
+  @IsOptional()
+  @IsBoolean()
+  hasFixedLocation?: boolean;
 }

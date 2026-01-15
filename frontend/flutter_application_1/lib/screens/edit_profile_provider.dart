@@ -1,7 +1,7 @@
 // lib/screens/edit_profile_provider.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'home_provider.dart';
+import 'package:flutter_application_1/screens/provider/home_provider.dart';
 import 'edit_profile_company.dart';
 import 'package:flutter_application_1/services/edit_profile_service.dart';
 

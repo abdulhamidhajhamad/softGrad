@@ -83,6 +83,12 @@ class ServiceService {
     normalized['serviceName'] = (service['serviceName'] ?? '').toString();
     normalized['name'] = (service['serviceName'] ?? '').toString();
     normalized['category'] = (service['category'] ?? '').toString();
+    
+    // ✅ Booking Type
+    normalized['bookingType'] = (service['bookingType'] ?? '').toString();
+    
+    // ✅ Description (direct field)
+    normalized['description'] = (service['description'] ?? '').toString();
 
     // ✅ NEW: Simple price (single number, optional for display)
     final priceData = service['price'];
@@ -107,6 +113,9 @@ class ServiceService {
 
     // Status
     normalized['isActive'] = service['isActive'] ?? true;
+    
+    // ✅ hasFixedLocation
+    normalized['hasFixedLocation'] = service['hasFixedLocation'] ?? true;
 
     // Location
     final location = service['location'];
@@ -181,8 +190,8 @@ static Future<Map<String, dynamic>> addService({
   required String bookingType,
   double? latitude,
   double? longitude,
-  required String address,
-  required String city,
+  String? address,
+  String? city,
   required String companyName,
   int? maxCapacity,
   int? minBookingHours,
@@ -190,7 +199,8 @@ static Future<Map<String, dynamic>> addService({
   List<int>? availableHours,
   int? cleanupTimeMinutes,
   List<String>? workingDays,
-  String? venueType, // 🆕 إضافة venueType parameter
+  String? venueType,
+  bool hasFixedLocation = true, // 🆕 إضافة hasFixedLocation parameter
 }) async {
   try {
     final token = await AuthService.getToken();
@@ -201,12 +211,13 @@ static Future<Map<String, dynamic>> addService({
 
     request.headers.addAll({'Authorization': 'Bearer $token'});
 
-    final Map<String, dynamic> locationData = {
+    // 🆕 الموقع يُرسل فقط إذا كانت الخدمة لها موقع ثابت
+    final Map<String, dynamic>? locationData = hasFixedLocation ? {
       'latitude': latitude ?? 0.0,
       'longitude': longitude ?? 0.0,
-      'address': address,
-      'city': city,
-    };
+      'address': address ?? '',
+      'city': city ?? '',
+    } : null;
 
     final Map<String, dynamic> additionalInfo = {
       'description': description,
@@ -217,16 +228,26 @@ static Future<Map<String, dynamic>> addService({
       additionalInfo['venueType'] = venueType;
     }
 
-    final createServiceDtoForJson = {
+    // 🆕 إضافة maxCapacity في additionalInfo للقاعات
+    if (maxCapacity != null && category == 'Venues') {
+      additionalInfo['maxCapacity'] = maxCapacity;
+    }
+
+    final createServiceDtoForJson = <String, dynamic>{
       'serviceName': title,
       'category': category,
-      'location': locationData,
       'price': price,
       'payType': priceType,
       'bookingType': bookingType,
       'additionalInfo': additionalInfo,
       'isActive': true,
+      'hasFixedLocation': hasFixedLocation, // 🆕
     };
+
+    // 🆕 إضافة الموقع فقط إذا كانت الخدمة لها موقع ثابت
+    if (locationData != null) {
+      createServiceDtoForJson['location'] = locationData;
+    }
 
     // Add optional fields only if provided
     if (maxCapacity != null) {
@@ -315,9 +336,11 @@ static Future<Map<String, dynamic>> addService({
       priceType = 'per hour';
     } else if (pricingModel == 'per_day' || bookingType.contains('day') || bookingType.contains('full')) {
       priceType = 'per day';
-    } else if (pricingModel.contains('capacity') || bookingType.contains('capacity')) {
+    } else if (pricingModel.contains('capacity') || pricingModel == 'per_person' || bookingType.contains('capacity')) {
       final unit = (form['capacityUnit'] ?? '').toString();
       priceType = unit == 'piece' ? 'per piece' : 'per person';
+    } else if (pricingModel == 'per_piece') {
+      priceType = 'per piece'; // 🆕 دعم per piece مباشرة
     } else if (pricingModel == 'per_item' || bookingType.contains('order') || bookingType.contains('display')) {
       priceType = 'display';
     } else {
@@ -331,6 +354,9 @@ static Future<Map<String, dynamic>> addService({
   final double? latitude = _toDoubleOrNull(form['latitude']);
   final double? longitude = _toDoubleOrNull(form['longitude']);
 
+  // 🆕 استخراج hasFixedLocation
+  final bool hasFixedLocation = form['hasFixedLocation'] ?? true;
+
   final highlights = _normalizeHighlights(form['highlights']);
   final imageFilesData = _normalizeImages(form['coverImage'], form['images']);
 
@@ -343,8 +369,12 @@ static Future<Map<String, dynamic>> addService({
   if (category.isEmpty) throw Exception('Category is required.');
   if (title.trim().isEmpty) throw Exception('Service name is required.');
   if (description.trim().isEmpty) throw Exception('Description is required.');
-  if (address.trim().isEmpty) throw Exception('Address is required.');
-  if (city.trim().isEmpty) throw Exception('City is required.');
+  
+  // 🆕 التحقق من الموقع فقط إذا كانت الخدمة لها موقع ثابت
+  if (hasFixedLocation) {
+    if (address.trim().isEmpty) throw Exception('Address is required.');
+    if (city.trim().isEmpty) throw Exception('City is required.');
+  }
   
   if (priceType != 'display' && price <= 0) {
     throw Exception('Price must be > 0.');
@@ -393,10 +423,10 @@ static Future<Map<String, dynamic>> addService({
     category: category,
     priceType: priceType,
     bookingType: bookingTypeRaw, 
-    latitude: latitude,
-    longitude: longitude,
-    address: address.trim(),
-    city: city.trim(),
+    latitude: hasFixedLocation ? latitude : null, // 🆕
+    longitude: hasFixedLocation ? longitude : null, // 🆕
+    address: hasFixedLocation ? address.trim() : null, // 🆕
+    city: hasFixedLocation ? city.trim() : null, // 🆕
     companyName: companyName,
     maxCapacity: maxCapacity,
     minBookingHours: minBookingHours,
@@ -404,7 +434,8 @@ static Future<Map<String, dynamic>> addService({
     availableHours: availableHours,
     cleanupTimeMinutes: cleanupTimeMinutes,
     workingDays: workingDays,
-    venueType: venueType, // 🆕 تمرير venueType
+    venueType: venueType,
+    hasFixedLocation: hasFixedLocation, // 🆕
   );
 }
 
@@ -481,14 +512,15 @@ static Future<Map<String, dynamic>> addService({
 
         throw Exception(_extractMessage(data) ?? 'Failed to update service.');
       } else {
-        final res = await http.patch(
-          Uri.parse('$baseUrl/services/id/$serviceId'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-          body: jsonEncode(updateData),
-        );
+        // ✅ استخدام PUT بدلاً من PATCH مع multipart/form-data
+        final url = Uri.parse('$baseUrl/services/id/$serviceId');
+        final request = http.MultipartRequest('PUT', url);
+
+        request.headers.addAll({'Authorization': 'Bearer $token'});
+        request.fields['data'] = jsonEncode(updateData);
+
+        final streamed = await request.send();
+        final res = await http.Response.fromStream(streamed);
 
         final data = _decodeJsonSafe(res.body);
 

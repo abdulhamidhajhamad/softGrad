@@ -1,14 +1,16 @@
-// lib/screens/services_customer_home.dart
+// lib/screens/provider/services_customer_home.dart
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import 'favorites.dart';
-import 'compnay_insider_provider.dart';
-import 'cart.dart' as cart;
-import 'chat_inside_search.dart' as chat;
+import '../favorites.dart';
+import '../compnay_insider_provider.dart';
+import '../cart.dart' as cart;
+import '../chat_inside_search.dart' as chat;
+import 'service_details_provider.dart';
 import 'package:flutter_application_1/services/user_service/user_service_service.dart';
 import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 
@@ -636,7 +638,7 @@ class _VendorsListPageState extends State<VendorsListPage> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ServiceDetailsPage(
+        builder: (_) => ServiceDetailsProviderPage(
           serviceId: service.id,
           companyServices: _servicesForCompany(service.companyName),
         ),
@@ -940,7 +942,7 @@ class _ServiceListTileCard extends StatelessWidget {
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ServiceDetailsPage(
+            builder: (_) => ServiceDetailsProviderPage(
                 serviceId: service.id, companyServices: companyServices),
           ),
         );

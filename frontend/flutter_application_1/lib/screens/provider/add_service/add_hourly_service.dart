@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'booking_common_widgets.dart'; 
 import 'package:flutter_application_1/services/service_service.dart';
 
-import '../map_location_picker.dart' hide kPrimaryColor, kTextColor;
+import '../../map_location_picker.dart' hide kPrimaryColor, kTextColor;
 
 class AddHourlyService extends StatefulWidget {
   final String category;
@@ -48,8 +48,14 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
   double? _selectedLng;
   bool _hasLocationSet = false;
 
+  // 🆕 هل الخدمة لها موقع ثابت أم تذهب للعميل
+  bool _hasFixedLocation = true;
+
   // 🆕 Venue Type (Indoor/Outdoor) - Default: Indoor
   String _venueType = "indoor";
+
+  // 🆕 Maximum Venue Capacity (عدد الأشخاص الأقصى)
+  final maxCapacityCtrl = TextEditingController();
 
   // hourly-specific (min must allow 1 hour)
   final minHoursCtrl = TextEditingController(text: "1");
@@ -318,7 +324,8 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
       return;
     }
 
-    if (_selectedCity == null || _selectedCity!.isEmpty) {
+    // 🆕 التحقق من المدينة فقط إذا كانت الخدمة لها موقع ثابت
+    if (_hasFixedLocation && (_selectedCity == null || _selectedCity!.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Select a city", style: GoogleFonts.poppins())),
       );
@@ -332,10 +339,16 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
       "name": nameCtrl.text.trim(),
       "description": descCtrl.text.trim(),
 
-      "address": addressCtrl.text.trim(),
-      "city": _selectedCity,
-      "latitude": _selectedLat?.toString() ?? "",
-      "longitude": _selectedLng?.toString() ?? "",
+      // 🆕 إضافة hasFixedLocation
+      "hasFixedLocation": _hasFixedLocation,
+
+      // الموقع يُرسل فقط إذا كانت الخدمة لها موقع ثابت
+      if (_hasFixedLocation) ...{
+        "address": addressCtrl.text.trim(),
+        "city": _selectedCity,
+        "latitude": _selectedLat?.toString() ?? "",
+        "longitude": _selectedLng?.toString() ?? "",
+      },
 
       "price": priceCtrl.text.trim(),
       "discount": discountCtrl.text.trim(),
@@ -362,6 +375,10 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
 
       // 🆕 إضافة venueType للقاعات فقط
       if (widget.category == "Venues") "venueType": _venueType,
+      
+      // 🆕 إضافة maxCapacity للقاعات فقط
+      if (widget.category == "Venues" && maxCapacityCtrl.text.trim().isNotEmpty)
+        "maxCapacity": maxCapacityCtrl.text.trim(),
     };
 
     setState(() => _saving = true);
@@ -398,6 +415,7 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     discountCtrl.dispose();
     minHoursCtrl.dispose();
     maxHoursCtrl.dispose();
+    maxCapacityCtrl.dispose();
     super.dispose();
   }
 
@@ -1001,6 +1019,148 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     );
   }
 
+  // 🆕 Widget للـ Maximum Capacity - Modern UI/UX
+  Widget _buildMaxCapacityField() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: kPrimaryColor.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.groups_rounded,
+                  color: kPrimaryColor,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                "Venue Capacity",
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: kTextColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "What is the maximum number of guests your venue can accommodate?",
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Input Field with Icon
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: kPrimaryColor.withOpacity(0.08),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(13),
+                      bottomLeft: Radius.circular(13),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    color: kPrimaryColor,
+                    size: 22,
+                  ),
+                ),
+                Expanded(
+                  child: TextFormField(
+                    controller: maxCapacityCtrl,
+                    keyboardType: TextInputType.number,
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: "e.g. 200",
+                      hintStyle: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: Colors.grey.shade500,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      suffixText: "guests",
+                      suffixStyle: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return null; // Optional
+                      final n = int.tryParse(v.trim());
+                      if (n == null || n <= 0) return "Enter a valid number";
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // Helpful tip
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: kPrimaryColor.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kPrimaryColor.withOpacity(0.12)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.lightbulb_outline_rounded,
+                  color: kPrimaryColor.withOpacity(0.8),
+                  size: 18,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "This helps customers find venues that fit their guest count.",
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.grey.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final eventsCount = _eventsPerDay();
@@ -1051,6 +1211,9 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
               
               // 🆕 Venue Type Section (يظهر فقط للـ Venues)
               if (widget.category == "Venues") _buildVenueTypeSelector(),
+              
+              // 🆕 Maximum Capacity Section (يظهر فقط للـ Venues)
+              if (widget.category == "Venues") _buildMaxCapacityField(),
               
               sectionLabel("Availability"),
               Container(
@@ -1225,6 +1388,155 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
                 margin: const EdgeInsets.only(bottom: 16),
                 child: _dailyCapacityCard(eventsCount, slots),
               ),
+              
+              // 🆕 سؤال: هل الخدمة لها موقع ثابت؟
+              sectionLabel("Service Location Type"),
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: cardDecoration(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _hasFixedLocation ? Icons.storefront_rounded : Icons.delivery_dining_rounded,
+                          color: kPrimaryColor,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            "Does this service have a fixed location?",
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _hasFixedLocation
+                          ? "Clients will come to your location"
+                          : "You will go to the client's location",
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _hasFixedLocation = true),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: _hasFixedLocation
+                                    ? kPrimaryColor.withOpacity(0.1)
+                                    : const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _hasFixedLocation
+                                      ? kPrimaryColor
+                                      : Colors.grey.shade300,
+                                  width: _hasFixedLocation ? 2 : 1,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.storefront_rounded,
+                                    color: _hasFixedLocation
+                                        ? kPrimaryColor
+                                        : Colors.grey.shade500,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    "Yes",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: _hasFixedLocation
+                                          ? kPrimaryColor
+                                          : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  Text(
+                                    "Fixed Location",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 10,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _hasFixedLocation = false),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: !_hasFixedLocation
+                                    ? kPrimaryColor.withOpacity(0.1)
+                                    : const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: !_hasFixedLocation
+                                      ? kPrimaryColor
+                                      : Colors.grey.shade300,
+                                  width: !_hasFixedLocation ? 2 : 1,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.delivery_dining_rounded,
+                                    color: !_hasFixedLocation
+                                        ? kPrimaryColor
+                                        : Colors.grey.shade500,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    "No",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: !_hasFixedLocation
+                                          ? kPrimaryColor
+                                          : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  Text(
+                                    "I Go to Client",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 10,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              // 🆕 قسم الموقع يظهر فقط إذا كانت الخدمة لها موقع ثابت
+              if (_hasFixedLocation) ...[
               sectionLabel("Location"),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -1380,6 +1692,7 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
                   ],
                 ),
               ),
+              ], // 🆕 نهاية if (_hasFixedLocation)
               sectionLabel("Pricing"),
               Container(
                 padding: const EdgeInsets.all(16),

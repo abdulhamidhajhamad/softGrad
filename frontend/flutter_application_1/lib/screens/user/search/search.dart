@@ -15,7 +15,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 // ✅ NEW: use your external details + cart files
 import 'service_inside_search.dart';
-import 'cart.dart';
+import '../payment/cart.dart';
 import 'package:flutter_application_1/services/user_service/home_user_service.dart';
 
 // -----------------------------------------------------------------------------

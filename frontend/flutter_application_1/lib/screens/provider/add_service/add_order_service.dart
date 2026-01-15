@@ -5,308 +5,93 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'booking_common_widgets.dart';
 import 'package:flutter_application_1/services/service_service.dart';
-import '../map_location_picker.dart' hide kPrimaryColor, kTextColor;
+import '../../map_location_picker.dart' hide kPrimaryColor, kTextColor;
 
-class AddCapacityService extends StatefulWidget {
+class AddOrderService extends StatefulWidget {
   final String category;
   final String bookingType;
 
-  const AddCapacityService({
+  const AddOrderService({
     super.key,
     required this.category,
     required this.bookingType,
   });
 
   @override
-  State<AddCapacityService> createState() => _AddCapacityServiceState();
+  State<AddOrderService> createState() => _AddOrderServiceState();
 }
 
-class _AddCapacityServiceState extends State<AddCapacityService> {
+class _AddOrderServiceState extends State<AddOrderService> {
   final _formKey = GlobalKey<FormState>();
 
-  // -----------------------------
-  // Common
-  // -----------------------------
+  // common
   final nameCtrl = TextEditingController();
   final descCtrl = TextEditingController();
 
-  // Location
+  // location
   final addressCtrl = TextEditingController();
   final latitudeCtrl = TextEditingController();
   final longitudeCtrl = TextEditingController();
   String? _selectedCity;
 
-  // Pricing
-  int _maxCapacity = 50; // ✅ default
-  final pricePerPersonCtrl = TextEditingController();
+  // pricing
+  final priceCtrl = TextEditingController(); // base item price
   final discountCtrl = TextEditingController();
 
-  // ✅ NEW: unit type before price (person vs piece)
-  String _capacityUnit = "person"; // "person" | "piece"
+  // live pricing preview (after discount)
+  double? _finalPrice;
+  double? _savedAmount;
 
-  // ✅ live pricing preview
-  double? _finalPricePerPerson;
-  double? _savedPerPerson;
-
-  // Gallery + highlights + visibility
-  Uint8List? _coverImage;
-
-  // ✅ highlights now key/value
-  final List<Map<String, String>> _highlights = [];
- double? _selectedLat;
-  double? _selectedLng;
-  bool _hasLocationSet = false;
   bool _visibleInSearch = true;
 
-  // -----------------------------
-  // ✅ Availability = Days ONLY
-  // -----------------------------
-  final List<String> _weekdays = const [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-  ];
-  final Set<String> _selectedDays = {"Friday", "Saturday", "Sunday"};
+  Uint8List? _coverImage;
 
-  String _day3(String d) => d.length <= 3 ? d : d.substring(0, 3);
+  // highlights key/value
+  final List<Map<String, String>> _highlights = [];
+    double? _selectedLat;
+    double? _selectedLng;
+    bool _hasLocationSet = false;
+  // 🆕 هل الخدمة لها موقع ثابت أم تذهب للعميل
+  bool _hasFixedLocation = true;
+  // order-specific
+  final minOrderQtyCtrl = TextEditingController(text: "1");
 
-  String _daysSummary() {
-    if (_selectedDays.isEmpty) return "No days selected";
-    if (_selectedDays.length == _weekdays.length) return "Every day";
-    final ordered = _weekdays.where(_selectedDays.contains).toList();
-    return ordered.map(_day3).join(", ");
-  }
+  // ✅ inventory + processing days (steppers)
+  int _availableQty = 10; // default
+  int _processingDays = 3; // default (0 allowed)
 
-  Widget _miniTitle(String t) => Text(
-        t,
-        style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700),
-      );
+  bool _customization = false;
+  final customizationFeeCtrl = TextEditingController();
 
-  Widget _hint(String t) => Text(
-        t,
-        style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600),
-      );
-
-  Widget _summaryRow({
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: kPrimaryColor),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            title,
-            style:
-                GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-        ),
-        Text(
-          value,
-          style: GoogleFonts.poppins(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: Colors.grey.shade800,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _dayChip(String d) {
-    final selected = _selectedDays.contains(d);
-
-    return ChoiceChip(
-      selected: selected,
-      showCheckmark: false,
-      selectedColor: kPrimaryColor.withOpacity(0.14),
-      backgroundColor: const Color(0xFFF9FAFB),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-      labelPadding: const EdgeInsets.symmetric(horizontal: 10),
-      label: SizedBox(
-        height: 20,
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              _day3(d),
-              maxLines: 1,
-              style: GoogleFonts.poppins(
-                  fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ),
-      ),
-      onSelected: (_) {
-        setState(() {
-          if (selected) {
-            _selectedDays.remove(d);
-          } else {
-            _selectedDays.add(d);
-          }
-        });
-      },
-    );
-  }
-
-  Widget _daysTwoRowsNeat() {
-    final row1 = _weekdays.take(4).toList();
-    final row2 = _weekdays.skip(4).take(3).toList();
-
-    Widget buildRow(List<String> days, {bool addEmptyLast = false}) {
-      return Row(
-        children: [
-          for (int i = 0; i < days.length; i++) ...[
-            Expanded(child: SizedBox(height: 36, child: _dayChip(days[i]))),
-            if (i != days.length - 1) const SizedBox(width: 8),
-          ],
-          if (addEmptyLast) ...[
-            const SizedBox(width: 8),
-            const Expanded(child: SizedBox(height: 36)),
-          ],
-        ],
-      );
-    }
-
-    return Column(
-      children: [
-        buildRow(row1),
-        const SizedBox(height: 8),
-        buildRow(row2, addEmptyLast: true),
-      ],
-    );
-  }
+  bool _delivery = false;
+  final deliveryFeeCtrl = TextEditingController();
 
   // -----------------------------
-  // ✅ Capacity Stepper UI
+  // Live final price calc
   // -----------------------------
-  void _decCapacity() {
-    setState(() {
-      if (_maxCapacity > 1) _maxCapacity--;
-    });
-  }
-
-  void _incCapacity() {
-    setState(() {
-      if (_maxCapacity < 1000) _maxCapacity++; // ✅ safety upper bound
-    });
-  }
-
-  Widget _roundIconBtn({required IconData icon, required VoidCallback onTap}) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        height: 42,
-        width: 42,
-        decoration: BoxDecoration(
-          color: kPrimaryColor.withOpacity(0.10),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: kPrimaryColor.withOpacity(0.16)),
-        ),
-        child: Icon(icon, color: kPrimaryColor, size: 20),
-      ),
-    );
-  }
-
-  Widget _capacityCard() {
-    // ✅ label adapts
-    final unitLabel = _capacityUnit == "piece" ? "pieces" : "people";
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 36,
-            width: 36,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.groups_rounded,
-                color: kPrimaryColor, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Maximum $unitLabel",
-                  style: GoogleFonts.poppins(
-                      fontSize: 11.5, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-              ],
-            ),
-          ),
-          _roundIconBtn(icon: Icons.remove_rounded, onTap: _decCapacity),
-          const SizedBox(width: 13),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "$_maxCapacity",
-                  style: GoogleFonts.poppins(
-                      fontSize: 13, fontWeight: FontWeight.w800),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          _roundIconBtn(icon: Icons.add_rounded, onTap: _incCapacity),
-        ],
-      ),
-    );
-  }
-
-  // -----------------------------
-  // ✅ Live final price calc (per unit)
-  // -----------------------------
-  void _recalcPrice() {
-    final price = double.tryParse(pricePerPersonCtrl.text.trim());
+  void _recalcFinalPrice() {
+    final base = double.tryParse(priceCtrl.text.trim());
     final disc = double.tryParse(discountCtrl.text.trim());
 
-    if (price == null || price <= 0) {
-      if (_finalPricePerPerson != null || _savedPerPerson != null) {
+    if (base == null || base <= 0) {
+      if (_finalPrice != null || _savedAmount != null) {
         setState(() {
-          _finalPricePerPerson = null;
-          _savedPerPerson = null;
+          _finalPrice = null;
+          _savedAmount = null;
         });
       }
       return;
     }
 
     final d = (disc ?? 0).clamp(0, 100);
-    final finalP = price * (1 - d / 100.0);
-    final saved = price - finalP;
+    final finalP = base * (1 - d / 100.0);
+    final saved = base - finalP;
 
-    if (_finalPricePerPerson == finalP && _savedPerPerson == saved) return;
+    if (_finalPrice == finalP && _savedAmount == saved) return;
 
     setState(() {
-      _finalPricePerPerson = finalP;
-      _savedPerPerson = saved;
+      _finalPrice = finalP;
+      _savedAmount = saved;
     });
   }
 
@@ -317,11 +102,12 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
     final picker = ImagePicker();
     final file = await picker.pickImage(source: ImageSource.gallery);
     if (file == null) return;
+
     final bytes = await file.readAsBytes();
     setState(() => _coverImage = bytes);
   }
 
-  // ✅ highlights dialog: Key + Value
+  // highlights dialog: Key + Value
   Future<void> _addHighlight() async {
     final keyCtrl = TextEditingController();
     final valCtrl = TextEditingController();
@@ -330,15 +116,17 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text("Add highlight",
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+        title: Text(
+          "Add highlight",
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: keyCtrl,
               decoration: InputDecoration(
-                hintText: "Key (e.g. Menu, Seating, Delivery...)",
+                hintText: "Key (e.g. Color, Material, Size...)",
                 hintStyle: GoogleFonts.poppins(fontSize: 13),
               ),
             ),
@@ -346,7 +134,7 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
             TextField(
               controller: valCtrl,
               decoration: InputDecoration(
-                hintText: "Value (e.g. Vegan, 200 seats, Free...)",
+                hintText: "Value (e.g. Gold, Handmade, A4...)",
                 hintStyle: GoogleFonts.poppins(fontSize: 13),
               ),
             ),
@@ -355,8 +143,10 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text("Cancel",
-                style: GoogleFonts.poppins(color: Colors.grey.shade700)),
+            child: Text(
+              "Cancel",
+              style: GoogleFonts.poppins(color: Colors.grey.shade700),
+            ),
           ),
           TextButton(
             onPressed: () {
@@ -375,75 +165,81 @@ class _AddCapacityServiceState extends State<AddCapacityService> {
     );
   }
 
-bool _saving = false;
+  bool _saving = false;
 
 Future<void> _trySave() async {
   final ok = _formKey.currentState?.validate() ?? false;
   if (!ok) return;
 
-  if (_selectedDays.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Select at least one day", style: GoogleFonts.poppins())),
-    );
-    return;
-  }
-
-  if (_selectedCity == null || _selectedCity!.isEmpty) {
+  if (_hasFixedLocation && (_selectedCity == null || _selectedCity!.isEmpty)) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Select a city", style: GoogleFonts.poppins())),
     );
     return;
   }
 
-  final price = num.tryParse(pricePerPersonCtrl.text.trim());
-  if (price == null || price <= 0) {
+
+  if (_availableQty < 1) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Enter a valid price.", style: GoogleFonts.poppins())),
+      SnackBar(content: Text("Available quantity must be at least 1.", style: GoogleFonts.poppins())),
+    );
+    return;
+  }
+
+  final minQty = int.tryParse(minOrderQtyCtrl.text.trim()) ?? 1;
+  if (_availableQty < minQty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Available quantity must be ≥ minimum order quantity.", style: GoogleFonts.poppins())),
     );
     return;
   }
 
   final form = {
     "category": widget.category,
-    "bookingType": "capacity",
+    "bookingType": "display",
 
     "name": nameCtrl.text.trim(),
     "description": descCtrl.text.trim(),
 
-    "address": addressCtrl.text.trim(),
-    "city": _selectedCity,
-    "latitude": latitudeCtrl.text.trim(),
-    "longitude": longitudeCtrl.text.trim(),
+    "hasFixedLocation": _hasFixedLocation,
+    if (_hasFixedLocation) ...{
+      "address": addressCtrl.text.trim(),
+      "city": _selectedCity,
+      "latitude": latitudeCtrl.text.trim(),
+      "longitude": longitudeCtrl.text.trim(),
+    },
 
-    "days": _selectedDays.toList(),
-
-    // capacity
-    "pricingModel": "capacity",
-    "capacityUnit": _capacityUnit, // "person" | "piece"
-    "maxCapacity": _maxCapacity,
-
-    "pricePerUnit": price.toDouble(),
+    "price": priceCtrl.text.trim(),
     "discount": discountCtrl.text.trim(),
 
-    "finalPricePerUnit": _finalPricePerPerson?.toStringAsFixed(2),
-    "savedPerUnit": _savedPerPerson?.toStringAsFixed(2),
+    "finalPrice": _finalPrice?.toStringAsFixed(2),
+    "savedAmount": _savedAmount?.toStringAsFixed(2),
 
     "coverImage": _coverImage,
     "highlights": _highlights,
     "visibleInSearch": _visibleInSearch,
+
+    "pricingModel": "per_item",
+    "minOrderQty": minOrderQtyCtrl.text.trim(),
+
+    "availableQty": _availableQty,
+    "processingDays": _processingDays,
+
+    "customizationAvailable": _customization,
+    "customizationFee": customizationFeeCtrl.text.trim(),
+    "deliveryAvailable": _delivery,
+    "deliveryFee": deliveryFeeCtrl.text.trim(),
   };
 
   setState(() => _saving = true);
 
   try {
     await ServiceService.addServiceFromBookingForm(form);
-
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text("Service created successfully ✅", style: GoogleFonts.poppins())),
     );
-
-    // ✅ هذا اللي AddServiceProviderScreen مستنيه
     Navigator.pop(context, true);
   } catch (e) {
     if (!mounted) return;
@@ -459,16 +255,20 @@ Future<void> _trySave() async {
   @override
   void initState() {
     super.initState();
-    // ✅ live calc listeners
-    pricePerPersonCtrl.addListener(_recalcPrice);
-    discountCtrl.addListener(_recalcPrice);
-    _recalcPrice();
+    // live calc listeners
+    priceCtrl.addListener(_recalcFinalPrice);
+    discountCtrl.addListener(_recalcFinalPrice);
+    _recalcFinalPrice();
+
+    // ✅ ensure starting values match rules
+    if (_availableQty < 1) _availableQty = 1;
+    if (_processingDays < 0) _processingDays = 0;
   }
 
   @override
   void dispose() {
-    pricePerPersonCtrl.removeListener(_recalcPrice);
-    discountCtrl.removeListener(_recalcPrice);
+    priceCtrl.removeListener(_recalcFinalPrice);
+    discountCtrl.removeListener(_recalcFinalPrice);
 
     nameCtrl.dispose();
     descCtrl.dispose();
@@ -477,14 +277,18 @@ Future<void> _trySave() async {
     latitudeCtrl.dispose();
     longitudeCtrl.dispose();
 
-    pricePerPersonCtrl.dispose();
+    priceCtrl.dispose();
     discountCtrl.dispose();
+
+    minOrderQtyCtrl.dispose();
+    customizationFeeCtrl.dispose();
+    deliveryFeeCtrl.dispose();
 
     super.dispose();
   }
 
   // -----------------------------
-  // UI
+  // UI helpers
   // -----------------------------
   Widget _prettyHeader() {
     return Container(
@@ -511,7 +315,7 @@ Future<void> _trySave() async {
               color: kPrimaryColor.withOpacity(0.10),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.people_alt_rounded, color: kPrimaryColor),
+            child: const Icon(Icons.shopping_bag_rounded, color: kPrimaryColor),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -519,9 +323,11 @@ Future<void> _trySave() async {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Capacity Booking!",
+                  "Order Booking!",
                   style: GoogleFonts.poppins(
-                      fontSize: 20, fontWeight: FontWeight.w800),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -542,8 +348,20 @@ Future<void> _trySave() async {
     );
   }
 
-  // ✅ NEW: unit picker UI
-  Widget _unitPicker() {
+  Widget _stepperTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required int value,
+    required int min,
+    required int max,
+    required VoidCallback onMinus,
+    required VoidCallback onPlus,
+    String? badgeSuffix,
+  }) {
+    final canMinus = value > min;
+    final canPlus = value < max;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -553,52 +371,98 @@ Future<void> _trySave() async {
       ),
       child: Row(
         children: [
-          const Icon(Icons.straighten_rounded, color: kPrimaryColor, size: 18),
+          Container(
+            height: 36,
+            width: 36,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: kPrimaryColor, size: 18),
+          ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              "Charge per",
-              style: GoogleFonts.poppins(
-                  fontSize: 12, fontWeight: FontWeight.w700),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
-          ChoiceChip(
-            selected: _capacityUnit == "person",
-            showCheckmark: false,
-            selectedColor: kPrimaryColor.withOpacity(0.14),
-            backgroundColor: Colors.white,
-            label: Text("Person",
-                style: GoogleFonts.poppins(
-                    fontSize: 12, fontWeight: FontWeight.w600)),
-            onSelected: (_) => setState(() => _capacityUnit = "person"),
-          ),
-          const SizedBox(width: 8),
-          ChoiceChip(
-            selected: _capacityUnit == "piece",
-            showCheckmark: false,
-            selectedColor: kPrimaryColor.withOpacity(0.14),
-            backgroundColor: Colors.white,
-            label: Text("Piece",
-                style: GoogleFonts.poppins(
-                    fontSize: 12, fontWeight: FontWeight.w600)),
-            onSelected: (_) => setState(() => _capacityUnit = "piece"),
+          const SizedBox(width: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: canMinus ? onMinus : null,
+                  icon: Icon(
+                    Icons.remove_rounded,
+                    size: 18,
+                    color: canMinus ? kPrimaryColor : Colors.grey.shade400,
+                  ),
+                  splashRadius: 18,
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    badgeSuffix == null ? "$value" : "$value $badgeSuffix",
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: canPlus ? onPlus : null,
+                  icon: Icon(
+                    Icons.add_rounded,
+                    size: 18,
+                    color: canPlus ? kPrimaryColor : Colors.grey.shade400,
+                  ),
+                  splashRadius: 18,
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
+  // -----------------------------
+  // Build
+  // -----------------------------
   @override
   Widget build(BuildContext context) {
-    final unitLabel = _capacityUnit == "piece" ? "piece" : "person";
-
     return Scaffold(
       backgroundColor: kBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.2,
-        title: Text("Add Service",
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+        title: Text(
+          "Add Service",
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+        ),
         leading: const BackButton(color: kTextColor),
       ),
       bottomNavigationBar: saveButton(_trySave),
@@ -639,8 +503,8 @@ Future<void> _trySave() async {
                 ),
               ),
 
-              // Availability (Days)
-              sectionLabel("Availability"),
+              // 🆕 سؤال: هل الخدمة لها موقع ثابت؟
+              sectionLabel("Service Location Type"),
               Container(
                 padding: const EdgeInsets.all(16),
                 margin: const EdgeInsets.only(bottom: 16),
@@ -648,71 +512,191 @@ Future<void> _trySave() async {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _miniTitle("Choose days"),
-                    const SizedBox(height: 10),
-                    _daysTwoRowsNeat(),
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: kPrimaryColor.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(16),
-                        border:
-                            Border.all(color: kPrimaryColor.withOpacity(0.12)),
-                      ),
-                      child: _summaryRow(
-                        icon: Icons.event_available_rounded,
-                        title: "Days",
-                        value: _daysSummary(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              // Location
-              sectionLabel("Location"),
-              Container(
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: cardDecoration(),
-                child: Column(
-                  children: [
                     Row(
                       children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: addressCtrl,
-                            decoration: inputStyle("Address"),
-                            validator: (v) => (v == null || v.trim().isEmpty)
-                                ? "Required"
-                                : null,
-                          ),
+                        Icon(
+                          _hasFixedLocation ? Icons.storefront_rounded : Icons.delivery_dining_rounded,
+                          color: kPrimaryColor,
+                          size: 20,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedCity,
-                            decoration: inputStyle("City"),
-                            icon:
-                                const Icon(Icons.expand_more_rounded, size: 18),
-                            items: kCities
-                                .map((c) => DropdownMenuItem(
-                                      value: c,
-                                      child: Text(c,
-                                          style: GoogleFonts.poppins(
-                                              fontSize: 13)),
-                                    ))
-                                .toList(),
-                            onChanged: (v) => setState(() => _selectedCity = v),
-                            validator: (v) =>
-                                (v == null || v.isEmpty) ? "Required" : null,
+                          child: Text(
+                            "Does this service have a fixed location?",
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _hasFixedLocation
+                          ? "Clients will come to your location"
+                          : "You will go to the client's location",
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
                     const SizedBox(height: 14),
-                    // ✅ Map Location Button
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _hasFixedLocation = true),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: _hasFixedLocation
+                                    ? kPrimaryColor.withOpacity(0.1)
+                                    : const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _hasFixedLocation
+                                      ? kPrimaryColor
+                                      : Colors.grey.shade300,
+                                  width: _hasFixedLocation ? 2 : 1,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.storefront_rounded,
+                                    color: _hasFixedLocation
+                                        ? kPrimaryColor
+                                        : Colors.grey.shade500,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    "Yes",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: _hasFixedLocation
+                                          ? kPrimaryColor
+                                          : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  Text(
+                                    "Fixed Location",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 10,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _hasFixedLocation = false),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: !_hasFixedLocation
+                                    ? kPrimaryColor.withOpacity(0.1)
+                                    : const Color(0xFFF9FAFB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: !_hasFixedLocation
+                                      ? kPrimaryColor
+                                      : Colors.grey.shade300,
+                                  width: !_hasFixedLocation ? 2 : 1,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.delivery_dining_rounded,
+                                    color: !_hasFixedLocation
+                                        ? kPrimaryColor
+                                        : Colors.grey.shade500,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    "No",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: !_hasFixedLocation
+                                          ? kPrimaryColor
+                                          : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  Text(
+                                    "I Go to Client",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 10,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              // 🆕 قسم الموقع يظهر فقط إذا كانت الخدمة لها موقع ثابت
+              if (_hasFixedLocation) ...[
+              // Location
+              sectionLabel("Location"),
+Container(
+  padding: const EdgeInsets.all(16),
+  margin: const EdgeInsets.only(bottom: 16),
+  decoration: cardDecoration(),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          const Icon(Icons.location_on_rounded,
+              color: kPrimaryColor, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            "Where is your service?",
+            style: GoogleFonts.poppins(
+                fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: addressCtrl,
+        decoration: inputStyle("Address"),
+        validator: (v) =>
+            (v == null || v.trim().isEmpty) ? "Required" : null,
+      ),
+      const SizedBox(height: 12),
+      DropdownButtonFormField<String>(
+        value: _selectedCity,
+        decoration: inputStyle("City"),
+        items: kCities
+            .map((c) => DropdownMenuItem(
+                  value: c,
+                  child: Text(c,
+                      style: GoogleFonts.poppins(fontSize: 13)),
+                ))
+            .toList(),
+        onChanged: (v) => setState(() => _selectedCity = v),
+        validator: (v) =>
+            (v == null || v.isEmpty) ? "Required" : null,
+      ),
+      const SizedBox(height: 14),
+                    
+                    // ✅ NEW: Map Location Picker Button
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -778,6 +762,8 @@ Future<void> _trySave() async {
                               ),
                             ),
                           ),
+                          
+                          // Show coordinates after selection
                           if (_hasLocationSet && _selectedLat != null && _selectedLng != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 10),
@@ -823,59 +809,41 @@ Future<void> _trySave() async {
                   ],
                 ),
               ),
-              // ✅ Pricing (Unit + Capacity + price per unit)
+              ],
+
+              // Pricing
               sectionLabel("Pricing"),
               Container(
                 padding: const EdgeInsets.all(16),
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: cardDecoration(),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.auto_awesome_rounded,
-                            color: kPrimaryColor, size: 18),
-                        const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            "Set capacity & price",
-                            style: GoogleFonts.poppins(
-                                fontSize: 13, fontWeight: FontWeight.w800),
+                          child: TextFormField(
+                            controller: priceCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: inputStyle("Base item price (₪)"),
+                            validator: (v) {
+                              final n = num.tryParse(v?.trim() ?? "");
+                              if (n == null || n <= 0)
+                                return "Enter valid price";
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: discountCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: inputStyle("Discount % (optional)"),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    _hint(
-                        "Choose if you charge per person (catering) or per piece (cake)."),
-                    const SizedBox(height: 12),
-
-                    // ✅ NEW FIELD (before price)
-                    _unitPicker(),
-
-                    const SizedBox(height: 12),
-                    _capacityCard(),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: pricePerPersonCtrl,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      decoration: inputStyle("Price per $unitLabel (₪)"),
-                      validator: (v) {
-                        final n = num.tryParse(v?.trim() ?? "");
-                        if (n == null || n <= 0) return "Enter valid price";
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: discountCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: inputStyle("Discount % (optional)"),
-                    ),
-
-                    // ✅ live result
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -892,23 +860,22 @@ Future<void> _trySave() async {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              "Final price / $unitLabel",
+                              "Final price",
                               style: GoogleFonts.poppins(
                                   fontSize: 12, fontWeight: FontWeight.w700),
                             ),
                           ),
                           Text(
-                            _finalPricePerPerson == null
+                            _finalPrice == null
                                 ? "--"
-                                : "${_finalPricePerPerson!.toStringAsFixed(2)} ₪",
+                                : "${_finalPrice!.toStringAsFixed(2)} ₪",
                             style: GoogleFonts.poppins(
                                 fontSize: 12, fontWeight: FontWeight.w800),
                           ),
-                          if (_savedPerPerson != null &&
-                              _savedPerPerson! > 0) ...[
+                          if (_savedAmount != null && _savedAmount! > 0) ...[
                             const SizedBox(width: 10),
                             Text(
-                              "(-${_savedPerPerson!.toStringAsFixed(2)} ₪)",
+                              "(-${_savedAmount!.toStringAsFixed(2)} ₪)",
                               style: GoogleFonts.poppins(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
@@ -918,6 +885,41 @@ Future<void> _trySave() async {
                           ],
                         ],
                       ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Order Rules
+              sectionLabel("Order Rules"),
+              Container(
+                padding: const EdgeInsets.all(22),
+                margin: const EdgeInsets.only(bottom: 22),
+                decoration: cardDecoration(),
+                child: Column(
+                  children: [
+                    _stepperTile(
+                      icon: Icons.inventory_2_rounded,
+                      title: "Available quantity",
+                      subtitle: "How many pieces are available right now",
+                      value: _availableQty,
+                      min: 1, // ✅ at least 1
+                      max: 1000,
+                      onMinus: () => setState(() => _availableQty--),
+                      onPlus: () => setState(() => _availableQty++),
+                      badgeSuffix: "pcs",
+                    ),
+                    const SizedBox(height: 12),
+                    _stepperTile(
+                      icon: Icons.timelapse_rounded,
+                      title: "Processing days",
+                      subtitle: "Preparation time before the order is ready",
+                      value: _processingDays,
+                      min: 0, // ✅ 0 allowed
+                      max: 60,
+                      onMinus: () => setState(() => _processingDays--),
+                      onPlus: () => setState(() => _processingDays++),
+                      badgeSuffix: "days",
                     ),
                   ],
                 ),
@@ -947,14 +949,15 @@ Future<void> _trySave() async {
                           style: GoogleFonts.poppins(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
-                            color: kTextColor,
                           ),
                         ),
                         const Spacer(),
                         IconButton(
                           onPressed: _addHighlight,
-                          icon: const Icon(Icons.add_circle_outline_rounded,
-                              color: kPrimaryColor),
+                          icon: const Icon(
+                            Icons.add_circle_outline_rounded,
+                            color: kPrimaryColor,
+                          ),
                         ),
                       ],
                     ),
@@ -964,7 +967,9 @@ Future<void> _trySave() async {
                         child: Text(
                           "Add points that make your service special.",
                           style: GoogleFonts.poppins(
-                              fontSize: 11, color: Colors.grey.shade600),
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       )
                     else
@@ -999,12 +1004,16 @@ Future<void> _trySave() async {
                       title: Text(
                         "Visible in search",
                         style: GoogleFonts.poppins(
-                            fontSize: 13, fontWeight: FontWeight.w600),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       subtitle: Text(
                         "Turn off if temporarily unavailable.",
                         style: GoogleFonts.poppins(
-                            fontSize: 11, color: Colors.grey.shade600),
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ),
                   ],

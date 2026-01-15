@@ -4,10 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 
-import 'cart.dart';
-import 'chat_inside_search.dart';
-import '../widgets/booking_details_modal.dart';
-import '../services/auth_service.dart';
+import '../payment/cart.dart';
+import '../chat/chat_inside_search.dart';
+import '../../../widgets/booking_details_modal.dart';
+import '../../../services/auth_service.dart';
 
 const Color kPrimary = Color.fromARGB(215, 20, 20, 215);
 const Color kBg = Color(0xFFF6F7FB);

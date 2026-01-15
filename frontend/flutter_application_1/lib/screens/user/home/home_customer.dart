@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_application_1/screens/search.dart';
+import 'package:flutter_application_1/screens/user/search/search.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
 import 'package:flutter_application_1/services/user_service/home_user_service.dart';
@@ -17,19 +17,19 @@ import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import 'favorites.dart';
+import '../profile/favorites.dart';
 import 'package:flutter_application_1/screens/Ai_Screen/ai_screen_layout.dart';
-import 'cart.dart';
-import 'profile.dart';
-import 'notifications.dart';
+import '../payment/cart.dart';
+import '../profile/profile.dart';
+import '../notifications/notifications.dart';
 import 'offers.dart';
-import 'packages.dart';
-import 'templates.dart';
-import 'provider/services_customer_home.dart';
-import 'signin.dart';
+import '../packages/packages.dart';
+import '../../templates.dart';
+import 'services_customer_home.dart';
+import '../../signin.dart';
 
 // ✅ Chat page
-import 'chat_customer_home_page.dart';
+import '../chat/chat_customer_home_page.dart';
 /// ✅ RGB(215, 20, 20, 215)
 const Color kNavBlue = Color.fromARGB(215, 20, 20, 215);
 

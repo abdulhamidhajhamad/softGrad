@@ -79,5 +79,11 @@ async getVendorStats(@Request() req) {
     return this.bookingService.getSalesStats(); // استدعاء بدون براميتر لجلب الكل
   }
 
+  // 📊 Finance Stats للـ Provider - إحصائيات مالية شاملة
+  @Get('vendor/finance')
+  async getVendorFinanceStats(@Request() req) {
+    const vendorId = req.user.userId;
+    return this.bookingService.getFinanceStats(vendorId);
+  }
 
 }

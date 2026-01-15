@@ -74,7 +74,7 @@ export class Service extends Document {
       city: { type: String },
       country: { type: String }
     },
-    required: true
+    required: false  // ✅ تغيير إلى false لأن بعض الخدمات لا تملك موقع ثابت
   })
   location: {
     latitude: number;
@@ -83,6 +83,10 @@ export class Service extends Document {
     city?: string;
     country?: string;
   };
+
+  // 🆕 هل الخدمة لها موقع ثابت أم تذهب للعميل (مثل الكيترينج)
+  @Prop({ type: Boolean, default: true })
+  hasFixedLocation: boolean;
 
   @Prop({ type: Number, required: false })
   price?: number;

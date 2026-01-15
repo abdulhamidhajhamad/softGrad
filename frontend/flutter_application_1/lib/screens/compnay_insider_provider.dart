@@ -2,9 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'services_customer_home.dart'; // ServiceItem + ServiceFavoritesStore + colors (kBg/kText/kBlue/kMuted)
-import 'cart.dart' as cart; // ✅ alias to avoid conflicts
-import 'chat_inside_search.dart' as chat; // ✅ prefix to avoid kText ambiguity
+import 'user/home/services_customer_home.dart'; // ServiceItem + ServiceFavoritesStore + colors (kBg/kText/kBlue/kMuted)
+import 'user/payment/cart.dart' as cart; // ✅ alias to avoid conflicts
+import 'user/chat/chat_inside_search.dart' as chat; // ✅ prefix to avoid kText ambiguity
 
 class CompanyInsiderProviderPage extends StatelessWidget {
   final String companyName;

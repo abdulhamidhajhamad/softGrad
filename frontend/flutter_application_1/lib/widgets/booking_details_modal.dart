@@ -4,7 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../services/payment_service/add_to_cart_service.dart';
 import '../services/payment_service/cart_service.dart';
-import '../screens/cart.dart' show CartStore, CartItem;
+import '../screens/user/payment/cart.dart' show CartStore, CartItem;
+import '../screens/map_location_picker.dart' hide kPrimaryColor, kTextColor;
 
 // =====================
 // 🎨 Design Tokens (from services_customer_home.dart)
@@ -104,6 +105,17 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
   bool _isFullVenue = false;
   bool _isLoading = false;
   
+  // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
+  final _clientAddressController = TextEditingController();
+  final _locationDescriptionController = TextEditingController(); // 🆕 وصف الموقع (landmark)
+  String? _clientCity;
+  double? _clientLat;
+  double? _clientLng;
+  bool _hasClientLocationSet = false;
+  
+  // 🆕 وصف الحجز (اختياري)
+  final _bookingDescriptionController = TextEditingController();
+  
   // =====================
   // 💰 Price State
   // =====================
@@ -122,6 +134,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
   List<String>? get _workingDays => (widget.serviceData['workingDays'] as List<dynamic>?)
       ?.map((e) => e.toString().toLowerCase())
       .toList();
+  
+  // 🆕 هل الخدمة لها موقع ثابت
+  bool get _hasFixedLocation => widget.serviceData['hasFixedLocation'] ?? true;
 
   @override
   void initState() {
@@ -132,6 +147,14 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _calculatePrice();
     });
+  }
+
+  @override
+  void dispose() {
+    _clientAddressController.dispose();
+    _locationDescriptionController.dispose();
+    _bookingDescriptionController.dispose();
+    super.dispose();
   }
 
   // =====================
@@ -339,9 +362,30 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
       return 'Please select a date';
     }
 
+    // 🆕 التحقق من أيام العمل
+    if (_workingDays != null && _workingDays!.isNotEmpty) {
+      final dayName = _getDayName(_selectedDate!);
+      if (!_workingDays!.contains(dayName)) {
+        return 'Service is not available on ${_capitalize(dayName)}s';
+      }
+    }
+
     if (widget.bookingType == BookingType.hourly) {
       if (_startTime == null || _endTime == null) {
         return 'Please select start and end times';
+      }
+
+      // 🆕 التحقق من ساعات العمل
+      if (_availableHours != null && _availableHours!.isNotEmpty) {
+        if (!_availableHours!.contains(_startTime!.hour)) {
+          return 'Service is not operational at ${_startTime!.hour}:00';
+        }
+        // التحقق من أن كل ساعات الحجز ضمن ساعات العمل
+        for (int h = _startTime!.hour; h < _endTime!.hour; h++) {
+          if (!_availableHours!.contains(h)) {
+            return 'Service is not operational at $h:00';
+          }
+        }
       }
 
       final startMinutes = _startTime!.hour * 60 + _startTime!.minute;
@@ -369,6 +413,16 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
 
       if (_maxCapacity != null && _numberOfPeople > _maxCapacity!) {
         return 'Maximum capacity is $_maxCapacity people';
+      }
+    }
+
+    // 🆕 التحقق من موقع العميل إذا الخدمة بدون موقع ثابت
+    if (!_hasFixedLocation) {
+      if (_clientAddressController.text.trim().isEmpty) {
+        return 'Please enter your address';
+      }
+      if (_clientCity == null || _clientCity!.isEmpty) {
+        return 'Please select your city';
       }
     }
 
@@ -405,6 +459,23 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
 
       if (widget.bookingType == BookingType.mixed) {
         bookingDetails['isFullVenue'] = _isFullVenue;
+      }
+
+      // 🆕 إضافة موقع العميل إذا الخدمة بدون موقع ثابت
+      if (!_hasFixedLocation) {
+        bookingDetails['clientLocation'] = {
+          'address': _clientAddressController.text.trim(),
+          'city': _clientCity,
+          'latitude': _clientLat,
+          'longitude': _clientLng,
+          'locationDescription': _locationDescriptionController.text.trim(), // 🆕 وصف الموقع
+        };
+      }
+
+      // 🆕 إضافة وصف الحجز (اختياري)
+      final description = _bookingDescriptionController.text.trim();
+      if (description.isNotEmpty) {
+        bookingDetails['bookingDescription'] = description;
       }
 
       // Call API
@@ -624,6 +695,16 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
                             const SizedBox(height: 16),
                           ],
                         ],
+
+                        // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
+                        if (!_hasFixedLocation) ...[
+                          _buildClientLocationField(),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // 🆕 وصف الحجز (اختياري - لجميع الخدمات)
+                        _buildBookingDescriptionField(),
+                        const SizedBox(height: 16),
 
                         // Price Display
                         if (_calculatedPrice != null && _calculatedPrice! > 0) ...[
@@ -1112,6 +1193,440 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
                 color: kText,
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  // 🆕 حقل موقع العميل للخدمات التي تذهب للعميل
+  Widget _buildClientLocationField() {
+    // قائمة المدن
+    const cities = [
+      'Jerusalem', 'Ramallah', 'Nablus', 'Hebron', 'Bethlehem',
+      'Jenin', 'Tulkarm', 'Qalqilya', 'Jericho', 'Salfit',
+      'Tubas', 'Gaza', 'Khan Yunis', 'Rafah', 'Deir al-Balah',
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kBlue.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [kBlue.withOpacity(0.15), kBlue.withOpacity(0.05)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.location_on_rounded, color: kBlue, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your Location',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: kText,
+                      ),
+                    ),
+                    Text(
+                      'Where should we come to serve you?',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: kMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Required badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Required',
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          
+          // City Dropdown
+          Text(
+            'City',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: kText,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _clientCity != null ? kBlue.withOpacity(0.3) : Colors.black.withOpacity(0.08),
+                width: _clientCity != null ? 1.5 : 1,
+              ),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _clientCity,
+                hint: Text(
+                  'Select your city',
+                  style: GoogleFonts.poppins(fontSize: 14, color: kMuted),
+                ),
+                isExpanded: true,
+                icon: Icon(Icons.keyboard_arrow_down_rounded, color: kBlue),
+                items: cities.map((city) => DropdownMenuItem(
+                  value: city,
+                  child: Text(
+                    city,
+                    style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                )).toList(),
+                onChanged: (value) => setState(() => _clientCity = value),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          
+          // Address TextField
+          Text(
+            'Address',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: kText,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _clientAddressController.text.isNotEmpty 
+                    ? kBlue.withOpacity(0.3) 
+                    : Colors.black.withOpacity(0.08),
+                width: _clientAddressController.text.isNotEmpty ? 1.5 : 1,
+              ),
+            ),
+            child: TextField(
+              controller: _clientAddressController,
+              style: GoogleFonts.poppins(fontSize: 14),
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Enter your full address',
+                hintStyle: GoogleFonts.poppins(fontSize: 14, color: kMuted),
+                prefixIcon: Icon(Icons.home_outlined, color: kBlue, size: 20),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          
+          // Map Location (Optional)
+          Text(
+            'Pin Location (Optional)',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: kText,
+            ),
+          ),
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MapLocationPicker(
+                    initialLat: _clientLat,
+                    initialLng: _clientLng,
+                  ),
+                ),
+              );
+
+              if (result != null && result is Map) {
+                setState(() {
+                  _clientLat = result['latitude'];
+                  _clientLng = result['longitude'];
+                  _hasClientLocationSet = true;
+                });
+              }
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _hasClientLocationSet 
+                    ? kBlue.withOpacity(0.08) 
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _hasClientLocationSet 
+                      ? kBlue 
+                      : Colors.black.withOpacity(0.08),
+                  width: _hasClientLocationSet ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: _hasClientLocationSet 
+                          ? kBlue.withOpacity(0.15) 
+                          : kBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      _hasClientLocationSet 
+                          ? Icons.check_circle_rounded 
+                          : Icons.map_outlined,
+                      color: _hasClientLocationSet ? kBlue : kMuted,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _hasClientLocationSet 
+                              ? 'Location Pinned ✓' 
+                              : 'Add Map Location',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _hasClientLocationSet ? kBlue : kText,
+                          ),
+                        ),
+                        if (_hasClientLocationSet && _clientLat != null)
+                          Text(
+                            '${_clientLat!.toStringAsFixed(4)}, ${_clientLng!.toStringAsFixed(4)}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: kMuted,
+                            ),
+                          )
+                        else
+                          Text(
+                            'Tap to pin your exact location',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: kMuted,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: _hasClientLocationSet ? kBlue : kMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // Clear location button
+          if (_hasClientLocationSet)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _clientLat = null;
+                      _clientLng = null;
+                      _hasClientLocationSet = false;
+                    });
+                  },
+                  icon: Icon(Icons.close_rounded, size: 16, color: Colors.red.shade400),
+                  label: Text(
+                    'Clear location',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.red.shade400,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                ),
+              ),
+            ),
+          
+          const SizedBox(height: 14),
+          
+          // 🆕 Location Description (Landmark)
+          Text(
+            'Location Description (Optional)',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: kText,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _locationDescriptionController.text.isNotEmpty 
+                    ? kBlue.withOpacity(0.3) 
+                    : Colors.black.withOpacity(0.08),
+                width: _locationDescriptionController.text.isNotEmpty ? 1.5 : 1,
+              ),
+            ),
+            child: TextField(
+              controller: _locationDescriptionController,
+              style: GoogleFonts.poppins(fontSize: 14),
+              maxLines: 2,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'e.g., Next to Halal Market, beside the mosque...',
+                hintStyle: GoogleFonts.poppins(fontSize: 13, color: kMuted),
+                prefixIcon: Icon(Icons.place_outlined, color: kBlue, size: 20),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🆕 حقل وصف الحجز (اختياري)
+  Widget _buildBookingDescriptionField() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.description_outlined,
+                  color: Color(0xFF8B5CF6),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Special Requests',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: kText,
+                      ),
+                    ),
+                    Text(
+                      'Any special instructions for the provider?',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: kMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Optional badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: kMuted.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Optional',
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: kMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          
+          // Description TextField
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _bookingDescriptionController.text.isNotEmpty 
+                    ? const Color(0xFF8B5CF6).withOpacity(0.3) 
+                    : Colors.black.withOpacity(0.08),
+                width: _bookingDescriptionController.text.isNotEmpty ? 1.5 : 1,
+              ),
+            ),
+            child: TextField(
+              controller: _bookingDescriptionController,
+              style: GoogleFonts.poppins(fontSize: 14),
+              maxLines: 3,
+              maxLength: 500,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'e.g., Please arrive 10 minutes early, need extra chairs...',
+                hintStyle: GoogleFonts.poppins(fontSize: 13, color: kMuted),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.all(14),
+                counterStyle: GoogleFonts.poppins(fontSize: 10, color: kMuted),
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'vendor_profile.dart';
-import 'favorites.dart'; // for FavoritesStore & FavoriteVendor
+import '../profile/favorites.dart'; // for FavoritesStore & FavoriteVendor
 
 class VendorsListPage extends StatefulWidget {
   const VendorsListPage({Key? key}) : super(key: key);

@@ -83,6 +83,9 @@ async createBookingsFromCart(userId: string, paymentIntentId: string): Promise<B
         endHour: item.bookingDetails.endHour,
         numberOfPeople: item.bookingDetails.numberOfPeople,
         isFullVenue: item.bookingDetails.isFullVenue,
+        // 🆕 موقع العميل ووصف الحجز
+        clientLocation: item.bookingDetails.clientLocation,
+        bookingDescription: item.bookingDetails.bookingDescription,
       },
       price: item.price,
       status: BookingStatus.CONFIRMED,
@@ -307,9 +310,11 @@ async createBookingsFromCart(userId: string, paymentIntentId: string): Promise<B
     if (isVendor) {
       // 👑 لـ Vendor: يحتاج اسم العميل (Client Name) من جدول User
       query = { providerId: userId };
-      // 🔗 ربط حقل userId لجلب اسم العميل (name) فقط
+      // 🔗 ربط حقل userId لجلب اسم العميل (userName) فقط
       // يجب أن يكون ref 'User' معرفًا في booking.entity.ts
-      populateOptions.push({ path: 'userId', select: 'name -_id' }); 
+      populateOptions.push({ path: 'userId', select: 'userName -_id' });
+      // 🆕 ربط حقل serviceId لجلب صورة الخدمة
+      populateOptions.push({ path: 'serviceId', select: 'images -_id' }); 
       
     } else if (clientRoles.includes(role)) {
       // 👤 لـ Client: يبحث بـ userId
@@ -333,21 +338,41 @@ async createBookingsFromCart(userId: string, paymentIntentId: string): Promise<B
         const bookingObject: any = booking.toObject({ virtuals: true });
         
         if (isVendor) {
-            // 📝 الحقول المطلوبة للـ Vendor: اسم العميل، اسم السيرفس، تاريخ الحجز
+            // 📝 الحقول المطلوبة للـ Vendor: جميع تفاصيل الحجز
             
             // 💡Fix: تم حل مشكلة TypeError/Compilation error عبر التحقق من الـ Population
-            const populatedUser = bookingObject.userId as { name: string } | Types.ObjectId | null;
-            const clientName = (populatedUser && typeof populatedUser === 'object' && 'name' in populatedUser)
-                               ? populatedUser.name 
+            const populatedUser = bookingObject.userId as { userName: string } | Types.ObjectId | null;
+            const clientName = (populatedUser && typeof populatedUser === 'object' && 'userName' in populatedUser)
+                               ? populatedUser.userName 
                                : 'Unknown Client';
+            
+            // 🆕 جلب صورة الخدمة
+            const populatedService = bookingObject.serviceId as { images: string[] } | Types.ObjectId | null;
+            const serviceImage = (populatedService && typeof populatedService === 'object' && 'images' in populatedService)
+                               ? populatedService.images?.[0] ?? null
+                               : null;
             
             return {
                 bookingId: bookingObject._id,
                 clientName: clientName, // ✅ اسم الشخص الذي قام بالحجز (من جدول User)
                 serviceName: bookingObject.serviceName, // ✅ اسم الخدمة
+                serviceImage: serviceImage, // 🆕 صورة الخدمة
                 bookingDate: bookingObject.bookingDetails?.date, // ✅ تاريخ الحجز
                 status: bookingObject.status,
-                seen: bookingObject.seen
+                seen: bookingObject.seen,
+                // 🆕 تفاصيل إضافية للحجز
+                startHour: bookingObject.bookingDetails?.startHour ?? null,
+                endHour: bookingObject.bookingDetails?.endHour ?? null,
+                numberOfPeople: bookingObject.bookingDetails?.numberOfPeople ?? null,
+                isFullVenue: bookingObject.bookingDetails?.isFullVenue ?? false,
+                // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
+                clientLocation: bookingObject.bookingDetails?.clientLocation ?? null,
+                // 🆕 وصف الحجز (ملاحظات خاصة من العميل)
+                bookingDescription: bookingObject.bookingDetails?.bookingDescription ?? null,
+                price: bookingObject.price,
+                bookingType: bookingObject.bookingType,
+                companyName: bookingObject.companyName,
+                createdAt: bookingObject.createdAt,
             };
         } else {
             // 📝 الحقول المطلوبة للـ Client: اسم الحجز، status، Cancellation Reason
@@ -459,6 +484,162 @@ async getSalesStats(vendorId?: string) {
     growthRate: parseFloat(growthRate.toFixed(2)) // تقريب الرقم
   };
 }
+
+  /**
+   * 📊 جلب إحصائيات مالية شاملة للـ Provider
+   */
+  async getFinanceStats(vendorId: string) {
+    const now = new Date();
+    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+    const stats = await this.bookingModel.aggregate([
+      { $match: { providerId: vendorId } },
+      {
+        $facet: {
+          // 📈 إجمالي المبيعات
+          "totalStats": [
+            {
+              $group: {
+                _id: null,
+                totalRevenue: { $sum: { $cond: [{ $in: ["$status", ["confirmed", "completed"]] }, "$price", 0] } },
+                totalBookings: { $sum: { $cond: [{ $in: ["$status", ["confirmed", "completed"]] }, 1, 0] } },
+                cancelledAmount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, "$price", 0] } },
+                cancelledCount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } }
+              }
+            }
+          ],
+          // 📅 مبيعات الشهر الحالي
+          "currentMonth": [
+            { $match: { createdAt: { $gte: startOfCurrentMonth }, status: { $in: ["confirmed", "completed"] } } },
+            { $group: { _id: null, amount: { $sum: "$price" }, count: { $sum: 1 } } }
+          ],
+          // 📅 مبيعات الشهر الماضي
+          "lastMonth": [
+            { $match: { createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth }, status: { $in: ["confirmed", "completed"] } } },
+            { $group: { _id: null, amount: { $sum: "$price" }, count: { $sum: 1 } } }
+          ],
+          // 📅 مبيعات هذه السنة
+          "yearToDate": [
+            { $match: { createdAt: { $gte: startOfYear }, status: { $in: ["confirmed", "completed"] } } },
+            { $group: { _id: null, amount: { $sum: "$price" }, count: { $sum: 1 } } }
+          ],
+          // 📊 مبيعات حسب الخدمة
+          "byService": [
+            { $match: { status: { $in: ["confirmed", "completed"] } } },
+            {
+              $group: {
+                _id: { serviceId: "$serviceId", serviceName: "$serviceName" },
+                revenue: { $sum: "$price" },
+                bookings: { $sum: 1 }
+              }
+            },
+            { $sort: { revenue: -1 } },
+            { $limit: 10 }
+          ],
+          // 📅 مبيعات آخر 12 شهر (للـ Chart - يدعم خيار السنة)
+          "monthlyTrend": [
+            { $match: { status: { $in: ["confirmed", "completed"] } } },
+            {
+              $group: {
+                _id: {
+                  year: { $year: "$createdAt" },
+                  month: { $month: "$createdAt" }
+                },
+                revenue: { $sum: "$price" },
+                bookings: { $sum: 1 }
+              }
+            },
+            { $sort: { "_id.year": -1, "_id.month": -1 } },
+            { $limit: 12 }
+          ],
+          // 📊 توزيع حسب حالة الحجز
+          "statusDistribution": [
+            {
+              $group: {
+                _id: "$status",
+                count: { $sum: 1 },
+                amount: { $sum: "$price" }
+              }
+            }
+          ],
+          // 📅 آخر 5 حجوزات
+          "recentBookings": [
+            { $sort: { createdAt: -1 } },
+            { $limit: 5 },
+            {
+              $project: {
+                serviceName: 1,
+                price: 1,
+                status: 1,
+                createdAt: 1,
+                "bookingDetails.date": 1
+              }
+            }
+          ]
+        }
+      }
+    ]);
+
+    const result = stats[0];
+    const total = result.totalStats[0] || { totalRevenue: 0, totalBookings: 0, cancelledAmount: 0, cancelledCount: 0 };
+    const currentMonth = result.currentMonth[0] || { amount: 0, count: 0 };
+    const lastMonth = result.lastMonth[0] || { amount: 0, count: 0 };
+    const yearToDate = result.yearToDate[0] || { amount: 0, count: 0 };
+
+    // حساب نسبة النمو
+    let growthRate = 0;
+    if (lastMonth.amount > 0) {
+      growthRate = ((currentMonth.amount - lastMonth.amount) / lastMonth.amount) * 100;
+    } else if (currentMonth.amount > 0) {
+      growthRate = 100;
+    }
+
+    // معالجة مبيعات الخدمات
+    const servicesSales = result.byService.map((s: any) => ({
+      serviceId: s._id.serviceId,
+      serviceName: s._id.serviceName,
+      revenue: s.revenue,
+      bookings: s.bookings,
+      percentage: total.totalRevenue > 0 ? parseFloat(((s.revenue / total.totalRevenue) * 100).toFixed(1)) : 0
+    }));
+
+    // معالجة الترند الشهري
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthlyTrend = result.monthlyTrend.map((m: any) => ({
+      month: monthNames[m._id.month - 1],
+      year: m._id.year,
+      revenue: m.revenue,
+      bookings: m.bookings
+    })).reverse();
+
+    // معالجة توزيع الحالات
+    const statusMap: any = {};
+    result.statusDistribution.forEach((s: any) => {
+      statusMap[s._id] = { count: s.count, amount: s.amount };
+    });
+
+    return {
+      summary: {
+        totalRevenue: total.totalRevenue,
+        totalBookings: total.totalBookings,
+        cancelledAmount: total.cancelledAmount,
+        cancelledCount: total.cancelledCount,
+        currentMonthRevenue: currentMonth.amount,
+        currentMonthBookings: currentMonth.count,
+        lastMonthRevenue: lastMonth.amount,
+        yearToDateRevenue: yearToDate.amount,
+        yearToDateBookings: yearToDate.count,
+        growthRate: parseFloat(growthRate.toFixed(1))
+      },
+      servicesSales,
+      monthlyTrend,
+      statusDistribution: statusMap,
+      recentBookings: result.recentBookings
+    };
+  }
 
 
 }

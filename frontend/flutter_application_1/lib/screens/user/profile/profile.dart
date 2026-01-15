@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'edit_profile_customer.dart';
-import 'security_password.dart';
+import '../../security_password.dart';
 import 'package:flutter_application_1/screens/review_screen/my_bookings_screen.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 

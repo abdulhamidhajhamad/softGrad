@@ -2,17 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/notification_provider_service.dart'; 
-import 'package:flutter_application_1/services/booked_provider_service.dart'; // ✅ إضافة
-import 'edit_profile_provider.dart';
-import 'services_provider.dart';
-import 'signin.dart';
-import 'package:flutter_application_1/screens/booking_provider.dart';
+import 'package:flutter_application_1/services/booked_provider_service.dart';
+import 'package:flutter_application_1/services/chat_provider_service.dart';
+
+// Local imports (same folder)
+import 'finance_provider.dart';
+
+// Other screens
+import 'package:flutter_application_1/screens/edit_profile_provider.dart';
+import 'package:flutter_application_1/screens/services_provider.dart';
+import 'package:flutter_application_1/screens/signin.dart';
+import 'package:flutter_application_1/screens/provider/booking_provider.dart';
 import 'package:flutter_application_1/screens/messages_provider.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
 import 'package:flutter_application_1/screens/reviews_provider.dart';
 import 'package:flutter_application_1/screens/packages_provider.dart';
-import 'package:flutter_application_1/screens/home_customer.dart'; 
-import 'package:flutter_application_1/services/chat_provider_service.dart';
+import 'package:flutter_application_1/screens/user/home/home_customer.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
@@ -306,8 +311,21 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> with WidgetsBin
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _HeaderCard(provider: provider),
-              const SizedBox(height: 15),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              
+              // 💰 Finance Card
+              _FinanceTeaserCard(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const FinanceProviderScreen(),
+                    ),
+                  );
+                },
+              ),
+              
+              const SizedBox(height: 12),
               _PackagesTeaserCard(
                 onTap: () {
                   Navigator.push(
@@ -778,6 +796,93 @@ class _PackagesTeaserCard extends StatelessWidget {
               Icons.arrow_forward_ios_rounded,
               size: 18,
               color: kPrimaryColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// 💰 Finance Teaser Card Widget
+class _FinanceTeaserCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _FinanceTeaserCard({Key? key, required this.onTap}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFF10B981).withOpacity(0.12),
+              const Color(0xFF10B981).withOpacity(0.04),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: const Color(0xFF10B981).withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.account_balance_wallet_rounded,
+                color: Color(0xFF10B981),
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Finance Overview",
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: kTextColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Track your revenue, bookings, and financial insights.",
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 18,
+              color: Color(0xFF10B981),
             ),
           ],
         ),

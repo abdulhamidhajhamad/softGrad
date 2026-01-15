@@ -1,7 +1,7 @@
 // lib/screens/security_password.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'profile.dart'; // for kAccentColor
+import 'user/profile/profile.dart'; // for kAccentColor
 
 class SecurityPasswordScreen extends StatefulWidget {
   final bool isDarkMode;

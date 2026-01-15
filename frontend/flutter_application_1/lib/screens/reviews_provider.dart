@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/chat_provider_service.dart';
 
 /// Core colors – keep consistent with the rest of the app
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
@@ -11,6 +12,7 @@ const Color kBackgroundColor = Colors.white;
 /// Review model
 class ProviderReview {
   final String id;
+  final String customerId; // ID of the customer who wrote the review
   final String customerName;
   final String? serviceName;
   final int rating; // 1–5 فقط
@@ -19,6 +21,7 @@ class ProviderReview {
 
   ProviderReview({
     required this.id,
+    required this.customerId,
     required this.customerName,
     this.serviceName,
     required this.rating,
@@ -441,10 +444,18 @@ class _RatingFilterChip extends StatelessWidget {
 }
 
 /// Single review card
-class _ReviewCard extends StatelessWidget {
+class _ReviewCard extends StatefulWidget {
   final ProviderReview review;
 
   const _ReviewCard({Key? key, required this.review}) : super(key: key);
+
+  @override
+  State<_ReviewCard> createState() => _ReviewCardState();
+}
+
+class _ReviewCardState extends State<_ReviewCard> {
+  bool _hasReplied = false;
+  bool _isSending = false;
 
   String _formatDate(DateTime time) {
     final day = time.day.toString().padLeft(2, '0');
@@ -453,8 +464,209 @@ class _ReviewCard extends StatelessWidget {
     return '$day/$month/$year';
   }
 
+  void _showReplyDialog() {
+    final TextEditingController messageController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.reply_rounded, color: kPrimaryColor, size: 24),
+            const SizedBox(width: 8),
+            Text(
+              'Reply to ${widget.review.customerName}',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Show the original review
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _StarRow(rating: widget.review.rating.toDouble(), size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.review.rating.toString(),
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    widget.review.comment,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Your message:',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: kTextColor,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: messageController,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText: 'Write your reply to the customer...',
+                hintStyle: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: Colors.grey.shade500,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: kPrimaryColor, width: 1.5),
+                ),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+              style: GoogleFonts.poppins(fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final message = messageController.text.trim();
+              if (message.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Please write a message',
+                      style: GoogleFonts.poppins(),
+                    ),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                return;
+              }
+              
+              Navigator.of(dialogContext).pop();
+              await _sendReply(message);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kPrimaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: Text(
+              'Send',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendReply(String message) async {
+    setState(() => _isSending = true);
+    
+    try {
+      final result = await ChatProviderService.startChatWithUser(
+        widget.review.customerId,
+        message,
+      );
+      
+      if (result['success'] == true) {
+        setState(() {
+          _hasReplied = true;
+          _isSending = false;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Message sent to ${widget.review.customerName}',
+                style: GoogleFonts.poppins(),
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        setState(() => _isSending = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                result['error'] ?? 'Failed to send message',
+                style: GoogleFonts.poppins(),
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _isSending = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error sending message: $e',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final review = widget.review;
     final dateText = _formatDate(review.createdAt);
     final initials = review.customerName.isNotEmpty
         ? review.customerName.trim()[0].toUpperCase()
@@ -512,7 +724,7 @@ class _ReviewCard extends StatelessWidget {
                         _StarRow(rating: review.rating.toDouble(), size: 16),
                         const SizedBox(width: 6),
                         Text(
-                          review.rating.toString(), // بدون كسور
+                          review.rating.toString(),
                           style: GoogleFonts.poppins(
                             fontSize: 12,
                             color: Colors.grey.shade700,
@@ -534,12 +746,82 @@ class _ReviewCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          // Review comment with overflow protection
           Text(
             review.comment,
+            maxLines: 5,
+            overflow: TextOverflow.ellipsis,
             style: GoogleFonts.poppins(
               fontSize: 13,
               color: Colors.grey.shade800,
             ),
+          ),
+          const SizedBox(height: 12),
+          // Reply button
+          Align(
+            alignment: Alignment.centerRight,
+            child: _isSending
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: kPrimaryColor,
+                    ),
+                  )
+                : _hasReplied
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_circle,
+                              size: 16,
+                              color: Colors.grey.shade600,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Already Replied',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ElevatedButton.icon(
+                        onPressed: _showReplyDialog,
+                        icon: const Icon(Icons.reply_rounded, size: 18),
+                        label: Text(
+                          'Reply to Customer',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kPrimaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
           ),
         ],
       ),

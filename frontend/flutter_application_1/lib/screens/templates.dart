@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'template_editor.dart';
-import 'favorites.dart'; // for FavoritesStore & FavoriteTemplate
+import 'user/profile/favorites.dart'; // for FavoritesStore & FavoriteTemplate
 
 class TemplatesPage extends StatefulWidget {
   const TemplatesPage({Key? key}) : super(key: key);

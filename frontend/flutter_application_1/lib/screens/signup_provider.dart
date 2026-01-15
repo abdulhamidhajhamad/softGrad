@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/auth_service.dart'; // استخدام AuthService
-import 'package:flutter_application_1/screens/home_provider.dart'; // استيراد شاشة لوحة التحكم
+import 'package:flutter_application_1/screens/provider/home_provider.dart'; // استيراد شاشة لوحة التحكم
 import 'package:flutter_application_1/services/vendor_auth_service.dart';
 // يجب أن يكون لديك تعريف لـ ProviderModel في ملف HomeProviderScreen أو آخر.
 

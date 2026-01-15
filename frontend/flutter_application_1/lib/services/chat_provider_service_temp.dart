@@ -328,7 +328,7 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
     }
   }
 
-  /// Start or get existing chat with a user (without sending initial message)
+  /// Start or get existing chat with a user and send initial message
   static Future<Map<String, dynamic>> startChatWithUser(String userId, String initialMessage) async {
     try {
       final token = await AuthService.getToken();
@@ -356,7 +356,7 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
         
         print('Chat created/found: $chatId');
         
-        // Only send message if initialMessage is not empty
+        // Send the initial message
         if (initialMessage.isNotEmpty && chatId != null) {
           final msgResponse = await http.post(
             Uri.parse('$_baseUrl/chat/send'),
@@ -372,24 +372,14 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
           print('Message send response: ${msgResponse.statusCode}');
         }
         
-        return {
-          'success': true,
-          'chatId': chatId,
-          'data': chatData,
-        };
+        return chatData;
       } else {
         print('Chat create failed: ${chatResponse.body}');
-        return {
-          'success': false,
-          'message': 'Failed to start chat: ${chatResponse.statusCode}',
-        };
+        throw Exception('Failed to start chat: ${chatResponse.statusCode}');
       }
     } catch (e) {
       print('Error starting chat: $e');
-      return {
-        'success': false,
-        'message': e.toString(),
-      };
+      rethrow;
     }
   }
 

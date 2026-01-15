@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_application_1/screens/home_customer.dart'; // Import HomePage
+import 'package:flutter_application_1/screens/user/home/home_customer.dart'; // Import HomePage
 import 'package:flutter_application_1/services/auth_service.dart'; // Import AuthService
-import 'package:flutter_application_1/screens/home_provider.dart';
+import 'package:flutter_application_1/screens/provider/home_provider.dart';
 import 'package:flutter_application_1/services/fcm_service.dart';
 import 'package:flutter_application_1/screens/forgot_password/forgot_password_request.dart';
 import 'package:flutter_application_1/screens/admin/admin_main_screen.dart'; // Import Admin Screen

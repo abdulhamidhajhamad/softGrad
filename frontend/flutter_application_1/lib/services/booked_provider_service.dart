@@ -36,30 +36,10 @@ class BookedProviderService {
         final List<dynamic> bookingsData = json.decode(response.body);
         debugPrint('✅ Fetched ${bookingsData.length} bookings');
         
-        // معالجة كل حجز لجلب اسم العميل
-        List<Map<String, dynamic>> processedBookings = [];
-        
-        for (var booking in bookingsData) {
-          Map<String, dynamic> bookingMap = Map<String, dynamic>.from(booking);
-          
-          // إذا كان userId موجود كـ Object، نستخرج الاسم منه
-          if (bookingMap['userId'] != null) {
-            if (bookingMap['userId'] is Map) {
-              // إذا كان populated
-              final userName = bookingMap['userId']['name'] ?? 'Unknown Client';
-              bookingMap['clientName'] = userName;
-            } else if (bookingMap['userId'] is String) {
-              // إذا كان فقط ID، نجلب معلومات المستخدم
-              final userId = bookingMap['userId'];
-              final clientName = await _fetchUserName(userId, token);
-              bookingMap['clientName'] = clientName;
-            }
-          } else {
-            bookingMap['clientName'] = 'Unknown Client';
-          }
-          
-          processedBookings.add(bookingMap);
-        }
+        // ✅ Backend يُرسل clientName مباشرة - لا حاجة لمعالجة إضافية
+        List<Map<String, dynamic>> processedBookings = bookingsData
+            .map((booking) => Map<String, dynamic>.from(booking))
+            .toList();
         
         return processedBookings;
       } else {

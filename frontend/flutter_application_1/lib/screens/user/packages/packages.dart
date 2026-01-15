@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 
-import 'cart.dart';
+import '../payment/cart.dart';
 import 'package:flutter_application_1/services/package_service/package_service.dart';
 import 'package:flutter_application_1/services/package_service/add_to_cart_packages.dart';
 import 'package:flutter_application_1/widgets/package_booking_modal.dart';

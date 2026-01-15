@@ -3,6 +3,25 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { BookingType } from '../service/service.schema';
 
+// 🆕 موقع العميل
+@Schema({ _id: false })
+export class ClientLocation {
+  @Prop({ type: Number })
+  latitude?: number;
+
+  @Prop({ type: Number })
+  longitude?: number;
+
+  @Prop({ type: String })
+  address?: string;
+
+  @Prop({ type: String })
+  city?: string;
+
+  @Prop({ type: String })
+  locationDescription?: string;
+}
+
 @Schema({ _id: false })
 export class CartItemBookingDetails {
   @Prop({ type: Date, required: true })
@@ -22,6 +41,14 @@ export class CartItemBookingDetails {
   // For full venue bookings
   @Prop({ type: Boolean, default: false })
   isFullVenue?: boolean;
+
+  // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
+  @Prop({ type: ClientLocation })
+  clientLocation?: ClientLocation;
+
+  // 🆕 وصف الحجز (ملاحظات خاصة من العميل)
+  @Prop({ type: String })
+  bookingDescription?: string;
 }
 
 @Schema({ _id: false })

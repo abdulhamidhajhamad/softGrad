@@ -61,6 +61,16 @@ class MessagesRepository {
         
         if (otherParticipant == null) continue;
         
+        // ✅ تحديد اسم المستخدم حسب نوعه
+        final role = otherParticipant['role']?.toString() ?? 'user';
+        String displayName;
+        if (role == 'admin') {
+          displayName = 'eventPlanner Support';
+        } else {
+          // للمستخدم العادي نظهر userName
+          displayName = otherParticipant['userName']?.toString() ?? 'User';
+        }
+        
         // ✅ Calculate unread count ONLY for messages NOT sent by me
       final messages = await ChatProviderService().fetchChatMessages(chat['_id']); 
         
@@ -80,7 +90,7 @@ class MessagesRepository {
         
         conversations.add(ConversationThread(
           id: chat['_id'],
-          customerName: otherParticipant['userName'] ?? 'Unknown',
+          customerName: displayName,
           avatarUrl: otherParticipant['imageUrl'],
           lastMessage: chat['lastMessage'] ?? 'Attachment',
           lastMessageTime: DateTime.tryParse(chat['updatedAt'] ?? chat['createdAt']) ?? DateTime.now(),

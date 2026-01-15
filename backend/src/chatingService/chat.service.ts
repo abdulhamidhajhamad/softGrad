@@ -55,17 +55,19 @@ export class ChatService {
 
   async sendMessage(senderId: string, chatId: string, content: string): Promise<{ message: Message, recipientId: string | null, newUnreadCount: number }> {
     this.logger.log(`\n🔵 ===== SEND MESSAGE START =====`);
-    this.logger.log(`Sender: ${senderId}, Chat: ${chatId}`);
+    this.logger.log(`Sender: ${senderId}, Chat: ${chatId}, Content: ${content}`);
     
     const chat = await this.chatModel.findById(chatId);
     if (!chat) {
       this.logger.error(`❌ Chat not found: ${chatId}`);
       throw new NotFoundException('Chat not found');
     }
+    this.logger.log(`✅ Chat found with participants: ${chat.participants}`);
 
-    // Create message
+    // Create message (isRead defaults to false in schema)
+    this.logger.log(`📝 Creating message...`);
     const message = await this.messageModel.create({ sender: senderId, chatId, content });
-    this.logger.log(`✅ Message created with ID: ${message._id}`);
+    this.logger.log(`✅ Message created with ID: ${message._id}, isRead: ${message.isRead}`);
     
     chat.lastMessage = content;
     
@@ -89,10 +91,17 @@ export class ChatService {
     await chat.save();
     this.logger.log(`✅ Chat updated`);
     
-    // Send via WebSocket
+    // ✅ حساب عدد الرسائل غير المقروءة للمستلم قبل إرسال الـ WebSocket
+    let newUnreadCount = 0;
+    if (recipientId) {
+      newUnreadCount = await this.getUnreadChatsCount(recipientId);
+      this.logger.log(`📊 Unread count for recipient: ${newUnreadCount}`);
+    }
+    
+    // Send via WebSocket (مع إرسال تحديث الـ unread count)
     try {
-      this.chatGateway.sendNewMessageToRoom(chatId, message);
-      this.logger.log(`✅ Message sent to WebSocket room`);
+      this.chatGateway.sendNewMessageToRoom(chatId, message, recipientId ?? undefined, newUnreadCount);
+      this.logger.log(`✅ Message sent to WebSocket room with unread count`);
     } catch (wsError) {
       this.logger.error(`❌ WebSocket error: ${wsError.message}`);
     }
@@ -123,13 +132,11 @@ export class ChatService {
       notificationTitle = `New message from ${userName}`; 
     }
 
-    let newUnreadCount = 0;
+    // newUnreadCount تم حسابه مسبقاً قبل إرسال الـ WebSocket
     
     if (recipientId) {
       this.logger.log(`\n📬 Processing notification for recipient: ${recipientId}`);
-      
-      newUnreadCount = await this.getUnreadChatsCount(recipientId);
-      this.logger.log(`📊 Unread count: ${newUnreadCount}`);
+      this.logger.log(`📊 Unread count (already calculated): ${newUnreadCount}`);
 
       const recipient = await this.userModel.findById(recipientId);
       if (!recipient) {
@@ -248,6 +255,8 @@ export class ChatService {
         throw new NotFoundException('User is not a participant in this chat');
     }
     
+    console.log(`📖 markMessagesAsRead called by userId: ${userId} for chatId: ${chatId}`);
+    
     const updateResult = await this.messageModel.updateMany(
       {
         chatId: chatId,
@@ -259,7 +268,7 @@ export class ChatService {
     
     const messagesMarkedReadCount = updateResult.modifiedCount;
     
-    console.log(`✅ Bulk Update executed. Messages marked as read: ${messagesMarkedReadCount}`);
+    console.log(`✅ Bulk Update executed. Messages marked as read: ${messagesMarkedReadCount} (marking messages NOT from ${userId})`);
 
     console.log(`📖 Updating lastRead in Chat document...`);
     
@@ -310,15 +319,24 @@ export class ChatService {
   }
 
   async getUnreadChatsCount(userId: string): Promise<number> {
+    // ✅ أولاً: جلب جميع الشاتات التي يشارك فيها المستخدم
+    const userChats = await this.chatModel.find({ participants: userId }).select('_id').lean();
+    const userChatIds = userChats.map(chat => chat._id);
+    
+    if (userChatIds.length === 0) {
+      return 0;
+    }
+    
+    // ✅ ثانياً: حساب عدد الشاتات التي فيها رسائل غير مقروءة
     const unreadChats = await this.messageModel.aggregate([
       {
         $match: {
-          $expr: {
-            $and: [
-              { $ne: [{ $toString: "$sender" }, userId] },
-              { $eq: ["$isRead", false] }
-            ]
-          }
+          // فقط الشاتات التي يشارك فيها المستخدم
+          chatId: { $in: userChatIds },
+          // رسائل ليست من المستخدم نفسه
+          sender: { $ne: new Types.ObjectId(userId) },
+          // رسائل غير مقروءة
+          isRead: false,
         },
       },
       {
@@ -328,13 +346,24 @@ export class ChatService {
       },
     ]);
     
+    this.logger.log(`📊 getUnreadChatsCount for ${userId}: ${unreadChats.length} chats with unread messages`);
     return unreadChats.length;
   }
 
 async getUnreadCountsPerChat(userId: string) {
+  // ✅ أولاً: جلب جميع الشاتات التي يشارك فيها المستخدم
+  const userChats = await this.chatModel.find({ participants: userId }).select('_id').lean();
+  const userChatIds = userChats.map(chat => chat._id);
+  
+  if (userChatIds.length === 0) {
+    return [];
+  }
+  
   const unreadCounts = await this.messageModel.aggregate([
     {
       $match: {
+        // ✅ فقط الشاتات التي يشارك فيها المستخدم
+        chatId: { $in: userChatIds },
         // 1. استبعاد الرسائل التي أرسلها المستخدم نفسه
         sender: { $ne: new Types.ObjectId(userId) },
         // 2. جلب الرسائل غير المقروءة فقط

@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/chat_provider_service.dart';
+import 'chat_screen.dart';
 
 /// Core colors – keep consistent with the rest of the app
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
@@ -456,6 +457,7 @@ class _ReviewCard extends StatefulWidget {
 class _ReviewCardState extends State<_ReviewCard> {
   bool _hasReplied = false;
   bool _isSending = false;
+  String? _chatId; // Store chat ID after first reply
 
   String _formatDate(DateTime time) {
     final day = time.day.toString().padLeft(2, '0');
@@ -618,9 +620,11 @@ class _ReviewCardState extends State<_ReviewCard> {
       );
       
       if (result['success'] == true) {
+        final chatId = result['chatId']?.toString();
         setState(() {
           _hasReplied = true;
           _isSending = false;
+          _chatId = chatId;
         });
         
         if (mounted) {
@@ -770,33 +774,39 @@ class _ReviewCardState extends State<_ReviewCard> {
                     ),
                   )
                 : _hasReplied
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.check_circle,
-                              size: 16,
-                              color: Colors.grey.shade600,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Already Replied',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey.shade600,
+                    ? ElevatedButton.icon(
+                        onPressed: () {
+                          if (_chatId != null) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ChatScreen(
+                                  conversationId: _chatId!,
+                                  customerName: widget.review.customerName,
+                                ),
                               ),
-                            ),
-                          ],
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                        label: Text(
+                          'Open Chat',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          elevation: 0,
                         ),
                       )
                     : ElevatedButton.icon(

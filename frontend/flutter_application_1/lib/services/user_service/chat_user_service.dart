@@ -105,6 +105,16 @@ class ChatUserService {
       }
       fetchUnreadCount();
       fetchUnreadPerChat();
+      
+      // ✅ الاستماع لتحديث عدد الرسائل غير المقروءة الموجه لهذا المستخدم (Real-time)
+      if (currentUserId != null) {
+        _socket?.on('unreadCount_$currentUserId', (data) {
+          final count = data['count'] ?? 0;
+          unreadGlobalCount.value = count;
+          print('📊 Real-time unread count for me: $count');
+          fetchUnreadPerChat(); // تحديث تفاصيل كل شات
+        });
+      }
     });
 
     _socket!.onDisconnect((_) {
@@ -296,9 +306,18 @@ class ChatUserService {
           final isSupport = role == 'admin';
           final isVendor = role == 'vendor';
           
-          String title = otherParticipant?['userName']?.toString() ?? 'Unknown';
+          // ✅ تحديد العنوان حسب نوع المستخدم
+          String title;
           if (isSupport) {
-            title = 'PlanMyWedding Support';
+            title = 'eventPlanner Support';
+          } else if (isVendor) {
+            // للـ vendor نستخدم companyName
+            title = otherParticipant?['companyName']?.toString() ?? 
+                    otherParticipant?['userName']?.toString() ?? 
+                    'Vendor';
+          } else {
+            // للمستخدم العادي نستخدم userName
+            title = otherParticipant?['userName']?.toString() ?? 'User';
           }
           
           final lastMessage = chatJson['lastMessage']?.toString() ?? '';

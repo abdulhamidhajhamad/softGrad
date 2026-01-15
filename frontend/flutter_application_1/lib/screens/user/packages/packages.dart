@@ -183,12 +183,165 @@ class _PackagesPageState extends State<PackagesPage> {
       // Close loading
       if (mounted) Navigator.pop(context);
 
-      // Show error
-      _toast(
-        e.toString().replaceAll('Exception: ', ''),
-        danger: true,
-      );
+      // Show conflict popup instead of toast
+      final errorMsg = e.toString().replaceAll('Exception: ', '');
+      _showBookingConflictPopup(errorMsg, package);
     }
+  }
+
+  void _showBookingConflictPopup(String message, PackageModel package) {
+    // Check if it's a time conflict or capacity issue
+    final isTimeConflict = message.toLowerCase().contains('time slot') || 
+                           message.toLowerCase().contains('fully booked') ||
+                           message.toLowerCase().contains('not available') ||
+                           message.toLowerCase().contains('conflict') ||
+                           message.toLowerCase().contains('capacity');
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon with animation
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isTimeConflict 
+                        ? [const Color(0xFFFF6B6B), const Color(0xFFFF8E53)]
+                        : [kDanger, kDanger.withOpacity(0.7)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isTimeConflict ? const Color(0xFFFF6B6B) : kDanger).withOpacity(0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  isTimeConflict ? Icons.schedule_rounded : Icons.error_outline_rounded,
+                  color: Colors.white,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // Title
+              Text(
+                isTimeConflict ? 'Booking Conflict' : 'Oops!',
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: kText,
+                ),
+              ),
+              const SizedBox(height: 12),
+              
+              // Message
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: kBg,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: kMuted,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // Hint
+              if (isTimeConflict)
+                Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline_rounded, size: 18, color: kBrandBlue),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Try selecting a different date or time',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: kBrandBlue,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 20),
+              
+              // Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: BorderSide(color: kBorder),
+                      ),
+                      child: Text(
+                        'Close',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          color: kMuted,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        // Reopen booking modal
+                        _handleAddToCart(package);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kBrandBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Try Again',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override

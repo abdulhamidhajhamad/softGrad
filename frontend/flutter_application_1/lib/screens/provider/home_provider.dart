@@ -90,6 +90,9 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> with WidgetsBin
     // ✅ جلب عدد الحجوزات غير المشاهدة
     await BookedProviderService.fetchUnseenCount();
     
+    // ✅ تهيئة اتصال الشات Real-time + جلب عدد الرسائل غير المقروءة
+    await _initializeChatConnection();
+    
     // التحقق من حالة الاتصال بعد ثانية
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
@@ -102,6 +105,32 @@ class _HomeProviderScreenState extends State<HomeProviderScreen> with WidgetsBin
         }
       }
     });
+  }
+  
+  /// ✅ تهيئة اتصال الشات Real-time
+  Future<void> _initializeChatConnection() async {
+    try {
+      // 1. تحديد userId الحالي (مهم جداً قبل initSocket)
+      final userData = await AuthService.getUserData();
+      final userId = userData?['_id']?.toString() ?? userData?['id']?.toString();
+      if (userId != null) {
+        ChatProviderService().currentUserId = userId;
+        debugPrint('💬 Chat userId set: $userId');
+      } else {
+        debugPrint('⚠️ Could not get userId for chat');
+        return;
+      }
+      
+      // 2. تهيئة Socket للشات (سيسجل الـ listener للـ unreadCount)
+      await ChatProviderService().initSocket();
+      
+      // 3. جلب عدد الرسائل غير المقروءة الأولي
+      await ChatProviderService().fetchUnreadCount();
+      
+      debugPrint('✅ Chat connection initialized, unread count: ${ChatProviderService.unreadGlobalCount.value}');
+    } catch (e) {
+      debugPrint('❌ Error initializing chat: $e');
+    }
   }
   
   /// ✅ معالجة تغييرات حالة التطبيق

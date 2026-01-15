@@ -41,6 +41,22 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
       joinChatRoom(chatId);
     }
   }
+  
+  /// ✅ تسجيل الاستماع لتحديث عدد الرسائل غير المقروءة
+  void _registerUnreadCountListener() {
+    if (currentUserId != null && _socket != null) {
+      final eventName = 'unreadCount_$currentUserId';
+      print('📡 Registering listener for: $eventName');
+      
+      _socket?.on(eventName, (data) {
+        final count = data['count'] ?? 0;
+        unreadGlobalCount.value = count;
+        print('📊 Real-time unread count received: $count');
+      });
+    } else {
+      print('⚠️ Cannot register unread listener: userId=$currentUserId, socket=${_socket != null}');
+    }
+  }
 
   Future<void> initSocket() async {
     final token = await AuthService.getToken();
@@ -73,11 +89,14 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
     _socket!.connect();
 
     _socket!.onConnect((_) {
-      print('âœ… Chat Socket Connected ID: ${_socket!.id}');
+      print('✅ Chat Socket Connected ID: ${_socket!.id}');
       if (_activeChatId != null) {
         joinChatRoom(_activeChatId!);
       }
       fetchUnreadCount();
+      
+      // ✅ تسجيل الاستماع لتحديث عدد الرسائل غير المقروءة
+      _registerUnreadCountListener();
     });
 
     _socket!.onDisconnect((_) {
@@ -251,6 +270,9 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
           String senderId = senderData is Map 
             ? _cleanId(senderData['_id'] ?? senderData['id'])
             : _cleanId(senderData);
+          
+          final isReadFromServer = msgJson['isRead'];
+          print('📩 Message: ${msgJson['content']}, isRead from server: $isReadFromServer, senderId: $senderId, currentUserId: $currentUserId');
           
           return ChatMessage(
             id: _cleanId(msgJson['_id']),

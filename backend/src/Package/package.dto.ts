@@ -1,5 +1,5 @@
 // package.dto.ts
-import { IsString, IsNumber, IsArray, ValidateNested, IsOptional, IsDateString, Min, Max } from 'class-validator';
+import { IsString, IsNumber, IsArray, ValidateNested, IsOptional, IsDateString, Min, Max, IsObject, MaxLength, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PackageServiceItemDto {
@@ -88,6 +88,30 @@ export class UpdatePackageStatusDto {
   isActive?: boolean;
 }
 
+// 🆕 DTO لموقع العميل (للخدمات التي تذهب للعميل)
+export class ClientLocationDto {
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  locationDescription?: string;
+}
+
 // DTO للحجز من الباقة
 export class BookingDetailsDto {
   @IsDateString()
@@ -115,6 +139,18 @@ export class BookingDetailsDto {
   @Min(0)
   @Max(23)
   endHour?: number;
+
+  // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ClientLocationDto)
+  clientLocation?: ClientLocationDto;
+
+  // 🆕 وصف الحجز (ملاحظات خاصة من العميل)
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  bookingDescription?: string;
 }
 
 export class PackageServiceBookingDto {

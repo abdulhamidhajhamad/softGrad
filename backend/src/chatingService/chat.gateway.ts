@@ -137,7 +137,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
 
   // ✨ الدالة الجديدة: لإرسال الرسالة عبر السوكيت من الـ Service
- async sendNewMessageToRoom(chatId: string, message: Message) {
+ async sendNewMessageToRoom(chatId: string, message: Message, recipientId?: string, newUnreadCount?: number) {
     console.log(`📡 Gateway: Emitting 'newMessage' to room ${chatId}`);
 
     // ✅ الحل: تحويل Mongoose Document إلى JavaScript Object باستخدام toJSON(). 
@@ -148,6 +148,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(chatId).emit('newMessage', {
       message: messageObject, 
     });
+    
+    // ✅ إرسال تحديث عدد الرسائل غير المقروءة للمستلم (Real-time badge update)
+    if (recipientId && newUnreadCount !== undefined) {
+      console.log(`📊 Gateway: Emitting unread count ${newUnreadCount} to user ${recipientId}`);
+      this.server.emit(`unreadCount_${recipientId}`, {
+        count: newUnreadCount,
+      });
+    }
   }
 
 }

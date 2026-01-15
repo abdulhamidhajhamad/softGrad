@@ -5,6 +5,13 @@ import { GoogleGenAI } from '@google/genai';
 import { AiSearchFilters } from './ai-search.interface'; 
 import { AiSearchBlueprint } from './ai-search.interface'; 
 
+// Interface for service priority with budget
+interface ServicePriority {
+  name: string;
+  priority: number;
+  budgetPercent?: number;
+}
+
 @Injectable()
 export class AiSearchService {
   private readonly logger = new Logger(AiSearchService.name);
@@ -32,7 +39,9 @@ export class AiSearchService {
     userTags: string[],      // 🆕 قائمة التاجز من اليوزر
     additionalNotes?: string, // 🆕 ملاحظات إضافية
     startTime?: string,
-    endTime?: string
+    endTime?: string,
+    servicePriorities?: ServicePriority[], // 🆕 أولويات الخدمات مع النسب
+    budgetFlexibility?: number, // 🆕 نسبة المرونة في الميزانية
   ): Promise<AiSearchBlueprint> {
     
     this.logger.log(`AI Search: ${eventType} in ${city}, Tags: [${userTags.join(', ')}]`);
@@ -44,10 +53,32 @@ export class AiSearchService {
       - Additional Notes: "${additionalNotes || 'None'}"
     `;
 
+    // 🆕 NEW: Check if user provided budget percentages for services
+    const hasUserBudgetPercentages = servicePriorities?.some(s => s.budgetPercent && s.budgetPercent > 0);
+    
+    // Build service constraints text if user provided percentages
+    let serviceConstraintsText = '';
+    if (hasUserBudgetPercentages && servicePriorities) {
+      const servicesBudgetText = servicePriorities
+        .filter(s => s.budgetPercent && s.budgetPercent > 0)
+        .map(s => `  - ${s.name}: ~${s.budgetPercent}% of total budget (±5% tolerance)`)
+        .join('\n');
+      
+      serviceConstraintsText = `
+      USER-DEFINED BUDGET ALLOCATION (CRITICAL - MUST FOLLOW):
+      The user has specified approximate budget percentages for each service type.
+      You MUST respect these allocations with ±5% tolerance:
+${servicesBudgetText}
+
+      IMPORTANT: Convert these percentages to budgetWeight values (percentage/100).
+      `;
+    }
+
     // حساب البدجت المتوسط والباكجات الثلاثة
+    const flexibility = budgetFlexibility || 15;
     const averageBudget = (budgetMin + budgetMax) / 2;
-    const budgetMinus15 = Math.round(averageBudget * 0.85);
-    const budgetPlus15 = Math.round(averageBudget * 1.15);
+    const budgetMinus = Math.round(averageBudget * (1 - flexibility/100));
+    const budgetPlus = Math.round(averageBudget * (1 + flexibility/100));
 
     const prompt = `
       You are an expert Event Planning AI. Your task is to create THREE comprehensive event packages based on the user's requirements.
@@ -62,12 +93,14 @@ export class AiSearchService {
 
       ${userPreferencesText}
 
+      ${serviceConstraintsText}
+
       CRITICAL INSTRUCTIONS:
 
       1. **Budget Distribution (VERY IMPORTANT)**:
-         - Package 1 (Budget-Friendly): Target price = ${budgetMinus15} (15% BELOW average budget)
+         - Package 1 (Budget-Friendly): Target price = ${budgetMinus} (${flexibility}% BELOW average budget)
          - Package 2 (Standard): Target price = ${Math.round(averageBudget)} (Within the budget range)
-         - Package 3 (Premium): Target price = ${budgetPlus15} (15% ABOVE average budget)
+         - Package 3 (Premium): Target price = ${budgetPlus} (${flexibility}% ABOVE average budget)
 
       2. **Service Priority Based on Event Type (CRITICAL)**:
          - You MUST adjust service priorities based on the event type "${eventType}".

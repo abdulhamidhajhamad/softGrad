@@ -13,6 +13,9 @@ export class PackageServiceItem {
   @Prop({ type: String }) // ✅ إضافة category
   category?: string;
 
+  @Prop({ type: String }) // ✅ نوع الحجز
+  bookingType?: string;
+
   @Prop({ type: Number, required: true })
   originalPrice: number;
 
@@ -27,6 +30,22 @@ export class PackageServiceItem {
 
   @Prop({ type: String })
   description?: string;
+
+  // 🆕 معلومات إضافية من السيرفس الأصلية
+  @Prop({ type: Boolean, default: true })
+  hasFixedLocation?: boolean;
+
+  @Prop({ type: [String] })
+  workingDays?: string[];
+
+  @Prop({ type: [Number] })
+  availableHours?: number[];
+
+  @Prop({ type: Number })
+  minBookingHours?: number;
+
+  @Prop({ type: Number })
+  maxBookingHours?: number;
 }
 
 @Schema({ timestamps: true })

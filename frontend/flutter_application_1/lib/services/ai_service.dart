@@ -24,26 +24,46 @@ class AiService {
       if (formData.city.isEmpty) {
         throw Exception('City is required');
       }
-      if (formData.eventDate == null) {
-        throw Exception('Event date is required');
-      }
-      if (formData.startTime == null || formData.endTime == null) {
-        throw Exception('Start time and end time are required');
+      if (formData.selectedServices.isEmpty) {
+        throw Exception('Please select at least one service');
       }
 
-      // Combine userTags: vibeStyles + venueType + selectedServices
+      // Use event date if provided, otherwise default to 30 days from now
+      final eventDate = formData.eventDate ?? DateTime.now().add(const Duration(days: 30));
+      
+      // Use times if provided, otherwise default
+      final startTime = formData.startTime ?? const TimeOfDay(hour: 18, minute: 0);
+      final endTime = formData.endTime ?? const TimeOfDay(hour: 23, minute: 0);
+
+      // Get services sorted by priority
+      final sortedServices = List<SelectedService>.from(formData.selectedServices)
+        ..sort((a, b) => a.priority.compareTo(b.priority));
+      
+      // Combine userTags: vibeStyles + venueType + service names
       final List<String> userTags = [
         ...formData.vibeStyles,
         formData.venueType,
-        ...formData.selectedServices,
+        ...sortedServices.map((s) => s.customName ?? s.name),
       ];
 
-      // Format time to "HH:mm" or "HH:mm AM/PM"
-      final startTimeStr = _formatTimeOfDay(formData.startTime!);
-      final endTimeStr = _formatTimeOfDay(formData.endTime!);
+      // Format time to "HH:mm"
+      final startTimeStr = _formatTimeOfDay(startTime);
+      final endTimeStr = _formatTimeOfDay(endTime);
 
       // Format date to ISO string
-      final eventDateStr = formData.eventDate!.toIso8601String();
+      final eventDateStr = eventDate.toIso8601String();
+
+      // Add custom event type if "Other" is selected
+      final effectiveEventType = formData.eventType == 'Other' && formData.customEventType != null
+          ? formData.customEventType!
+          : formData.eventType;
+
+      // 🆕 Build service priorities with budget percentages
+      final servicePriorities = sortedServices.map((s) => {
+        'name': s.customName ?? s.name,
+        'priority': s.priority,
+        'budgetPercent': s.budgetPercent,  // 🆕 Include budget percentage
+      }).toList();
 
       // Prepare request body
       final requestBody = {
@@ -51,11 +71,16 @@ class AiService {
         'guestCount': formData.guestCount,
         'budgetMin': formData.budgetRange.start.toInt(),
         'budgetMax': formData.budgetRange.end.toInt(),
-        'eventType': formData.eventType,
+        'eventType': effectiveEventType,
         'eventDate': eventDateStr,
         'startTime': startTimeStr,
         'endTime': endTimeStr,
         'userTags': userTags,
+        'venueType': formData.venueType,
+        'packagePreference': formData.packagePreference == PackagePreference.withOptions ? 'withOptions' : 'withinBudget',
+        'servicePriorities': servicePriorities,  // 🆕 Send service priorities with budgets
+        'budgetFlexibility': formData.variationPercentage,  // 🆕 Budget flexibility
+        if (formData.notes.isNotEmpty) 'additionalNotes': formData.notes,
       };
 
       print('📤 Request Body: ${json.encode(requestBody)}');
@@ -129,6 +154,122 @@ class AiService {
     } catch (e) {
       print('❌ AI Service connection test failed: $e');
       return false;
+    }
+  }
+
+  /// Search for a single service
+  static Future<SingleServiceResponse> searchSingleService(SingleServiceData data) async {
+    try {
+      print('🔍 Searching for single service...');
+      
+      // Get auth token
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Authentication required. Please login first.');
+      }
+
+      // Validate required fields
+      if (data.serviceType.isEmpty) {
+        throw Exception('Service type is required');
+      }
+      if (data.city.isEmpty) {
+        throw Exception('City is required');
+      }
+
+      // Use event date if provided, otherwise default to 30 days from now
+      final eventDate = data.eventDate ?? DateTime.now().add(const Duration(days: 30));
+      
+      // Use times if provided, otherwise default
+      final startTime = data.startTime ?? const TimeOfDay(hour: 18, minute: 0);
+      final endTime = data.endTime ?? const TimeOfDay(hour: 23, minute: 0);
+
+      // Format time to "HH:mm"
+      final startTimeStr = _formatTimeOfDay(startTime);
+      final endTimeStr = _formatTimeOfDay(endTime);
+
+      // Format date to ISO string
+      final eventDateStr = eventDate.toIso8601String();
+
+      // Add custom event type if "Other" is selected
+      final effectiveEventType = data.eventType == 'Other' && data.customEventType != null
+          ? data.customEventType!
+          : data.eventType;
+
+      // Add custom service type if "Other" is selected
+      final effectiveServiceType = data.serviceType == 'Other' && data.customServiceType != null
+          ? data.customServiceType!
+          : data.serviceType;
+
+      // Prepare request body
+      final requestBody = {
+        'category': effectiveServiceType,
+        'city': data.city,
+        'guestCount': data.guestCount,
+        'budgetMin': data.minBudget.toInt(),
+        'budgetMax': data.maxBudget.toInt(),
+        'eventType': effectiveEventType,
+        'eventDate': eventDateStr,
+        'startTime': startTimeStr,
+        'endTime': endTimeStr,
+        'venueType': data.venueType,
+        // 🆕 Add budget flexibility if enabled
+        if (data.hasBudgetFlexibility) 'budgetFlexibility': data.budgetFlexibilityPercent,
+        if (data.notes.isNotEmpty) 'notes': data.notes,
+      };
+
+      print('📤 Single Service Request: ${json.encode(requestBody)}');
+
+      // Make API call to single service endpoint
+      final response = await http.post(
+        Uri.parse('$baseUrl/ai-search/single-service'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(requestBody),
+      );
+
+      print('📥 Response Status: ${response.statusCode}');
+      print('📥 Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final dynamic responseData = json.decode(response.body);
+        List<dynamic> data;
+        
+        if (responseData is List) {
+          data = responseData;
+        } else if (responseData is Map && responseData['services'] != null) {
+          data = responseData['services'] as List;
+        } else {
+          data = [];
+        }
+        
+        if (data.isEmpty) {
+          throw Exception('No services found matching your criteria. Try adjusting your preferences.');
+        }
+
+        // Convert to ServiceSearchResult list
+        final results = data.map((serviceJson) {
+          return ServiceSearchResult.fromJson(serviceJson);
+        }).toList();
+
+        print('✅ Successfully found ${results.length} services');
+
+        return SingleServiceResponse(
+          success: true,
+          results: results,
+        );
+      } else {
+        final errorData = json.decode(response.body);
+        final errorMessage = errorData['message'] ?? 'Failed to find services';
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      print('❌ Error in searchSingleService: $e');
+      return SingleServiceResponse(
+        success: false,
+        error: e.toString().replaceAll('Exception: ', ''),
+      );
     }
   }
 }

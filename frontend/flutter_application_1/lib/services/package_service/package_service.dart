@@ -13,6 +13,11 @@ class PackageServiceItem {
   final double newPrice;
   final int? maxHours;
   final int? maxCapacity;
+  final bool hasFixedLocation;
+  final List<String> workingDays;
+  final List<int> availableHours;
+  final int? minBookingHours;
+  final int? maxBookingHours;
 
   PackageServiceItem({
     required this.serviceId,
@@ -23,6 +28,11 @@ class PackageServiceItem {
     required this.newPrice,
     this.maxHours,
     this.maxCapacity,
+    this.hasFixedLocation = true,
+    this.workingDays = const [],
+    this.availableHours = const [],
+    this.minBookingHours,
+    this.maxBookingHours,
   });
 
   factory PackageServiceItem.fromJson(Map<String, dynamic> json) {
@@ -39,6 +49,11 @@ class PackageServiceItem {
           : 0.0,
       maxHours: json['maxHours'] as int?,
       maxCapacity: json['maxCapacity'] as int?,
+      hasFixedLocation: json['hasFixedLocation'] ?? true,
+      workingDays: (json['workingDays'] as List?)?.map((e) => e.toString().toLowerCase()).toList() ?? [],
+      availableHours: (json['availableHours'] as List?)?.map((e) => (e as num).toInt()).toList() ?? [],
+      minBookingHours: json['minBookingHours'] as int?,
+      maxBookingHours: json['maxBookingHours'] as int?,
     );
   }
 }

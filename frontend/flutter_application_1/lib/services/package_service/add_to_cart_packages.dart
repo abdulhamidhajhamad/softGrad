@@ -24,19 +24,22 @@ class PackageServiceBooking {
 }
 
 /// 📅 Booking Details (matches backend DTO)
-/// ✅ Backend expects: date, startHour?, endHour?, numberOfPeople?
-/// ❌ NO isFullVenue for packages (only for regular cart items)
+/// ✅ Backend expects: date, startHour?, endHour?, numberOfPeople?, clientLocation?, bookingDescription?
 class BookingDetailsForPackage {
   final String date;
   final int? startHour;
   final int? endHour;
   final int? numberOfPeople;
+  final Map<String, dynamic>? clientLocation;
+  final String? bookingDescription;
 
   BookingDetailsForPackage({
     required this.date,
     this.startHour,
     this.endHour,
     this.numberOfPeople,
+    this.clientLocation,
+    this.bookingDescription,
   });
 
   Map<String, dynamic> toJson() {
@@ -48,6 +51,10 @@ class BookingDetailsForPackage {
     if (startHour != null) json['startHour'] = startHour;
     if (endHour != null) json['endHour'] = endHour;
     if (numberOfPeople != null) json['numberOfPeople'] = numberOfPeople;
+    if (clientLocation != null) json['clientLocation'] = clientLocation;
+    if (bookingDescription != null && bookingDescription!.trim().isNotEmpty) {
+      json['bookingDescription'] = bookingDescription;
+    }
     
     return json;
   }
@@ -122,6 +129,10 @@ class PackageCartService {
     bool? isFullVenue,
     int? maxHours,
     int? maxCapacity,
+    bool hasFixedLocation = true,
+    String? clientCity,
+    String? clientAddress,
+    String? locationDescription,
   }) {
     // 1. Check date is not in the past
     final today = DateTime.now();
@@ -179,6 +190,17 @@ class PackageCartService {
       default:
         // Display or other types - no specific validation
         break;
+    }
+
+    // ✅ Validate location for services without fixed location
+    if (!hasFixedLocation) {
+      if (clientCity == null || clientCity.isEmpty) {
+        return 'Please select your city';
+      }
+      // Address is required now
+      if (clientAddress == null || clientAddress.trim().isEmpty) {
+        return 'Please enter your address';
+      }
     }
 
     return null; // ✅ Valid

@@ -2,7 +2,7 @@
 
 import { Controller, Post, Body, HttpCode, HttpStatus, HttpException } from '@nestjs/common';
 import { AiSearchService } from './ai-search.service';
-import { AiSearchDto } from './ai-search.dto';
+import { AiSearchDto, SingleServiceSearchDto } from './ai-search.dto';
 import { AggregatedPackage, AiSearchBlueprint } from './ai-search.interface'; 
 import { PackageBuilderService } from './package-builder.service'; 
 
@@ -28,7 +28,9 @@ export class AiSearchController {
             dto.userTags,       // 🆕 تمرير التاجز
             dto.additionalNotes, // 🆕 تمرير الملاحظات
             dto.startTime,
-            dto.endTime
+            dto.endTime,
+            dto.servicePriorities, // 🆕 تمرير أولويات الخدمات مع النسب
+            dto.budgetFlexibility, // 🆕 تمرير نسبة المرونة
         );
         
         // 2. استخدام المخطط لتجميع الخدمات (هذا الجزء يبقى كما هو لا يتغير)
@@ -42,5 +44,40 @@ export class AiSearchController {
         }
 
         return aggregatedPackages;
+    }
+
+    /**
+     * 🆕 NEW: Single Service Search Endpoint
+     * البحث عن خدمة واحدة فقط بناءً على الفلاتر
+     */
+    @Post('single-service')
+    @HttpCode(HttpStatus.OK)
+    async searchSingleService(@Body() dto: SingleServiceSearchDto) {
+        const services = await this.packageBuilderService.searchSingleServiceType(
+            dto.category,
+            dto.city,
+            dto.guestCount,
+            dto.budgetMin,
+            dto.budgetMax,
+            dto.eventDate,
+            dto.startTime,
+            dto.endTime,
+            dto.budgetFlexibility,
+        );
+
+        if (!services || services.length === 0) {
+            throw new HttpException(
+                `No ${dto.category} services found matching your criteria in ${dto.city}.`,
+                HttpStatus.NOT_FOUND
+            );
+        }
+
+        return { 
+            success: true,
+            category: dto.category,
+            city: dto.city,
+            services: services,
+            count: services.length,
+        };
     }
 }

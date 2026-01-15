@@ -36,7 +36,7 @@ async createPackage(providerId: string, createPackageDto: CreatePackageDto): Pro
   // ✅ جلب الخدمات مع category و bookingType
   const existingServices = await this.serviceModel.find({ 
     _id: { $in: serviceIds } 
-  }).select('_id serviceName category bookingType price priceOptions').exec();
+  }).select('_id serviceName category bookingType price priceOptions hasFixedLocation workingDays availableHours minBookingHours maxBookingHours').exec();
 
   if (existingServices.length !== serviceIds.length) {
     throw new NotFoundException('One or more services not found.');
@@ -101,8 +101,15 @@ async createPackage(providerId: string, createPackageDto: CreatePackageDto): Pro
       serviceId: service._id,
       serviceName: service.serviceName,
       category: service.category, // ✅ إضافة category
+      bookingType: service.bookingType, // ✅ إضافة bookingType
       originalPrice: originalPrice,
       newPrice: newPrice,
+      // 🆕 معلومات إضافية من السيرفس الأصلية
+      hasFixedLocation: service.hasFixedLocation ?? true,
+      workingDays: service.workingDays || [],
+      availableHours: service.availableHours || [],
+      minBookingHours: service.minBookingHours,
+      maxBookingHours: service.maxBookingHours,
       ...(itemDto.maxHours && { maxHours: itemDto.maxHours }),
       ...(itemDto.maxCapacity && { maxCapacity: itemDto.maxCapacity }),
     };
@@ -255,9 +262,10 @@ async getActivePackages(): Promise<any[]> {
     packages.map(async (pkg) => {
       const serviceIds = pkg.services.map(s => s.serviceId);
       
+      // ✅ جلب جميع البيانات المطلوبة من السيرفس الأصلية
       const services = await this.serviceModel.find({ 
         _id: { $in: serviceIds } 
-      }).select('_id bookingType category').exec(); // ✅ أضف category
+      }).select('_id bookingType category hasFixedLocation workingDays availableHours minBookingHours maxBookingHours').exec();
 
       const enrichedServices = pkg.services.map(pkgService => {
         const fullService = services.find(
@@ -274,6 +282,12 @@ async getActivePackages(): Promise<any[]> {
           newPrice: pkgService.newPrice,
           maxHours: pkgService.maxHours,
           maxCapacity: pkgService.maxCapacity,
+          // 🆕 معلومات إضافية من السيرفس الأصلية
+          hasFixedLocation: fullService?.hasFixedLocation ?? true,
+          workingDays: fullService?.workingDays || [],
+          availableHours: fullService?.availableHours || [],
+          minBookingHours: fullService?.minBookingHours,
+          maxBookingHours: fullService?.maxBookingHours,
         };
       });
 
@@ -304,9 +318,10 @@ async getPackageById(packageId: string): Promise<any> {
   }
 
   const serviceIds = pkg.services.map(s => s.serviceId);
+  // ✅ جلب جميع البيانات المطلوبة من السيرفس الأصلية
   const services = await this.serviceModel.find({ 
     _id: { $in: serviceIds } 
-  }).select('_id bookingType category').exec();
+  }).select('_id bookingType category hasFixedLocation workingDays availableHours minBookingHours maxBookingHours').exec();
 
   const enrichedServices = pkg.services.map(pkgService => {
     const fullService = services.find(
@@ -323,6 +338,12 @@ async getPackageById(packageId: string): Promise<any> {
       newPrice: pkgService.newPrice,
       maxHours: pkgService.maxHours,
       maxCapacity: pkgService.maxCapacity,
+      // 🆕 معلومات إضافية من السيرفس الأصلية
+      hasFixedLocation: fullService?.hasFixedLocation ?? true,
+      workingDays: fullService?.workingDays || [],
+      availableHours: fullService?.availableHours || [],
+      minBookingHours: fullService?.minBookingHours,
+      maxBookingHours: fullService?.maxBookingHours,
     };
   });
 

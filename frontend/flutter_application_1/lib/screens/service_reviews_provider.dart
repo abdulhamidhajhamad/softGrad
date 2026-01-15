@@ -559,9 +559,383 @@ class _ServiceReviewsProviderScreenState extends State<ServiceReviewsProviderScr
   }
 
   Widget _buildReviewCard(ServiceReview review) {
-    final isPositive = review.rating >= 4;
-    final ratingColor = _getRatingColor(review.rating);
+    return _ServiceReviewCard(review: review);
+  }
+
+  Color _getRatingColor(int rating) {
+    if (rating >= 4) return kSuccessColor;
+    if (rating >= 3) return kWarningColor;
+    return kDangerColor;
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} weeks ago';
+    if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} months ago';
+    return '${date.day}/${date.month}/${date.year}';
+  }
+}
+
+/// Separate StatefulWidget for Review Card to manage reply state
+class _ServiceReviewCard extends StatefulWidget {
+  final ServiceReview review;
+
+  const _ServiceReviewCard({Key? key, required this.review}) : super(key: key);
+
+  @override
+  State<_ServiceReviewCard> createState() => _ServiceReviewCardState();
+}
+
+class _ServiceReviewCardState extends State<_ServiceReviewCard> {
+  bool _hasReplied = false;
+  bool _isSending = false;
+  String? _chatId;
+
+  Color _getRatingColor(int rating) {
+    if (rating >= 4) return kSuccessColor;
+    if (rating >= 3) return kWarningColor;
+    return kDangerColor;
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} weeks ago';
+    if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} months ago';
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
+  void _showReplyDialog() {
+    final TextEditingController messageController = TextEditingController();
+    final ratingColor = _getRatingColor(widget.review.rating);
     
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (dialogContext) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(dialogContext).viewInsets.bottom,
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Reply to ${widget.review.customerName}',
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: kTextColor,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: kBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: IconButton(
+                        icon: Icon(LucideIcons.x, color: kMutedColor, size: 20),
+                        onPressed: () => Navigator.pop(dialogContext),
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Review Quote
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: kBackgroundColor,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(LucideIcons.quote, size: 16, color: kPrimaryColor),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Original Review',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: kPrimaryColor,
+                              ),
+                            ),
+                          ),
+                          // Rating
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: ratingColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.star_rounded, size: 14, color: ratingColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${widget.review.rating}.0',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: ratingColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        widget.review.comment.isNotEmpty 
+                            ? widget.review.comment 
+                            : 'No comment provided',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: kMutedColor,
+                          height: 1.4,
+                          fontStyle: widget.review.comment.isEmpty 
+                              ? FontStyle.italic 
+                              : FontStyle.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // Message Input
+                Text(
+                  'Your message:',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: kTextColor,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: messageController,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.newline,
+                  style: GoogleFonts.poppins(fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Write your reply to the customer...',
+                    hintStyle: GoogleFonts.poppins(
+                      color: kMutedColor,
+                      fontSize: 13,
+                    ),
+                    filled: true,
+                    fillColor: kBackgroundColor,
+                    contentPadding: const EdgeInsets.all(14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: kPrimaryColor, width: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // Action Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: BorderSide(color: kMutedColor.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            color: kMutedColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final message = messageController.text.trim();
+                          if (message.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Please write a message',
+                                  style: GoogleFonts.poppins(),
+                                ),
+                                backgroundColor: kWarningColor,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          Navigator.pop(dialogContext);
+                          await _sendReply(message);
+                        },
+                        icon: const Icon(LucideIcons.send, size: 18),
+                        label: Text(
+                          'Send',
+                          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kPrimaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendReply(String message) async {
+    if (widget.review.visitorId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cannot identify the customer', style: GoogleFonts.poppins()),
+          backgroundColor: kWarningColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSending = true);
+
+    try {
+      final result = await ChatProviderService.startChatWithUser(
+        widget.review.visitorId,
+        message,
+      );
+
+      if (result['success'] == true) {
+        final chatId = result['chatId']?.toString() ?? result['data']?['chatId']?.toString();
+        setState(() {
+          _hasReplied = true;
+          _isSending = false;
+          _chatId = chatId;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Message sent to ${widget.review.customerName}',
+                style: GoogleFonts.poppins(),
+              ),
+              backgroundColor: kSuccessColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      } else {
+        setState(() => _isSending = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                result['message'] ?? 'Failed to send message',
+                style: GoogleFonts.poppins(),
+              ),
+              backgroundColor: kDangerColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _isSending = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}', style: GoogleFonts.poppins()),
+            backgroundColor: kDangerColor,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
+  void _openChat() {
+    if (_chatId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            conversationId: _chatId!,
+            customerName: widget.review.customerName,
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final review = widget.review;
+    final ratingColor = _getRatingColor(review.rating);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -593,19 +967,14 @@ class _ServiceReviewsProviderScreenState extends State<ServiceReviewsProviderScr
                     ],
                   ),
                   child: Center(
-                    child: review.customerAvatarUrl != null && review.customerAvatarUrl!.isNotEmpty
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: _buildDisplayImage(review.customerAvatarUrl),
-                          )
-                        : Text(
-                            review.customerName.isNotEmpty ? review.customerName[0].toUpperCase() : 'U',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              fontSize: 20,
-                            ),
-                          ),
+                    child: Text(
+                      review.customerName.isNotEmpty ? review.customerName[0].toUpperCase() : 'U',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        fontSize: 20,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -704,113 +1073,60 @@ class _ServiceReviewsProviderScreenState extends State<ServiceReviewsProviderScr
               ),
             ),
           
-          // Reply Button
+          // Reply / Open Chat Button
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
             child: SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _openChatWithCustomer(review),
-                icon: Icon(LucideIcons.messageCircle, size: 18, color: kPrimaryColor),
-                label: Text(
-                  'Reply to Customer',
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w700,
-                    color: kPrimaryColor,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  side: BorderSide(color: kPrimaryColor.withOpacity(0.3)),
-                ),
-              ),
+              child: _isSending
+                  ? Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: kPrimaryColor,
+                        ),
+                      ),
+                    )
+                  : _hasReplied
+                      ? ElevatedButton.icon(
+                          onPressed: _openChat,
+                          icon: Icon(LucideIcons.messageCircle, size: 18),
+                          label: Text(
+                            'Open Chat',
+                            style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kSuccessColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: _showReplyDialog,
+                          icon: Icon(LucideIcons.messageCircle, size: 18, color: kPrimaryColor),
+                          label: Text(
+                            'Reply to Customer',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w700,
+                              color: kPrimaryColor,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            side: BorderSide(color: kPrimaryColor.withOpacity(0.3)),
+                          ),
+                        ),
             ),
           ),
         ],
       ),
     );
-  }
-
-  /// Open chat directly with the customer without initial message
-  Future<void> _openChatWithCustomer(ServiceReview review) async {
-    if (review.visitorId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Cannot identify the customer', style: GoogleFonts.poppins()),
-          backgroundColor: kWarningColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      // Start chat without sending initial message
-      final result = await ChatProviderService.startChatWithUser(
-        review.visitorId,
-        '', // No initial message
-      );
-
-      setState(() => _isLoading = false);
-
-      if (result['success'] == true) {
-        final chatId = result['chatId'] ?? result['data']?['chatId'];
-        if (chatId != null && mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                conversationId: chatId,
-                customerName: review.customerName,
-              ),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result['message'] ?? 'Failed to open chat', style: GoogleFonts.poppins()),
-              backgroundColor: kDangerColor,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}', style: GoogleFonts.poppins()),
-            backgroundColor: kDangerColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      }
-    }
-  }
-
-  Color _getRatingColor(int rating) {
-    if (rating >= 4) return kSuccessColor;
-    if (rating >= 3) return kWarningColor;
-    return kDangerColor;
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-    if (diff.inDays == 0) return 'Today';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays} days ago';
-    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} weeks ago';
-    if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} months ago';
-    return '${date.day}/${date.month}/${date.year}';
   }
 }

@@ -57,11 +57,53 @@ class _MyAppState extends State<MyApp> {
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
   late AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSubscription;
+  
+  // ✅ متغيرات لتحديد الصفحة الأولى
+  String? _initialRoute;
+  Map<String, dynamic>? _initialRouteArgs;
+  bool _initialCheckDone = false;
 
   @override
   void initState() {
     super.initState();
+    _checkInitialUrlSync(); // ✅ فحص الـ URL فوراً قبل أي شيء
     _initDeepLinks();
+  }
+  
+  /// ✅ فحص الـ URL فوراً عند بدء التشغيل (متزامن)
+  void _checkInitialUrlSync() {
+    if (kIsWeb) {
+      try {
+        final currentUrl = Uri.base.toString();
+        print('🌐 Initial URL check: $currentUrl');
+        
+        if (currentUrl.contains('reset-password')) {
+          final uri = Uri.parse(currentUrl);
+          final fragment = uri.fragment;
+          
+          if (fragment.isNotEmpty && fragment.contains('reset-password')) {
+            String? token;
+            String? email;
+            
+            if (fragment.contains('?')) {
+              final queryPart = fragment.split('?').last;
+              final fragmentParams = Uri.splitQueryString(queryPart);
+              token = fragmentParams['token'];
+              email = fragmentParams['email'];
+            }
+            
+            if (token != null && email != null) {
+              print('✅ Reset password detected - Token: ${token.substring(0, 10)}..., Email: $email');
+              _initialRoute = '/reset-password';
+              _initialRouteArgs = {'token': token, 'email': email};
+            }
+          }
+        }
+      } catch (e) {
+        print('❌ Error in initial URL check: $e');
+      }
+    }
+    _initialCheckDone = true;
   }
 
   @override
@@ -100,12 +142,41 @@ class _MyAppState extends State<MyApp> {
       final currentUrl = Uri.base.toString();
       print('🌐 Current URL on startup: $currentUrl');
 
-      final uri = Uri.parse(currentUrl);
-
       // تحقق من وجود reset-password في الرابط
       if (currentUrl.contains('reset-password')) {
         print('✅ Reset password link detected in URL');
-        _handleDeepLink(uri);
+        
+        // ✅ استخراج الـ fragment من الرابط (بعد #)
+        final uri = Uri.parse(currentUrl);
+        final fragment = uri.fragment; // مثال: /reset-password?token=...&email=...
+        
+        if (fragment.isNotEmpty && fragment.contains('reset-password')) {
+          String? token;
+          String? email;
+          
+          // استخراج الـ query parameters من الـ fragment
+          if (fragment.contains('?')) {
+            final queryPart = fragment.split('?').last;
+            final fragmentParams = Uri.splitQueryString(queryPart);
+            token = fragmentParams['token'];
+            email = fragmentParams['email'];
+          }
+          
+          print('🔑 Token from URL: ${token?.substring(0, 10) ?? 'null'}...');
+          print('📧 Email from URL: $email');
+          
+          if (token != null && email != null) {
+            // ✅ الانتقال مباشرة لصفحة إعادة تعيين كلمة المرور
+            Future.delayed(const Duration(milliseconds: 100), () {
+              navigatorKey.currentState?.pushNamedAndRemoveUntil(
+                '/reset-password',
+                (route) => false,
+                arguments: {'token': token, 'email': email},
+              );
+            });
+            return; // ✅ خروج مبكر لمنع أي معالجة إضافية
+          }
+        }
       }
     } catch (e) {
       print('❌ Error checking current URL: $e');
@@ -144,14 +215,17 @@ class _MyAppState extends State<MyApp> {
         email = fragmentParams['email'];
       }
 
-      print('🔑 Token: ${token?.substring(0, 10)}...');
+      if (token != null) {
+        print('🔑 Token: ${token.substring(0, 10)}...');
+      }
       print('📧 Email: $email');
 
       if (token != null && email != null) {
-        // الانتقال لصفحة إعادة تعيين كلمة المرور
-        Future.delayed(const Duration(milliseconds: 500), () {
-          navigatorKey.currentState?.pushNamed(
+        // ✅ الانتقال لصفحة إعادة تعيين كلمة المرور باستخدام pushNamedAndRemoveUntil
+        Future.delayed(const Duration(milliseconds: 100), () {
+          navigatorKey.currentState?.pushNamedAndRemoveUntil(
             '/reset-password',
+            (route) => false,
             arguments: {'token': token, 'email': email},
           );
         });
@@ -163,6 +237,17 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ تحديد الصفحة الأولى بناءً على الـ URL
+    Widget homeWidget;
+    if (_initialRoute == '/reset-password' && _initialRouteArgs != null) {
+      homeWidget = ResetPasswordScreen(
+        token: _initialRouteArgs!['token'],
+        email: _initialRouteArgs!['email'],
+      );
+    } else {
+      homeWidget = const SplashScreen();
+    }
+    
     return MaterialApp(
       title: 'PlanMyWedding',
       debugShowCheckedModeBanner: false,
@@ -178,7 +263,7 @@ class _MyAppState extends State<MyApp> {
           secondary: const Color(0xFF1414D7),
         ),
       ),
-      home: const SplashScreen(),
+      home: homeWidget, // ✅ استخدام الصفحة المحددة بناءً على الـ URL
       routes: {
         '/onboarding': (_) => const OnboardingScreen(),
         '/choose_role': (_) => const ChooseRoleScreen(),

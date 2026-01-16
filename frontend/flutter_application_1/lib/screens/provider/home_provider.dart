@@ -16,7 +16,7 @@ import 'package:flutter_application_1/screens/provider/booking_provider.dart';
 import 'package:flutter_application_1/screens/messages_provider.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
 import 'package:flutter_application_1/screens/reviews_provider.dart';
-import 'package:flutter_application_1/screens/packages_provider.dart';
+import 'package:flutter_application_1/screens/provider/packages_provider.dart';
 import 'package:flutter_application_1/screens/user/home/home_customer.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);

@@ -22,7 +22,7 @@ Available wedding categories:
 - Flower Shops
 - Decor & Lighting
 - Music & Entertainment
-- Wedding Planners & Coordinators
+- Event Planners & Coordinators
 - Card Printing
 - Jewelry & Accessories
 - Car Rental & Transportation

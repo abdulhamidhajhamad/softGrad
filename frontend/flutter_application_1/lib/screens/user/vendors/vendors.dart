@@ -46,7 +46,7 @@ class VendorsListPage extends StatefulWidget {
     },
     {
       'type': 'Full Wedding Management and Coordination',
-      'name': 'Wedding Planners & Coordinators',
+      'name': 'Event Planners & Coordinators',
       'icon': Icons.event,
     },
     {

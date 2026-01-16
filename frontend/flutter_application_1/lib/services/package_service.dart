@@ -1,6 +1,7 @@
 // lib/services/package_service.dart
 
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/service_service.dart';
@@ -137,6 +138,7 @@ static Future<void> createPackage({
     DateTime? startDate,
     DateTime? endDate,
     String? imageUrl,
+    Uint8List? coverImageBytes, // ✅ صورة الغلاف (اختيارية)
   }) async {
     try {
       final token = await AuthService.getToken();
@@ -152,32 +154,53 @@ static Future<void> createPackage({
         };
       }).toList();
 
-final body = jsonEncode({
-  'packageName': packageName,
-  'services': formattedServices,
-  'newPrice': totalPrice,
-  'startDate': startDate?.toIso8601String(),
-  'endDate': endDate?.toIso8601String(),
-  'packageImageUrl': imageUrl,
-});
+      final packageData = {
+        'packageName': packageName,
+        'services': formattedServices,
+        'newPrice': totalPrice,
+        'startDate': startDate?.toIso8601String(),
+        'endDate': endDate?.toIso8601String(),
+        'packageImageUrl': imageUrl,
+      };
 
-      print("📤 Sending Body: $body"); // للطباعة والتأكد في الـ Debug Console
+      // ✅ إذا كانت هناك صورة، نستخدم MultipartRequest
+      if (coverImageBytes != null && coverImageBytes.isNotEmpty) {
+        final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/packages'));
+        request.headers.addAll({'Authorization': 'Bearer $token'});
+        request.fields['data'] = jsonEncode(packageData);
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'coverImage',
+            coverImageBytes,
+            filename: 'cover.jpg',
+          ),
+        );
 
-      final res = await http.post(
-        Uri.parse('$baseUrl/packages'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: body,
-      );
+        final streamed = await request.send();
+        final res = await http.Response.fromStream(streamed);
 
-      if (res.statusCode == 201 || res.statusCode == 200) {
-        return;
+        if (res.statusCode == 201 || res.statusCode == 200) {
+          return;
+        }
+
+        final data = _decodeJsonSafe(res.body);
+        throw Exception(_extractMessage(data) ?? 'Failed to create package.');
+      } else {
+        // ✅ بدون صورة - نستخدم JSON عادي مع form-data
+        final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/packages'));
+        request.headers.addAll({'Authorization': 'Bearer $token'});
+        request.fields['data'] = jsonEncode(packageData);
+
+        final streamed = await request.send();
+        final res = await http.Response.fromStream(streamed);
+
+        if (res.statusCode == 201 || res.statusCode == 200) {
+          return;
+        }
+
+        final data = _decodeJsonSafe(res.body);
+        throw Exception(_extractMessage(data) ?? 'Failed to create package.');
       }
-
-      final data = _decodeJsonSafe(res.body);
-      throw Exception(_extractMessage(data) ?? 'Failed to create package.');
     } catch (e) {
       print('❌ Error in createPackage: $e');
       rethrow;
@@ -241,39 +264,51 @@ final body = jsonEncode({
   static Future<void> updatePackage({
   required String packageId,
   required String newPackageName,
-  required List<String> newServiceIds,
+  required List<Map<String, dynamic>> services, // ✅ تم التغيير: الآن نستقبل map كامل مع الأسعار
   required double newPrice,
   DateTime? startDate,
   DateTime? endDate,
+  Uint8List? newCoverImageBytes, // ✅ صورة غلاف جديدة (اختيارية)
+  String? existingImageUrl, // ✅ URL الصورة الحالية (للحفاظ عليها)
 }) async {
   try {
     final token = await AuthService.getToken();
     if (token == null) throw Exception('Authentication token not found.');
 
-    // تحضير البيانات التي سيتم إرسالها (قد تحتاج لتعديلها حسب متطلبات الـ Backend)
-final List<Map<String, dynamic>> formattedServices = newServiceIds.map((id) {
-  return {
-    'serviceId': id,
-    'newPrice': newPrice / newServiceIds.length, // أو حسب اللوجيك المطلوب
-  };
-}).toList();
+    // تحضير البيانات
+    final List<Map<String, dynamic>> formattedServices = services.map((s) {
+      return {
+        'serviceId': s['serviceId'] ?? s['id'],
+        'newPrice': s['newPrice'] ?? s['customPrice'] ?? 0.0,
+      };
+    }).toList();
 
-final body = jsonEncode({
-  'packageName': newPackageName,
-  'services': formattedServices,
-  'newPrice': newPrice,
-  'startDate': startDate?.toIso8601String(),
-  'endDate': endDate?.toIso8601String(),
-});
+    final packageData = {
+      'packageName': newPackageName,
+      'services': formattedServices,
+      'newPrice': newPrice,
+      'startDate': startDate?.toIso8601String(),
+      'endDate': endDate?.toIso8601String(),
+    };
 
-    final res = await http.put( // نستخدم PUT أو PATCH للتعديل
-      Uri.parse('$baseUrl/packages/$packageId'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: body,
-    );
+    // ✅ استخدام MultipartRequest للتحديث (مع أو بدون صورة)
+    final request = http.MultipartRequest('PUT', Uri.parse('$baseUrl/packages/$packageId'));
+    request.headers.addAll({'Authorization': 'Bearer $token'});
+    request.fields['data'] = jsonEncode(packageData);
+
+    // ✅ إذا كانت هناك صورة جديدة
+    if (newCoverImageBytes != null && newCoverImageBytes.isNotEmpty) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'coverImage',
+          newCoverImageBytes,
+          filename: 'cover.jpg',
+        ),
+      );
+    }
+
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
 
     if (res.statusCode == 200) return;
 

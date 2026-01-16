@@ -61,7 +61,7 @@ class _PackagesPageState extends State<PackagesPage> {
     'Flower Shops',
     'Decor & Lighting',
     'Music & Entertainment',
-    'Wedding Planners & Coordinators',
+    'Event Planners & Coordinators',
     'Card Printing',
     'Jewelry & Accessories',
     'Car Rental & Transportation',
@@ -565,7 +565,7 @@ class _CategoryStrip extends StatelessWidget {
         return Icons.lightbulb_rounded;
       case 'Music & Entertainment':
         return Icons.music_note_rounded;
-      case 'Wedding Planners & Coordinators':
+      case 'Event Planners & Coordinators':
         return Icons.event_available_rounded;
       case 'Card Printing':
         return Icons.mail_rounded;

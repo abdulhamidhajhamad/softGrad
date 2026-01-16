@@ -358,7 +358,8 @@ static Future<Map<String, dynamic>> addService({
   final bool hasFixedLocation = form['hasFixedLocation'] ?? true;
 
   final highlights = _normalizeHighlights(form['highlights']);
-  final imageFilesData = _normalizeImages(form['coverImage'], form['images']);
+  // ✅ Fix: Also check for mediaItems (new multi-media format)
+  final imageFilesData = _normalizeImages(form['coverImage'], form['images'], form['mediaItems']);
 
   String companyName = (form['companyName'] ?? '').toString().trim();
   if (companyName.isEmpty) {
@@ -657,14 +658,47 @@ static Future<Map<String, dynamic>> addService({
   }
 
   static List<Map<String, dynamic>> _normalizeImages(
-      dynamic cover, dynamic images) {
+      dynamic cover, dynamic images, dynamic mediaItems) {
     final out = <Map<String, dynamic>>[];
 
-    void addBytes(Uint8List bytes, {String name = 'cover.jpg'}) {
+    void addBytes(Uint8List bytes, {String name = 'cover.jpg', bool isVideo = false}) {
       if (bytes.isEmpty) return;
-      out.add({'bytes': bytes.toList(), 'name': name});
+      // ✅ Determine extension based on video flag
+      String finalName = name;
+      if (isVideo && !name.toLowerCase().endsWith('.mp4') && !name.toLowerCase().endsWith('.mov')) {
+        finalName = name.replaceAll(RegExp(r'\.[^.]+$'), '.mp4');
+        if (finalName == name) finalName = '$name.mp4';
+      }
+      out.add({'bytes': bytes.toList(), 'name': finalName});
     }
 
+    // ✅ Priority 1: Process mediaItems (new multi-media format from add service screens)
+    if (mediaItems is List && mediaItems.isNotEmpty) {
+      int i = 0;
+      for (final item in mediaItems) {
+        i++;
+        if (item is Map) {
+          final bytesRaw = item['bytes'];
+          final isVideo = item['isVideo'] == true;
+          final fileName = (item['fileName'] ?? (isVideo ? 'video_$i.mp4' : 'image_$i.jpg')).toString();
+          
+          Uint8List? bytes;
+          if (bytesRaw is Uint8List) {
+            bytes = bytesRaw;
+          } else if (bytesRaw is List<int>) {
+            bytes = Uint8List.fromList(bytesRaw);
+          }
+          
+          if (bytes != null && bytes.isNotEmpty) {
+            addBytes(bytes, name: fileName, isVideo: isVideo);
+          }
+        }
+      }
+      // If we got media from mediaItems, return early
+      if (out.isNotEmpty) return out;
+    }
+
+    // ✅ Priority 2: Process cover image (backwards compatibility)
     if (cover is Uint8List) {
       addBytes(cover, name: 'cover.jpg');
     } else if (cover is Map) {
@@ -674,6 +708,7 @@ static Future<Map<String, dynamic>> addService({
       if (b is List<int>) out.add({'bytes': b, 'name': n});
     }
 
+    // ✅ Priority 3: Process images list (backwards compatibility)
     if (images is List) {
       int i = 0;
       for (final item in images) {

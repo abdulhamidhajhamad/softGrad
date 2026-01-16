@@ -18,6 +18,7 @@ class PackageServiceItem {
   final List<int> availableHours;
   final int? minBookingHours;
   final int? maxBookingHours;
+  final String? imageUrl; // ✅ Service image
 
   PackageServiceItem({
     required this.serviceId,
@@ -33,9 +34,18 @@ class PackageServiceItem {
     this.availableHours = const [],
     this.minBookingHours,
     this.maxBookingHours,
+    this.imageUrl,
   });
 
   factory PackageServiceItem.fromJson(Map<String, dynamic> json) {
+    // ✅ Extract image URL from mediaItems if available
+    String? imgUrl;
+    if (json['mediaItems'] != null && (json['mediaItems'] as List).isNotEmpty) {
+      imgUrl = json['mediaItems'][0]['url']?.toString();
+    } else if (json['imageUrl'] != null) {
+      imgUrl = json['imageUrl']?.toString();
+    }
+
     return PackageServiceItem(
       serviceId: json['serviceId']?.toString() ?? '',
       serviceName: json['serviceName']?.toString() ?? '',
@@ -54,6 +64,7 @@ class PackageServiceItem {
       availableHours: (json['availableHours'] as List?)?.map((e) => (e as num).toInt()).toList() ?? [],
       minBookingHours: json['minBookingHours'] as int?,
       maxBookingHours: json['maxBookingHours'] as int?,
+      imageUrl: imgUrl,
     );
   }
 }

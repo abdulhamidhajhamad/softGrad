@@ -1,11 +1,13 @@
 // lib/screens/provider/service_details_provider.dart
 // Modern Service Details Page for Provider
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:video_player/video_player.dart';
 
 import '../user/profile/favorites.dart';
 import '../user/payment/cart.dart' as cart;
@@ -63,6 +65,12 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
+  // ✅ Media Slider State
+  List<String> _mediaUrls = [];
+  int _currentMediaIndex = 0;
+  late PageController _mediaPageController;
+  Timer? _autoSlideTimer;
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +78,8 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
       (s) => s.id == widget.serviceId,
       orElse: () => widget.companyServices.first,
     );
+    
+    _mediaPageController = PageController();
     
     _animController = AnimationController(
       vsync: this,
@@ -84,7 +94,34 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
   @override
   void dispose() {
     _animController.dispose();
+    _autoSlideTimer?.cancel();
+    _mediaPageController.dispose();
     super.dispose();
+  }
+  
+  // ✅ Start auto-slide timer
+  void _startAutoSlide() {
+    _autoSlideTimer?.cancel();
+    if (_mediaUrls.length <= 1) return;
+    
+    _autoSlideTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      
+      final nextIndex = (_currentMediaIndex + 1) % _mediaUrls.length;
+      _mediaPageController.animateToPage(
+        nextIndex,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+  
+  // ✅ Reset timer when user interacts
+  void _resetAutoSlide() {
+    _startAutoSlide();
   }
 
   Future<void> _loadServiceDetails() async {
@@ -103,8 +140,26 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
         }
 
         _bookingType = data['bookingType']?.toString().toLowerCase();
+        
+        // ✅ Extract media URLs from images array
+        _mediaUrls = [];
+        if (data['images'] != null && data['images'] is List) {
+          for (var img in data['images']) {
+            if (img != null && img.toString().isNotEmpty) {
+              _mediaUrls.add(img.toString());
+            }
+          }
+        }
+        // Fallback to single image if no images array
+        if (_mediaUrls.isEmpty && _service?.imageUrl != null && _service!.imageUrl!.isNotEmpty) {
+          _mediaUrls.add(_service!.imageUrl!);
+        }
+        
         _isLoading = false;
       });
+      
+      // Start auto-slide after data is loaded
+      _startAutoSlide();
       
       _animController.forward();
     } catch (e) {
@@ -297,7 +352,7 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
 
   Widget _buildSliverAppBar(ServiceItem s) {
     return SliverAppBar(
-      expandedHeight: 280,
+      expandedHeight: 320,
       pinned: true,
       backgroundColor: Colors.white,
       elevation: 0.5,
@@ -350,7 +405,7 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
             },
           ),
         ),
-        // Cart Button
+        // Chat Button
         Container(
           margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
           decoration: BoxDecoration(
@@ -368,72 +423,225 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Image
-            if (s.imageUrl != null && s.imageUrl!.isNotEmpty)
-              Image.network(
-                s.imageUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: kPrimaryColor.withOpacity(0.1),
-                  child: const Icon(Icons.image_rounded, size: 64, color: kMutedColor),
-                ),
-              )
-            else
-              Container(
-                color: kPrimaryColor.withOpacity(0.1),
-                child: const Icon(Icons.image_rounded, size: 64, color: kMutedColor),
+        background: _buildMediaSlider(s),
+      ),
+    );
+  }
+
+  // ✅ Modern Media Slider Widget
+  Widget _buildMediaSlider(ServiceItem s) {
+    // If no media, show placeholder
+    if (_mediaUrls.isEmpty) {
+      return Container(
+        color: kPrimaryColor.withOpacity(0.1),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.image_rounded, size: 64, color: kMutedColor),
+              const SizedBox(height: 8),
+              Text(
+                'No images',
+                style: GoogleFonts.poppins(color: kMutedColor, fontSize: 14),
               ),
-            // Gradient overlay
-            Container(
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () => _openFullScreenGallery(0),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // ✅ PageView for sliding
+          PageView.builder(
+            controller: _mediaPageController,
+            onPageChanged: (index) {
+              setState(() => _currentMediaIndex = index);
+              _resetAutoSlide();
+            },
+            itemCount: _mediaUrls.length,
+            itemBuilder: (context, index) {
+              final url = _mediaUrls[index];
+              final isVideo = _isVideoUrl(url);
+              
+              if (isVideo) {
+                return _VideoThumbnail(
+                  url: url,
+                  onTap: () => _openFullScreenGallery(index),
+                );
+              }
+              
+              return GestureDetector(
+                onTap: () => _openFullScreenGallery(index),
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      color: Colors.grey.shade200,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded / 
+                                loadingProgress.expectedTotalBytes!
+                              : null,
+                          color: kPrimaryColor,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, __, ___) => Container(
+                    color: kPrimaryColor.withOpacity(0.1),
+                    child: const Icon(Icons.broken_image_rounded, 
+                        size: 64, color: kMutedColor),
+                  ),
+                ),
+              );
+            },
+          ),
+          
+          // ✅ Gradient overlay
+          Positioned.fill(
+            child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
+                    Colors.black.withOpacity(0.1),
                     Colors.transparent,
-                    Colors.black.withOpacity(0.3),
+                    Colors.black.withOpacity(0.4),
                   ],
+                  stops: const [0.0, 0.4, 1.0],
                 ),
               ),
             ),
-            // Category Badge
+          ),
+          
+          // ✅ Modern Dot Indicators
+          if (_mediaUrls.length > 1)
             Positioned(
-              left: 16,
-              bottom: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+              bottom: 60,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  _mediaUrls.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: _currentMediaIndex == index ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _currentMediaIndex == index 
+                          ? Colors.white 
+                          : Colors.white.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 4,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                ),
+              ),
+            ),
+          
+          // ✅ Image Counter Badge
+          if (_mediaUrls.length > 1)
+            Positioned(
+              top: 100,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(LucideIcons.tag, size: 14, color: kPrimaryColor),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.photo_library_rounded, 
+                        size: 14, color: Colors.white),
+                    const SizedBox(width: 4),
                     Text(
-                      s.category,
+                      '${_currentMediaIndex + 1}/${_mediaUrls.length}',
                       style: GoogleFonts.poppins(
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: kPrimaryColor,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-          ],
+          
+          // ✅ Category Badge
+          Positioned(
+            left: 16,
+            bottom: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.tag, size: 14, color: kPrimaryColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    s.category,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: kPrimaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ Check if URL is a video
+  bool _isVideoUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.contains('.mp4') || 
+           lower.contains('.mov') || 
+           lower.contains('.avi') ||
+           lower.contains('.webm') ||
+           lower.contains('video');
+  }
+
+  // ✅ Open full screen gallery
+  void _openFullScreenGallery(int initialIndex) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _FullScreenGallery(
+          mediaUrls: _mediaUrls,
+          initialIndex: initialIndex,
         ),
       ),
     );
@@ -1356,6 +1564,367 @@ class _CartIconButton extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+// =====================
+// Video Thumbnail Widget
+// =====================
+class _VideoThumbnail extends StatefulWidget {
+  final String url;
+  final VoidCallback onTap;
+
+  const _VideoThumbnail({
+    required this.url,
+    required this.onTap,
+  });
+
+  @override
+  State<_VideoThumbnail> createState() => _VideoThumbnailState();
+}
+
+class _VideoThumbnailState extends State<_VideoThumbnail> {
+  VideoPlayerController? _controller;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initVideo();
+  }
+
+  void _initVideo() async {
+    try {
+      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+      await _controller?.initialize();
+      if (mounted) {
+        setState(() => _initialized = true);
+      }
+    } catch (e) {
+      print('Video init error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_initialized && _controller != null)
+            FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: _controller!.value.size.width,
+                height: _controller!.value.size.height,
+                child: VideoPlayer(_controller!),
+              ),
+            )
+          else
+            Container(
+              color: Colors.grey.shade900,
+              child: const Center(
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
+          // Play icon overlay
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 48,
+              ),
+            ),
+          ),
+          // Video badge
+          Positioned(
+            top: 100,
+            left: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.videocam_rounded, size: 14, color: Colors.white),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Video',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =====================
+// Full Screen Gallery
+// =====================
+class _FullScreenGallery extends StatefulWidget {
+  final List<String> mediaUrls;
+  final int initialIndex;
+
+  const _FullScreenGallery({
+    required this.mediaUrls,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_FullScreenGallery> createState() => _FullScreenGalleryState();
+}
+
+class _FullScreenGalleryState extends State<_FullScreenGallery> {
+  late PageController _pageController;
+  late int _currentIndex;
+  VideoPlayerController? _videoController;
+  bool _isVideoPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+    _checkAndLoadVideo();
+  }
+
+  void _checkAndLoadVideo() {
+    _disposeVideo();
+    final url = widget.mediaUrls[_currentIndex];
+    if (_isVideoUrl(url)) {
+      _initVideo(url);
+    }
+  }
+
+  void _initVideo(String url) async {
+    try {
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
+      await _videoController?.initialize();
+      if (mounted) setState(() {});
+    } catch (e) {
+      print('Video error: $e');
+    }
+  }
+
+  void _disposeVideo() {
+    _videoController?.pause();
+    _videoController?.dispose();
+    _videoController = null;
+    _isVideoPlaying = false;
+  }
+
+  bool _isVideoUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.contains('.mp4') || 
+           lower.contains('.mov') || 
+           lower.contains('.avi') ||
+           lower.contains('.webm') ||
+           lower.contains('video');
+  }
+
+  @override
+  void dispose() {
+    _disposeVideo();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text(
+          '${_currentIndex + 1} / ${widget.mediaUrls.length}',
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        onPageChanged: (index) {
+          setState(() => _currentIndex = index);
+          _checkAndLoadVideo();
+        },
+        itemCount: widget.mediaUrls.length,
+        itemBuilder: (context, index) {
+          final url = widget.mediaUrls[index];
+          final isVideo = _isVideoUrl(url);
+          
+          if (isVideo && index == _currentIndex && _videoController != null) {
+            return _buildVideoPlayer();
+          } else if (isVideo) {
+            return _buildVideoPlaceholder(url);
+          }
+          
+          return InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Center(
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded / 
+                            loadingProgress.expectedTotalBytes!
+                          : null,
+                      color: Colors.white,
+                    ),
+                  );
+                },
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.broken_image_rounded,
+                  size: 64,
+                  color: Colors.white54,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+      // Bottom indicator
+      bottomNavigationBar: widget.mediaUrls.length > 1
+          ? Container(
+              color: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  widget.mediaUrls.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentIndex == index ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _currentIndex == index 
+                          ? Colors.white 
+                          : Colors.white.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+
+  Widget _buildVideoPlayer() {
+    if (_videoController == null || !_videoController!.value.isInitialized) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (_videoController!.value.isPlaying) {
+            _videoController!.pause();
+            _isVideoPlaying = false;
+          } else {
+            _videoController!.play();
+            _isVideoPlaying = true;
+          }
+        });
+      },
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Center(
+            child: AspectRatio(
+              aspectRatio: _videoController!.value.aspectRatio,
+              child: VideoPlayer(_videoController!),
+            ),
+          ),
+          // Play/Pause overlay
+          AnimatedOpacity(
+            opacity: _isVideoPlaying ? 0.0 : 1.0,
+            duration: const Duration(milliseconds: 200),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _isVideoPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 48,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVideoPlaceholder(String url) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.videocam_rounded,
+              color: Colors.white,
+              size: 48,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Swipe to view video',
+            style: GoogleFonts.poppins(
+              color: Colors.white54,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

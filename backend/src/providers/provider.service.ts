@@ -126,20 +126,15 @@ async remove(userId: string, companyName: string, isAdmin = false): Promise<Dele
 
 async findByName(userId: string, companyName: string): Promise<ServiceProvider> {
   const userObjectId = new Types.ObjectId(userId);
-  
   const company = await this.providerModel.findOne({ 
     userId: userObjectId,
     companyName 
   });
-  
   if (!company) throw new NotFoundException('Company not found or you do not have access');
-  
   return company;
 }
-
 async findCompanyNameByUserId(userId: string): Promise<string> {
   const userObjectId = new Types.ObjectId(userId);
-  
   // البحث عن أول شركة تابعة لهذا المستخدم واختيار حقل companyName فقط
   const company = await this.providerModel.findOne(
     { userId: userObjectId },
@@ -152,8 +147,6 @@ async findCompanyNameByUserId(userId: string): Promise<string> {
   
   return company.companyName;
 }
-
-
 async findProviderDetails(userId: string): Promise<any> {
   const userObjectId = new Types.ObjectId(userId);
 

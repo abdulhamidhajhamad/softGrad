@@ -107,10 +107,12 @@ class _AddOtherServiceState extends State<AddOtherService> {
   double? _savedAmount;
 
   // =====================================================
-  // 🖼️ Gallery + Highlights
+  // 🖼️ Gallery + Additional Info
   // =====================================================
-  Uint8List? _coverImage;
-  final List<Map<String, String>> _highlights = [];
+  // ✅ Multi-media gallery (up to 10 images/videos)
+  final List<MediaItem> _mediaItems = [];
+  static const int _maxMediaItems = 10;
+  final List<Map<String, String>> _additionalInfo = [];
 
   // =====================================================
   // 🔄 State
@@ -174,69 +176,81 @@ class _AddOtherServiceState extends State<AddOtherService> {
   // =====================================================
   // 🖼️ Image Picker
   // =====================================================
-  Future<void> _pickImage() async {
+  Future<void> _pickImages() async {
+    if (_mediaItems.length >= _maxMediaItems) {
+      _showSnack("You can't upload more than $_maxMediaItems items");
+      return;
+    }
+
     final picker = ImagePicker();
-    final file = await picker.pickImage(source: ImageSource.gallery);
+    final files = await picker.pickMultiImage();
+    if (files.isEmpty) return;
+
+    final remainingSlots = _maxMediaItems - _mediaItems.length;
+    final filesToAdd = files.take(remainingSlots).toList();
+
+    if (files.length > remainingSlots) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Only $remainingSlots more items can be added. Some images were skipped.",
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+
+    for (final file in filesToAdd) {
+      final bytes = await file.readAsBytes();
+      setState(() {
+        _mediaItems.add(MediaItem(
+          bytes: bytes,
+          isVideo: false,
+          fileName: file.name,
+        ));
+      });
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    if (_mediaItems.length >= _maxMediaItems) {
+      _showSnack("You can't upload more than $_maxMediaItems items");
+      return;
+    }
+
+    final picker = ImagePicker();
+    final file = await picker.pickVideo(source: ImageSource.gallery);
     if (file == null) return;
 
     final bytes = await file.readAsBytes();
-    setState(() => _coverImage = bytes);
+    setState(() {
+      _mediaItems.add(MediaItem(
+        bytes: bytes,
+        isVideo: true,
+        fileName: file.name,
+      ));
+    });
+  }
+
+  void _removeMediaItem(int index) {
+    setState(() {
+      _mediaItems.removeAt(index);
+    });
   }
 
   // =====================================================
-  // ✨ Highlight Dialog
+  // ✨ Additional Info Methods
   // =====================================================
-  Future<void> _addHighlight() async {
-    final keyCtrl = TextEditingController();
-    final valCtrl = TextEditingController();
+  Future<void> _addAdditionalInfo() async {
+    final result = await showAddInfoDialog(context);
+    if (result != null) {
+      setState(() => _additionalInfo.add(result));
+    }
+  }
 
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(
-          "Add Highlight",
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: keyCtrl,
-              decoration: InputDecoration(
-                hintText: "Key (e.g. Duration, Style...)",
-                hintStyle: GoogleFonts.poppins(fontSize: 13),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: valCtrl,
-              decoration: InputDecoration(
-                hintText: "Value (e.g. 2 hours, Modern...)",
-                hintStyle: GoogleFonts.poppins(fontSize: 13),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text("Cancel", style: GoogleFonts.poppins(color: Colors.grey.shade700)),
-          ),
-          TextButton(
-            onPressed: () {
-              final k = keyCtrl.text.trim();
-              final v = valCtrl.text.trim();
-              if (k.isNotEmpty && v.isNotEmpty) {
-                setState(() => _highlights.add({"key": k, "value": v}));
-              }
-              Navigator.pop(context);
-            },
-            child: Text("Add", style: GoogleFonts.poppins(color: kPrimaryColor)),
-          ),
-        ],
-      ),
-    );
+  void _removeAdditionalInfo(int index) {
+    setState(() => _additionalInfo.removeAt(index));
   }
 
   // =====================================================
@@ -315,8 +329,17 @@ class _AddOtherServiceState extends State<AddOtherService> {
       "finalPrice": _finalPrice?.toStringAsFixed(2),
       "savedAmount": _savedAmount?.toStringAsFixed(2),
       
-      "coverImage": _coverImage,
-      "highlights": _highlights,
+      // ✅ Multi-media: send list of media items
+      "mediaItems": _mediaItems.map((item) => {
+        "bytes": item.bytes,
+        "isVideo": item.isVideo,
+        "fileName": item.fileName,
+      }).toList(),
+      // ✅ Cover image is the first image (for backwards compatibility)
+      "coverImage": _mediaItems.isNotEmpty && !_mediaItems.first.isVideo 
+          ? _mediaItems.first.bytes 
+          : null,
+      "highlights": _additionalInfo,
       "visibleInSearch": _visibleInSearch,
       
       "days": _selectedDays.toList(),
@@ -437,7 +460,7 @@ class _AddOtherServiceState extends State<AddOtherService> {
               ],
               _buildImageSection(),
               const SizedBox(height: 20),
-              _buildHighlightsSection(),
+              _buildAdditionalInfoSection(),
               const SizedBox(height: 20),
               _buildVisibilityToggle(),
               const SizedBox(height: 40),
@@ -1331,51 +1354,15 @@ class _AddOtherServiceState extends State<AddOtherService> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _sectionHeader(Icons.image_rounded, "Cover Image"),
+          _sectionHeader(Icons.image_rounded, "Gallery"),
           const SizedBox(height: 14),
           
-          InkWell(
-            onTap: _pickImage,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              height: 160,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _coverImage != null ? kPrimaryColor : Colors.grey.shade200,
-                  width: _coverImage != null ? 2 : 1,
-                ),
-              ),
-              child: _coverImage != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Image.memory(_coverImage!, fit: BoxFit.cover),
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: kPrimaryColor.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.add_photo_alternate_rounded, color: kPrimaryColor, size: 32),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          "Tap to upload image",
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
+          MultiMediaGalleryBox(
+            mediaItems: _mediaItems,
+            onPickImages: _pickImages,
+            onPickVideo: _pickVideo,
+            onRemove: _removeMediaItem,
+            maxItems: _maxMediaItems,
           ),
         ],
       ),
@@ -1383,83 +1370,16 @@ class _AddOtherServiceState extends State<AddOtherService> {
   }
 
   // =====================================================
-  // ✨ Highlights Section
+  // ✨ Additional Info Section
   // =====================================================
-  Widget _buildHighlightsSection() {
+  Widget _buildAdditionalInfoSection() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _sectionHeader(Icons.auto_awesome_rounded, "Highlights"),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _addHighlight,
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: Text("Add", style: GoogleFonts.poppins(fontSize: 12)),
-                style: TextButton.styleFrom(foregroundColor: kPrimaryColor),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          _hint("Key features of your service"),
-          
-          if (_highlights.isEmpty) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9FAFB),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Text(
-                  "No highlights added yet",
-                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade500),
-                ),
-              ),
-            ),
-          ] else ...[
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _highlights.asMap().entries.map((entry) {
-                final idx = entry.key;
-                final h = entry.value;
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: kPrimaryColor.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: kPrimaryColor.withOpacity(0.2)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        "${h['key']}: ${h['value']}",
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: kPrimaryColor,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      InkWell(
-                        onTap: () => setState(() => _highlights.removeAt(idx)),
-                        child: Icon(Icons.close_rounded, size: 14, color: kPrimaryColor),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ],
+      child: AdditionalInfoSection(
+        items: _additionalInfo,
+        onAdd: _addAdditionalInfo,
+        onRemove: _removeAdditionalInfo,
       ),
     );
   }

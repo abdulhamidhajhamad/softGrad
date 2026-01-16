@@ -398,6 +398,15 @@ class _AiScreenLayoutState extends State<AiScreenLayout> with TickerProviderStat
             onTap: () => _showCityDialog(isSingleService: true),
           ),
           
+          // Venue Type (only show when service type is Venue)
+          if (_singleServiceData.serviceType == 'Venue')
+            _buildInputTile(
+              icon: Icons.home_work_rounded,
+              title: 'Venue Type',
+              value: _singleServiceData.venueType,
+              onTap: () => _showVenueTypeDialog(isSingleService: true),
+            ),
+          
           // Event Date
           _buildInputTile(
             icon: Icons.calendar_month_rounded,
@@ -947,15 +956,19 @@ class _AiScreenLayoutState extends State<AiScreenLayout> with TickerProviderStat
     );
   }
 
-  void _showVenueTypeDialog() {
+  void _showVenueTypeDialog({bool isSingleService = false}) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => VenueTypeDialog(
-        selectedVenueType: _packageFormData.venueType,
+        selectedVenueType: isSingleService ? _singleServiceData.venueType : _packageFormData.venueType,
         onSelected: (venueType) {
           setState(() {
-            _packageFormData = _packageFormData.copyWith(venueType: venueType);
+            if (isSingleService) {
+              _singleServiceData = _singleServiceData.copyWith(venueType: venueType);
+            } else {
+              _packageFormData = _packageFormData.copyWith(venueType: venueType);
+            }
           });
         },
       ),

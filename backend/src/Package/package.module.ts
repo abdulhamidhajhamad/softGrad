@@ -6,6 +6,7 @@ import { PackageService } from './package.service';
 import { Package, PackageSchema } from './package.entity';
 import { Service, ServiceSchema } from '../service/service.schema';
 import { ServiceProvider, ServiceProviderSchema } from '../providers/provider.entity';
+import { SupabaseStorageModule } from '../subbase/supabaseStorage.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ServiceProvider, ServiceProviderSchema } from '../providers/provider.en
       { name: Service.name, schema: ServiceSchema },
       { name: ServiceProvider.name, schema: ServiceProviderSchema },
     ]),
+    SupabaseStorageModule, // ✅ إضافة Supabase للصور
   ],
   controllers: [PackageController],
   providers: [PackageService],

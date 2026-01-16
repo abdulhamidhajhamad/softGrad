@@ -36,10 +36,12 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
   String? _selectedCity;
   bool _visibleInSearch = true;
 
-  Uint8List? _coverImage;
+  // ✅ Multi-media gallery (up to 10 images/videos)
+  final List<MediaItem> _mediaItems = [];
+  static const int _maxMediaItems = 10;
 
-  // ✅ highlights now key/value
-  final List<Map<String, String>> _highlights = [];
+  // ✅ Additional info items (key/value pairs)
+  final List<Map<String, String>> _additionalInfo = [];
 
   // ✅ live pricing preview
   double? _finalPrice;
@@ -134,66 +136,94 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
     });
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImages() async {
+    if (_mediaItems.length >= _maxMediaItems) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "You can't upload more than $_maxMediaItems items",
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final picker = ImagePicker();
-    final file = await picker.pickImage(source: ImageSource.gallery);
+    final files = await picker.pickMultiImage();
+    if (files.isEmpty) return;
+
+    final remainingSlots = _maxMediaItems - _mediaItems.length;
+    final filesToAdd = files.take(remainingSlots).toList();
+
+    if (files.length > remainingSlots) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Only $remainingSlots more items can be added. Some images were skipped.",
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+
+    for (final file in filesToAdd) {
+      final bytes = await file.readAsBytes();
+      setState(() {
+        _mediaItems.add(MediaItem(
+          bytes: bytes,
+          isVideo: false,
+          fileName: file.name,
+        ));
+      });
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    if (_mediaItems.length >= _maxMediaItems) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "You can't upload more than $_maxMediaItems items",
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final picker = ImagePicker();
+    final file = await picker.pickVideo(source: ImageSource.gallery);
     if (file == null) return;
 
     final bytes = await file.readAsBytes();
-    setState(() => _coverImage = bytes);
+    setState(() {
+      _mediaItems.add(MediaItem(
+        bytes: bytes,
+        isVideo: true,
+        fileName: file.name,
+      ));
+    });
   }
 
-  Future<void> _addHighlight() async {
-    final keyCtrl = TextEditingController();
-    final valCtrl = TextEditingController();
+  void _removeMediaItem(int index) {
+    setState(() {
+      _mediaItems.removeAt(index);
+    });
+  }
 
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text("Add highlight",
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: keyCtrl,
-              decoration: InputDecoration(
-                hintText: "Key (e.g. Equipment, Delivery, Setup...)",
-                hintStyle: GoogleFonts.poppins(fontSize: 13),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: valCtrl,
-              decoration: InputDecoration(
-                hintText: "Value (e.g. Included, 2 hours, Free...)",
-                hintStyle: GoogleFonts.poppins(fontSize: 13),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text("Cancel",
-                style: GoogleFonts.poppins(color: Colors.grey.shade700)),
-          ),
-          TextButton(
-            onPressed: () {
-              final k = keyCtrl.text.trim();
-              final v = valCtrl.text.trim();
-              if (k.isNotEmpty && v.isNotEmpty) {
-                setState(() => _highlights.add({"key": k, "value": v}));
-              }
-              Navigator.pop(context);
-            },
-            child:
-                Text("Add", style: GoogleFonts.poppins(color: kPrimaryColor)),
-          ),
-        ],
-      ),
-    );
+  Future<void> _addAdditionalInfo() async {
+    final result = await showAddInfoDialog(context);
+    if (result != null) {
+      setState(() => _additionalInfo.add(result));
+    }
+  }
+
+  void _removeAdditionalInfo(int index) {
+    setState(() => _additionalInfo.removeAt(index));
   }
 
   Future<void> _pickFrom() async {
@@ -356,8 +386,17 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
       "finalPrice": _finalPrice?.toStringAsFixed(2),
       "savedAmount": _savedAmount?.toStringAsFixed(2),
 
-      "coverImage": _coverImage,
-      "highlights": _highlights,
+      // ✅ Multi-media: send list of media items
+      "mediaItems": _mediaItems.map((item) => {
+        "bytes": item.bytes,
+        "isVideo": item.isVideo,
+        "fileName": item.fileName,
+      }).toList(),
+      // ✅ Cover image is the first image (for backwards compatibility)
+      "coverImage": _mediaItems.isNotEmpty && !_mediaItems.first.isVideo 
+          ? _mediaItems.first.bytes 
+          : null,
+      "highlights": _additionalInfo,
       "visibleInSearch": _visibleInSearch,
 
       "pricingModel": "per_hour",
@@ -1832,73 +1871,39 @@ class _AddHourlyServiceState extends State<AddHourlyService> {
                 padding: const EdgeInsets.all(16),
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: cardDecoration(),
-                child: CoverImageBox(bytes: _coverImage, onPick: _pickImage),
+                child: MultiMediaGalleryBox(
+                  mediaItems: _mediaItems,
+                  onPickImages: _pickImages,
+                  onPickVideo: _pickVideo,
+                  onRemove: _removeMediaItem,
+                  maxItems: _maxMediaItems,
+                ),
               ),
-              sectionLabel("Highlights"),
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: cardDecoration(),
+                child: AdditionalInfoSection(
+                  items: _additionalInfo,
+                  onAdd: _addAdditionalInfo,
+                  onRemove: _removeAdditionalInfo,
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.all(16),
                 margin: const EdgeInsets.only(bottom: 24),
                 decoration: cardDecoration(),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Text("Highlights",
-                            style: GoogleFonts.poppins(
-                                fontSize: 14, fontWeight: FontWeight.w700)),
-                        const Spacer(),
-                        IconButton(
-                          onPressed: _addHighlight,
-                          icon: const Icon(Icons.add_circle_outline_rounded,
-                              color: kPrimaryColor),
-                        ),
-                      ],
-                    ),
-                    if (_highlights.isEmpty)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          "Add points that make your service special.",
-                          style: GoogleFonts.poppins(
-                              fontSize: 11, color: Colors.grey.shade600),
-                        ),
-                      )
-                    else
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: _highlights.map((h) {
-                            final k = (h["key"] ?? "").trim();
-                            final v = (h["value"] ?? "").trim();
-                            return Chip(
-                              label: Text(
-                                "$k: $v",
-                                style: GoogleFonts.poppins(fontSize: 11),
-                              ),
-                              backgroundColor: const Color(0xFFF9FAFB),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18)),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    const Divider(height: 24),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      value: _visibleInSearch,
-                      activeColor: kPrimaryColor,
-                      onChanged: (v) => setState(() => _visibleInSearch = v),
-                      title: Text("Visible in search",
-                          style: GoogleFonts.poppins(
-                              fontSize: 13, fontWeight: FontWeight.w600)),
-                      subtitle: Text("Turn off if temporarily unavailable.",
-                          style: GoogleFonts.poppins(
-                              fontSize: 11, color: Colors.grey.shade600)),
-                    ),
-                  ],
+                child: SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: _visibleInSearch,
+                  activeColor: kPrimaryColor,
+                  onChanged: (v) => setState(() => _visibleInSearch = v),
+                  title: Text("Visible in search",
+                      style: GoogleFonts.poppins(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  subtitle: Text("Turn off if temporarily unavailable.",
+                      style: GoogleFonts.poppins(
+                          fontSize: 11, color: Colors.grey.shade600)),
                 ),
               ),
             ],

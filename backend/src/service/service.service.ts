@@ -125,24 +125,38 @@ constructor(
         throw new HttpException('Service not found or you do not have permission to update it', HttpStatus.NOT_FOUND);
       }
 
-      let finalImageUrls: string[] = service.images || []; 
-
-      if (files && files.length > 0) {
-        if (service.images && service.images.length > 0) {
-          try {
-            const deletePromises = service.images.map(imageUrl => 
-              this.supabaseStorage.deleteFile(imageUrl) 
-            );
-            await Promise.all(deletePromises);
-          } catch (deleteError) {
-            this.logger.error('⚠️ Failed to delete old service images:', deleteError);
-          }
+      // ✅ Get existing images that frontend wants to keep
+      const existingImagesToKeep: string[] = updateServiceDto.images || [];
+      
+      // ✅ Find images that need to be deleted (old images not in the keep list)
+      const currentImages = service.images || [];
+      const imagesToDelete = currentImages.filter(img => !existingImagesToKeep.includes(img));
+      
+      // ✅ Delete removed images from Supabase
+      if (imagesToDelete.length > 0) {
+        try {
+          const deletePromises = imagesToDelete.map(imageUrl => 
+            this.supabaseStorage.deleteFile(imageUrl) 
+          );
+          await Promise.all(deletePromises);
+          this.logger.log(`🗑️ Deleted ${imagesToDelete.length} old images`);
+        } catch (deleteError) {
+          this.logger.error('⚠️ Failed to delete old service images:', deleteError);
         }
+      }
+
+      // ✅ Start with images that frontend wants to keep
+      let finalImageUrls: string[] = [...existingImagesToKeep];
+
+      // ✅ Upload new images and ADD them to the existing ones
+      if (files && files.length > 0) {
         try {
           const uploadPromises = files.map(file => 
             this.supabaseStorage.uploadImage(file, 'services', true)
           );
-          finalImageUrls = await Promise.all(uploadPromises); 
+          const newImageUrls = await Promise.all(uploadPromises);
+          finalImageUrls = [...finalImageUrls, ...newImageUrls]; // ✅ Merge old + new
+          this.logger.log(`📤 Uploaded ${newImageUrls.length} new images`);
         } catch (uploadError) {
           throw new HttpException('Failed to upload new service images', HttpStatus.INTERNAL_SERVER_ERROR);
         }

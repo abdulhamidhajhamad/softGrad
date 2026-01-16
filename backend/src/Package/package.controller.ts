@@ -1,5 +1,9 @@
 // package.controller.ts
-import { Controller, Get, Post, Put, Patch, Delete, Body, Param, UseGuards, Request, HttpCode, HttpStatus } from '@nestjs/common';
+import { 
+  Controller, Get, Post, Put, Patch, Delete, Body, Param, 
+  UseGuards, Request, HttpCode, HttpStatus, UseInterceptors, UploadedFile 
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { PackageService } from './package.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreatePackageDto, UpdatePackageDto, UpdatePackageStatusDto } from './package.dto';
@@ -16,9 +20,15 @@ export class PackageController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('coverImage')) // ✅ دعم رفع صورة الغلاف
   @HttpCode(HttpStatus.CREATED)
-  async createPackage(@Request() req, @Body() createDto: CreatePackageDto) {
-    return this.packageService.createPackage(req.user.userId, createDto);
+  async createPackage(
+    @Request() req, 
+    @Body('data') data: string, // ✅ JSON string
+    @UploadedFile() coverImage?: Express.Multer.File
+  ) {
+    const createDto: CreatePackageDto = JSON.parse(data);
+    return this.packageService.createPackage(req.user.userId, createDto, coverImage);
   }
 
   @Get()
@@ -39,12 +49,16 @@ export class PackageController {
   }
 
   @Put(':id')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('coverImage')) // ✅ دعم رفع صورة جديدة
   async updatePackage(
     @Param('id') id: string,
     @Request() req,
-    @Body() updateDto: UpdatePackageDto
+    @Body('data') data: string, // ✅ JSON string
+    @UploadedFile() coverImage?: Express.Multer.File
   ) {
-    return this.packageService.updatePackage(id, req.user.userId, updateDto);
+    const updateDto: UpdatePackageDto = JSON.parse(data);
+    return this.packageService.updatePackage(id, req.user.userId, updateDto, coverImage);
   }
 
   @Patch(':id')

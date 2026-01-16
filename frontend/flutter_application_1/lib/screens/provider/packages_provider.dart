@@ -1,7 +1,10 @@
-// lib/screens/packages_provider.dart
+// lib/screens/provider/packages_provider.dart
 
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_application_1/services/package_service.dart';
 
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
@@ -11,6 +14,7 @@ class BundlePackage {
   final String name;
   final List<String> serviceIds;
   final List<String> serviceNames;
+  final List<double> servicePrices; // ✅ أسعار الخدمات داخل الباقة
   final double bundlePrice;
   final DateTime? startDate;
   final DateTime? endDate;
@@ -22,6 +26,7 @@ class BundlePackage {
     required this.name,
     required this.serviceIds,
     required this.serviceNames,
+    required this.servicePrices,
     required this.bundlePrice,
     this.startDate,
     this.endDate,
@@ -33,16 +38,19 @@ class BundlePackage {
     // ✅ التعديل هنا - نجيب services من الـ array
     final List<dynamic> servicesArray = json['services'] as List<dynamic>? ?? [];
     
-    // نستخرج الـ IDs والأسماء من services array
+    // نستخرج الـ IDs والأسماء والأسعار من services array
     final List<String> extractedIds = [];
     final List<String> extractedNames = [];
+    final List<double> extractedPrices = [];
     
     for (final service in servicesArray) {
       if (service is Map<String, dynamic>) {
         final id = service['serviceId']?.toString() ?? '';
         final name = service['serviceName']?.toString() ?? '';
+        final price = (service['newPrice'] as num?)?.toDouble() ?? 0.0;
         if (id.isNotEmpty) extractedIds.add(id);
         if (name.isNotEmpty) extractedNames.add(name);
+        extractedPrices.add(price);
       }
     }
 
@@ -55,6 +63,7 @@ class BundlePackage {
       name: json['packageName'] as String? ?? 'N/A',
       serviceIds: extractedIds,
       serviceNames: extractedNames,
+      servicePrices: extractedPrices,
       bundlePrice: price,
       startDate: start,
       endDate: end,
@@ -195,9 +204,17 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
     
     _serviceQuantities.clear();
     
+    // ✅ عند التعديل، نملأ الأسعار من الباقة الموجودة
     if (editingPackage != null) {
-      for (final serviceId in editingPackage.serviceIds) {
+      for (int i = 0; i < editingPackage.serviceIds.length; i++) {
+        final serviceId = editingPackage.serviceIds[i];
         _serviceQuantities[serviceId] = 1;
+        // ✅ إضافة controller بالسعر المحدد مسبقاً
+        if (i < editingPackage.servicePrices.length) {
+          newPriceControllers[serviceId] = TextEditingController(
+            text: editingPackage.servicePrices[i].toStringAsFixed(0),
+          );
+        }
       }
     }
 
@@ -205,6 +222,10 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
 
     DateTime? startDate = editingPackage?.startDate;
     DateTime? endDate = editingPackage?.endDate;
+    
+    // ✅ صورة الغلاف
+    Uint8List? coverImageBytes;
+    String? existingImageUrl = editingPackage?.packageImageUrl;
 
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -379,260 +400,636 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                     ),
 
                     const SizedBox(height: 18),
-
+                    
+                    // ✅ قسم صورة الغلاف (اختياري)
                     Text(
-                      "Select services and set new prices",
+                      "Cover image (optional)",
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () async {
+                        final picker = ImagePicker();
+                        final picked = await picker.pickImage(
+                          source: ImageSource.gallery,
+                          maxWidth: 1200,
+                          maxHeight: 1200,
+                          imageQuality: 85,
+                        );
+                        if (picked != null) {
+                          final bytes = await picked.readAsBytes();
+                          setSheetState(() {
+                            coverImageBytes = bytes;
+                            existingImageUrl = null; // نستبدل الصورة القديمة
+                          });
+                        }
+                      },
+                      child: Container(
+                        height: 140,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9FAFB),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFFE5E7EB),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: coverImageBytes != null
+                            ? Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Image.memory(
+                                      coverImageBytes!,
+                                      height: 140,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setSheetState(() {
+                                          coverImageBytes = null;
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.close, color: Colors.white, size: 16),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : existingImageUrl != null && existingImageUrl!.isNotEmpty
+                                ? Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: CachedNetworkImage(
+                                          imageUrl: existingImageUrl!,
+                                          height: 140,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                          placeholder: (_, __) => const Center(
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          ),
+                                          errorWidget: (_, __, ___) => const Icon(Icons.error),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 8,
+                                        right: 8,
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            setSheetState(() {
+                                              existingImageUrl = null;
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(
+                                              color: Colors.red,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(Icons.close, color: Colors.white, size: 16),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.add_photo_alternate_outlined,
+                                          size: 40, color: Colors.grey[400]),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        "Tap to add cover image",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: Colors.grey[500],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 18),
+
+                    // ✅ زر لاختيار الخدمات وتحديد الأسعار
+                    InkWell(
+                      onTap: _services.isEmpty ? null : () async {
+                        await showModalBottomSheet(
+                          context: ctx,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.white,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                          ),
+                          builder: (dialogCtx) {
+                            return StatefulBuilder(
+                              builder: (context, setDialogState) {
+                                return DraggableScrollableSheet(
+                                  initialChildSize: 0.7,
+                                  minChildSize: 0.5,
+                                  maxChildSize: 0.9,
+                                  expand: false,
+                                  builder: (context, scrollController) {
+                                    return Column(
+                                      children: [
+                                        // Header
+                                        Container(
+                                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.05),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              Container(
+                                                width: 40,
+                                                height: 4,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.grey.shade300,
+                                                  borderRadius: BorderRadius.circular(999),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Row(
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: kPrimaryColor.withOpacity(0.1),
+                                                      borderRadius: BorderRadius.circular(10),
+                                                    ),
+                                                    child: const Icon(Icons.checklist_rounded, color: kPrimaryColor, size: 20),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          editingPackage == null 
+                                                              ? "Select Services" 
+                                                              : "Edit Services & Prices",
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          "${selectedServiceIds.length} selected",
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 12,
+                                                            color: Colors.grey[600],
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () => Navigator.pop(dialogCtx),
+                                                    child: Text(
+                                                      "Done",
+                                                      style: GoogleFonts.poppins(
+                                                        fontSize: 14,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: kPrimaryColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        // Services List
+                                        Expanded(
+                                          child: ListView.builder(
+                                            controller: scrollController,
+                                            padding: const EdgeInsets.all(16),
+                                            itemCount: _services.length,
+                                            itemBuilder: (context, index) {
+                                              final service = _services[index];
+                                              final name = _serviceNameAt(index);
+                                              final id = _serviceIdAt(index);
+                                              final String priceType = service['priceType'] ?? 'fixed';
+                                              final isChecked = selectedServiceIds.contains(id);
+                                              final double oldPrice = _calculateServicePrice(service);
+                                              final int currentQty = _serviceQuantities[id] ?? 1;
+
+                                              if (!newPriceControllers.containsKey(id)) {
+                                                newPriceControllers[id] = TextEditingController();
+                                              }
+
+                                              return AnimatedContainer(
+                                                duration: const Duration(milliseconds: 200),
+                                                margin: const EdgeInsets.only(bottom: 10),
+                                                decoration: BoxDecoration(
+                                                  color: isChecked ? kPrimaryColor.withOpacity(0.05) : Colors.white,
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  border: Border.all(
+                                                    color: isChecked ? kPrimaryColor : Colors.grey.shade200,
+                                                    width: isChecked ? 1.5 : 1,
+                                                  ),
+                                                  boxShadow: isChecked ? [
+                                                    BoxShadow(
+                                                      color: kPrimaryColor.withOpacity(0.1),
+                                                      blurRadius: 8,
+                                                      offset: const Offset(0, 2),
+                                                    ),
+                                                  ] : null,
+                                                ),
+                                                child: Column(
+                                                  children: [
+                                                    // Service Header - Tap to select
+                                                    InkWell(
+                                                      onTap: () {
+                                                        setDialogState(() {
+                                                          if (isChecked) {
+                                                            selectedServiceIds.remove(id);
+                                                            _serviceQuantities.remove(id);
+                                                            newPriceControllers[id]?.clear();
+                                                          } else {
+                                                            selectedServiceIds.add(id);
+                                                            if (!_serviceQuantities.containsKey(id)) {
+                                                              _serviceQuantities[id] = 1;
+                                                            }
+                                                          }
+                                                        });
+                                                        setSheetState(() {}); // Update parent
+                                                      },
+                                                      borderRadius: BorderRadius.circular(14),
+                                                      child: Padding(
+                                                        padding: const EdgeInsets.all(14),
+                                                        child: Row(
+                                                          children: [
+                                                            AnimatedContainer(
+                                                              duration: const Duration(milliseconds: 200),
+                                                              width: 24,
+                                                              height: 24,
+                                                              decoration: BoxDecoration(
+                                                                color: isChecked ? kPrimaryColor : Colors.transparent,
+                                                                borderRadius: BorderRadius.circular(6),
+                                                                border: Border.all(
+                                                                  color: isChecked ? kPrimaryColor : Colors.grey.shade400,
+                                                                  width: 2,
+                                                                ),
+                                                              ),
+                                                              child: isChecked
+                                                                  ? const Icon(Icons.check, color: Colors.white, size: 16)
+                                                                  : null,
+                                                            ),
+                                                            const SizedBox(width: 14),
+                                                            Expanded(
+                                                              child: Column(
+                                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                                children: [
+                                                                  Text(
+                                                                    name,
+                                                                    style: GoogleFonts.poppins(
+                                                                      fontSize: 14,
+                                                                      fontWeight: FontWeight.w600,
+                                                                      color: isChecked ? kPrimaryColor : Colors.black87,
+                                                                    ),
+                                                                  ),
+                                                                  Text(
+                                                                    service['priceLabel'] ?? 'Fixed Price',
+                                                                    style: GoogleFonts.poppins(
+                                                                      fontSize: 11,
+                                                                      color: Colors.grey[600],
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.grey.shade100,
+                                                                borderRadius: BorderRadius.circular(8),
+                                                              ),
+                                                              child: Text(
+                                                                "₪${oldPrice.toStringAsFixed(0)}",
+                                                                style: GoogleFonts.poppins(
+                                                                  fontSize: 13,
+                                                                  fontWeight: FontWeight.w600,
+                                                                  color: Colors.grey[700],
+                                                                  decoration: isChecked ? TextDecoration.lineThrough : null,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    // Price Input - Only when selected
+                                                    if (isChecked)
+                                                      Container(
+                                                        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                                                        child: Column(
+                                                          children: [
+                                                            const Divider(height: 1),
+                                                            const SizedBox(height: 12),
+                                                            if (priceType == 'hourly' || priceType == 'capacity')
+                                                              Padding(
+                                                                padding: const EdgeInsets.only(bottom: 10),
+                                                                child: Row(
+                                                                  children: [
+                                                                    Icon(
+                                                                      priceType == 'hourly' ? Icons.schedule : Icons.people_outline,
+                                                                      size: 18,
+                                                                      color: Colors.grey[600],
+                                                                    ),
+                                                                    const SizedBox(width: 8),
+                                                                    Expanded(
+                                                                      child: Text(
+                                                                        priceType == 'hourly' ? "Hours" : "People",
+                                                                        style: GoogleFonts.poppins(
+                                                                          fontSize: 13,
+                                                                          color: Colors.grey[700],
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                    Container(
+                                                                      width: 80,
+                                                                      height: 36,
+                                                                      child: TextField(
+                                                                        keyboardType: TextInputType.number,
+                                                                        textAlign: TextAlign.center,
+                                                                        style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600),
+                                                                        decoration: InputDecoration(
+                                                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                                                          filled: true,
+                                                                          fillColor: Colors.grey.shade50,
+                                                                          border: OutlineInputBorder(
+                                                                            borderRadius: BorderRadius.circular(8),
+                                                                            borderSide: BorderSide(color: Colors.grey.shade300),
+                                                                          ),
+                                                                          enabledBorder: OutlineInputBorder(
+                                                                            borderRadius: BorderRadius.circular(8),
+                                                                            borderSide: BorderSide(color: Colors.grey.shade300),
+                                                                          ),
+                                                                          focusedBorder: OutlineInputBorder(
+                                                                            borderRadius: BorderRadius.circular(8),
+                                                                            borderSide: const BorderSide(color: kPrimaryColor, width: 1.5),
+                                                                          ),
+                                                                        ),
+                                                                        onChanged: (v) {
+                                                                          final qty = int.tryParse(v.trim()) ?? 1;
+                                                                          setDialogState(() {
+                                                                            _serviceQuantities[id] = qty > 0 ? qty : 1;
+                                                                          });
+                                                                          setSheetState(() {});
+                                                                        },
+                                                                        controller: TextEditingController(text: currentQty.toString()),
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            Row(
+                                                              children: [
+                                                                const Icon(Icons.local_offer_outlined, size: 18, color: kPrimaryColor),
+                                                                const SizedBox(width: 8),
+                                                                Expanded(
+                                                                  child: Text(
+                                                                    "New price (₪)",
+                                                                    style: GoogleFonts.poppins(
+                                                                      fontSize: 13,
+                                                                      fontWeight: FontWeight.w500,
+                                                                      color: kPrimaryColor,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                                Container(
+                                                                  width: 100,
+                                                                  height: 40,
+                                                                  child: TextField(
+                                                                    controller: newPriceControllers[id],
+                                                                    keyboardType: TextInputType.number,
+                                                                    textAlign: TextAlign.center,
+                                                                    style: GoogleFonts.poppins(
+                                                                      fontSize: 15,
+                                                                      fontWeight: FontWeight.w700,
+                                                                      color: kPrimaryColor,
+                                                                    ),
+                                                                    decoration: InputDecoration(
+                                                                      hintText: "0",
+                                                                      hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
+                                                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                                                      filled: true,
+                                                                      fillColor: kPrimaryColor.withOpacity(0.05),
+                                                                      border: OutlineInputBorder(
+                                                                        borderRadius: BorderRadius.circular(10),
+                                                                        borderSide: BorderSide(color: kPrimaryColor.withOpacity(0.3)),
+                                                                      ),
+                                                                      enabledBorder: OutlineInputBorder(
+                                                                        borderRadius: BorderRadius.circular(10),
+                                                                        borderSide: BorderSide(color: kPrimaryColor.withOpacity(0.3)),
+                                                                      ),
+                                                                      focusedBorder: OutlineInputBorder(
+                                                                        borderRadius: BorderRadius.circular(10),
+                                                                        borderSide: const BorderSide(color: kPrimaryColor, width: 2),
+                                                                      ),
+                                                                    ),
+                                                                    onChanged: (_) {
+                                                                      setDialogState(() {});
+                                                                      setSheetState(() {});
+                                                                    },
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                );
+                              },
+                            );
+                          },
+                        );
+                        setSheetState(() {}); // Refresh parent after closing dialog
+                      },
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: selectedServiceIds.isEmpty 
+                              ? const Color(0xFFF9FAFB) 
+                              : kPrimaryColor.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: selectedServiceIds.isEmpty 
+                                ? const Color(0xFFE5E7EB) 
+                                : kPrimaryColor.withOpacity(0.3),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: selectedServiceIds.isEmpty 
+                                        ? Colors.grey.shade100 
+                                        : kPrimaryColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    selectedServiceIds.isEmpty 
+                                        ? Icons.add_circle_outline 
+                                        : Icons.checklist_rounded,
+                                    color: selectedServiceIds.isEmpty 
+                                        ? Colors.grey[600] 
+                                        : kPrimaryColor,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        editingPackage == null 
+                                            ? "Select services & prices"
+                                            : "Edit services & prices",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: selectedServiceIds.isEmpty 
+                                              ? Colors.grey[800] 
+                                              : kPrimaryColor,
+                                        ),
+                                      ),
+                                      Text(
+                                        selectedServiceIds.isEmpty
+                                            ? "Tap to choose services for this package"
+                                            : "${selectedServiceIds.length} service${selectedServiceIds.length > 1 ? 's' : ''} selected",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: selectedServiceIds.isEmpty 
+                                      ? Colors.grey[400] 
+                                      : kPrimaryColor,
+                                  size: 24,
+                                ),
+                              ],
+                            ),
+                            // Show selected services summary
+                            if (selectedServiceIds.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              const Divider(height: 1),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: selectedServiceIds.map((id) {
+                                  final service = _services.firstWhere(
+                                    (s) => s['_id'] == id,
+                                    orElse: () => {},
+                                  );
+                                  final name = service['name'] ?? '';
+                                  final priceText = newPriceControllers[id]?.text.trim() ?? '';
+                                  final price = double.tryParse(priceText) ?? 0;
+                                  
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: kPrimaryColor.withOpacity(0.3)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          name.length > 12 ? '${name.substring(0, 12)}...' : name,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        if (price > 0) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: kPrimaryColor,
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: Text(
+                                              "₪${price.toStringAsFixed(0)}",
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
 
                     if (_services.isEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 4, bottom: 16),
+                        padding: const EdgeInsets.only(top: 8),
                         child: Text(
-                          "No services found. Add services first, then create a bundle.",
+                          "No services found. Add services first.",
                           style: GoogleFonts.poppins(
                             fontSize: 12,
                             color: Colors.grey[600],
                           ),
                         ),
-                      )
-                    else
-                      Column(
-                        children: List.generate(_services.length, (index) {
-                          final service = _services[index];
-                          final name = _serviceNameAt(index);
-                          final id = _serviceIdAt(index);
-                          final String priceType = service['priceType'] ?? 'fixed';
-                          final isChecked = selectedServiceIds.contains(id);
-
-                          final int currentQty = _serviceQuantities[id] ?? 1;
-                          final double oldPrice = _calculateServicePrice(service);
-
-                          if (!newPriceControllers.containsKey(id)) {
-                            newPriceControllers[id] = TextEditingController();
-                          }
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: isChecked
-                                  ? kPrimaryColor.withOpacity(0.05)
-                                  : const Color(0xFFF9FAFB),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isChecked
-                                    ? kPrimaryColor.withOpacity(0.3)
-                                    : Colors.grey.shade200,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Checkbox(
-                                      value: isChecked,
-                                      onChanged: (v) {
-                                        setSheetState(() {
-                                          if (v == true) {
-                                            selectedServiceIds.add(id);
-                                            if (!_serviceQuantities.containsKey(id)) {
-                                              _serviceQuantities[id] = 1;
-                                            }
-                                          } else {
-                                            selectedServiceIds.remove(id);
-                                            _serviceQuantities.remove(id);
-                                            newPriceControllers[id]?.clear();
-                                          }
-                                        });
-                                      },
-                                      activeColor: kPrimaryColor,
-                                    ),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            name,
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          Text(
-                                            service['priceLabel'] ?? '',
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 11,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          "Old: ₪${oldPrice.toStringAsFixed(0)}",
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 11,
-                                            color: Colors.grey[600],
-                                            decoration: TextDecoration.lineThrough,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-
-                                if (isChecked) ...[
-                                  const SizedBox(height: 8),
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 48),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        if (priceType == 'hourly' || priceType == 'capacity')
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  priceType == 'hourly'
-                                                      ? "Number of hours:"
-                                                      : "Number of people:",
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 12,
-                                                    color: Colors.grey[700],
-                                                  ),
-                                                ),
-                                              ),
-                                              Container(
-                                                width: 90,
-                                                height: 36,
-                                                child: TextField(
-                                                  keyboardType: TextInputType.number,
-                                                  textAlign: TextAlign.center,
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                  decoration: InputDecoration(
-                                                    contentPadding: const EdgeInsets.symmetric(
-                                                        horizontal: 8, vertical: 8),
-                                                    filled: true,
-                                                    fillColor: Colors.white,
-                                                    border: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(10),
-                                                      borderSide: BorderSide(
-                                                        color: Colors.grey.shade300,
-                                                      ),
-                                                    ),
-                                                    enabledBorder: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(10),
-                                                      borderSide: BorderSide(
-                                                        color: Colors.grey.shade300,
-                                                      ),
-                                                    ),
-                                                    focusedBorder: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.circular(10),
-                                                      borderSide: const BorderSide(
-                                                        color: kPrimaryColor,
-                                                        width: 1.5,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  onChanged: (v) {
-                                                    final qty = int.tryParse(v.trim()) ?? 1;
-                                                    setSheetState(() {
-                                                      _serviceQuantities[id] = qty > 0 ? qty : 1;
-                                                    });
-                                                  },
-                                                  controller: TextEditingController(
-                                                    text: currentQty.toString(),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        
-                                        if (priceType == 'hourly' || priceType == 'capacity')
-                                          const SizedBox(height: 8),
-
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                priceType == 'hourly'
-                                                    ? "New price per hour (₪):"
-                                                    : priceType == 'capacity'
-                                                        ? "New price per person (₪):"
-                                                        : "New price (₪):",
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: Colors.grey[700],
-                                                ),
-                                              ),
-                                            ),
-                                            Container(
-                                              width: 100,
-                                              height: 38,
-                                              child: TextField(
-                                                controller: newPriceControllers[id],
-                                                keyboardType: TextInputType.number,
-                                                textAlign: TextAlign.center,
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: kPrimaryColor,
-                                                ),
-                                                decoration: InputDecoration(
-                                                  hintText: "0",
-                                                  hintStyle: GoogleFonts.poppins(
-                                                    color: Colors.grey[400],
-                                                  ),
-                                                  contentPadding: const EdgeInsets.symmetric(
-                                                      horizontal: 8, vertical: 8),
-                                                  filled: true,
-                                                  fillColor: Colors.white,
-                                                  border: OutlineInputBorder(
-                                                    borderRadius: BorderRadius.circular(10),
-                                                    borderSide: BorderSide(
-                                                      color: kPrimaryColor.withOpacity(0.3),
-                                                    ),
-                                                  ),
-                                                  enabledBorder: OutlineInputBorder(
-                                                    borderRadius: BorderRadius.circular(10),
-                                                    borderSide: BorderSide(
-                                                      color: kPrimaryColor.withOpacity(0.3),
-                                                    ),
-                                                  ),
-                                                  focusedBorder: OutlineInputBorder(
-                                                    borderRadius: BorderRadius.circular(10),
-                                                    borderSide: const BorderSide(
-                                                      color: kPrimaryColor,
-                                                      width: 2,
-                                                    ),
-                                                  ),
-                                                ),
-                                                onChanged: (_) => setSheetState(() {}),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          );
-                        }),
                       ),
 
                     const SizedBox(height: 14),
@@ -856,7 +1253,9 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                           final price = double.tryParse(priceText) ?? 0;
                           formattedServices.add({
                             'id': id,
+                            'serviceId': id, // ✅ للتوافق مع الباك إند
                             'customPrice': price,
+                            'newPrice': price, // ✅ للتوافق مع الباك إند
                           });
                         }
 
@@ -866,6 +1265,8 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                           'totalPrice': totalNewPrice,
                           'startDate': startDate,
                           'endDate': endDate,
+                          'coverImageBytes': coverImageBytes, // ✅ صورة الغلاف
+                          'existingImageUrl': existingImageUrl, // ✅ URL الصورة الحالية
                         });
                         },
                         child: Text(
@@ -898,10 +1299,12 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
           await PackageService.updatePackage(
             packageId: editingPackage.id,
             newPackageName: result['packageName'],
-            newServiceIds: result['serviceIds'],
-            newPrice: result['newPrice'],
+            services: result['services'], // ✅ تم التغيير لإرسال map كامل
+            newPrice: result['totalPrice'],
             startDate: result['startDate'],
             endDate: result['endDate'],
+            newCoverImageBytes: result['coverImageBytes'], // ✅ صورة جديدة
+            existingImageUrl: result['existingImageUrl'], // ✅ URL الصورة الحالية
           );
           await _fetchData();
           _showSnackBar('✅ Package updated successfully!');
@@ -924,6 +1327,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
               totalPrice: result['totalPrice'],
               startDate: result['startDate'],
               endDate: result['endDate'],
+              coverImageBytes: result['coverImageBytes'], // ✅ صورة الغلاف
             );
           await _fetchData();
           _showSnackBar('✅ Package created successfully!');
@@ -1283,6 +1687,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                             name: p.name,
                                             serviceIds: p.serviceIds,
                                             serviceNames: p.serviceNames,
+                                            servicePrices: p.servicePrices,
                                             bundlePrice: p.bundlePrice,
                                             startDate: p.startDate,
                                             endDate: p.endDate,
@@ -1306,6 +1711,7 @@ class _PackagesProviderScreenState extends State<PackagesProviderScreen> {
                                               name: p.name,
                                               serviceIds: p.serviceIds,
                                               serviceNames: p.serviceNames,
+                                              servicePrices: p.servicePrices,
                                               bundlePrice: p.bundlePrice,
                                               startDate: p.startDate,
                                               endDate: p.endDate,

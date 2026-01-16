@@ -47,8 +47,8 @@ const List<Map<String, dynamic>> kServiceCategories = [
     'icon': Icons.music_note_rounded
   },
   {
-    'value': 'Wedding Planners & Coordinators',
-    'label': 'Wedding Planners',
+    'value': 'Event Planners & Coordinators',
+    'label': 'Event Planners',
     'icon': Icons.event_available_rounded
   },
   {
@@ -63,7 +63,7 @@ const List<Map<String, dynamic>> kServiceCategories = [
   },
   {
     'value': 'Car Rental & Transportation',
-    'label': 'Car Rental',
+    'label': 'Car Rental and Transportation',
     'icon': Icons.directions_car_filled_outlined
   },
   {
@@ -88,7 +88,7 @@ String _bookingTypeKey(String category) {
     case 'Venues':
     case 'Photographers':
     case 'Music & Entertainment':
-    case 'Wedding Planners & Coordinators':
+    case 'Event Planners & Coordinators':
       return 'hourly';
 
     case 'Decor & Lighting':

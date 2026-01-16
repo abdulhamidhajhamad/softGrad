@@ -48,8 +48,8 @@ const List<Map<String, dynamic>> kServiceCategories = [
     'icon': Icons.music_note_rounded,
   },
   {
-    'value': 'Wedding Planners & Coordinators',
-    'label': 'Wedding Planners & Coordinators',
+    'value': 'Event Planners & Coordinators',
+    'label': 'Event Planners',
     'icon': Icons.event_available_rounded,
   },
   {
@@ -64,7 +64,7 @@ const List<Map<String, dynamic>> kServiceCategories = [
   },
   {
     'value': 'Car Rental & Transportation',
-    'label': 'Car Rental & Transportation',
+    'label': 'Car Rental and Transportation',
     'icon': Icons.directions_car_filled_outlined,
   },
   {

@@ -347,8 +347,8 @@ class VendorsListPage extends StatefulWidget {
       'icon': Icons.music_note
     },
     {
-      'type': 'Full Wedding Management and Coordination',
-      'name': 'Wedding Planners & Coordinators',
+      'type': 'Full Event Management and Coordination',
+      'name': 'Event Planners & Coordinators',
       'icon': Icons.event
     },
     {

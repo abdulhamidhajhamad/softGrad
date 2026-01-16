@@ -1,10 +1,12 @@
 // lib/screens/Ai_Screen/components/ai_service_details_screen.dart
 
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
+import 'package:video_player/video_player.dart';
 
 import '../../../services/auth_service.dart';
 import '../../user/chat/chat_inside_search.dart';
@@ -48,11 +50,238 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _serviceData;
   String? _bookingType;
+  
+  // ✅ Media Slider State
+  List<String> _mediaUrls = [];
+  int _currentMediaIndex = 0;
+  late PageController _mediaPageController;
+  Timer? _autoSlideTimer;
 
   @override
   void initState() {
     super.initState();
+    _mediaPageController = PageController();
     _loadServiceDetails();
+  }
+  
+  @override
+  void dispose() {
+    _autoSlideTimer?.cancel();
+    _mediaPageController.dispose();
+    super.dispose();
+  }
+  
+  // ✅ Start auto-slide timer
+  void _startAutoSlide() {
+    _autoSlideTimer?.cancel();
+    if (_mediaUrls.length <= 1) return;
+    
+    _autoSlideTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      
+      final nextIndex = (_currentMediaIndex + 1) % _mediaUrls.length;
+      _mediaPageController.animateToPage(
+        nextIndex,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+  
+  // ✅ Reset auto-slide timer on user interaction
+  void _resetAutoSlide() {
+    _autoSlideTimer?.cancel();
+    _startAutoSlide();
+  }
+  
+  // ✅ Check if URL is a video
+  bool _isVideoUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.endsWith('.mp4') || 
+           lower.endsWith('.mov') || 
+           lower.endsWith('.avi') || 
+           lower.endsWith('.webm') ||
+           lower.contains('video');
+  }
+  
+  // ✅ Open fullscreen gallery
+  void _openFullScreenGallery(int initialIndex) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _AiFullScreenGallery(
+          mediaUrls: _mediaUrls,
+          initialIndex: initialIndex,
+        ),
+      ),
+    );
+  }
+  
+  // ✅ Build media slider widget
+  Widget _buildMediaSlider() {
+    // If no media, show placeholder
+    if (_mediaUrls.isEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          height: 220,
+          color: kPrimary.withOpacity(0.1),
+          child: Icon(
+            _getServiceIcon(_getCategory()),
+            size: 64,
+            color: kPrimary.withOpacity(0.4),
+          ),
+        ),
+      );
+    }
+    
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: Stack(
+        children: [
+          // Media PageView
+          SizedBox(
+            height: 220,
+            child: PageView.builder(
+              controller: _mediaPageController,
+              itemCount: _mediaUrls.length,
+              onPageChanged: (index) {
+                setState(() => _currentMediaIndex = index);
+                _resetAutoSlide();
+              },
+              itemBuilder: (context, index) {
+                final url = _mediaUrls[index];
+                final isVideo = _isVideoUrl(url);
+                
+                return GestureDetector(
+                  onTap: () => _openFullScreenGallery(index),
+                  child: isVideo
+                      ? _AiVideoThumbnail(url: url)
+                      : CachedNetworkImage(
+                          imageUrl: url,
+                          height: 220,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(
+                            height: 220,
+                            color: const Color(0xFFF1F5F9),
+                            child: const Center(child: CircularProgressIndicator()),
+                          ),
+                          errorWidget: (_, __, ___) => Container(
+                            height: 220,
+                            color: kPrimary.withOpacity(0.1),
+                            child: Icon(
+                              _getServiceIcon(_getCategory()),
+                              size: 64,
+                              color: kPrimary.withOpacity(0.4),
+                            ),
+                          ),
+                        ),
+                );
+              },
+            ),
+          ),
+          
+          // Rating Badge
+          if (_getRating() > 0)
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(
+                      _getRating().toStringAsFixed(1),
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        color: kText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          
+          // Media counter badge
+          if (_mediaUrls.length > 1)
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.photo_library_rounded, size: 14, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_currentMediaIndex + 1}/${_mediaUrls.length}',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          
+          // Dot indicators
+          if (_mediaUrls.length > 1)
+            Positioned(
+              bottom: 12,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_mediaUrls.length, (index) {
+                  final isActive = index == _currentMediaIndex;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: isActive ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isActive ? kPrimary : Colors.white.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadServiceDetails() async {
@@ -61,8 +290,26 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
       setState(() {
         _serviceData = serviceDetails;
         _bookingType = serviceDetails['bookingType']?.toString() ?? 'daily';
+        
+        // ✅ Extract media URLs from images array
+        _mediaUrls = [];
+        if (serviceDetails['images'] != null && serviceDetails['images'] is List) {
+          for (var img in serviceDetails['images']) {
+            if (img != null && img.toString().isNotEmpty) {
+              _mediaUrls.add(img.toString());
+            }
+          }
+        }
+        // Fallback to single image
+        if (_mediaUrls.isEmpty && widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
+          _mediaUrls.add(widget.imageUrl!);
+        }
+        
         _isLoading = false;
       });
+      
+      // Start auto-slide
+      _startAutoSlide();
     } catch (e) {
       print('❌ Error loading service details: $e');
       setState(() {
@@ -78,6 +325,11 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
           'price': widget.price ?? 0,
           'bookingType': widget.payType ?? 'daily',
         };
+        
+        // Fallback image
+        if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
+          _mediaUrls = [widget.imageUrl!];
+        }
       });
     }
   }
@@ -146,72 +398,8 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Hero Image
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(22),
-                  child: Stack(
-                    children: [
-                      Hero(
-                        tag: heroTag,
-                        child: CachedNetworkImage(
-                          imageUrl: _getImageUrl(),
-                          height: 220,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(
-                            height: 220,
-                            color: const Color(0xFFF1F5F9),
-                            child: const Center(child: CircularProgressIndicator()),
-                          ),
-                          errorWidget: (_, __, ___) => Container(
-                            height: 220,
-                            color: kPrimary.withOpacity(0.1),
-                            child: Icon(
-                              _getServiceIcon(_getCategory()),
-                              size: 64,
-                              color: kPrimary.withOpacity(0.4),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Rating Badge
-                      if (_getRating() > 0)
-                        Positioned(
-                          top: 12,
-                          right: 12,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _getRating().toStringAsFixed(1),
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 13,
-                                    color: kText,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                // Media Slider
+                _buildMediaSlider(),
                 
                 const SizedBox(height: 16),
                 
@@ -645,6 +833,232 @@ class _InfoRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ============ Video Thumbnail Widget ============
+class _AiVideoThumbnail extends StatefulWidget {
+  final String url;
+  const _AiVideoThumbnail({required this.url});
+
+  @override
+  State<_AiVideoThumbnail> createState() => _AiVideoThumbnailState();
+}
+
+class _AiVideoThumbnailState extends State<_AiVideoThumbnail> {
+  VideoPlayerController? _controller;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initVideo();
+  }
+
+  Future<void> _initVideo() async {
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    try {
+      await _controller!.initialize();
+      if (mounted) {
+        setState(() => _initialized = true);
+      }
+    } catch (e) {
+      debugPrint('Video init error: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_initialized && _controller != null)
+          FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: _controller!.value.size.width,
+              height: _controller!.value.size.height,
+              child: VideoPlayer(_controller!),
+            ),
+          )
+        else
+          Container(
+            color: Colors.black87,
+            child: const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
+          ),
+        // Video play icon overlay
+        Center(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.play_arrow_rounded,
+              color: Colors.white,
+              size: 40,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============ Full Screen Gallery ============
+class _AiFullScreenGallery extends StatefulWidget {
+  final List<String> mediaUrls;
+  final int initialIndex;
+
+  const _AiFullScreenGallery({
+    required this.mediaUrls,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_AiFullScreenGallery> createState() => _AiFullScreenGalleryState();
+}
+
+class _AiFullScreenGalleryState extends State<_AiFullScreenGallery> {
+  late PageController _pageController;
+  late int _currentIndex;
+  VideoPlayerController? _videoController;
+  bool _isVideoPlaying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+    _initVideoIfNeeded();
+  }
+
+  bool _isVideoUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.endsWith('.mp4') || 
+           lower.endsWith('.mov') || 
+           lower.endsWith('.avi') || 
+           lower.endsWith('.webm') ||
+           lower.contains('video');
+  }
+
+  Future<void> _initVideoIfNeeded() async {
+    final url = widget.mediaUrls[_currentIndex];
+    if (_isVideoUrl(url)) {
+      _videoController?.dispose();
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
+      await _videoController!.initialize();
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _toggleVideoPlay() {
+    if (_videoController == null) return;
+    setState(() {
+      if (_videoController!.value.isPlaying) {
+        _videoController!.pause();
+        _isVideoPlaying = false;
+      } else {
+        _videoController!.play();
+        _isVideoPlaying = true;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text(
+          '${_currentIndex + 1} / ${widget.mediaUrls.length}',
+          style: GoogleFonts.poppins(color: Colors.white),
+        ),
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.mediaUrls.length,
+        onPageChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+            _isVideoPlaying = false;
+          });
+          _videoController?.pause();
+          _initVideoIfNeeded();
+        },
+        itemBuilder: (context, index) {
+          final url = widget.mediaUrls[index];
+          final isVideo = _isVideoUrl(url);
+
+          if (isVideo && index == _currentIndex) {
+            return GestureDetector(
+              onTap: _toggleVideoPlay,
+              child: Center(
+                child: _videoController?.value.isInitialized == true
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          AspectRatio(
+                            aspectRatio: _videoController!.value.aspectRatio,
+                            child: VideoPlayer(_videoController!),
+                          ),
+                          if (!_isVideoPlaying)
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.play_arrow_rounded,
+                                color: Colors.white,
+                                size: 50,
+                              ),
+                            ),
+                        ],
+                      )
+                    : const CircularProgressIndicator(color: Colors.white),
+              ),
+            );
+          }
+
+          return InteractiveViewer(
+            child: Center(
+              child: CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.contain,
+                placeholder: (_, __) => const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+                errorWidget: (_, __, ___) => const Icon(
+                  Icons.broken_image_rounded,
+                  color: Colors.white54,
+                  size: 64,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

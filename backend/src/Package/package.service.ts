@@ -6,6 +6,7 @@ import { Package } from './package.entity';
 import { Service } from '../service/service.schema';
 import { CreatePackageDto, UpdatePackageDto, UpdatePackageStatusDto } from './package.dto';
 import { ServiceProvider } from '../providers/provider.entity';
+import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
 
 @Injectable()
 export class PackageService {
@@ -15,11 +16,16 @@ export class PackageService {
     @InjectModel(Package.name) private packageModel: Model<Package>,
     @InjectModel(Service.name) private serviceModel: Model<Service>,
     @InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>,
+    private supabaseStorage: SupabaseStorageService, // ✅ إضافة Supabase
   ) {}
 
- // package.service.ts - Updated createPackage with category
+ // package.service.ts - Updated createPackage with category and image upload
 
-async createPackage(providerId: string, createPackageDto: CreatePackageDto): Promise<Package> {
+async createPackage(
+  providerId: string, 
+  createPackageDto: CreatePackageDto,
+  coverImage?: Express.Multer.File // ✅ صورة الغلاف اختيارية
+): Promise<Package> {
   const provider = await this.providerModel
     .findOne({ userId: new Types.ObjectId(providerId) })
     .select('companyName location') // ✅ جلب location أيضاً
@@ -27,6 +33,17 @@ async createPackage(providerId: string, createPackageDto: CreatePackageDto): Pro
 
   if (!provider || !provider.companyName) {
     throw new BadRequestException('Provider profile not found or company name is missing.');
+  }
+
+  // ✅ رفع صورة الغلاف إذا وجدت
+  let packageImageUrl: string | undefined;
+  if (coverImage) {
+    try {
+      packageImageUrl = await this.supabaseStorage.uploadImage(coverImage, 'packages', true);
+      this.logger.log(`📤 Package cover image uploaded: ${packageImageUrl}`);
+    } catch (uploadError) {
+      this.logger.error('⚠️ Failed to upload package cover image:', uploadError);
+    }
   }
 
   let originalTotal = 0;
@@ -128,7 +145,7 @@ async createPackage(providerId: string, createPackageDto: CreatePackageDto): Pro
     newPrice: createPackageDto.newPrice,
     startDate: createPackageDto.startDate,
     endDate: createPackageDto.endDate,
-    packageImageUrl: createPackageDto.packageImageUrl,
+    packageImageUrl: packageImageUrl || createPackageDto.packageImageUrl, // ✅ استخدام الصورة المرفوعة أو URL
     isActive: true,
   });
 
@@ -140,7 +157,8 @@ async createPackage(providerId: string, createPackageDto: CreatePackageDto): Pro
   async updatePackage(
     packageId: string,
     providerId: string,
-    updateDto: UpdatePackageDto
+    updateDto: UpdatePackageDto,
+    coverImage?: Express.Multer.File // ✅ صورة غلاف جديدة اختيارية
   ): Promise<Package> {
     const pkg = await this.packageModel.findOne({
       _id: new Types.ObjectId(packageId),
@@ -149,6 +167,27 @@ async createPackage(providerId: string, createPackageDto: CreatePackageDto): Pro
 
     if (!pkg) {
       throw new NotFoundException('Package not found or you do not have permission.');
+    }
+
+    // ✅ رفع صورة غلاف جديدة إذا وجدت
+    if (coverImage) {
+      try {
+        // حذف الصورة القديمة إذا وجدت
+        if (pkg.packageImageUrl) {
+          try {
+            await this.supabaseStorage.deleteFile(pkg.packageImageUrl);
+            this.logger.log(`🗑️ Deleted old package cover image`);
+          } catch (deleteError) {
+            this.logger.error('⚠️ Failed to delete old cover image:', deleteError);
+          }
+        }
+        // رفع الصورة الجديدة
+        const newImageUrl = await this.supabaseStorage.uploadImage(coverImage, 'packages', true);
+        pkg.packageImageUrl = newImageUrl;
+        this.logger.log(`📤 New package cover image uploaded: ${newImageUrl}`);
+      } catch (uploadError) {
+        this.logger.error('⚠️ Failed to upload new cover image:', uploadError);
+      }
     }
 
     if (updateDto.services) {
@@ -223,6 +262,8 @@ async createPackage(providerId: string, createPackageDto: CreatePackageDto): Pro
         serviceItems.push({
           serviceId: service._id,
           serviceName: service.serviceName,
+          category: service.category,
+          bookingType: service.bookingType,
           originalPrice: originalPrice,
           newPrice: newPrice,
           ...(itemDto.maxHours && { maxHours: itemDto.maxHours }),
@@ -239,7 +280,8 @@ async createPackage(providerId: string, createPackageDto: CreatePackageDto): Pro
     if (updateDto.startDate) pkg.startDate = new Date(updateDto.startDate);
     if (updateDto.description) pkg.description = updateDto.description;
     if (updateDto.endDate) pkg.endDate = new Date(updateDto.endDate);
-    if (updateDto.packageImageUrl) pkg.packageImageUrl = updateDto.packageImageUrl;
+    // ✅ يمكن تحديث URL الصورة مباشرة أيضاً (بدون رفع ملف)
+    if (updateDto.packageImageUrl !== undefined) pkg.packageImageUrl = updateDto.packageImageUrl;
 
     return await pkg.save();
   }

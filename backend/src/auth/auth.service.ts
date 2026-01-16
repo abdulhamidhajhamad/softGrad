@@ -391,26 +391,31 @@ export class AuthService {
 
 
 async forgotPassword(email: string) {
- const user = await this.userModel.findOne({ email });
+  const user = await this.userModel.findOne({ email });
   if (!user) {
     return { message: 'If this email exists, a reset link has been sent.' };
   }
+  
   await this.passwordResetTokenModel.deleteMany({ email });
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000); 
+  
   await this.passwordResetTokenModel.create({
     email,
     tokenHash,
     expiresAt
   });
 
-  const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3001'; 
-  const resetUrl = `${frontendBaseUrl}/reset-password?token=${token}&email=${email}`;
+  const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  
+  // ✅ للويب: استخدم # للتوافق مع Flutter Web routing
+  const resetUrl = `${frontendBaseUrl}/#/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
 
   try {
     await this.mailService.sendPasswordResetEmail(email, resetUrl);
     console.log(`✅ Password reset email sent to: ${email}`);
+    console.log(`🔗 Reset URL: ${resetUrl}`);
   } catch (error) {
     console.error('❌ Error sending reset email:', error);
     throw new BadRequestException('Failed to send reset email, please try again later.');
@@ -420,6 +425,8 @@ async forgotPassword(email: string) {
     message: 'If this email exists, a reset link has been sent.' 
   };
 }
+
+
 
 async verifyResetToken(token: string, email: string) {
   console.log('🔍 Verifying token for email:', email);

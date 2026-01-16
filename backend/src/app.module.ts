@@ -18,10 +18,16 @@ import { NotificationModule } from './notification/notification.module';
 import { PromotionModule } from './promotion/promotion.module';
 import { ReviewModule } from './review/review.module';
 import { AiSearchModule } from './ai-search/ai-search.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+      ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
+      exclude: ['/auth*'], // استثني routes الـ API
     }),
 
     MongooseModule.forRootAsync({

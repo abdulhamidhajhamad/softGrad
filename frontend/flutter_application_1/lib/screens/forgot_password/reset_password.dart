@@ -1,18 +1,11 @@
-// lib/screens/reset_password_screen.dart
+// lib/screens/forgot_password/reset_password.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/user_service/forgot_password_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-// Conditional import for web
-import 'package:flutter_application_1/core/navigation/url_strategy_stub.dart'
-    if (dart.library.html) 'url_strategy_web.dart';
-
 /// Universal screen for resetting password via email link
-/// Works on Mobile, Web, and all platforms
-/// Accessible via: /reset-password?token=xxx&email=xxx
 class ResetPasswordScreen extends StatefulWidget {
-  // Constructor accepts optional parameters for direct navigation (mobile)
   final String? token;
   final String? email;
   
@@ -56,47 +49,20 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     super.dispose();
   }
 
-  /// Initialize token and email from either:
-  /// 1. Widget parameters (mobile deep linking)
-  /// 2. URL query parameters (web)
+  /// ✅ Initialize token and email from widget parameters (passed from main.dart)
   Future<void> _initializeTokenAndEmail() async {
     try {
-      // Check if passed via constructor (mobile/direct navigation)
       if (widget.token != null && widget.email != null) {
+        print('✅ Token and email received from main.dart');
         setState(() {
           _token = widget.token;
           _email = widget.email;
         });
         await _verifyToken();
-        return;
-      }
-
-      // For web, parse URL
-      if (kIsWeb) {
-        final urlData = getUrlParameters();
-        final token = urlData['token'];
-        final email = urlData['email'];
-
-        print('🔍 Parsed URL - Token: ${token?.substring(0, 10)}..., Email: $email');
-
-        if (token == null || email == null) {
-          setState(() {
-            _verificationError = 'Invalid reset link. Token or email is missing.';
-            _isVerifying = false;
-          });
-          return;
-        }
-
-        setState(() {
-          _token = token;
-          _email = email;
-        });
-
-        await _verifyToken();
       } else {
-        // Mobile without parameters - show error
+        print('❌ Token or email is null');
         setState(() {
-          _verificationError = 'Invalid reset link. Please use the link from your email.';
+          _verificationError = 'Invalid reset link. Token or email is missing.';
           _isVerifying = false;
         });
       }
@@ -217,14 +183,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              if (kIsWeb) {
-                // For web, redirect using URL
-                redirectToSignIn();
-              } else {
-                // For mobile, use navigation
-                Navigator.of(context).pop(); // Close dialog
-                Navigator.of(context).pushReplacementNamed('/signin');
-              }
+              Navigator.of(context).pop(); // Close dialog
+              Navigator.of(context).pushReplacementNamed('/signin');
             },
             child: Text(
               'Go to Login',
@@ -357,11 +317,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   height: 56,
                   child: ElevatedButton(
                     onPressed: () {
-                      if (kIsWeb) {
-                        redirectToForgotPassword();
-                      } else {
-                        Navigator.of(context).pushReplacementNamed('/forgot-password');
-                      }
+                      Navigator.of(context).pushReplacementNamed('/forgot-password');
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color.fromARGB(215, 20, 20, 215),
@@ -512,10 +468,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     decoration: InputDecoration(
                       hintText: '••••••••',
                       hintStyle: GoogleFonts.poppins(color: Colors.grey.shade400),
-                      prefixIcon: const Icon(
-                        Icons.lock_outline,
-                        color: Colors.grey,
-                      ),
+                      prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _isNewPasswordVisible
@@ -567,19 +520,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         minHeight: 6,
                         value: _strengthValue(),
                         backgroundColor: Colors.grey.shade200,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          _passwordStrengthColor,
-                        ),
+                        valueColor: AlwaysStoppedAnimation<Color>(_passwordStrengthColor),
                       ),
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(
-                          Icons.bolt_rounded,
-                          size: 16,
-                          color: _passwordStrengthColor,
-                        ),
+                        Icon(Icons.bolt_rounded, size: 16, color: _passwordStrengthColor),
                         const SizedBox(width: 6),
                         Text(
                           'Password strength: $_passwordStrengthLabel',
@@ -611,10 +558,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     decoration: InputDecoration(
                       hintText: '••••••••',
                       hintStyle: GoogleFonts.poppins(color: Colors.grey.shade400),
-                      prefixIcon: const Icon(
-                        Icons.lock_outline,
-                        color: Colors.grey,
-                      ),
+                      prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _isConfirmPasswordVisible
@@ -700,19 +644,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     decoration: BoxDecoration(
                       color: Colors.blue.shade50,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.blue.shade100,
-                        width: 1,
-                      ),
+                      border: Border.all(color: Colors.blue.shade100),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.security,
-                          color: Colors.blue.shade700,
-                          size: 20,
-                        ),
+                        Icon(Icons.security, color: Colors.blue.shade700, size: 20),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(

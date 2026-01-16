@@ -13,6 +13,7 @@ import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
 import 'package:flutter_application_1/services/user_service/home_user_service.dart';
 import 'package:flutter_application_1/services/user_service/chat_user_service.dart';
+import 'package:flutter_application_1/services/notification_provider_service.dart';
 import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -44,13 +45,17 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _index = 0;
   late final List<Widget> _tabs;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    
+    // ✅ تهيئة الاتصالات Real-time
+    _initializeConnections();
 
     _tabs = [
       _HomeTab(
@@ -101,6 +106,37 @@ const AiScreenLayout(),
     if (_index == i) return;
     HapticFeedback.selectionClick();
     setState(() => _index = i);
+  }
+
+  /// ✅ تهيئة جميع الاتصالات Real-time
+  Future<void> _initializeConnections() async {
+    debugPrint('🚀 Customer: Initializing real-time connections...');
+    
+    // 1. تهيئة اتصال الإشعارات (لكي يعرف الـ backend أن اليوزر online)
+    await NotificationProviderService.initRealtimeNotifications();
+    
+    // 2. تهيئة اتصال الشات
+    final service = ChatUserService();
+    await service.initializeUserId();
+    await service.initSocket();
+    
+    debugPrint('✅ Customer: Real-time connections initialized');
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('✅ Customer App resumed, reconnecting...');
+      _initializeConnections();
+    }
+  }
+  
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
@@ -176,11 +212,18 @@ class _CleanBottomNav extends StatelessWidget {
                         label: "Home",
                         onTap: () => onChanged(0),
                       ),
-                      _NavItemSmall(
-                        selected: index == 1,
-                        icon: Icons.chat_bubble_rounded,
-                        label: "Chat",
-                        onTap: () => onChanged(1),
+                      // ✅ Chat مع Badge للرسائل غير المقروءة
+                      ValueListenableBuilder<int>(
+                        valueListenable: ChatUserService.unreadGlobalCount,
+                        builder: (context, unreadCount, child) {
+                          return _NavItemSmall(
+                            selected: index == 1,
+                            icon: Icons.chat_bubble_rounded,
+                            label: "Chat",
+                            badge: unreadCount,
+                            onTap: () => onChanged(1),
+                          );
+                        },
                       ),
 
                       // gap for center AI
@@ -266,12 +309,14 @@ class _NavItemSmall extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final int badge; // ✅ Badge للرسائل غير المقروءة
 
   const _NavItemSmall({
     required this.selected,
     required this.icon,
     required this.label,
     required this.onTap,
+    this.badge = 0, // ✅ default = 0
   });
 
   @override
@@ -289,7 +334,45 @@ class _NavItemSmall extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: selected ? 24 : 22, color: iconColor), // ✅ أصغر
+            // ✅ Stack للأيقونة مع Badge
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, size: selected ? 24 : 22, color: iconColor),
+                // ✅ Badge
+                if (badge > 0)
+                  Positioned(
+                    right: -8,
+                    top: -6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF3B30), // أحمر Apple-style
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFF3B30).withOpacity(0.35),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          badge > 99 ? '99+' : badge.toString(),
+                          style: GoogleFonts.poppins(
+                            fontSize: badge > 99 ? 9 : 10,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 3),
             // ✅ نخليه يظهر بس لما selected لتفادي overflow
             SizedBox(
@@ -1459,10 +1542,50 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
   Map<String, dynamic>? _serviceData;
   String? _bookingType;
 
+  // ✅ Media Slider State
+  List<String> _mediaUrls = [];
+  int _currentMediaIndex = 0;
+  PageController? _mediaPageController;
+  Timer? _autoSlideTimer;
+
   @override
   void initState() {
     super.initState();
+    _mediaPageController = PageController();
     _loadServiceDetails();
+  }
+
+  @override
+  void dispose() {
+    _autoSlideTimer?.cancel();
+    _mediaPageController?.dispose();
+    super.dispose();
+  }
+
+  // ✅ Auto-slide every 4 seconds
+  void _startAutoSlide() {
+    _autoSlideTimer?.cancel();
+    if (_mediaUrls.length <= 1) return;
+    
+    _autoSlideTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || _mediaPageController == null) return;
+      final next = (_currentMediaIndex + 1) % _mediaUrls.length;
+      _mediaPageController!.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  void _resetAutoSlide() {
+    _autoSlideTimer?.cancel();
+    _startAutoSlide();
+  }
+
+  bool _isVideoUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.webm');
   }
 
   Future<void> _loadServiceDetails() async {
@@ -1472,11 +1595,38 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
       // Import user_service_service for API call
       final response = await _fetchServiceDetails(widget.service.id);
       
+      // 🔍 Debug prints
+      print('📦 Service Details Response: $response');
+      print('📷 Images field: ${response['images']}');
+      print('📷 Images type: ${response['images']?.runtimeType}');
+      
       setState(() {
         _serviceData = response;
         _bookingType = response['bookingType']?.toString().toLowerCase();
+        
+        // ✅ Extract media URLs from images array
+        _mediaUrls = [];
+        if (response['images'] != null && response['images'] is List) {
+          for (var img in response['images']) {
+            if (img != null && img.toString().isNotEmpty) {
+              _mediaUrls.add(img.toString());
+            }
+          }
+        }
+        // Fallback to single image if no images array
+        if (_mediaUrls.isEmpty && widget.service.imageUrl.isNotEmpty) {
+          _mediaUrls.add(widget.service.imageUrl);
+        }
+        
+        print('📷 Final _mediaUrls: $_mediaUrls');
+        print('📷 _mediaUrls length: ${_mediaUrls.length}');
+        
         _isLoading = false;
       });
+      
+      // Start auto-slide after data is loaded
+      _startAutoSlide();
+      
     } catch (e) {
       print('❌ Error loading service details: $e');
       setState(() => _isLoading = false);
@@ -1731,27 +1881,9 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Hero Image
-                if (s.imageUrl.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: CachedNetworkImage(
-                      imageUrl: s.imageUrl,
-                      height: 220,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        height: 220,
-                        color: const Color(0xFFF1F5F9),
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        height: 220,
-                        color: const Color(0xFFF1F5F9),
-                        child: const Icon(Icons.image, size: 48),
-                      ),
-                    ),
-                  ),
+                // ✅ Media Slider (Images/Videos)
+                if (_mediaUrls.isNotEmpty)
+                  _buildMediaSlider(),
                 
                 const SizedBox(height: 16),
                 
@@ -2124,6 +2256,279 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  // ✅ Media Slider Widget
+  Widget _buildMediaSlider() {
+    if (_mediaUrls.isEmpty) {
+      return Container(
+        height: 220,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: const Center(
+          child: Icon(Icons.image, size: 48, color: Colors.grey),
+        ),
+      );
+    }
+
+    return Container(
+      height: 260,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // PageView Slider
+          ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: PageView.builder(
+              controller: _mediaPageController,
+              itemCount: _mediaUrls.length,
+              onPageChanged: (index) {
+                setState(() => _currentMediaIndex = index);
+                _resetAutoSlide();
+              },
+              itemBuilder: (context, index) {
+                final url = _mediaUrls[index];
+                final isVideo = _isVideoUrl(url);
+
+                if (isVideo) {
+                  return GestureDetector(
+                    onTap: () => _openFullScreenGallery(index),
+                    child: Container(
+                      color: Colors.black,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CachedNetworkImage(
+                            imageUrl: url,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            errorWidget: (_, __, ___) => const Icon(
+                              Icons.videocam_rounded,
+                              size: 64,
+                              color: Colors.white54,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.play_arrow_rounded,
+                              size: 40,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                return GestureDetector(
+                  onTap: () => _openFullScreenGallery(index),
+                  child: CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    placeholder: (_, __) => Container(
+                      color: const Color(0xFFF1F5F9),
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (_, __, ___) => Container(
+                      color: const Color(0xFFF1F5F9),
+                      child: const Icon(Icons.broken_image, size: 48),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // Image Counter Badge
+          if (_mediaUrls.length > 1)
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.photo_library_rounded, size: 14, color: Colors.white),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${_currentMediaIndex + 1}/${_mediaUrls.length}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // Dot Indicators
+          if (_mediaUrls.length > 1)
+            Positioned(
+              bottom: 12,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_mediaUrls.length, (index) {
+                  final isActive = index == _currentMediaIndex;
+                  final dotSize = _mediaUrls.length >= 7 ? 6.0 : 8.0;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: EdgeInsets.symmetric(horizontal: _mediaUrls.length >= 7 ? 2 : 3),
+                    width: isActive ? (dotSize * 2.5) : dotSize,
+                    height: dotSize,
+                    decoration: BoxDecoration(
+                      color: isActive ? Colors.white : Colors.white.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(dotSize / 2),
+                      boxShadow: isActive
+                          ? [BoxShadow(color: Colors.black26, blurRadius: 4)]
+                          : null,
+                    ),
+                  );
+                }),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ Open Full Screen Gallery
+  void _openFullScreenGallery(int initialIndex) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _FullScreenGalleryHome(
+          mediaUrls: _mediaUrls,
+          initialIndex: initialIndex,
+        ),
+      ),
+    );
+  }
+}
+
+// ✅ Full Screen Gallery Widget
+class _FullScreenGalleryHome extends StatefulWidget {
+  final List<String> mediaUrls;
+  final int initialIndex;
+
+  const _FullScreenGalleryHome({
+    required this.mediaUrls,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_FullScreenGalleryHome> createState() => _FullScreenGalleryHomeState();
+}
+
+class _FullScreenGalleryHomeState extends State<_FullScreenGalleryHome> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  bool _isVideoUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.webm');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text(
+          '${_currentIndex + 1} / ${widget.mediaUrls.length}',
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.mediaUrls.length,
+        onPageChanged: (index) => setState(() => _currentIndex = index),
+        itemBuilder: (context, index) {
+          final url = widget.mediaUrls[index];
+          final isVideo = _isVideoUrl(url);
+
+          if (isVideo) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.videocam_rounded, size: 64, color: Colors.white54),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Video Preview',
+                    style: GoogleFonts.poppins(color: Colors.white70),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Center(
+              child: CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.contain,
+                placeholder: (_, __) => const CircularProgressIndicator(color: Colors.white),
+                errorWidget: (_, __, ___) => const Icon(
+                  Icons.broken_image,
+                  size: 64,
+                  color: Colors.white54,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

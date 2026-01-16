@@ -144,9 +144,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // هذا يضمن تحويل ObjectId إلى string وتجنب أخطاء .toString()
     const messageObject = message.toJSON(); 
     
-    // يطلق حدث 'newMessage' لجميع العملاء في الغرفة
+    // ✅ يطلق حدث 'newMessage' لجميع العملاء في الغرفة مع الـ chatId
     this.server.to(chatId).emit('newMessage', {
-      message: messageObject, 
+      message: messageObject,
+      chatId: chatId,  // ✅ إضافة chatId للتحقق من الشات الصحيح
     });
     
     // ✅ إرسال تحديث عدد الرسائل غير المقروءة للمستلم (Real-time badge update)

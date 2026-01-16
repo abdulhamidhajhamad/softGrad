@@ -434,6 +434,9 @@ async getServiceById(serviceId: string): Promise<any> {
       hasFixedLocation: service.hasFixedLocation ?? true, // 🆕 إضافة hasFixedLocation
       rating: service.averageRating || 0, // ✅ استخدام averageRating
       totalReviews: service.totalReviews || 0, // ✅ إضافة عدد التقييمات
+      
+      // ✅ إضافة الصور للـ slider
+      images: service.images || [],
 
       // 🆕 إضافة حقول التحقق من الحجز
       workingDays: service.workingDays || [],

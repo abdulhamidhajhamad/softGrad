@@ -142,9 +142,12 @@ class ChatUserService {
         String senderId = senderData is Map 
             ? _cleanId(senderData['_id'] ?? senderData['id'])
             : _cleanId(senderData);
-            
-        final chatID = _cleanId(messageData['chat'] ?? data['chatId']);
+        
+        // ✅ جلب chatId من عدة مصادر محتملة
+        final chatID = _cleanId(messageData['chatId'] ?? messageData['chat'] ?? data['chatId']);
         final isMe = senderId == currentUserId;
+        
+        print('📨 Message chatId: $chatID, activeChatId: $activeChatId, isMe: $isMe');
         
         final newMessage = ChatMessageModel(
           id: messageData['_id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
@@ -154,11 +157,13 @@ class ChatUserService {
           isRead: isMe || (messageData['isRead'] ?? false),
         );
         
-        // ✅ بث الرسالة عبر Stream
-        _messageStreamController.add(newMessage);
-        
-        if (activeChatId  == chatID && !isMe) {
-          markAsRead(chatID);
+        // ✅ بث الرسالة عبر Stream فقط إذا كانت للشات النشط
+        if (activeChatId == chatID) {
+          _messageStreamController.add(newMessage);
+          
+          if (!isMe) {
+            markAsRead(chatID);
+          }
         }
 
         // ✅ بث تحديث الحالة

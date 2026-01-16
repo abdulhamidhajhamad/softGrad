@@ -44,9 +44,16 @@ class MessagesRepository {
       final userMap = await AuthService.getUserData();
       final currentUserId = userMap?['_id']?.toString() ?? userMap?['id']?.toString();
       
+      // ✅ تعيين الـ currentUserId في الـ Service
+      ChatProviderService().currentUserId = currentUserId;
+      
+      // ✅ جلب عدد الرسائل غير المقروءة لكل chat من الـ API
+      final unreadCounts = await ChatProviderService().fetchUnreadCountsPerChat();
+      
       List<ConversationThread> conversations = [];
       
       for (var chat in chats) {
+        final chatId = chat['_id']?.toString() ?? '';
         final participants = chat['participants'] as List<dynamic>;
         
         // Find the other participant (customer)
@@ -67,29 +74,15 @@ class MessagesRepository {
         if (role == 'admin') {
           displayName = 'eventPlanner Support';
         } else {
-          // للمستخدم العادي نظهر userName
           displayName = otherParticipant['userName']?.toString() ?? 'User';
         }
         
-        // ✅ Calculate unread count ONLY for messages NOT sent by me
-      final messages = await ChatProviderService().fetchChatMessages(chat['_id']); 
-        
-        int unreadCount = 0;
-        
-        // 2. (NEW FIX) استخدام خصائص الكائن (.isMe, .isRead) بدلاً من مفاتيح الخريطة (['...'])
-        for (var msg in messages) {
-          // Count as unread ONLY if: 
-          // (1) I'm not the sender (msg.isMe is false) 
-          // AND (2) the message is marked unread (msg.isRead is false).
-          if (!msg.isMe && msg.isRead == false) {
-            unreadCount++;
-          }
-        }
-        
-        print('💬 Chat ${chat['_id']}: $unreadCount unread messages');
+        // ✅ استخدام الـ unreadCount من الـ API
+        final unreadCount = unreadCounts[chatId] ?? 0;
+        print('💬 Chat $chatId: $unreadCount unread messages');
         
         conversations.add(ConversationThread(
-          id: chat['_id'],
+          id: chatId,
           customerName: displayName,
           avatarUrl: otherParticipant['imageUrl'],
           lastMessage: chat['lastMessage'] ?? 'Attachment',

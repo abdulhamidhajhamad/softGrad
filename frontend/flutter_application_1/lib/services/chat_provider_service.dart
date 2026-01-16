@@ -188,6 +188,38 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
     }
   }
 
+  /// ✅ جلب عدد الرسائل غير المقروءة لكل chat
+  Future<Map<String, int>> fetchUnreadCountsPerChat() async {
+    final token = await AuthService.getToken();
+    if (token == null) return {};
+    
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/chat/unread-per-chat'),
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 5));
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> counts = data['data'] ?? [];
+        
+        Map<String, int> result = {};
+        for (var item in counts) {
+          final chatId = item['chatId']?.toString() ?? '';
+          final count = item['unreadCount'] ?? 0;
+          if (chatId.isNotEmpty) {
+            result[chatId] = count;
+          }
+        }
+        print('Unread counts per chat: $result');
+        return result;
+      }
+    } catch (e) {
+      print('Error fetching unread counts per chat: $e');
+    }
+    return {};
+  }
+
   Future<void> markAsRead(String chatId) async {
     final token = await AuthService.getToken();
     if (token == null) return;

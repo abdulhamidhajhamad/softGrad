@@ -74,19 +74,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// ✅ دالة جديدة: تضع علامة مقروءة فقط إذا كانت آخر رسالة ليست مني
+  /// ✅ دالة: تضع علامة مقروءة إذا كانت هناك رسائل غير مقروءة من الطرف الآخر
   Future<void> _markAsReadIfNeeded() async {
     if (_messages.isEmpty) return;
     
-    // ✅ نحصل على آخر رسالة (الأحدث)
-    final latestMessage = _messages.first;
+    // ✅ نتحقق إذا كانت هناك أي رسالة غير مقروءة من الطرف الآخر
+    final hasUnreadFromOthers = _messages.any((msg) => !msg.isMe && !msg.isRead);
     
-    // ✅ إذا آخر رسالة ليست مني، نضع علامة مقروءة
-    if (!latestMessage.isMe) {
-      print('📖 Marking as read (last message is from other person)');
+    if (hasUnreadFromOthers) {
+      print('📖 Marking as read (has unread messages from other person)');
       await ChatProviderService().markAsRead(widget.conversationId);
     } else {
-      print('🚫 NOT marking as read (last message is mine)');
+      print('🚫 NOT marking as read (no unread messages from others)');
     }
   }
 

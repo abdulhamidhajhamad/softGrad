@@ -129,6 +129,11 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
       setState(() => _isLoading = true);
       final data = await UserServiceService.getServiceDetails(widget.serviceId);
 
+      // 🔍 Debug prints
+      print('📦 Service Details Response: $data');
+      print('📷 Images field: ${data['images']}');
+      print('📷 Images type: ${data['images']?.runtimeType}');
+
       setState(() {
         _serviceData = data;
 
@@ -155,6 +160,9 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
           _mediaUrls.add(_service!.imageUrl!);
         }
         
+        print('📷 Final _mediaUrls: $_mediaUrls');
+        print('📷 _mediaUrls length: ${_mediaUrls.length}');
+        
         _isLoading = false;
       });
       
@@ -163,6 +171,7 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
       
       _animController.forward();
     } catch (e) {
+      print('❌ Error loading service details: $e');
       setState(() => _isLoading = false);
       if (mounted) {
         _showErrorSnackBar('Failed to load service details');

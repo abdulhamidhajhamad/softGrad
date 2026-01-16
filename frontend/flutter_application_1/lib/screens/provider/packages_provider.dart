@@ -20,7 +20,7 @@ class BundlePackage {
   final DateTime? endDate;
   final String? packageImageUrl;
   final bool isActive;
-
+  
   BundlePackage({
     required this.id,
     required this.name,

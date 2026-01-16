@@ -65,8 +65,15 @@ export class ChatService {
     this.logger.log(`✅ Chat found with participants: ${chat.participants}`);
 
     // Create message (isRead defaults to false in schema)
+    // ✅ حفظ chatId و sender كـ ObjectId وليس String
     this.logger.log(`📝 Creating message...`);
-    const message = await this.messageModel.create({ sender: senderId, chatId, content });
+    const chatIdObj = new Types.ObjectId(chatId);
+    const senderIdObj = new Types.ObjectId(senderId);
+    const message = await this.messageModel.create({ 
+      sender: senderIdObj,  // ✅ ObjectId بدلاً من String
+      chatId: chatIdObj,    // ✅ ObjectId بدلاً من String
+      content 
+    });
     this.logger.log(`✅ Message created with ID: ${message._id}, isRead: ${message.isRead}`);
     
     chat.lastMessage = content;
@@ -187,10 +194,22 @@ export class ChatService {
   }
 
   async getMessages(chatId: string) {
-    return this.messageModel
-      .find({ chatId: chatId })
+    // ✅ البحث بكلا النوعين: ObjectId و String
+    this.logger.log(`📨 getMessages called with chatId: ${chatId}`);
+    const chatIdObj = new Types.ObjectId(chatId);
+    
+    const messages = await this.messageModel
+      .find({ 
+        $or: [
+          { chatId: chatIdObj },
+          { chatId: chatId }
+        ]
+      })
       .populate('sender', 'userName imageUrl role')
       .sort({ createdAt: 1 });
+    
+    this.logger.log(`📨 Found ${messages.length} messages for chatId: ${chatId}`);
+    return messages;
   }
 
   async getUserChats(userId: string) {
@@ -227,7 +246,14 @@ export class ChatService {
       throw new NotFoundException('Chat not found or access denied');
     }
 
-    await this.messageModel.deleteMany({ chatId: chatId });
+    // ✅ حذف بكلا النوعين: ObjectId و String
+    const chatIdObj = new Types.ObjectId(chatId);
+    await this.messageModel.deleteMany({ 
+      $or: [
+        { chatId: chatIdObj },
+        { chatId: chatId }
+      ]
+    });
     const result = await this.chatModel.deleteOne({ _id: chatId });
 
     return { deleted: result.deletedCount > 0, chatId };
@@ -257,9 +283,15 @@ export class ChatService {
     
     console.log(`📖 markMessagesAsRead called by userId: ${userId} for chatId: ${chatId}`);
     
+    // ✅ دعم الـ chatId كـ ObjectId و String
+    const chatIdObj = new Types.ObjectId(chatId);
+    
     const updateResult = await this.messageModel.updateMany(
       {
-        chatId: chatId,
+        $or: [
+          { chatId: chatId },        // كـ String
+          { chatId: chatIdObj },     // كـ ObjectId
+        ],
         isRead: false,
         sender: { $ne: userIdObj } 
       },
@@ -321,20 +353,27 @@ export class ChatService {
   async getUnreadChatsCount(userId: string): Promise<number> {
     // ✅ أولاً: جلب جميع الشاتات التي يشارك فيها المستخدم
     const userChats = await this.chatModel.find({ participants: userId }).select('_id').lean();
-    const userChatIds = userChats.map(chat => chat._id);
     
-    if (userChatIds.length === 0) {
+    if (userChats.length === 0) {
       return 0;
     }
+    
+    // ✅ تحويل الـ chatIds لـ ObjectId و String للمطابقة مع كلا النوعين
+    const userChatIdsAsObjectId = userChats.map(chat => chat._id);
+    const userChatIdsAsString = userChats.map(chat => chat._id.toString());
     
     // ✅ ثانياً: حساب عدد الشاتات التي فيها رسائل غير مقروءة
     const unreadChats = await this.messageModel.aggregate([
       {
         $match: {
-          // فقط الشاتات التي يشارك فيها المستخدم
-          chatId: { $in: userChatIds },
-          // رسائل ليست من المستخدم نفسه
-          sender: { $ne: new Types.ObjectId(userId) },
+          $or: [
+            // مطابقة الـ chatId كـ ObjectId
+            { chatId: { $in: userChatIdsAsObjectId } },
+            // مطابقة الـ chatId كـ String
+            { chatId: { $in: userChatIdsAsString } },
+          ],
+          // رسائل ليست من المستخدم نفسه (دعم ObjectId و String)
+          sender: { $nin: [new Types.ObjectId(userId), userId] },
           // رسائل غير مقروءة
           isRead: false,
         },
@@ -353,19 +392,26 @@ export class ChatService {
 async getUnreadCountsPerChat(userId: string) {
   // ✅ أولاً: جلب جميع الشاتات التي يشارك فيها المستخدم
   const userChats = await this.chatModel.find({ participants: userId }).select('_id').lean();
-  const userChatIds = userChats.map(chat => chat._id);
   
-  if (userChatIds.length === 0) {
+  if (userChats.length === 0) {
     return [];
   }
+  
+  // ✅ تحويل الـ chatIds لـ ObjectId و String للمطابقة مع كلا النوعين
+  const userChatIdsAsObjectId = userChats.map(chat => chat._id);
+  const userChatIdsAsString = userChats.map(chat => chat._id.toString());
   
   const unreadCounts = await this.messageModel.aggregate([
     {
       $match: {
-        // ✅ فقط الشاتات التي يشارك فيها المستخدم
-        chatId: { $in: userChatIds },
-        // 1. استبعاد الرسائل التي أرسلها المستخدم نفسه
-        sender: { $ne: new Types.ObjectId(userId) },
+        $or: [
+          // مطابقة الـ chatId كـ ObjectId
+          { chatId: { $in: userChatIdsAsObjectId } },
+          // مطابقة الـ chatId كـ String
+          { chatId: { $in: userChatIdsAsString } },
+        ],
+        // 1. استبعاد الرسائل التي أرسلها المستخدم نفسه (دعم ObjectId و String)
+        sender: { $nin: [new Types.ObjectId(userId), userId] },
         // 2. جلب الرسائل غير المقروءة فقط
         isRead: false,
       },

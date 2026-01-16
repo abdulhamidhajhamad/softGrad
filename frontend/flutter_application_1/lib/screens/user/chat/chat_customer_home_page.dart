@@ -397,19 +397,42 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
     super.initState();
     _thread = widget.thread.copyWith(unreadCount: 0);
     _initializeThread();    
-  _messageSubscription = _service.messageStream.listen((message) {
-    if (mounted && _service.activeChatId == _thread.id) {
-      setState(() {
-        _messages.add(message);
-        _thread = _thread.copyWith(
-          lastMessage: message.text,
-          lastTime: message.time,
+    _messageSubscription = _service.messageStream.listen((message) {
+      if (mounted && _service.activeChatId == _thread.id) {
+        // ✅ فحص التكرار: لا تضيف الرسالة إذا كانت موجودة أو إذا كانت رسالتي عبر WebSocket
+        final exists = _messages.any((m) => 
+          m.id == message.id ||  // نفس الـ ID
+          (m.text == message.text && 
+           m.fromMe == message.fromMe && 
+           m.time.difference(message.time).abs().inSeconds < 5) // نفس المحتوى والمرسل خلال 5 ثواني
         );
-      });
-      _animateToBottom();
-    }
-  });
-}
+        
+        // ✅ تجاهل الرسائل المرسلة مني (لأنها مضافة مسبقاً كـ optimistic)
+        if (!exists && !message.fromMe) {
+          setState(() {
+            _messages.add(message);
+            _thread = _thread.copyWith(
+              lastMessage: message.text,
+              lastTime: message.time,
+            );
+          });
+          _animateToBottom();
+        } else if (message.fromMe) {
+          // ✅ تحديث الرسالة المؤقتة بالـ ID الحقيقي
+          final tempIndex = _messages.indexWhere((m) => 
+            m.id.startsWith('temp_') && 
+            m.text == message.text && 
+            m.fromMe
+          );
+          if (tempIndex != -1) {
+            setState(() {
+              _messages[tempIndex] = message;
+            });
+          }
+        }
+      }
+    });
+  }
 
   Future<void> _initializeThread() async {
     setState(() => _isLoading = true);

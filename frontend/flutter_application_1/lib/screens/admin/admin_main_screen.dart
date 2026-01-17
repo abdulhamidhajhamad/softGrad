@@ -10,6 +10,7 @@ import 'screens/messages_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/service_sales_screen.dart';
 import 'screens/package_sales_screen.dart';
+import 'screens/verification_requests_screen.dart';
 import 'package:flutter_application_1/screens/signin.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/services/admin_service/admin_service.dart';
@@ -44,6 +45,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
     _NavItem(icon: LucideIcons.bell, label: 'Notifications', index: 3),
     _NavItem(icon: LucideIcons.briefcase, label: 'Services', index: 4),
     _NavItem(icon: LucideIcons.package, label: 'Packages', index: 5),
+    _NavItem(icon: LucideIcons.shieldCheck, label: 'Verification', index: 6),
   ];
 
   @override
@@ -622,6 +624,8 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
         return const ServiceSalesScreen();
       case 5:
         return const PackageSalesScreen();
+      case 6:
+        return const VerificationRequestsScreen();
       default:
         return const HomeScreen();
     }

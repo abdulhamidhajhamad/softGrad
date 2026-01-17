@@ -16,6 +16,9 @@ class NotificationProviderService {
   static final ValueNotifier<List<ProviderNotification>> notificationsNotifier = 
       ValueNotifier<List<ProviderNotification>>([]);
   
+  /// ✅ NEW: Unread count notifier (for badge display: ≤9 shows number, >9 shows "9+")
+  static final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
+  
   static IO.Socket? _socket;
   static bool _isConnecting = false;
 
@@ -111,6 +114,7 @@ class NotificationProviderService {
           
           // ✅ تحديث العداد فوراً
           hasUnreadNotifier.value = true;
+          unreadCountNotifier.value = unreadCountNotifier.value + 1;  // ✅ Increment count
           debugPrint('✅ Updated hasUnread badge to TRUE\n');
           
         } catch (e, stackTrace) {
@@ -130,6 +134,7 @@ class NotificationProviderService {
           
           debugPrint('📊 Setting hasUnread to: ${count > 0} (count: $count)');
           hasUnreadNotifier.value = count > 0;
+          unreadCountNotifier.value = count;  // ✅ Update count notifier
         } catch (e) {
           debugPrint('❌ Error processing unread count: $e');
         }
@@ -211,6 +216,7 @@ class NotificationProviderService {
     try {
       final count = await getUnreadCount();
       hasUnreadNotifier.value = count > 0;
+      unreadCountNotifier.value = count;  // ✅ Update count notifier
       debugPrint('🔄 Manual count update: $count (hasUnread: ${count > 0})');
     } catch(e) {
       debugPrint('❌ Error manual update count: $e');
@@ -293,6 +299,7 @@ class NotificationProviderService {
       
       // ✅ تحديث محلي أولاً
       hasUnreadNotifier.value = false;
+      unreadCountNotifier.value = 0;  // ✅ Reset count
       debugPrint('✅ Updated hasUnreadNotifier to false');
       
       final headers = await _getHeaders();

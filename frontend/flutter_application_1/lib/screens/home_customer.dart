@@ -5,10 +5,11 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_application_1/screens/search.dart';
+import 'package:flutter_application_1/screens/user/search/search.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
 import 'package:flutter_application_1/services/user_service/home_user_service.dart';
@@ -18,19 +19,22 @@ import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import 'favorites.dart';
+import 'package:flutter_application_1/screens/user/profile/favorites.dart';
 import 'package:flutter_application_1/screens/Ai_Screen/ai_screen_layout.dart';
-import 'cart.dart';
-import 'profile.dart';
-import 'notifications.dart';
-import 'offers.dart';
-import 'packages.dart';
+import 'package:flutter_application_1/screens/user/payment/cart.dart';
+import 'package:flutter_application_1/screens/user/profile/profile.dart';
+import 'package:flutter_application_1/screens/user/notifications/notifications.dart';
+import 'package:flutter_application_1/screens/user/home/offers.dart';
+import 'package:flutter_application_1/screens/user/packages/packages.dart';
 import 'templates.dart';
 import 'provider/services_customer_home.dart';
 import 'signin.dart';
 
 // ✅ Chat page
-import 'chat_customer_home_page.dart';
+import 'package:flutter_application_1/screens/user/chat/chat_customer_home_page.dart';
+
+// ✅ Web Shell for web version
+import 'package:flutter_application_1/screens/user/web/web_shell.dart';
 /// ✅ RGB(215, 20, 20, 215)
 const Color kNavBlue = Color.fromARGB(215, 20, 20, 215);
 
@@ -106,6 +110,14 @@ const AiScreenLayout(),
 
   @override
   Widget build(BuildContext context) {
+    // ✅ On Web with wide screen, show WebShell
+    if (kIsWeb) {
+      final width = MediaQuery.of(context).size.width;
+      if (width >= 900) {
+        return WebShell(userName: widget.userName);
+      }
+    }
+    
     return Scaffold(
       backgroundColor: kPageBg,
       extendBody: true,

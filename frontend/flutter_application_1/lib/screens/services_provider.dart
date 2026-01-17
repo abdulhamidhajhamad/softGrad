@@ -7,6 +7,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:flutter_application_1/screens/provider/add_service/add_service_provider.dart';
 import 'package:flutter_application_1/services/service_service.dart';
+import 'package:flutter_application_1/screens/compliance_provider/compliance_provider.dart';
+import 'package:flutter_application_1/screens/compliance_provider/compliance_provider_service.dart';
 import 'showMore_provider.dart';
 import 'provider/edit_service_provider.dart';
 
@@ -34,6 +36,7 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
   bool _isLoading = true;
   bool _hasError = false;
   String _errorMessage = '';
+  bool _canAddServices = false; // ✨ حالة التحقق
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -46,6 +49,26 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
   void initState() {
     super.initState();
     _loadServices();
+    _checkVerificationStatus(); // ✨ فحص حالة التحقق
+  }
+
+  Future<void> _checkVerificationStatus() async {
+    try {
+      final status = await ComplianceProviderService.getVerificationStatus();
+      if (mounted) {
+        setState(() {
+          _canAddServices = status.canAddServices;
+        });
+      }
+    } catch (e) {
+      print('⚠️ Could not check verification status: $e');
+      // في حالة الفشل، نفترض عدم السماح
+      if (mounted) {
+        setState(() {
+          _canAddServices = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadServices() async {
@@ -129,6 +152,25 @@ class _ServicesProviderScreenState extends State<ServicesProviderScreen> {
   }
 
   Future<void> _openAddService() async {
+    // ✨ فحص حالة التحقق قبل فتح شاشة إضافة الخدمة
+    if (!_canAddServices) {
+      VerificationGuardPopup.show(
+        context,
+        onGoToSettings: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const VerificationScreen(isFromSignup: false),
+            ),
+          );
+          if (result == true) {
+            _checkVerificationStatus();
+          }
+        },
+      );
+      return;
+    }
+
     final created = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const AddServiceProviderScreen()),

@@ -19,6 +19,7 @@ import { NotificationModule } from './notification/notification.module';
 import { PromotionModule } from './promotion/promotion.module';
 import { ReviewModule } from './review/review.module';
 import { AiSearchModule } from './ai-search/ai-search.module';
+import { ComplianceProviderModule } from './complianceProvider/compliance-provider.module'; // ✅ COMPLIANCE
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 @Module({
@@ -68,6 +69,7 @@ import { join } from 'path';
     NotificationModule,
     PromotionModule,
     AiSearchModule,
+    ComplianceProviderModule, // ✅ COMPLIANCE MODULE
   ],
   controllers: [],
   providers: [],

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/screens/provider/home_provider.dart';
 import 'edit_profile_company.dart';
 import 'package:flutter_application_1/services/edit_profile_service.dart';
+import 'package:flutter_application_1/screens/compliance_provider/compliance_provider.dart';
 
 class EditProfileProvider extends StatefulWidget {
   final ProviderModel provider;
@@ -368,7 +369,10 @@ class _EditProfileProviderState extends State<EditProfileProvider> {
                 ),
               ]),
 
-              const SizedBox(height: 10),
+              // ✨ قسم التحقق - Verification Section
+              const VerificationSettingsSection(),
+
+              const SizedBox(height: 22),
 
               // SAVE CHANGES BUTTON
               SizedBox(

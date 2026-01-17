@@ -6,10 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../favorites.dart';
+import 'package:flutter_application_1/screens/user/profile/favorites.dart';
 import '../compnay_insider_provider.dart';
-import '../cart.dart' as cart;
-import '../chat_inside_search.dart' as chat;
+import 'package:flutter_application_1/screens/user/payment/cart.dart' as cart;
+import 'package:flutter_application_1/screens/user/chat/chat_inside_search.dart' as chat;
 import 'service_details_provider.dart';
 import 'package:flutter_application_1/services/user_service/user_service_service.dart';
 import 'package:flutter_application_1/widgets/booking_details_modal.dart';

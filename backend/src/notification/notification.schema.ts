@@ -10,8 +10,16 @@ export enum NotificationType {
   PAYMENT_FAILED = 'payment_failed',
   PROMO_CODE = 'promo_code',
   NEW_MESSAGE = 'new_message',
-  NEW_REVIEW = 'new_review', // ✅ NEW
+  NEW_REVIEW = 'new_review',
   GENERAL = 'general',
+  // ==================== أنواع إشعارات التحقق ====================
+  VERIFICATION_SUCCESS = 'verification_success',
+  VERIFICATION_REJECTED = 'verification_rejected',
+  VERIFICATION_PENDING = 'verification_pending',
+  DOCUMENT_EXPIRY_WARNING = 'document_expiry_warning',
+  DOCUMENT_EXPIRED = 'document_expired',
+  RENEWAL_REMINDER = 'renewal_reminder',
+  ACCOUNT_DEACTIVATED = 'account_deactivated',
 }
 
 export enum RecipientType {

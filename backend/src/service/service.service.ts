@@ -894,4 +894,126 @@ async getServiceById(serviceId: string): Promise<any> {
       return 0;
     }
   }
+
+  /**
+   * ✅ PUBLIC: Get all active offers for customers
+   * Returns services with active offers that haven't expired
+   */
+  async getActiveOffers(): Promise<any[]> {
+    try {
+      const now = new Date();
+      
+      const services = await this.serviceModel.aggregate([
+        { 
+          $match: { 
+            isActive: true,
+            'offer.isActive': true,
+            'offer.endDate': { $gt: now },
+            'offer.startDate': { $lte: now }
+          } 
+        },
+        {
+          $lookup: {
+            from: 'serviceproviders',
+            let: { providerId: '$providerId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $or: [
+                      { $eq: ['$userId', { $toObjectId: '$$providerId' }] },
+                      { $eq: ['$_id', { $toObjectId: '$$providerId' }] }
+                    ]
+                  }
+                }
+              }
+            ],
+            as: 'provider'
+          }
+        },
+        { $unwind: { path: '$provider', preserveNullAndEmptyArrays: true } },
+        { $sort: { 'offer.discountPercentage': -1 } }, // Sort by highest discount first
+        {
+          $project: {
+            _id: 1,
+            serviceName: 1,
+            companyName: 1,
+            providerId: 1,
+            category: 1,
+            description: 1,
+            price: 1,
+            bookingType: 1,
+            payType: 1,
+            averageRating: 1,
+            totalReviews: 1,
+            hasFixedLocation: 1,
+            firstImage: { $arrayElemAt: ['$images', 0] },
+            images: 1,
+            latitude: '$location.latitude',
+            longitude: '$location.longitude',
+            city: '$location.city',
+            offer: 1,
+            workingDays: 1,
+            availableHours: 1,
+            minBookingHours: 1,
+            maxBookingHours: 1,
+            maxCapacity: 1,
+            cleanupTimeMinutes: 1,
+            providerCompanyName: { 
+              $ifNull: [
+                '$provider.details.companyName', 
+                { $ifNull: ['$provider.companyName', '$provider.details.name'] }
+              ] 
+            },
+          }
+        }
+      ]).exec();
+
+      return services.map(service => ({
+        id: service._id.toString(),
+        name: service.serviceName || 'Unknown Service',
+        company: service.companyName || service.providerCompanyName || 'Unknown',
+        providerId: service.providerId?.toString() || '',
+        category: service.category || 'General',
+        description: service.description || '',
+        bookingType: service.bookingType || 'daily',
+        payType: service.payType || 'per day',
+        hasFixedLocation: service.hasFixedLocation ?? true,
+        
+        // Prices
+        originalPrice: service.price || 0,
+        discountedPrice: service.offer?.discountedPrice || service.price || 0,
+        discountPercentage: service.offer?.discountPercentage || 0,
+        
+        // Offer details
+        offerStartDate: service.offer?.startDate,
+        offerEndDate: service.offer?.endDate,
+        offerDescription: service.offer?.description || '',
+        
+        // Media
+        imageUrl: service.firstImage || '',
+        images: service.images || [],
+        
+        // Location
+        latitude: service.latitude || null,
+        longitude: service.longitude || null,
+        city: service.city || 'Unknown',
+        
+        // Reviews
+        rating: service.averageRating || 0,
+        totalReviews: service.totalReviews || 0,
+        
+        // Booking constraints
+        workingDays: service.workingDays || [],
+        availableHours: service.availableHours || [],
+        minBookingHours: service.minBookingHours || null,
+        maxBookingHours: service.maxBookingHours || null,
+        maxCapacity: service.maxCapacity || null,
+        cleanupTimeMinutes: service.cleanupTimeMinutes || 0,
+      }));
+    } catch (error) {
+      this.logger.error('Failed to fetch active offers:', error.stack);
+      throw new HttpException('Failed to fetch active offers', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 }

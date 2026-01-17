@@ -10,6 +10,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { ServiceService } from './service.service';
 import { CreateServiceDto, UpdateServiceDto } from './service.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { VerificationGuard, RequireVerification } from '../complianceProvider/guards/verification.guard';
 
 @Controller('services')
 export class ServiceController {
@@ -55,6 +56,19 @@ async getHomepageCategoriesPreview() {
     }
   }
 
+  // ✅ PUBLIC: Get all services with active offers for customers
+  @Get('offers/active')
+  async getActiveOffers() {
+    try {
+      return await this.serviceService.getActiveOffers();
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch active offers',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   // ✅ Search/Browse endpoint - Get all services formatted for search display (Public)
   @Get('browse/all')
   async getAllServicesForBrowse() {
@@ -69,7 +83,8 @@ async getHomepageCategoriesPreview() {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, VerificationGuard)
+  @RequireVerification()
   @UseInterceptors(FilesInterceptor('images', 10)) 
   async addService(
     @Body('data') data: string, // ⬅️ يتوقع 'data' من form-data

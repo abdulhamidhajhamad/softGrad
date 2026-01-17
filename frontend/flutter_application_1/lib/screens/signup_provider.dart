@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/auth_service.dart'; // استخدام AuthService
 import 'package:flutter_application_1/screens/provider/home_provider.dart'; // استيراد شاشة لوحة التحكم
 import 'package:flutter_application_1/services/vendor_auth_service.dart';
+import 'package:flutter_application_1/screens/compliance_provider/compliance_provider.dart';
 // يجب أن يكون لديك تعريف لـ ProviderModel في ملف HomeProviderScreen أو آخر.
 
 class SignUpProviderScreen extends StatefulWidget {
@@ -123,12 +124,24 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
           description: _bioCtrl.text.trim(),
         );
 
-        // 2. النجاح - الانتقال مباشرة إلى شاشة لوحة تحكم المزود
-        // 🆕 تم التعديل: الانتقال إلى /home_provider بدلاً من /verification
-        Navigator.pushReplacementNamed(
+        // 2. النجاح - الانتقال إلى شاشة التحقق
+        // 🆕 تم التعديل: الانتقال إلى شاشة التحقق بدلاً من الرئيسية
+        Navigator.pushReplacement(
           context,
-          '/signin', // 🔑 المسار المباشر الجديد
-          // لا تحتاج arguments في الغالب لشاشة لوحة التحكم
+          MaterialPageRoute(
+            builder: (_) => VerificationScreen(
+              isFromSignup: true,
+              providerData: {
+                'companyName': _brandCtrl.text.trim(),
+                'email': _emailCtrl.text.trim(),
+                'phone': _phoneCtrl.text.trim(),
+                'city': _selectedCity == "Other"
+                    ? _otherCityCtrl.text.trim()
+                    : _selectedCity!,
+                'description': _bioCtrl.text.trim(),
+              },
+            ),
+          ),
         );
       } catch (e) {
         String errorMessage = 'An error occurred during provider registration.';

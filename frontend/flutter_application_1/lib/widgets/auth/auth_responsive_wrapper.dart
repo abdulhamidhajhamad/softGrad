@@ -86,14 +86,19 @@ class AuthResponsiveWrapper extends StatelessWidget {
     );
   }
 
-  /// 📱 Mobile Layout: Standard vertical layout
+  /// 📱 Mobile Layout: Modern centered layout
   Widget _buildMobileLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: child,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: child,
+            ),
+          ),
         ),
       ),
     );

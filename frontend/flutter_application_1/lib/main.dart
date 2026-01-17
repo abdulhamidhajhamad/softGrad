@@ -237,14 +237,18 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ تحديد الصفحة الأولى بناءً على الـ URL
+    // ✅ تحديد الصفحة الأولى بناءً على الـ URL أو المنصة
     Widget homeWidget;
     if (_initialRoute == '/reset-password' && _initialRouteArgs != null) {
       homeWidget = ResetPasswordScreen(
         token: _initialRouteArgs!['token'],
         email: _initialRouteArgs!['email'],
       );
+    } else if (kIsWeb) {
+      // ✅ للويب: البدء مباشرة من صفحة تسجيل الدخول
+      homeWidget = const SignInScreen();
     } else {
+      // ✅ للموبايل: البدء من Splash Screen
       homeWidget = const SplashScreen();
     }
     

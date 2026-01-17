@@ -14,6 +14,7 @@ import 'package:flutter_application_1/screens/notifications_provider.dart';
 import 'package:flutter_application_1/services/user_service/home_user_service.dart';
 import 'package:flutter_application_1/services/user_service/chat_user_service.dart';
 import 'package:flutter_application_1/services/notification_provider_service.dart';
+import 'package:flutter_application_1/services/service_locator.dart'; // ✅ Added for getIt
 import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -115,8 +116,8 @@ const AiScreenLayout(),
     // 1. تهيئة اتصال الإشعارات (لكي يعرف الـ backend أن اليوزر online)
     await NotificationProviderService.initRealtimeNotifications();
     
-    // 2. تهيئة اتصال الشات
-    final service = ChatUserService();
+    // 2. تهيئة اتصال الشات - ✅ استخدام getIt
+    final service = getIt<ChatUserService>();
     await service.initializeUserId();
     await service.initSocket();
     
@@ -1683,7 +1684,8 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
     );
 
     try {
-      final chatService = ChatUserService();
+      // ✅ استخدام getIt للحصول على نفس الـ instance
+      final chatService = getIt<ChatUserService>();
       await chatService.initializeUserId();
       await chatService.initSocket();
       
@@ -1825,7 +1827,7 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                   onPressed: _isLoading ? null : _startChat,
                   icon: Icon(Icons.chat_bubble_rounded, color: kNavBlue),
                   label: Text(
-                    'Start Chat',
+                    'Start Chat with Provider',
                     style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: const Color(0xFF0B1220)),
                   ),
                   style: OutlinedButton.styleFrom(

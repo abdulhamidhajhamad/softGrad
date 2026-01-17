@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../theme/app_theme.dart';
 import '../models/sales_item.dart';
@@ -7,7 +8,9 @@ import '../widgets/review_card.dart';
 import '../../../services/admin_service/admin_service.dart';
 
 class ServiceSalesScreen extends StatefulWidget {
-  const ServiceSalesScreen({super.key});
+  final bool isEmbedded; // Whether it's inside admin shell or standalone
+  
+  const ServiceSalesScreen({super.key, this.isEmbedded = true});
 
   @override
   State<ServiceSalesScreen> createState() => _ServiceSalesScreenState();
@@ -46,39 +49,99 @@ class _ServiceSalesScreenState extends State<ServiceSalesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, color: kTextColor),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Service Sales',
-          style: TextStyle(
-            color: kTextColor,
-            fontWeight: FontWeight.bold,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 900;
+        
+        // If embedded in admin shell (web), don't show AppBar
+        if (widget.isEmbedded && isDesktop) {
+          return _buildContent(isDesktop: true);
+        }
+        
+        // Standalone or mobile - show with AppBar
+        return Scaffold(
+          backgroundColor: kBackgroundColor,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(LucideIcons.arrowLeft, color: kTextColor),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              'Service Sales',
+              style: GoogleFonts.poppins(
+                color: kTextColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
+          body: _buildContent(isDesktop: false),
+        );
+      },
+    );
+  }
+
+  Widget _buildContent({required bool isDesktop}) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    if (_services.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(LucideIcons.briefcase, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(
+              'No services found',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
         ),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _services.isEmpty
-              ? const Center(child: Text('No services found'))
-              : ListView.separated(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: _services.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final service = _services[index];
-                    return _ServiceCard(
-                      service: service,
-                      onTap: () => _showServiceDetail(context, service),
-                    );
-                  },
-                ),
+      );
+    }
+
+    if (isDesktop) {
+      // Grid layout for desktop
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 1.3,
+          ),
+          itemCount: _services.length,
+          itemBuilder: (context, index) {
+            final service = _services[index];
+            return _ServiceCard(
+              service: service,
+              onTap: () => _showServiceDetail(context, service),
+            );
+          },
+        ),
+      );
+    }
+    
+    // List layout for mobile/tablet
+    return ListView.separated(
+      padding: const EdgeInsets.all(20),
+      itemCount: _services.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final service = _services[index];
+        return _ServiceCard(
+          service: service,
+          onTap: () => _showServiceDetail(context, service),
+        );
+      },
     );
   }
 

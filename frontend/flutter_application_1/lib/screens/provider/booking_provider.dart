@@ -5,8 +5,20 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/booked_provider_service.dart';
 import 'package:flutter_application_1/screens/provider/booking_details_provider.dart';
 import 'package:intl/intl.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
-const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎨 Design Tokens - Modern Purple Theme
+// ═══════════════════════════════════════════════════════════════════════════
+const Color kPrimaryColor = Color(0xFF6C63FF);
+const Color kPrimaryLight = Color(0xFFE8E6FF);
+const Color kBackgroundColor = Color(0xFFF8F9FC);
+const Color kCardColor = Colors.white;
+const Color kTextPrimary = Color(0xFF1A1D29);
+const Color kTextSecondary = Color(0xFF6B7280);
+const Color kSuccessColor = Color(0xFF10B981);
+const Color kWarningColor = Color(0xFFF59E0B);
+const Color kErrorColor = Color(0xFFEF4444);
 
 class BookingsScreen extends StatefulWidget {
   const BookingsScreen({Key? key}) : super(key: key);
@@ -280,6 +292,386 @@ class _BookingsScreenState extends State<BookingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 1100;
+        final isTablet = constraints.maxWidth >= 768 && constraints.maxWidth < 1100;
+
+        if (isDesktop || isTablet) {
+          return _buildWebLayout(isDesktop);
+        }
+        return _buildMobileLayout();
+      },
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🌐 WEB LAYOUT - Modern Dashboard Style
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWebLayout(bool isDesktop) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: kBackgroundColor,
+        body: const Center(child: CircularProgressIndicator(color: kPrimaryColor)),
+      );
+    }
+
+    // Count stats
+    final pending = _bookings.where((b) => b['status']?.toLowerCase() == 'pending').length;
+    final confirmed = _bookings.where((b) => b['status']?.toLowerCase() == 'confirmed').length;
+    final completed = _bookings.where((b) => b['status']?.toLowerCase() == 'completed').length;
+    final cancelled = _bookings.where((b) => b['status']?.toLowerCase() == 'cancelled').length;
+
+    return Scaffold(
+      backgroundColor: kBackgroundColor,
+      body: Column(
+        children: [
+          // Modern Top Bar
+          Container(
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.arrowLeft, size: 18, color: kTextSecondary),
+                          const SizedBox(width: 8),
+                          Text('Back', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextSecondary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kPrimaryLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(LucideIcons.calendarCheck, size: 20, color: kPrimaryColor),
+                ),
+                const SizedBox(width: 14),
+                Text(
+                  'Bookings Management',
+                  style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: kTextPrimary),
+                ),
+                const Spacer(),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: _loadBookings,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kPrimaryLight,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.refreshCw, size: 16, color: kPrimaryColor),
+                          const SizedBox(width: 8),
+                          Text('Refresh', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kPrimaryColor)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(horizontal: isDesktop ? 48 : 24, vertical: 32),
+              child: Center(
+                child: Container(
+                  constraints: BoxConstraints(maxWidth: isDesktop ? 1200 : double.infinity),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Stats Row
+                      Row(
+                        children: [
+                          Expanded(child: _buildWebStatCard('Total', _bookings.length, LucideIcons.calendar, kPrimaryColor)),
+                          const SizedBox(width: 20),
+                          Expanded(child: _buildWebStatCard('Pending', pending, LucideIcons.clock, kWarningColor)),
+                          const SizedBox(width: 20),
+                          Expanded(child: _buildWebStatCard('Confirmed', confirmed, LucideIcons.checkCircle, kSuccessColor)),
+                          const SizedBox(width: 20),
+                          Expanded(child: _buildWebStatCard('Completed', completed, LucideIcons.star, Colors.blue)),
+                          const SizedBox(width: 20),
+                          Expanded(child: _buildWebStatCard('Cancelled', cancelled, LucideIcons.xCircle, kErrorColor)),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+
+                      if (_error != null)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.only(bottom: 24),
+                          decoration: BoxDecoration(
+                            color: kErrorColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: kErrorColor.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(LucideIcons.alertCircle, color: kErrorColor),
+                              const SizedBox(width: 12),
+                              Expanded(child: Text(_error!, style: GoogleFonts.poppins(color: kErrorColor))),
+                            ],
+                          ),
+                        ),
+
+                      if (_bookings.isEmpty)
+                        _buildWebEmptyState()
+                      else
+                        _buildWebBookingsTable(),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebStatCard(String label, int count, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 22, color: color),
+          ),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary)),
+              Text('$count', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: kTextPrimary)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 64),
+      child: Center(
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: kPrimaryLight,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(LucideIcons.calendarOff, size: 48, color: kPrimaryColor),
+            ),
+            const SizedBox(height: 24),
+            Text('No bookings yet', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: kTextPrimary)),
+            const SizedBox(height: 8),
+            Text('Your bookings will appear here once clients make reservations', style: GoogleFonts.poppins(fontSize: 14, color: kTextSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebBookingsTable() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            decoration: BoxDecoration(
+              color: kBackgroundColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(
+              children: [
+                Expanded(flex: 2, child: Text('Service', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary))),
+                Expanded(flex: 2, child: Text('Client', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary))),
+                Expanded(child: Text('Date', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary))),
+                Expanded(child: Text('Price', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary))),
+                Expanded(child: Text('Status', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary))),
+                const SizedBox(width: 100, child: Text('Actions', style: TextStyle(fontWeight: FontWeight.w600, color: kTextSecondary))),
+              ],
+            ),
+          ),
+          // Table Rows
+          ...List.generate(_bookings.length, (index) {
+            final booking = _bookings[index];
+            return _buildWebBookingRow(booking, index);
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebBookingRow(Map<String, dynamic> booking, int index) {
+    final bookingId = booking['bookingId'] ?? '';
+    final clientName = booking['clientName'] ?? 'Unknown';
+    final serviceName = booking['serviceName'] ?? 'N/A';
+    final serviceImage = booking['serviceImage'];
+    final bookingDate = booking['bookingDate'];
+    final status = booking['status'] ?? 'pending';
+    final price = booking['price'];
+
+    final statusColor = _getStatusColor(status);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BookingDetailsProvider(booking: booking))),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
+          ),
+          child: Row(
+            children: [
+              // Service
+              Expanded(
+                flex: 2,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: kPrimaryLight,
+                        image: serviceImage != null ? DecorationImage(image: NetworkImage(serviceImage), fit: BoxFit.cover) : null,
+                      ),
+                      child: serviceImage == null ? const Icon(LucideIcons.image, size: 18, color: kPrimaryColor) : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(serviceName, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextPrimary), overflow: TextOverflow.ellipsis)),
+                  ],
+                ),
+              ),
+              // Client
+              Expanded(
+                flex: 2,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: kBackgroundColor, borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(LucideIcons.user, size: 16, color: kTextSecondary),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(clientName, style: GoogleFonts.poppins(fontSize: 14, color: kTextPrimary), overflow: TextOverflow.ellipsis)),
+                  ],
+                ),
+              ),
+              // Date
+              Expanded(child: Text(_formatDate(bookingDate), style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary))),
+              // Price
+              Expanded(
+                child: price != null
+                    ? Text('₪${price.toStringAsFixed(0)}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: kSuccessColor))
+                    : Text('-', style: GoogleFonts.poppins(color: kTextSecondary)),
+              ),
+              // Status
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_getStatusIcon(status), size: 14, color: statusColor),
+                      const SizedBox(width: 6),
+                      Text(_getStatusText(status), style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: statusColor)),
+                    ],
+                  ),
+                ),
+              ),
+              // Actions
+              SizedBox(
+                width: 100,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (status != 'cancelled')
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () => _showCancelDialog(bookingId),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: kErrorColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(LucideIcons.x, size: 16, color: kErrorColor),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: kPrimaryLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(LucideIcons.eye, size: 16, color: kPrimaryColor),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📱 MOBILE LAYOUT
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildMobileLayout() {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: const Color(0xFFF5F5F5),

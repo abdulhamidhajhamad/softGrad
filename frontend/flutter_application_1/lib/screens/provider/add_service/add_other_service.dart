@@ -5,9 +5,23 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'booking_common_widgets.dart';
 import 'package:flutter_application_1/services/service_service.dart';
 import '../../map_location_picker.dart' hide kPrimaryColor, kTextColor;
+
+// ─────────────────────────────────────────────────────────────
+// 🎨 Design Tokens (Web Layout)
+// ─────────────────────────────────────────────────────────────
+const Color _kPrimaryColor = Color(0xFF6C63FF);
+const Color _kPrimaryLight = Color(0xFFE8E6FF);
+const Color _kBackgroundColor = Color(0xFFF8F9FC);
+const Color _kCardColor = Colors.white;
+const Color _kTextPrimary = Color(0xFF1A1D29);
+const Color _kTextSecondary = Color(0xFF6B7280);
+const Color _kSuccessColor = Color(0xFF10B981);
+const Color _kWarningColor = Color(0xFFF59E0B);
+const Color _kDangerColor = Color(0xFFEF4444);
 
 /// ✅ أنواع التسعير المتاحة
 enum PricingType {
@@ -416,6 +430,1458 @@ class _AddOtherServiceState extends State<AddOtherService> {
   // =====================================================
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 1100;
+        final isTablet = constraints.maxWidth >= 768 && constraints.maxWidth < 1100;
+        
+        if (isDesktop || isTablet) {
+          return _buildWebLayout(context, isDesktop);
+        }
+        return _buildMobileLayout(context);
+      },
+    );
+  }
+
+  // =====================================================
+  // 🌐 Web Layout
+  // =====================================================
+  Widget _buildWebLayout(BuildContext context, bool isDesktop) {
+    return Scaffold(
+      backgroundColor: _kBackgroundColor,
+      body: Column(
+        children: [
+          // Top Bar
+          _buildWebTopBar(context),
+          
+          // Main Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: isDesktop ? 48 : 24,
+                vertical: 32,
+              ),
+              child: Form(
+                key: _formKey,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Left Column - Main Form
+                    Expanded(
+                      flex: 6,
+                      child: Column(
+                        children: [
+                          // Service Info Card
+                          _buildWebSectionCard(
+                            title: "Service Details",
+                            icon: LucideIcons.sparkles,
+                            children: [
+                              _buildWebTextField(
+                                controller: nameCtrl,
+                                label: "Service Name",
+                                hint: "Enter your service name",
+                                icon: LucideIcons.tag,
+                                validator: (v) => (v == null || v.trim().isEmpty) ? "Required" : null,
+                              ),
+                              const SizedBox(height: 20),
+                              _buildWebTextField(
+                                controller: descCtrl,
+                                label: "Description",
+                                hint: "Describe your custom service...",
+                                icon: LucideIcons.alignLeft,
+                                maxLines: 4,
+                                validator: (v) => (v == null || v.trim().isEmpty) ? "Required" : null,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Booking Type Card
+                          _buildWebSectionCard(
+                            title: "Booking Type",
+                            icon: LucideIcons.calendar,
+                            children: [
+                              Text(
+                                "How do customers book this service?",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: _kTextSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              _buildWebBookingTypeSelector(),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Pricing Type Card
+                          _buildWebSectionCard(
+                            title: "Pricing Model",
+                            icon: LucideIcons.dollarSign,
+                            children: [
+                              Text(
+                                "How is the price calculated?",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: _kTextSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              _buildWebPricingTypeSelector(),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Location Card
+                          _buildWebSectionCard(
+                            title: "Service Location",
+                            icon: LucideIcons.mapPin,
+                            children: [
+                              _buildWebLocationTypeToggle(),
+                              if (_hasFixedLocation) ...[
+                                const SizedBox(height: 20),
+                                _buildWebDropdown(
+                                  label: "City",
+                                  value: _selectedCity,
+                                  items: kCities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                                  onChanged: (v) => setState(() => _selectedCity = v),
+                                ),
+                                const SizedBox(height: 16),
+                                _buildWebTextField(
+                                  controller: addressCtrl,
+                                  label: "Address",
+                                  hint: "Enter street address",
+                                  icon: LucideIcons.home,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildWebMapPicker(),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Pricing Card
+                          _buildWebSectionCard(
+                            title: "Pricing",
+                            icon: LucideIcons.coins,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: _buildWebTextField(
+                                      controller: priceCtrl,
+                                      label: "Price (${_selectedPricingType.label})",
+                                      hint: "0.00",
+                                      icon: LucideIcons.dollarSign,
+                                      keyboardType: TextInputType.number,
+                                      validator: (v) {
+                                        if (v == null || v.trim().isEmpty) return "Required";
+                                        final p = double.tryParse(v.trim());
+                                        if (p == null || p <= 0) return "Invalid";
+                                        return null;
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildWebTextField(
+                                      controller: discountCtrl,
+                                      label: "Discount",
+                                      hint: "0",
+                                      icon: LucideIcons.percent,
+                                      keyboardType: TextInputType.number,
+                                      suffix: "%",
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_finalPrice != null) ...[
+                                const SizedBox(height: 20),
+                                _buildWebPricePreview(),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Availability Card
+                          _buildWebSectionCard(
+                            title: "Available Days",
+                            icon: LucideIcons.calendarDays,
+                            children: [
+                              Text(
+                                "Select which days this service is available",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: _kTextSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: _weekdays.map((day) => _buildWebDayChip(day)).toList(),
+                              ),
+                              const SizedBox(height: 16),
+                              _buildWebDaysSummary(),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Dynamic sections based on booking type
+                          if (_selectedBookingType == BookingTypeOption.hourly) ...[
+                            _buildWebSectionCard(
+                              title: "Hourly Options",
+                              icon: LucideIcons.clock,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildWebTimePicker("From", _from, _pickFrom),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: _buildWebTimePicker("To", _to, _pickTo),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildWebTextField(
+                                        controller: minHoursCtrl,
+                                        label: "Min Hours",
+                                        hint: "1",
+                                        icon: LucideIcons.arrowDown,
+                                        keyboardType: TextInputType.number,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: _buildWebTextField(
+                                        controller: maxHoursCtrl,
+                                        label: "Max Hours",
+                                        hint: "8",
+                                        icon: LucideIcons.arrowUp,
+                                        keyboardType: TextInputType.number,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                          ],
+                          
+                          if (_selectedBookingType == BookingTypeOption.capacity) ...[
+                            _buildWebSectionCard(
+                              title: "Capacity Options",
+                              icon: LucideIcons.users,
+                              children: [
+                                _buildWebCapacityUnitSelector(),
+                                const SizedBox(height: 20),
+                                _buildWebCapacityStepper(),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                          ],
+                          
+                          // Gallery Card
+                          _buildWebSectionCard(
+                            title: "Gallery",
+                            icon: LucideIcons.image,
+                            children: [
+                              Text(
+                                "Upload up to $_maxMediaItems images or videos",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: _kTextSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              MultiMediaGalleryBox(
+                                mediaItems: _mediaItems,
+                                onPickImages: _pickImages,
+                                onPickVideo: _pickVideo,
+                                onRemove: _removeMediaItem,
+                                maxItems: _maxMediaItems,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    SizedBox(width: isDesktop ? 32 : 20),
+                    
+                    // Right Column - Settings
+                    Expanded(
+                      flex: 4,
+                      child: Column(
+                        children: [
+                          // Quick Preview
+                          _buildWebPreviewCard(),
+                          const SizedBox(height: 24),
+                          
+                          // Additional Info
+                          _buildWebSectionCard(
+                            title: "Additional Info",
+                            icon: LucideIcons.listPlus,
+                            children: [
+                              Text(
+                                "Add highlights or extra details",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: _kTextSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              AdditionalInfoSection(
+                                items: _additionalInfo,
+                                onAdd: _addAdditionalInfo,
+                                onRemove: _removeAdditionalInfo,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Visibility Toggle
+                          _buildWebSectionCard(
+                            title: "Visibility",
+                            icon: LucideIcons.eye,
+                            children: [
+                              _buildWebVisibilityToggle(),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          
+                          // Tips Card
+                          _buildWebTipsCard(),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 🔝 Web Top Bar
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebTopBar(BuildContext context) {
+    return Container(
+      height: 70,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      decoration: BoxDecoration(
+        color: _kCardColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Back Button
+          InkWell(
+            onTap: () => Navigator.pop(context),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _kBackgroundColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(LucideIcons.arrowLeft, size: 20, color: _kTextPrimary),
+            ),
+          ),
+          const SizedBox(width: 20),
+          
+          // Icon
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [_kPrimaryColor, _kPrimaryColor.withOpacity(0.8)],
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(LucideIcons.sparkles, size: 22, color: Colors.white),
+          ),
+          const SizedBox(width: 16),
+          
+          // Title
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Add Custom Service",
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: _kTextPrimary,
+                ),
+              ),
+              Text(
+                "Create a fully customizable service",
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: _kTextSecondary,
+                ),
+              ),
+            ],
+          ),
+          
+          const Spacer(),
+          
+          // Save Button
+          ElevatedButton.icon(
+            onPressed: _saving ? null : _trySave,
+            icon: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(LucideIcons.check, size: 18),
+            label: Text(_saving ? "Saving..." : "Create Service"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kPrimaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 📦 Web Section Card
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: _kCardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _kPrimaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 20, color: _kPrimaryColor),
+              ),
+              const SizedBox(width: 14),
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: _kTextPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 📝 Web Text Field
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    String? suffix,
+    String? Function(String?)? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: _kTextPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          keyboardType: keyboardType,
+          validator: validator,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: GoogleFonts.poppins(
+              fontSize: 14,
+              color: _kTextSecondary.withOpacity(0.6),
+            ),
+            prefixIcon: Icon(icon, size: 20, color: _kPrimaryColor),
+            suffixText: suffix,
+            filled: true,
+            fillColor: _kBackgroundColor,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: _kPrimaryColor, width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: _kDangerColor),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 📅 Web Booking Type Selector
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebBookingTypeSelector() {
+    return Row(
+      children: BookingTypeOption.values.map((type) {
+        final selected = _selectedBookingType == type;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => _selectedBookingType = type),
+            child: Container(
+              margin: EdgeInsets.only(
+                right: type != BookingTypeOption.values.last ? 12 : 0,
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+              decoration: BoxDecoration(
+                color: selected ? _kPrimaryLight : _kBackgroundColor,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: selected ? _kPrimaryColor : Colors.grey.shade200,
+                  width: selected ? 2 : 1,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    type.icon,
+                    color: selected ? _kPrimaryColor : _kTextSecondary,
+                    size: 28,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    type.label,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? _kPrimaryColor : _kTextSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 💵 Web Pricing Type Selector
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebPricingTypeSelector() {
+    return Row(
+      children: PricingType.values.map((type) {
+        final selected = _selectedPricingType == type;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => _selectedPricingType = type),
+            child: Container(
+              margin: EdgeInsets.only(
+                right: type != PricingType.values.last ? 12 : 0,
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFFD1FAE5) : _kBackgroundColor,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: selected ? _kSuccessColor : Colors.grey.shade200,
+                  width: selected ? 2 : 1,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    type.icon,
+                    color: selected ? _kSuccessColor : _kTextSecondary,
+                    size: 28,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    type.label,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? _kSuccessColor : _kTextSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 📍 Web Location Type Toggle
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebLocationTypeToggle() {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: _kBackgroundColor,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _hasFixedLocation = true),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: _hasFixedLocation ? _kCardColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: _hasFixedLocation ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 6,
+                    ),
+                  ] : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      LucideIcons.store,
+                      size: 20,
+                      color: _hasFixedLocation ? _kPrimaryColor : _kTextSecondary,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Fixed Location",
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _hasFixedLocation ? _kPrimaryColor : _kTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _hasFixedLocation = false),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: !_hasFixedLocation ? _kCardColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: !_hasFixedLocation ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 6,
+                    ),
+                  ] : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      LucideIcons.truck,
+                      size: 20,
+                      color: !_hasFixedLocation ? _kWarningColor : _kTextSecondary,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Go to Client",
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: !_hasFixedLocation ? _kWarningColor : _kTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 🗺️ Web Map Picker
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebMapPicker() {
+    return InkWell(
+      onTap: () async {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => MapLocationPicker()),
+        );
+        if (result != null && result is Map<String, dynamic>) {
+          setState(() {
+            _selectedLat = result['latitude'];
+            _selectedLng = result['longitude'];
+            _hasLocationSet = true;
+            if (result['address'] != null) {
+              addressCtrl.text = result['address'];
+            }
+          });
+        }
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _hasLocationSet ? const Color(0xFFD1FAE5) : _kBackgroundColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _hasLocationSet ? _kSuccessColor : Colors.grey.shade200,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _hasLocationSet ? _kSuccessColor.withOpacity(0.2) : _kPrimaryLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _hasLocationSet ? LucideIcons.checkCircle : LucideIcons.map,
+                color: _hasLocationSet ? _kSuccessColor : _kPrimaryColor,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _hasLocationSet ? "Location Set" : "Pick Location on Map",
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: _hasLocationSet ? _kSuccessColor : _kTextPrimary,
+                    ),
+                  ),
+                  if (_hasLocationSet)
+                    Text(
+                      "${_selectedLat?.toStringAsFixed(4)}, ${_selectedLng?.toStringAsFixed(4)}",
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: _kTextSecondary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Icon(
+              LucideIcons.chevronRight,
+              color: _kTextSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 🔢 Web Dropdown
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebDropdown({
+    required String label,
+    required String? value,
+    required List<DropdownMenuItem<String>> items,
+    required void Function(String?) onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: _kTextPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: value,
+          items: items,
+          onChanged: onChanged,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: _kBackgroundColor,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: _kPrimaryColor, width: 1.5),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 📅 Web Day Chip
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebDayChip(String day) {
+    final selected = _selectedDays.contains(day);
+    return InkWell(
+      onTap: () {
+        setState(() {
+          if (selected) {
+            _selectedDays.remove(day);
+          } else {
+            _selectedDays.add(day);
+          }
+        });
+      },
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? _kPrimaryColor : _kBackgroundColor,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: selected ? _kPrimaryColor : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          _day3(day),
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : _kTextSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 📊 Web Days Summary
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebDaysSummary() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: _kPrimaryLight,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(LucideIcons.calendarCheck, size: 18, color: _kPrimaryColor),
+          const SizedBox(width: 10),
+          Text(
+            _daysSummary(),
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _kPrimaryColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // ⏰ Web Time Picker
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebTimePicker(String label, TimeOfDay? time, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _kBackgroundColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _kPrimaryLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(LucideIcons.clock, color: _kPrimaryColor, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: _kTextSecondary,
+                    ),
+                  ),
+                  Text(
+                    _fmtTime(time),
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: _kTextPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 👥 Web Capacity Unit Selector
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebCapacityUnitSelector() {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: _kBackgroundColor,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _capacityUnit = "person"),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: _capacityUnit == "person" ? _kCardColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: _capacityUnit == "person" ? [
+                    BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6),
+                  ] : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      LucideIcons.user,
+                      size: 20,
+                      color: _capacityUnit == "person" ? _kPrimaryColor : _kTextSecondary,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Per Person",
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _capacityUnit == "person" ? _kPrimaryColor : _kTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _capacityUnit = "piece"),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: _capacityUnit == "piece" ? _kCardColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: _capacityUnit == "piece" ? [
+                    BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6),
+                  ] : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      LucideIcons.package,
+                      size: 20,
+                      color: _capacityUnit == "piece" ? _kPrimaryColor : _kTextSecondary,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Per Piece",
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _capacityUnit == "piece" ? _kPrimaryColor : _kTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 🔢 Web Capacity Stepper
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebCapacityStepper() {
+    final unitLabel = _capacityUnit == "piece" ? "pieces" : "people";
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _kBackgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _kPrimaryLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(LucideIcons.users, color: _kPrimaryColor, size: 22),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              "Maximum $unitLabel",
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _kTextPrimary,
+              ),
+            ),
+          ),
+          _buildWebStepperButton(LucideIcons.minus, () {
+            if (_maxCapacity > 1) setState(() => _maxCapacity--);
+          }),
+          const SizedBox(width: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: _kCardColor,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Text(
+              "$_maxCapacity",
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: _kTextPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          _buildWebStepperButton(LucideIcons.plus, () {
+            if (_maxCapacity < 1000) setState(() => _maxCapacity++);
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebStepperButton(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _kPrimaryLight,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _kPrimaryColor.withOpacity(0.3)),
+        ),
+        child: Icon(icon, color: _kPrimaryColor, size: 20),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 💰 Web Price Preview
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebPricePreview() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            _kSuccessColor.withOpacity(0.1),
+            _kSuccessColor.withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _kSuccessColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _kSuccessColor.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(LucideIcons.badgeDollarSign, color: _kSuccessColor, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Final Price",
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: _kTextSecondary,
+                  ),
+                ),
+                Text(
+                  "\$${_finalPrice!.toStringAsFixed(2)} ${_selectedPricingType.label}",
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: _kSuccessColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_savedAmount != null && _savedAmount! > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: _kDangerColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                "Save \$${_savedAmount!.toStringAsFixed(2)}",
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: _kDangerColor,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 👁️ Web Visibility Toggle
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebVisibilityToggle() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _kBackgroundColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _visibleInSearch ? _kPrimaryLight : Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _visibleInSearch ? LucideIcons.eye : LucideIcons.eyeOff,
+              color: _visibleInSearch ? _kPrimaryColor : _kTextSecondary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Visible in Search",
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _kTextPrimary,
+                  ),
+                ),
+                Text(
+                  "Make this service discoverable",
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: _kTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: _visibleInSearch,
+            onChanged: (v) => setState(() => _visibleInSearch = v),
+            activeColor: _kPrimaryColor,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 🎯 Web Preview Card
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebPreviewCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _kPrimaryColor.withOpacity(0.1),
+            const Color(0xFF8B5CF6).withOpacity(0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kPrimaryColor.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _kPrimaryColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(LucideIcons.sparkles, size: 24, color: _kPrimaryColor),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Quick Preview",
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _kTextPrimary,
+                      ),
+                    ),
+                    Text(
+                      "How your service looks",
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: _kTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _buildWebInfoPill(LucideIcons.tag, nameCtrl.text.isEmpty ? "Service Name" : nameCtrl.text),
+          const SizedBox(height: 10),
+          _buildWebInfoPill(LucideIcons.calendar, _selectedBookingType.label),
+          const SizedBox(height: 10),
+          _buildWebInfoPill(LucideIcons.dollarSign, _selectedPricingType.label),
+          const SizedBox(height: 10),
+          _buildWebInfoPill(LucideIcons.mapPin, _hasFixedLocation ? (_selectedCity ?? "City") : "Mobile"),
+          const SizedBox(height: 10),
+          _buildWebInfoPill(LucideIcons.calendarDays, _daysSummary()),
+          if (_finalPrice != null) ...[
+            const SizedBox(height: 10),
+            _buildWebInfoPill(LucideIcons.coins, "\$${_finalPrice!.toStringAsFixed(2)}"),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebInfoPill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: _kCardColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: _kPrimaryColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: _kTextPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 💡 Web Tips Card
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildWebTipsCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kWarningColor.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.lightbulb, size: 20, color: _kWarningColor),
+              const SizedBox(width: 10),
+              Text(
+                "Quick Tips",
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _kWarningColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildWebTipItem("Use clear, descriptive names"),
+          _buildWebTipItem("Add high-quality photos"),
+          _buildWebTipItem("Set competitive pricing"),
+          _buildWebTipItem("Choose the right booking type"),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebTipItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 6),
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: _kWarningColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: const Color(0xFF92400E),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // 📱 Mobile Layout
+  // =====================================================
+  Widget _buildMobileLayout(BuildContext context) {
     return Scaffold(
       backgroundColor: kBackgroundColor,
       appBar: AppBar(

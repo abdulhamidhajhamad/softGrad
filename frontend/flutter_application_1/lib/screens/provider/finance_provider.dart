@@ -3,11 +3,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_application_1/services/finance_provider_service.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'dart:math' as math;
 
-const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
-const Color kTextColor = Colors.black;
-const Color kBackgroundColor = Color(0xFFF8F9FA);
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎨 Design Tokens - Modern Purple Theme
+// ═══════════════════════════════════════════════════════════════════════════
+const Color kPrimaryColor = Color(0xFF6C63FF);
+const Color kPrimaryLight = Color(0xFFE8E6FF);
+const Color kTextColor = Color(0xFF1A1D29);
+const Color kTextSecondary = Color(0xFF6B7280);
+const Color kBackgroundColor = Color(0xFFF8F9FC);
 const Color kCardColor = Colors.white;
 const Color kSuccessColor = Color(0xFF10B981);
 const Color kWarningColor = Color(0xFFF59E0B);
@@ -61,6 +67,454 @@ class _FinanceProviderScreenState extends State<FinanceProviderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 1100;
+        final isTablet = constraints.maxWidth >= 768 && constraints.maxWidth < 1100;
+
+        if (isDesktop || isTablet) {
+          return _buildWebLayout(isDesktop);
+        }
+        return _buildMobileLayout();
+      },
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🌐 WEB LAYOUT - Modern Dashboard Style
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWebLayout(bool isDesktop) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: kBackgroundColor,
+        body: const Center(child: CircularProgressIndicator(color: kPrimaryColor)),
+      );
+    }
+
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: kBackgroundColor,
+        body: Center(child: _buildErrorState()),
+      );
+    }
+
+    if (_financeData == null) {
+      return Scaffold(
+        backgroundColor: kBackgroundColor,
+        body: Center(child: _buildEmptyState()),
+      );
+    }
+
+    final summary = _financeData!.summary;
+    final servicesSales = _financeData!.servicesSales;
+    final recentBookings = _financeData!.recentBookings;
+
+    return Scaffold(
+      backgroundColor: kBackgroundColor,
+      body: Column(
+        children: [
+          // Modern Top Bar
+          Container(
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.arrowLeft, size: 18, color: kTextSecondary),
+                          const SizedBox(width: 8),
+                          Text('Back', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextSecondary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kPrimaryLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(LucideIcons.trendingUp, size: 20, color: kPrimaryColor),
+                ),
+                const SizedBox(width: 14),
+                Text(
+                  'Finance Overview',
+                  style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: kTextColor),
+                ),
+                const Spacer(),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: _loadFinanceData,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kPrimaryLight,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.refreshCw, size: 16, color: kPrimaryColor),
+                          const SizedBox(width: 8),
+                          Text('Refresh', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kPrimaryColor)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(horizontal: isDesktop ? 48 : 24, vertical: 32),
+              child: Center(
+                child: Container(
+                  constraints: BoxConstraints(maxWidth: isDesktop ? 1400 : double.infinity),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Main Stats Row
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Total Revenue Card
+                          Expanded(
+                            flex: 2,
+                            child: _buildWebRevenueCard(summary),
+                          ),
+                          const SizedBox(width: 24),
+                          // Stats Cards
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(child: _buildWebStatCard('Total Bookings', summary.totalBookings.toString(), LucideIcons.calendar, kPrimaryColor)),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: _buildWebStatCard('This Month', '₪${_formatNumber(summary.currentMonthRevenue)}', LucideIcons.trendingUp, kSuccessColor)),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(child: _buildWebStatCard('Cancelled', summary.cancelledCount.toString(), LucideIcons.xCircle, kDangerColor, subtitle: '₪${_formatNumber(summary.cancelledAmount)}')),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: _buildWebStatCard('Growth Rate', '${summary.growthRate >= 0 ? '+' : ''}${summary.growthRate.toStringAsFixed(1)}%', summary.growthRate >= 0 ? LucideIcons.arrowUpRight : LucideIcons.arrowDownRight, summary.growthRate >= 0 ? kSuccessColor : kDangerColor)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Charts Row
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Revenue Trend Chart
+                          Expanded(
+                            flex: 3,
+                            child: _buildWebChartSection(),
+                          ),
+                          const SizedBox(width: 24),
+                          // Services Sales
+                          Expanded(
+                            flex: 2,
+                            child: _buildWebServicesSalesSection(servicesSales),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Recent Bookings Table
+                      if (recentBookings.isNotEmpty) _buildWebRecentBookings(recentBookings),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebRevenueCard(FinanceSummary summary) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.85)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: kPrimaryColor.withOpacity(0.3), blurRadius: 24, offset: const Offset(0, 8))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(LucideIcons.wallet, size: 22, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Text('Total Revenue', style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            '₪${_formatNumber(summary.totalRevenue)}',
+            style: GoogleFonts.poppins(fontSize: 42, fontWeight: FontWeight.w800, color: Colors.white),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: summary.growthRate >= 0 ? kSuccessColor.withOpacity(0.2) : kDangerColor.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  summary.growthRate >= 0 ? LucideIcons.arrowUpRight : LucideIcons.arrowDownRight,
+                  size: 14,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${summary.growthRate >= 0 ? '+' : ''}${summary.growthRate.toStringAsFixed(1)}% vs last month',
+                  style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebStatCard(String label, String value, IconData icon, Color color, {String? subtitle}) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 22, color: color),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary)),
+                Text(value, style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: kTextColor)),
+                if (subtitle != null) Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: kTextSecondary)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebChartSection() {
+    final filteredTrend = _getFilteredTrend();
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(10)),
+                child: const Icon(LucideIcons.barChart3, size: 18, color: kPrimaryColor),
+              ),
+              const SizedBox(width: 12),
+              Text('Revenue Trend', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: kTextColor)),
+              const Spacer(),
+              _buildPeriodDropdown(),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 220,
+            child: filteredTrend.isEmpty
+                ? Center(child: Text('No trend data', style: GoogleFonts.poppins(color: kTextSecondary)))
+                : _SimpleBarChart(data: filteredTrend),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebServicesSalesSection(List<ServiceSalesData> servicesSales) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(10)),
+                child: const Icon(LucideIcons.pieChart, size: 18, color: kPrimaryColor),
+              ),
+              const SizedBox(width: 12),
+              Text('Sales by Service', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: kTextColor)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          if (servicesSales.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(child: Text('No sales data yet', style: GoogleFonts.poppins(color: kTextSecondary))),
+            )
+          else ...[
+            SizedBox(height: 160, child: _ServicesPieChart(services: servicesSales)),
+            const SizedBox(height: 16),
+            const Divider(),
+            ...servicesSales.map((s) => _ServiceSalesItem(service: s)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebRecentBookings(List<RecentBooking> bookings) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(LucideIcons.clock, size: 18, color: kPrimaryColor),
+                ),
+                const SizedBox(width: 12),
+                Text('Recent Bookings', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: kTextColor)),
+              ],
+            ),
+          ),
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(color: kBackgroundColor),
+            child: Row(
+              children: [
+                Expanded(flex: 2, child: Text('Client', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary))),
+                Expanded(flex: 2, child: Text('Service', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary))),
+                Expanded(child: Text('Date', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary))),
+                Expanded(child: Text('Amount', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary))),
+                Expanded(child: Text('Status', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary))),
+              ],
+            ),
+          ),
+          ...bookings.map((b) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade100))),
+            child: Row(
+              children: [
+                Expanded(flex: 2, child: Text('Customer', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: kTextColor))),
+                Expanded(flex: 2, child: Text(b.serviceName, style: GoogleFonts.poppins(fontSize: 14, color: kTextSecondary))),
+                Expanded(child: Text(_formatBookingDate(b.bookingDate ?? b.createdAt), style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary))),
+                Expanded(child: Text('₪${b.price.toStringAsFixed(0)}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: kSuccessColor))),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: b.status == 'confirmed' ? kSuccessColor.withOpacity(0.1) : kDangerColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      b.status.toUpperCase(),
+                      style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: b.status == 'confirmed' ? kSuccessColor : kDangerColor),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  String _formatBookingDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inDays == 0) return "Today";
+    if (diff.inDays == 1) return "Yesterday";
+    if (diff.inDays < 7) return "${diff.inDays} days ago";
+    return "${date.day}/${date.month}/${date.year}";
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📱 MOBILE LAYOUT
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildMobileLayout() {
     return Scaffold(
       backgroundColor: kBackgroundColor,
       appBar: AppBar(

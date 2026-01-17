@@ -1,3 +1,5 @@
+import 'package:flutter_application_1/services/auth_service.dart';
+
 class SalesItem {
   final String id;
   final String name;
@@ -8,8 +10,8 @@ class SalesItem {
   final int totalBookings;
   final int canceledBookings;
 
-  // Base URL for images (same as backend)
-  static const String _baseUrl = 'http://10.0.2.2:3000';
+  // ✅ Dynamic URL based on platform
+  static String get _baseUrl => AuthService.baseUrl;
 
   SalesItem({
     required this.id,

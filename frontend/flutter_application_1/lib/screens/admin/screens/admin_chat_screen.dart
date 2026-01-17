@@ -51,7 +51,7 @@ class _AdminChatScreenState extends State<AdminChatScreen> with WidgetsBindingOb
   String? _currentUserId;
   IO.Socket? _socket;
 
-  static const String _baseUrl = 'http://10.0.2.2:3000';
+  static String get _baseUrl => AuthService.baseUrl;
 
   @override
   void initState() {

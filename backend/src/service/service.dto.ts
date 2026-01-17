@@ -244,3 +244,50 @@ export class UpdateServiceDto {
   @IsBoolean()
   hasFixedLocation?: boolean;
 }
+//  NEW: Offer DTO for creating/updating service offers
+export class CreateOfferDto {
+  @IsNumber()
+  @Min(0)
+  discountedPrice: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPercentage?: number;
+
+  @IsString()
+  startDate: string; // ISO date string
+
+  @IsString()
+  endDate: string; // ISO date string
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+}
+
+export class UpdateOfferDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountedPrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPercentage?: number;
+
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+}

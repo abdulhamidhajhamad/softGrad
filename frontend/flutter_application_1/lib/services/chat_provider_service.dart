@@ -14,7 +14,9 @@ class ChatProviderService {
   factory ChatProviderService() => _instance;
   ChatProviderService._internal();
 
-static const String _baseUrl = 'http://10.0.2.2:3000';  
+  // ✅ استخدام AuthService.baseUrl بدلاً من URL ثابت
+  String get _baseUrl => AuthService.baseUrl;
+  static String get _staticBaseUrl => AuthService.baseUrl; // ✅ للـ static methods
   IO.Socket? _socket;
   static final ValueNotifier<int> unreadGlobalCount = ValueNotifier<int>(0);
   String? currentUserId;
@@ -392,7 +394,7 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
       
       // First, create or get existing chat
       final chatResponse = await http.post(
-        Uri.parse('$_baseUrl/chat/create'),
+        Uri.parse('$_staticBaseUrl/chat/create'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -413,7 +415,7 @@ static const String _baseUrl = 'http://10.0.2.2:3000';
         // Only send message if initialMessage is not empty
         if (initialMessage.isNotEmpty && chatId != null) {
           final msgResponse = await http.post(
-            Uri.parse('$_baseUrl/chat/send'),
+            Uri.parse('$_staticBaseUrl/chat/send'),
             headers: {
               'Authorization': 'Bearer $token',
               'Content-Type': 'application/json',

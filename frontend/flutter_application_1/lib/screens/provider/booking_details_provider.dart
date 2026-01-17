@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 /// 📋 Booking Details Screen for Provider
 /// Shows comprehensive details of a booking with modern design
@@ -15,15 +17,421 @@ class BookingDetailsProvider extends StatelessWidget {
     required this.booking,
   });
 
-  // 🎨 Theme Colors
-  static const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
+  // 🎨 Theme Colors - Modern Purple
+  static const Color kPrimaryColor = Color(0xFF6C63FF);
+  static const Color kPrimaryLight = Color(0xFFE8E6FF);
   static const Color kSuccessColor = Color(0xFF10B981);
   static const Color kDangerColor = Color(0xFFEF4444);
   static const Color kWarningColor = Color(0xFFF59E0B);
-  static const Color kBackgroundColor = Color(0xFFF8FAFC);
+  static const Color kBackgroundColor = Color(0xFFF8F9FC);
+  static const Color kTextPrimary = Color(0xFF1A1D29);
+  static const Color kTextSecondary = Color(0xFF6B7280);
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 1100;
+        final isTablet = constraints.maxWidth >= 768 && constraints.maxWidth < 1100;
+
+        if (isDesktop || isTablet) {
+          return _buildWebLayout(context, isDesktop);
+        }
+        return _buildMobileLayout(context);
+      },
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🌐 WEB LAYOUT - Modern Dashboard Style
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWebLayout(BuildContext context, bool isDesktop) {
+    final serviceName = booking['serviceName'] ?? 'Service';
+    final serviceImage = booking['serviceImage'];
+    final clientName = booking['clientName'] ?? 'Unknown Client';
+    final status = booking['status'] ?? 'confirmed';
+    final price = booking['price'];
+    final bookingDate = booking['bookingDate'];
+
+    final clientLocation = booking['clientLocation'];
+    final hasClientLocation = clientLocation != null && 
+        (clientLocation['address'] != null || clientLocation['city'] != null);
+
+    final bookingDescription = booking['bookingDescription'];
+    final hasDescription = bookingDescription != null && 
+        bookingDescription.toString().trim().isNotEmpty;
+
+    return Scaffold(
+      backgroundColor: kBackgroundColor,
+      body: Column(
+        children: [
+          // Modern Top Bar
+          Container(
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.arrowLeft, size: 18, color: kTextSecondary),
+                          const SizedBox(width: 8),
+                          Text('Back', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextSecondary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kPrimaryLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(LucideIcons.calendarCheck, size: 20, color: kPrimaryColor),
+                ),
+                const SizedBox(width: 14),
+                Text(
+                  'Booking Details',
+                  style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: kTextPrimary),
+                ),
+                const Spacer(),
+                _buildWebStatusBadge(status),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(horizontal: isDesktop ? 48 : 24, vertical: 32),
+              child: Center(
+                child: Container(
+                  constraints: BoxConstraints(maxWidth: isDesktop ? 1100 : double.infinity),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left Column - Main Details
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          children: [
+                            // Service Hero Card
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Service Image
+                                  Container(
+                                    height: 200,
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                                      gradient: serviceImage == null
+                                          ? LinearGradient(colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.7)])
+                                          : null,
+                                      image: serviceImage != null
+                                          ? DecorationImage(image: NetworkImage(serviceImage), fit: BoxFit.cover)
+                                          : null,
+                                    ),
+                                    child: serviceImage == null
+                                        ? Center(child: Icon(LucideIcons.image, size: 48, color: Colors.white.withOpacity(0.5)))
+                                        : null,
+                                  ),
+                                  // Service Info
+                                  Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(serviceName, style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                                        if (bookingDate != null) ...[
+                                          const SizedBox(height: 12),
+                                          Row(
+                                            children: [
+                                              const Icon(LucideIcons.calendar, size: 18, color: kPrimaryColor),
+                                              const SizedBox(width: 8),
+                                              Text(_formatDate(bookingDate), style: GoogleFonts.poppins(fontSize: 15, color: kTextSecondary)),
+                                            ],
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+
+                            // Client Info
+                            _buildWebInfoSection(
+                              'Client Information',
+                              LucideIcons.user,
+                              [
+                                _buildWebInfoRow(LucideIcons.user, 'Client Name', clientName),
+                              ],
+                            ),
+
+                            if (hasClientLocation) ...[
+                              const SizedBox(height: 20),
+                              _buildWebLocationCard(clientLocation),
+                            ],
+
+                            if (hasDescription) ...[
+                              const SizedBox(height: 20),
+                              _buildWebInfoSection(
+                                'Booking Description',
+                                LucideIcons.fileText,
+                                [
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Text(bookingDescription.toString(), style: GoogleFonts.poppins(fontSize: 14, color: kTextSecondary, height: 1.6)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      // Right Column - Price & Actions
+                      SizedBox(
+                        width: isDesktop ? 350 : 280,
+                        child: Column(
+                          children: [
+                            // Price Card
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.85)]),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [BoxShadow(color: kPrimaryColor.withOpacity(0.3), blurRadius: 24, offset: const Offset(0, 8))],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                                        child: const Icon(LucideIcons.wallet, size: 20, color: Colors.white),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text('Total Price', style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    price != null ? '₪${price.toStringAsFixed(0)}' : 'N/A',
+                                    style: GoogleFonts.poppins(fontSize: 36, fontWeight: FontWeight.w800, color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            // Status Card
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: _getStatusColor(status).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Icon(_getStatusIcon(status), color: _getStatusColor(status), size: 24),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('Status', style: GoogleFonts.poppins(fontSize: 12, color: kTextSecondary)),
+                                            Text(_getStatusText(status), style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: _getStatusColor(status))),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            // Timestamps
+                            _buildWebInfoSection(
+                              'Timestamps',
+                              LucideIcons.clock,
+                              [
+                                if (booking['createdAt'] != null) _buildWebInfoRow(LucideIcons.plus, 'Created', _formatFullDate(booking['createdAt'])),
+                                if (booking['updatedAt'] != null) _buildWebInfoRow(LucideIcons.edit, 'Updated', _formatFullDate(booking['updatedAt'])),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebStatusBadge(String status) {
+    final color = _getStatusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_getStatusIcon(status), size: 16, color: color),
+          const SizedBox(width: 8),
+          Text(_getStatusText(status), style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebInfoSection(String title, IconData icon, List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(icon, size: 18, color: kPrimaryColor),
+                ),
+                const SizedBox(width: 12),
+                Text(title, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary)),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: kTextSecondary),
+          const SizedBox(width: 12),
+          Text(label, style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary)),
+          const Spacer(),
+          Text(value, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextPrimary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebLocationCard(Map<String, dynamic> location) {
+    final address = location['address'] ?? 'N/A';
+    final city = location['city'] ?? 'N/A';
+    final description = location['locationDescription'] ?? '';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(LucideIcons.mapPin, size: 18, color: kPrimaryColor),
+                ),
+                const SizedBox(width: 12),
+                Text('Client Location', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary)),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          _buildWebInfoRow(LucideIcons.home, 'Address', address),
+          _buildWebInfoRow(LucideIcons.building, 'City', city),
+          if (description.isNotEmpty) _buildWebInfoRow(LucideIcons.info, 'Notes', description),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return DateFormat('EEEE, MMM d, yyyy').format(date);
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  String _formatFullDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return DateFormat('MMM d, yyyy • h:mm a').format(date);
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📱 MOBILE LAYOUT
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildMobileLayout(BuildContext context) {
     // 🆕 التحقق من وجود موقع العميل
     final clientLocation = booking['clientLocation'];
     final hasClientLocation = clientLocation != null && 

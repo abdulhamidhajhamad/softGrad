@@ -352,7 +352,98 @@ async getServiceDetailsById(@Param('serviceId') serviceId: string) {
     return this.serviceService.getPaginatedServicesWithDetails(limit, page);
   }
 
+  // ============================================================================
+  // ✅ OFFER MANAGEMENT ENDPOINTS
+  // ============================================================================
 
+  /**
+   * Get provider's services with offer status (Active Offers + Available Services)
+   */
+  @Get('offers/my-services')
+  @UseGuards(JwtAuthGuard)
+  async getMyServicesWithOffers(@Request() req: any) {
+    try {
+      const providerId = req.user.userId;
+      return await this.serviceService.getProviderServicesWithOffers(providerId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch services with offers',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
+  /**
+   * Create an offer for a service
+   */
+  @Post('offers/:serviceId')
+  @UseGuards(JwtAuthGuard)
+  async createOffer(
+    @Param('serviceId') serviceId: string,
+    @Body() offerData: {
+      discountedPrice: number;
+      discountPercentage?: number;
+      startDate: string;
+      endDate: string;
+      description?: string;
+    },
+    @Request() req: any
+  ) {
+    try {
+      const providerId = req.user.userId;
+      if (req.user.role !== 'vendor') {
+        throw new HttpException('Only vendors can create offers', HttpStatus.FORBIDDEN);
+      }
+      return await this.serviceService.createOffer(serviceId, providerId, offerData);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to create offer',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Remove an offer from a service
+   */
+  @Delete('offers/:serviceId')
+  @UseGuards(JwtAuthGuard)
+  async removeOffer(
+    @Param('serviceId') serviceId: string,
+    @Request() req: any
+  ) {
+    try {
+      const providerId = req.user.userId;
+      if (req.user.role !== 'vendor') {
+        throw new HttpException('Only vendors can remove offers', HttpStatus.FORBIDDEN);
+      }
+      return await this.serviceService.removeOffer(serviceId, providerId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to remove offer',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Admin: Cleanup expired offers (can also be called by cron job)
+   */
+  @Post('offers/cleanup-expired')
+  @UseGuards(JwtAuthGuard)
+  async cleanupExpiredOffers(@Request() req: any) {
+    try {
+      if (req.user.role !== 'admin') {
+        throw new HttpException('Only admins can trigger cleanup', HttpStatus.FORBIDDEN);
+      }
+      const count = await this.serviceService.cleanupExpiredOffers();
+      return { message: `Cleaned up ${count} expired offers` };
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to cleanup offers',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
   
 }

@@ -4,14 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_1/services/service_service.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import '../map_location_picker.dart' hide kPrimaryColor, kTextColor;
 
-// =====================
-// 🎨 Design Tokens
-// =====================
-const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
-const Color kBackgroundColor = Color(0xFFF7F8FC);
-const Color kTextColor = Color(0xFF0B1220);
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎨 Design Tokens - Modern Purple Theme
+// ═══════════════════════════════════════════════════════════════════════════
+const Color kPrimaryColor = Color(0xFF6C63FF);
+const Color kPrimaryLight = Color(0xFFE8E6FF);
+const Color kBackgroundColor = Color(0xFFF8F9FC);
+const Color kTextColor = Color(0xFF1A1D29);
+const Color kTextSecondary = Color(0xFF6B7280);
 const Color kMutedColor = Color(0xFF6B7280);
 const Color kSuccessColor = Color(0xFF10B981);
 const Color kErrorColor = Color(0xFFEF4444);
@@ -466,6 +469,262 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
   // =====================
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 1100;
+        final isTablet = constraints.maxWidth >= 768 && constraints.maxWidth < 1100;
+
+        if (isDesktop || isTablet) {
+          return _buildWebLayout(isDesktop);
+        }
+        return _buildMobileLayout();
+      },
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🌐 WEB LAYOUT - Modern Dashboard Style
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWebLayout(bool isDesktop) {
+    return Scaffold(
+      backgroundColor: kBackgroundColor,
+      body: Column(
+        children: [
+          // Modern Top Bar
+          Container(
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () {
+                      if (_hasChanges) {
+                        _showDiscardDialog();
+                      } else {
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.arrowLeft, size: 18, color: kTextSecondary),
+                          const SizedBox(width: 8),
+                          Text('Back', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextSecondary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kPrimaryLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(LucideIcons.edit3, size: 20, color: kPrimaryColor),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Edit Service', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: kTextColor)),
+                      Text(widget.existingData['serviceName'] ?? 'Service', style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary), overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+                if (_hasChanges)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    margin: const EdgeInsets.only(right: 16),
+                    decoration: BoxDecoration(
+                      color: kPrimaryLight,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(LucideIcons.alertCircle, size: 14, color: kPrimaryColor),
+                        const SizedBox(width: 6),
+                        Text('Unsaved changes', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kPrimaryColor)),
+                      ],
+                    ),
+                  ),
+                // Save Button
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: _isLoading ? null : _saveChanges,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.85)]),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [BoxShadow(color: kPrimaryColor.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : Row(
+                              children: [
+                                const Icon(LucideIcons.check, size: 18, color: Colors.white),
+                                const SizedBox(width: 8),
+                                Text('Save Changes', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(horizontal: isDesktop ? 48 : 24, vertical: 32),
+              child: Center(
+                child: Container(
+                  constraints: BoxConstraints(maxWidth: isDesktop ? 1200 : double.infinity),
+                  child: Form(
+                    key: _formKey,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left Column
+                        Expanded(
+                          flex: 6,
+                          child: Column(
+                            children: [
+                              _buildWebSection(
+                                icon: LucideIcons.image,
+                                title: 'Gallery',
+                                child: _buildImagesSection(),
+                              ),
+                              const SizedBox(height: 24),
+                              _buildWebSection(
+                                icon: LucideIcons.info,
+                                title: 'Basic Information',
+                                child: _buildBasicInfoSection(),
+                              ),
+                              const SizedBox(height: 24),
+                              _buildWebSection(
+                                icon: LucideIcons.mapPin,
+                                title: 'Location',
+                                child: Column(
+                                  children: [
+                                    _buildLocationTypeToggle(),
+                                    if (_hasFixedLocation) ...[
+                                      const SizedBox(height: 16),
+                                      _buildLocationSection(),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: isDesktop ? 32 : 20),
+                        // Right Column
+                        SizedBox(
+                          width: isDesktop ? 380 : 320,
+                          child: Column(
+                            children: [
+                              _buildWebSection(
+                                icon: LucideIcons.tag,
+                                title: 'Category',
+                                child: _buildCategorySection(),
+                              ),
+                              const SizedBox(height: 20),
+                              _buildWebSection(
+                                icon: LucideIcons.wallet,
+                                title: 'Pricing',
+                                child: _buildPricingSection(),
+                              ),
+                              const SizedBox(height: 20),
+                              _buildWebSection(
+                                icon: LucideIcons.calendar,
+                                title: 'Availability',
+                                child: _buildAvailabilitySection(),
+                              ),
+                              const SizedBox(height: 20),
+                              if (_bookingType == 'hourly')
+                                _buildWebSection(
+                                  icon: LucideIcons.clock,
+                                  title: 'Hourly Settings',
+                                  child: _buildHourlySettingsSection(),
+                                ),
+                              if (_bookingType == 'capacity' || _bookingType == 'mixed')
+                                _buildWebSection(
+                                  icon: LucideIcons.users,
+                                  title: 'Capacity Settings',
+                                  child: _buildCapacitySection(),
+                                ),
+                              const SizedBox(height: 20),
+                              _buildWebSection(
+                                icon: LucideIcons.settings,
+                                title: 'Status',
+                                child: _buildStatusSection(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebSection({required IconData icon, required String title, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, size: 18, color: kPrimaryColor),
+              ),
+              const SizedBox(width: 12),
+              Text(title, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: kTextColor)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          child,
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📱 MOBILE LAYOUT
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildMobileLayout() {
     return Scaffold(
       backgroundColor: kBackgroundColor,
       body: SafeArea(

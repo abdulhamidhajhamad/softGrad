@@ -1,15 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 
 import '../payment/cart.dart';
-import '../chat/chat_inside_search.dart';
+import '../chat/chat_customer_home_page.dart'; // ✅ Real chat
 import '../../../widgets/booking_details_modal.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/user_service/chat_user_service.dart'; // ✅ Chat service
+import '../../../services/service_locator.dart'; // ✅ For getIt
 
 const Color kPrimary = Color.fromARGB(215, 20, 20, 215);
 const Color kBg = Color(0xFFF6F7FB);
@@ -289,17 +292,79 @@ class _ServiceInsideSearchScreenState extends State<ServiceInsideSearchScreen> {
 
   String _money(double v) => '₪${v.toStringAsFixed(0)}';
 
-  void _openChat(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ChatInsideSearchScreen(
-          providerName: widget.data.companyName,
-          providerEmail: widget.data.contactEmail,
-          providerPhone: widget.data.contactPhone,
+  // ✅ Open real chat with backend
+  Future<void> _openChat(BuildContext context) async {
+    // Get providerId from service data
+    final providerId = _serviceData?['providerId']?.toString() ?? '';
+    
+    if (providerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot start chat: Provider not available'),
+          backgroundColor: Colors.red,
         ),
+      );
+      return;
+    }
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: kPrimary),
       ),
     );
+
+    try {
+      // ✅ Use getIt to get the same ChatUserService instance
+      final chatService = getIt<ChatUserService>();
+      await chatService.initializeUserId();
+      await chatService.initSocket();
+      
+      final chatId = await chatService.createChat(providerId);
+      
+      if (mounted) Navigator.pop(context); // Close loading
+      
+      if (chatId != null && mounted) {
+        // Navigate to real chat
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatThreadPage(
+              thread: ChatThreadModel(
+                id: chatId,
+                type: ThreadType.vendor,
+                title: widget.data.companyName,
+                lastMessage: '',
+                lastTime: DateTime.now(),
+                unreadCount: 0,
+                online: false,
+              ),
+            ),
+          ),
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to start chat'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Close loading
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _openBookingModal(BuildContext context) async {
@@ -557,7 +622,7 @@ class _ServiceInsideSearchScreenState extends State<ServiceInsideSearchScreen> {
                       ),
                       icon: Icon(Icons.chat_bubble_rounded, color: kPrimary),
                       label: Text(
-                        'Start Chat',
+                        'Start Chat with Provider',
                         style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText),
                       ),
                     ),

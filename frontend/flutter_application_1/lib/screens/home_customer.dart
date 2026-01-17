@@ -13,6 +13,7 @@ import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
 import 'package:flutter_application_1/services/user_service/home_user_service.dart';
 import 'package:flutter_application_1/services/user_service/chat_user_service.dart';
+import 'package:flutter_application_1/services/service_locator.dart'; // ✅ Added for getIt
 import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -1533,7 +1534,8 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
     );
 
     try {
-      final chatService = ChatUserService();
+      // ✅ استخدام getIt للحصول على نفس الـ instance
+      final chatService = getIt<ChatUserService>();
       await chatService.initializeUserId();
       await chatService.initSocket();
       

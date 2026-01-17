@@ -6,6 +6,7 @@ import { ServiceSchema } from './service.schema';
 import { SupabaseStorageModule } from '../subbase/supabaseStorage.module';
 import { ServiceProvider, ServiceProviderSchema } from '../providers/provider.entity';
 import { Review, ReviewSchema } from '../review/review.schema'; // ✅ NEW
+import { OfferCleanupScheduler } from './offer-cleanup.scheduler'; // ✅ SCHEDULER
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { Review, ReviewSchema } from '../review/review.schema'; // ✅ NEW
     SupabaseStorageModule, 
   ],
   controllers: [ServiceController],
-  providers: [ServiceService],
+  providers: [ServiceService, OfferCleanupScheduler], // ✅ ADD SCHEDULER
   exports: [ServiceService]
 })
 export class ServiceModule {}

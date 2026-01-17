@@ -233,6 +233,17 @@ static Future<Map<String, dynamic>> addService({
       additionalInfo['maxCapacity'] = maxCapacity;
     }
 
+    // ✅ إضافة highlights (key-value pairs) في additionalInfo
+    if (highlights.isNotEmpty) {
+      for (final item in highlights) {
+        final key = item['key']?.trim();
+        final value = item['value']?.trim();
+        if (key != null && key.isNotEmpty && value != null && value.isNotEmpty) {
+          additionalInfo[key] = value;
+        }
+      }
+    }
+
     final createServiceDtoForJson = <String, dynamic>{
       'serviceName': title,
       'category': category,

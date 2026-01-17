@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-// **التعديل هنا:** استيراد الخدمة الموحدة
 import 'package:flutter_application_1/services/auth_service.dart';
+import 'package:flutter_application_1/widgets/auth/auth_responsive_wrapper.dart';
 
+/// ✅ Responsive Sign Up Screen for Mobile & Web
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);
 
@@ -41,7 +42,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _isLoading = false;
 
   // لحفظ الدور الحالي
-  String _currentRole = 'customer';
+  String _currentRole = 'user'; // ✅ تم تغييره من 'customer' إلى 'user'
 
   @override
   void initState() {
@@ -108,7 +109,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       // **التعديل هنا:** قراءة الدور من الـ Arguments
       final arguments =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      final String userRole = arguments?['role'] ?? 'customer';
+      final String userRole = arguments?['role'] ?? 'user'; // ✅ Backend يتوقع 'user' وليس 'customer'
 
       try {
         // **التعديل هنا:** استخدام AuthService.signup وتمرير الدور
@@ -120,7 +121,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           city: _selectedCity == 'Other'
               ? _otherCityCtrl.text.trim()
               : _selectedCity!,
-          role: userRole, // تمرير الدور ('customer' أو 'vendor')
+          role: userRole, // تمرير الدور ('user' أو 'vendor')
         );
 
         if (response.containsKey('message')) {
@@ -236,333 +237,225 @@ class _SignUpScreenState extends State<SignUpScreen> {
     // قراءة الدور وتحديث حالة الواجهة عند تغيير التبعيات
     final arguments =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    _currentRole = arguments?['role'] ?? 'customer';
+    _currentRole = arguments?['role'] ?? 'user';
   }
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    // لتحديد النص المعروض بناءً على الدور
-    final String roleDisplay =
-        _currentRole == 'vendor' ? 'Provider' : 'Customer';
+    final String roleDisplay = _currentRole == 'vendor' ? 'Provider' : 'Customer';
 
-    return Scaffold(
-      backgroundColor: Colors.white,
+    return AuthResponsiveWrapper(
+      pageType: AuthPageType.signUp,
+      showBackButton: true,
+      onBack: () => Navigator.pop(context),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
 
-      // BACK BUTTON → يعود لصفحة choose_role
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.black,
-          ),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
-      ),
+            Text(
+              'Create Account',
+              style: GoogleFonts.poppins(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF1A1A2E),
+              ),
+            ),
 
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            24,
-            media.padding.top > 0 ? 16 : 24,
-            24,
-            16 + media.viewInsets.bottom,
-          ),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            const SizedBox(height: 4),
+
+            Row(
               children: [
                 Text(
-                  // **التعديل هنا:** عرض الدور
-                  'Create Account as $roleDisplay',
+                  'Signing up as ',
                   style: GoogleFonts.poppins(
-                    fontSize: 23,
-                    fontWeight: FontWeight.w700,
-                    color: kTextColor,
-                    height: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 6),
-
-                Text(
-                  'Join our wedding community in a few steps',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
+                    fontSize: 14.5,
                     color: Colors.grey.shade600,
                   ),
                 ),
-
-                const SizedBox(height: 24),
-
-                // Full Name
-                _label('Full Name'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  controller: _nameCtrl,
-                  decoration: _decor(
-                    hint: 'Enter your full name',
-                    icon: Icons.person_outline,
-                  ),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Enter your name'
-                      : null,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Email
-                _label('Email'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: _decor(
-                    hint: 'you@example.com',
-                    icon: Icons.email_outlined,
-                  ),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) {
-                      return 'Enter your email';
-                    }
-                    final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                        .hasMatch(v.trim());
-                    return ok ? null : 'Enter a valid email';
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // Phone
-                _label('Phone Number'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  controller: _phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: _decor(
-                    hint: 'Enter your phone number',
-                    icon: Icons.phone_outlined,
-                  ),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Enter phone number'
-                      : null,
-                ),
-
-                const SizedBox(height: 16),
-
-                // City Dropdown
-                _label('City'),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  value: _selectedCity,
-                  items: _cities
-                      .map(
-                        (city) => DropdownMenuItem(
-                          value: city,
-                          child: Text(
-                            city,
-                            style: GoogleFonts.poppins(fontSize: 14),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  decoration: _decor(
-                    hint: 'Select your city',
-                    icon: Icons.location_city_outlined,
-                  ),
-                  onChanged: (value) => setState(() => _selectedCity = value),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Select your city' : null,
-                ),
-
-                if (_selectedCity == 'Other') ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    controller: _otherCityCtrl,
-                    decoration: _decor(
-                      hint: 'Enter your city',
-                      icon: Icons.edit_location_alt_outlined,
-                    ),
-                    validator: (v) {
-                      if (_selectedCity == 'Other' &&
-                          (v == null || v.trim().isEmpty)) {
-                        return 'Please enter your city';
-                      }
-                      return null;
-                    },
-                  ),
-                ],
-
-                const SizedBox(height: 16),
-
-                // Password
-                _label('Password'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  controller: _passCtrl,
-                  obscureText: !_showPass,
-                  onChanged: _evaluatePasswordStrength,
-                  decoration: _decor(
-                    hint: '••••••••',
-                    icon: Icons.lock_outline,
-                    suffix: IconButton(
-                      onPressed: () {
-                        setState(() => _showPass = !_showPass);
-                      },
-                      icon: Icon(
-                        _showPass
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
-                    ),
-                  ),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Enter a password' : null,
-                ),
-
-                if (_passwordStrengthLabel.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  ClipRRect(
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: kPrimaryColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      minHeight: 6,
-                      value: _strengthValue(),
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        _passwordStrengthColor,
-                      ),
-                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.bolt_rounded,
-                        size: 16,
-                        color: _passwordStrengthColor,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Password strength: $_passwordStrengthLabel',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _passwordStrengthColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-
-                const SizedBox(height: 16),
-
-                // Confirm Password
-                _label('Confirm Password'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  controller: _confirmCtrl,
-                  obscureText: !_showConfirm,
-                  decoration: _decor(
-                    hint: '••••••••',
-                    icon: Icons.lock_outline,
-                    suffix: IconButton(
-                      onPressed: () =>
-                          setState(() => _showConfirm = !_showConfirm),
-                      icon: Icon(
-                        _showConfirm
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
+                  child: Text(
+                    roleDisplay,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: kPrimaryColor,
                     ),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Confirm your password';
-                    if (v != _passCtrl.text) return 'Passwords do not match';
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 24),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kPrimaryButtonColor,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(56),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isLoading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : Text(
-                            // **التعديل هنا:** عرض الدور
-                            'Sign up as $roleDisplay',
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                            ),
-                          ),
                   ),
                 ),
-
-                const SizedBox(height: 20),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Already have an account?',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    InkWell(
-                      onTap: _isLoading
-                          ? null
-                          : () => Navigator.pushReplacementNamed(
-                              context, '/signin'),
-                      child: Text(
-                        '  Sign In',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: _isLoading
-                              ? Colors.grey.shade400
-                              : kPrimaryButtonColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
               ],
             ),
-          ),
+
+            const SizedBox(height: 32),
+
+            // Full Name
+            AuthTextField(
+              controller: _nameCtrl,
+              label: 'Full Name',
+              hint: 'Enter your full name',
+              prefixIcon: Icons.person_outline,
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter your name' : null,
+            ),
+
+            const SizedBox(height: 16),
+
+            // Email
+            AuthTextField(
+              controller: _emailCtrl,
+              label: 'Email',
+              hint: 'you@example.com',
+              prefixIcon: Icons.email_outlined,
+              keyboardType: TextInputType.emailAddress,
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Enter your email';
+                final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(v.trim());
+                return ok ? null : 'Enter a valid email';
+              },
+            ),
+
+            const SizedBox(height: 16),
+
+            // Phone
+            AuthTextField(
+              controller: _phoneCtrl,
+              label: 'Phone Number',
+              hint: 'Enter your phone number',
+              prefixIcon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter phone number' : null,
+            ),
+
+            const SizedBox(height: 16),
+
+            // City Dropdown
+            AuthDropdownField<String>(
+              label: 'City',
+              hint: 'Select your city',
+              prefixIcon: Icons.location_city_outlined,
+              value: _selectedCity,
+              items: _cities.map((city) => DropdownMenuItem(
+                value: city,
+                child: Text(city, style: GoogleFonts.poppins(fontSize: 14)),
+              )).toList(),
+              onChanged: (v) => setState(() => _selectedCity = v),
+              validator: (v) => (v == null || v.isEmpty) ? 'Select your city' : null,
+            ),
+
+            if (_selectedCity == 'Other') ...[
+              const SizedBox(height: 12),
+              AuthTextField(
+                controller: _otherCityCtrl,
+                label: 'Your City',
+                hint: 'Enter your city',
+                prefixIcon: Icons.edit_location_alt_outlined,
+                validator: (v) {
+                  if (_selectedCity == 'Other' && (v == null || v.trim().isEmpty)) {
+                    return 'Please enter your city';
+                  }
+                  return null;
+                },
+              ),
+            ],
+
+            const SizedBox(height: 16),
+
+            // Password
+            AuthTextField(
+              controller: _passCtrl,
+              label: 'Password',
+              hint: '••••••••',
+              prefixIcon: Icons.lock_outline,
+              obscureText: !_showPass,
+              onChanged: _evaluatePasswordStrength,
+              suffix: IconButton(
+                onPressed: () => setState(() => _showPass = !_showPass),
+                icon: Icon(
+                  _showPass ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                  color: Colors.grey,
+                ),
+              ),
+              validator: (v) => (v == null || v.isEmpty) ? 'Enter a password' : null,
+            ),
+
+            // Password Strength Indicator
+            if (_passwordStrengthLabel.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  minHeight: 6,
+                  value: _strengthValue(),
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: AlwaysStoppedAnimation<Color>(_passwordStrengthColor),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.bolt_rounded, size: 16, color: _passwordStrengthColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Password strength: $_passwordStrengthLabel',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _passwordStrengthColor,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
+            const SizedBox(height: 16),
+
+            // Confirm Password
+            AuthTextField(
+              controller: _confirmCtrl,
+              label: 'Confirm Password',
+              hint: '••••••••',
+              prefixIcon: Icons.lock_outline,
+              obscureText: !_showConfirm,
+              suffix: IconButton(
+                onPressed: () => setState(() => _showConfirm = !_showConfirm),
+                icon: Icon(
+                  _showConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                  color: Colors.grey,
+                ),
+              ),
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Confirm your password';
+                if (v != _passCtrl.text) return 'Passwords do not match';
+                return null;
+              },
+            ),
+
+            const SizedBox(height: 32),
+
+            // Sign Up Button
+            AuthButton(
+              text: 'Sign up as $roleDisplay',
+              onPressed: _submit,
+              isLoading: _isLoading,
+            ),
+
+            const SizedBox(height: 24),
+
+            // Sign In Link
+            AuthLinkText(
+              prefix: 'Already have an account? ',
+              linkText: 'Sign In',
+              onTap: () => Navigator.pushReplacementNamed(context, '/signin'),
+            ),
+
+            const SizedBox(height: 20),
+          ],
         ),
       ),
     );

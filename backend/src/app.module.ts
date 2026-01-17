@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull'; // 👈 NEW IMPORT
+import { ScheduleModule } from '@nestjs/schedule'; // 👈 NEW IMPORT FOR CRON JOBS
 
 import { AuthModule } from './auth/auth.module';
 import { ProviderModule } from './providers/provider.module';
@@ -25,7 +26,8 @@ import { join } from 'path';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-      ServeStaticModule.forRoot({
+    ScheduleModule.forRoot(), // 👈 ADD SCHEDULE MODULE FOR CRON JOBS
+    ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'),
       exclude: ['/auth*'], // استثني routes الـ API
     }),

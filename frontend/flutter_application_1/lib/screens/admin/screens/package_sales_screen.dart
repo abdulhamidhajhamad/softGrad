@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../theme/app_theme.dart';
 import '../models/sales_item.dart';
@@ -7,7 +8,9 @@ import '../widgets/review_card.dart';
 import '../../../services/admin_service/admin_service.dart';
 
 class PackageSalesScreen extends StatefulWidget {
-  const PackageSalesScreen({super.key});
+  final bool isEmbedded;
+  
+  const PackageSalesScreen({super.key, this.isEmbedded = true});
 
   @override
   State<PackageSalesScreen> createState() => _PackageSalesScreenState();
@@ -46,39 +49,95 @@ class _PackageSalesScreenState extends State<PackageSalesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, color: kTextColor),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Package Sales',
-          style: TextStyle(
-            color: kTextColor,
-            fontWeight: FontWeight.bold,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 900;
+        
+        if (widget.isEmbedded && isDesktop) {
+          return _buildContent(isDesktop: true);
+        }
+        
+        return Scaffold(
+          backgroundColor: kBackgroundColor,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(LucideIcons.arrowLeft, color: kTextColor),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              'Package Sales',
+              style: GoogleFonts.poppins(
+                color: kTextColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
+          body: _buildContent(isDesktop: false),
+        );
+      },
+    );
+  }
+
+  Widget _buildContent({required bool isDesktop}) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    if (_packages.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(LucideIcons.package, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(
+              'No packages found',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
         ),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _packages.isEmpty
-              ? const Center(child: Text('No packages found'))
-              : ListView.separated(
-                  padding: const EdgeInsets.all(20),
-                  itemCount: _packages.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final package = _packages[index];
-                    return _PackageCard(
-                      package: package,
-                      onTap: () => _showPackageDetail(context, package),
-                    );
-                  },
-                ),
+      );
+    }
+
+    if (isDesktop) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 1.3,
+          ),
+          itemCount: _packages.length,
+          itemBuilder: (context, index) {
+            final package = _packages[index];
+            return _PackageCard(
+              package: package,
+              onTap: () => _showPackageDetail(context, package),
+            );
+          },
+        ),
+      );
+    }
+    
+    return ListView.separated(
+      padding: const EdgeInsets.all(20),
+      itemCount: _packages.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final package = _packages[index];
+        return _PackageCard(
+          package: package,
+          onTap: () => _showPackageDetail(context, package),
+        );
+      },
     );
   }
 

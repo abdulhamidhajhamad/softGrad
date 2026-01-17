@@ -12,7 +12,8 @@ class ChatUserService {
   factory ChatUserService() => _instance;
   ChatUserService._internal();
 
-  static const String _baseUrl = 'http://10.0.2.2:3000';
+  // ✅ استخدام AuthService.baseUrl بدلاً من URL ثابت
+  String get _baseUrl => AuthService.baseUrl;
   IO.Socket? _socket;
   
   static final ValueNotifier<int> unreadGlobalCount = ValueNotifier<int>(0);
@@ -357,13 +358,18 @@ class ChatUserService {
     }
     
     try {
+      final url = '$_baseUrl/chat/messages/$chatId';
       print('📥 Fetching messages for chat: $chatId');
+      print('📥 URL: $url');
+      print('📥 Current User ID: $currentUserId');
+      
       final response = await http.get(
-        Uri.parse('$_baseUrl/chat/messages/$chatId'),
+        Uri.parse(url),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 10));
       
       print('📡 Messages response status: ${response.statusCode}');
+      print('📡 Messages response body: ${response.body}');
       
       if (response.statusCode == 200) {
         final List<dynamic> jsonMessages = json.decode(response.body);
@@ -374,6 +380,8 @@ class ChatUserService {
           String senderId = senderData is Map 
             ? _cleanId(senderData['_id'] ?? senderData['id'])
             : _cleanId(senderData);
+          
+          print('📨 Message: senderId=$senderId, currentUserId=$currentUserId, fromMe=${senderId == currentUserId}');
           
           return ChatMessageModel(
             id: _cleanId(msgJson['_id']),
@@ -405,9 +413,12 @@ class ChatUserService {
     }
     
     try {
-      print('📤 Sending message via HTTP');
+      final url = '$_baseUrl/chat/send';
+      print('📤 Sending message via HTTP to: $url');
+      print('📤 ChatId: $chatId, Content: $content');
+      
       final response = await http.post(
-        Uri.parse('$_baseUrl/chat/send'),
+        Uri.parse(url),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -416,6 +427,7 @@ class ChatUserService {
       );
       
       print('📡 Send message response: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
       
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('✅ Message sent via HTTP successfully');
@@ -436,9 +448,12 @@ class ChatUserService {
     }
     
     try {
+      final url = '$_baseUrl/chat/create';
       print('📥 Creating chat with receiver: $receiverId');
+      print('📥 URL: $url');
+      
       final response = await http.post(
-        Uri.parse('$_baseUrl/chat/create'),
+        Uri.parse(url),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -446,12 +461,16 @@ class ChatUserService {
         body: json.encode({'receiverId': receiverId}),
       );
       
+      print('📡 Create chat response: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
+      
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = json.decode(response.body);
         final chatId = _cleanId(data['_id']);
         print('✅ Chat created/found: $chatId');
         return chatId;
       }
+      print('❌ Create chat failed: ${response.statusCode}');
       return null;
     } catch (e) {
       print('❌ Error creating chat: $e');

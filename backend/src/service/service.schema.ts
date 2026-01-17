@@ -159,6 +159,27 @@ export class Service extends Document {
     bestFor: string[];
     lastUpdated: Date;
   };
+
+  // ✅ NEW: Offer/Discount System
+  @Prop({
+    type: {
+      isActive: { type: Boolean, default: false },
+      discountedPrice: { type: Number },
+      discountPercentage: { type: Number },
+      startDate: { type: Date },
+      endDate: { type: Date },
+      description: { type: String }
+    },
+    default: null
+  })
+  offer?: {
+    isActive: boolean;
+    discountedPrice: number;
+    discountPercentage: number;
+    startDate: Date;
+    endDate: Date;
+    description?: string;
+  };
 }
 
 export const ServiceSchema = SchemaFactory.createForClass(Service);

@@ -9,12 +9,14 @@ import 'dart:async';
 import 'package:flutter_application_1/services/user_service/review_service.dart';
 import 'package:flutter_application_1/services/chat_provider_service.dart';
 
-// =====================
-// 🎨 Colors - Same as project
-// =====================
-const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
-const Color kBackgroundColor = Color(0xFFF7F8FC);
-const Color kTextColor = Color(0xFF0B1220);
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎨 Design Tokens - Modern Purple Theme
+// ═══════════════════════════════════════════════════════════════════════════
+const Color kPrimaryColor = Color(0xFF6C63FF);
+const Color kPrimaryLight = Color(0xFFE8E6FF);
+const Color kBackgroundColor = Color(0xFFF8F9FC);
+const Color kTextColor = Color(0xFF1A1D29);
+const Color kTextSecondary = Color(0xFF6B7280);
 const Color kMutedColor = Color(0xFF6B7280);
 const Color kSuccessColor = Color(0xFF10B981);
 const Color kWarningColor = Color(0xFFF59E0B);
@@ -108,6 +110,284 @@ class _ServiceReviewsProviderPageState extends State<ServiceReviewsProviderPage>
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 1100;
+        final isTablet = constraints.maxWidth >= 768 && constraints.maxWidth < 1100;
+
+        if (isDesktop || isTablet) {
+          return _buildWebLayout(isDesktop);
+        }
+        return _buildMobileLayout();
+      },
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🌐 WEB LAYOUT - Modern Dashboard Style
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWebLayout(bool isDesktop) {
+    final filtered = _filteredReviews;
+    final positiveCount = _reviews.where((r) => (r.rating ?? 0) >= 4).length;
+    final negativeCount = _reviews.where((r) => (r.rating ?? 0) < 4).length;
+
+    return Scaffold(
+      backgroundColor: kBackgroundColor,
+      body: Column(
+        children: [
+          // Modern Top Bar
+          Container(
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.arrowLeft, size: 18, color: kTextSecondary),
+                          const SizedBox(width: 8),
+                          Text('Back', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextSecondary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.star_rounded, size: 20, color: Colors.amber),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Service Reviews', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: kTextColor)),
+                      Text(widget.serviceName, style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary), overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+                // Average Rating Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [Colors.amber.shade600, Colors.amber.shade500]),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.star_rounded, size: 18, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text(_averageRating.toStringAsFixed(1), style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                      Text(' ($_totalReviews)', style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: kPrimaryColor))
+                : _reviews.isEmpty
+                    ? _buildEmptyState()
+                    : SingleChildScrollView(
+                        padding: EdgeInsets.symmetric(horizontal: isDesktop ? 48 : 24, vertical: 32),
+                        child: Center(
+                          child: Container(
+                            constraints: BoxConstraints(maxWidth: isDesktop ? 1100 : double.infinity),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Left - Stats & Filters
+                                SizedBox(
+                                  width: isDesktop ? 320 : 280,
+                                  child: Column(
+                                    children: [
+                                      // Stats Card
+                                      Container(
+                                        padding: const EdgeInsets.all(24),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(20),
+                                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.all(10),
+                                                  decoration: BoxDecoration(color: Colors.amber.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                                                  child: const Icon(Icons.star_rounded, size: 18, color: Colors.amber),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Text('Rating Overview', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: kTextColor)),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 24),
+                                            Text(_averageRating.toStringAsFixed(1), style: GoogleFonts.poppins(fontSize: 48, fontWeight: FontWeight.w800, color: Colors.amber.shade700)),
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: List.generate(5, (i) => Icon(Icons.star_rounded, size: 20, color: i < _averageRating.round() ? Colors.amber : Colors.grey.shade300)),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text('$_totalReviews reviews', style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary)),
+                                            const SizedBox(height: 24),
+                                            const Divider(),
+                                            const SizedBox(height: 16),
+                                            _buildWebStatRow('Positive', positiveCount, kSuccessColor),
+                                            const SizedBox(height: 12),
+                                            _buildWebStatRow('Negative', negativeCount, kErrorColor),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 20),
+                                      // Filter Card
+                                      Container(
+                                        padding: const EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(16),
+                                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('Filters', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: kTextColor)),
+                                            const SizedBox(height: 16),
+                                            Wrap(
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: [
+                                                _buildWebFilterChip('All', 'all'),
+                                                _buildWebFilterChip('Positive', 'positive'),
+                                                _buildWebFilterChip('Negative', 'negative'),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 20),
+                                            Text('Sort by', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: kTextColor)),
+                                            const SizedBox(height: 12),
+                                            Wrap(
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: [
+                                                _buildWebSortChip('Newest', 'newest'),
+                                                _buildWebSortChip('Oldest', 'oldest'),
+                                                _buildWebSortChip('Highest', 'highest'),
+                                                _buildWebSortChip('Lowest', 'lowest'),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 24),
+                                // Right - Reviews List
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 16),
+                                        child: Text('${filtered.length} Reviews', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: kTextSecondary)),
+                                      ),
+                                      if (filtered.isEmpty)
+                                        _buildNoFilterResults()
+                                      else
+                                        ...filtered.map((review) => _buildReviewCard(review)).toList(),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebStatRow(String label, int count, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+        ),
+        const SizedBox(width: 10),
+        Text(label, style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary)),
+        const Spacer(),
+        Text('$count', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: kTextColor)),
+      ],
+    );
+  }
+
+  Widget _buildWebFilterChip(String label, String value) {
+    final isSelected = _filterOption == value;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => setState(() => _filterOption = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? kPrimaryColor : kBackgroundColor,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(label, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : kTextSecondary)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebSortChip(String label, String value) {
+    final isSelected = _sortOption == value;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => setState(() => _sortOption = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? kPrimaryLight : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: isSelected ? kPrimaryColor : Colors.grey.shade300),
+          ),
+          child: Text(label, style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: isSelected ? kPrimaryColor : kTextSecondary)),
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📱 MOBILE LAYOUT
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildMobileLayout() {
     final filtered = _filteredReviews;
     final positiveCount = _reviews.where((r) => (r.rating ?? 0) >= 4).length;
     final negativeCount = _reviews.where((r) => (r.rating ?? 0) < 4).length;

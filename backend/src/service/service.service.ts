@@ -423,6 +423,7 @@ async getServiceById(serviceId: string): Promise<any> {
     return {
       serviceName: service.serviceName,
       companyName: companyName,
+      providerId: service.providerId?.toString() || '', // ✅ Added providerId for chat
       bookingType: service.bookingType,
       description: service.description,
       additionalInfo: service.additionalInfo,
@@ -723,6 +724,174 @@ async getServiceById(serviceId: string): Promise<any> {
     } catch (error) {
       this.logger.error('Failed to fetch services for browse', error.stack);
       throw new HttpException('Failed to fetch services', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  // ============================================================================
+  // ✅ OFFER MANAGEMENT METHODS
+  // ============================================================================
+
+  /**
+   * Create or update an offer for a service
+   */
+  async createOffer(
+    serviceId: string,
+    providerId: string,
+    offerData: {
+      discountedPrice: number;
+      discountPercentage?: number;
+      startDate: string;
+      endDate: string;
+      description?: string;
+    }
+  ): Promise<Service> {
+    try {
+      const service = await this.serviceModel.findOne({ _id: serviceId, providerId });
+      
+      if (!service) {
+        throw new HttpException('Service not found or you do not have permission', HttpStatus.NOT_FOUND);
+      }
+
+      // Validate dates
+      const startDate = new Date(offerData.startDate);
+      const endDate = new Date(offerData.endDate);
+      const now = new Date();
+
+      if (endDate <= startDate) {
+        throw new HttpException('End date must be after start date', HttpStatus.BAD_REQUEST);
+      }
+
+      if (endDate <= now) {
+        throw new HttpException('End date must be in the future', HttpStatus.BAD_REQUEST);
+      }
+
+      // Calculate discount percentage if not provided
+      let discountPercentage = offerData.discountPercentage;
+      if (!discountPercentage && service.price && service.price > 0) {
+        discountPercentage = Math.round(((service.price - offerData.discountedPrice) / service.price) * 100);
+      }
+
+      const offer = {
+        isActive: true,
+        discountedPrice: offerData.discountedPrice,
+        discountPercentage: discountPercentage || 0,
+        startDate: startDate,
+        endDate: endDate,
+        description: offerData.description || ''
+      };
+
+      const updatedService = await this.serviceModel.findByIdAndUpdate(
+        serviceId,
+        { $set: { offer } },
+        { new: true }
+      ).exec();
+
+      this.logger.log(`✅ Offer created for service ${serviceId}`);
+      return updatedService!;
+    } catch (error) {
+      this.logger.error('Failed to create offer:', error.stack);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Failed to create offer', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * Remove offer from a service
+   */
+  async removeOffer(serviceId: string, providerId: string): Promise<Service> {
+    try {
+      const service = await this.serviceModel.findOne({ _id: serviceId, providerId });
+      
+      if (!service) {
+        throw new HttpException('Service not found or you do not have permission', HttpStatus.NOT_FOUND);
+      }
+
+      const updatedService = await this.serviceModel.findByIdAndUpdate(
+        serviceId,
+        { $set: { offer: null } },
+        { new: true }
+      ).exec();
+
+      this.logger.log(`🗑️ Offer removed from service ${serviceId}`);
+      return updatedService!;
+    } catch (error) {
+      this.logger.error('Failed to remove offer:', error.stack);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException('Failed to remove offer', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * Get all services for a provider with offer status
+   */
+  async getProviderServicesWithOffers(providerId: string): Promise<{
+    activeOffers: any[];
+    availableServices: any[];
+  }> {
+    try {
+      const services = await this.serviceModel.find({ providerId }).exec();
+      const now = new Date();
+
+      const activeOffers: any[] = [];
+      const availableServices: any[] = [];
+
+      for (const service of services) {
+        const svc = service as any; // Type assertion for flexibility
+        const serviceData = {
+          id: svc._id.toString(),
+          _id: svc._id.toString(),
+          name: svc.serviceName || svc.name,
+          serviceName: svc.serviceName,
+          category: svc.category,
+          price: svc.price || 0,
+          gallery: svc.images || svc.gallery || [],
+          offer: svc.offer,
+        };
+
+        // Check if offer is active and not expired
+        if (svc.offer?.isActive && svc.offer.endDate > now) {
+          activeOffers.push({
+            ...serviceData,
+            discountedPrice: svc.offer.discountedPrice,
+            discountPercentage: svc.offer.discountPercentage,
+            startDate: svc.offer.startDate,
+            endDate: svc.offer.endDate,
+            description: svc.offer.description,
+          });
+        } else {
+          availableServices.push(serviceData);
+        }
+      }
+
+      return { activeOffers, availableServices };
+    } catch (error) {
+      this.logger.error('Failed to get provider services with offers:', error.stack);
+      throw new HttpException('Failed to get services', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * Clean up expired offers - to be called by a scheduled job
+   */
+  async cleanupExpiredOffers(): Promise<number> {
+    try {
+      const now = new Date();
+      
+      const result = await this.serviceModel.updateMany(
+        {
+          'offer.isActive': true,
+          'offer.endDate': { $lte: now }
+        },
+        {
+          $set: { offer: null }
+        }
+      ).exec();
+
+      this.logger.log(`🧹 Cleaned up ${result.modifiedCount} expired offers`);
+      return result.modifiedCount;
+    } catch (error) {
+      this.logger.error('Failed to cleanup expired offers:', error.stack);
+      return 0;
     }
   }
 }

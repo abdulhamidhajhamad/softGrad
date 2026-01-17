@@ -6,9 +6,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_1/services/service_service.dart';
 import 'dart:typed_data'; // 💡 إضافة ضرورية للتعامل مع MemoryImage (لحل مشكلة الويب)
+import 'package:lucide_icons/lucide_icons.dart';
 
-  const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
-  const Color kBackgroundColor = Color(0xFFF3F4F6);
+  // Modern Design Tokens
+  const Color kPrimaryColor = Color(0xFF6C63FF);
+  const Color kPrimaryLight = Color(0xFFE8E6FF);
+  const Color kBackgroundColor = Color(0xFFF8F9FC);
+  const Color kCardColor = Colors.white;
+  const Color kTextPrimary = Color(0xFF1A1D29);
+  const Color kTextSecondary = Color(0xFF6B7280);
+  const Color kSuccessColor = Color(0xFF10B981);
+  const Color kErrorColor = Color(0xFFEF4444);
   const Color kTextColor = Color(0xFF111827);
 
 const List<Map<String, dynamic>> kServiceCategories = [
@@ -592,6 +600,563 @@ class _AddServiceProviderScreenState extends State<AddServiceProviderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 1100;
+        final isTablet = constraints.maxWidth >= 768 && constraints.maxWidth < 1100;
+
+        if (isDesktop || isTablet) {
+          return _buildWebLayout(isDesktop);
+        }
+        return _buildMobileLayout();
+      },
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🌐 WEB LAYOUT - Modern & Clean
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWebLayout(bool isDesktop) {
+    return Scaffold(
+      backgroundColor: kBackgroundColor,
+      body: Column(
+        children: [
+          // Modern Top Bar
+          Container(
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.arrowLeft, size: 18, color: kTextSecondary),
+                          const SizedBox(width: 8),
+                          Text('Back', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextSecondary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: kPrimaryLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(LucideIcons.plus, size: 20, color: kPrimaryColor),
+                ),
+                const SizedBox(width: 14),
+                Text(
+                  widget.existingData == null ? 'Add New Service' : 'Edit Service',
+                  style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: kTextPrimary),
+                ),
+                const Spacer(),
+                // Save Button
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: _isLoading ? null : _save,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.85)]),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [BoxShadow(color: kPrimaryColor.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : Row(
+                              children: [
+                                const Icon(LucideIcons.check, size: 18, color: Colors.white),
+                                const SizedBox(width: 8),
+                                Text('Save Service', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(horizontal: isDesktop ? 48 : 24, vertical: 32),
+              child: Center(
+                child: Container(
+                  constraints: BoxConstraints(maxWidth: isDesktop ? 1200 : double.infinity),
+                  child: Form(
+                    key: _formKey,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left Column - Main Info
+                        Expanded(
+                          flex: 6,
+                          child: Column(
+                            children: [
+                              _buildWebSection(
+                                icon: LucideIcons.info,
+                                title: 'Basic Information',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildWebInput('Service Name', _nameCtrl, hint: 'Enter service name'),
+                                    const SizedBox(height: 16),
+                                    _buildWebInput('Description', _fullDescCtrl, hint: 'Describe your service...', maxLines: 4),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              _buildWebSection(
+                                icon: LucideIcons.mapPin,
+                                title: 'Location',
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(child: _buildWebInput('Address', _addressCtrl, hint: 'Street address')),
+                                        const SizedBox(width: 16),
+                                        Expanded(child: _buildWebDropdown('City', _selectedCity, kCities, (v) => setState(() => _selectedCity = v))),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        Expanded(child: _buildWebInput('Latitude', _latitudeCtrl, hint: '32.0000', isNumber: true)),
+                                        const SizedBox(width: 16),
+                                        Expanded(child: _buildWebInput('Longitude', _longitudeCtrl, hint: '35.0000', isNumber: true)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              _buildWebSection(
+                                icon: LucideIcons.image,
+                                title: 'Gallery',
+                                subtitle: 'Upload images that showcase your service',
+                                child: _buildWebGallery(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: isDesktop ? 32 : 20),
+                        // Right Column - Pricing & Settings
+                        SizedBox(
+                          width: isDesktop ? 380 : 320,
+                          child: Column(
+                            children: [
+                              _buildWebSection(
+                                icon: LucideIcons.wallet,
+                                title: 'Pricing',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(child: _buildWebInput('Price (₪)', _priceCtrl, hint: '0', isNumber: true)),
+                                        const SizedBox(width: 12),
+                                        Expanded(child: _buildWebInput('Discount %', _discountCtrl, hint: '0', isNumber: true)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text('Price Type', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextPrimary)),
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                      spacing: 10,
+                                      runSpacing: 10,
+                                      children: ['Per Event', 'Per Hour', 'Per Person', 'Per Day'].map((type) => _buildWebPriceChip(type)).toList(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              _buildWebSection(
+                                icon: LucideIcons.tag,
+                                title: 'Category',
+                                child: _buildWebCategoryDropdown(),
+                              ),
+                              const SizedBox(height: 20),
+                              _buildWebSection(
+                                icon: LucideIcons.star,
+                                title: 'Highlights',
+                                trailing: IconButton(
+                                  onPressed: _addHighlight,
+                                  icon: const Icon(LucideIcons.plusCircle, size: 20, color: kPrimaryColor),
+                                ),
+                                child: _buildWebHighlights(),
+                              ),
+                              const SizedBox(height: 20),
+                              _buildWebSection(
+                                icon: LucideIcons.settings,
+                                title: 'Settings',
+                                child: _buildWebSettings(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Web Section Card
+  Widget _buildWebSection({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    required Widget child,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, size: 18, color: kPrimaryColor),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                    if (subtitle != null)
+                      Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: kTextSecondary)),
+                  ],
+                ),
+              ),
+              if (trailing != null) trailing,
+            ],
+          ),
+          const SizedBox(height: 20),
+          child,
+        ],
+      ),
+    );
+  }
+
+  // Web Input Field
+  Widget _buildWebInput(String label, TextEditingController ctrl, {String? hint, bool isNumber = false, int maxLines = 1}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: ctrl,
+          keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+          maxLines: maxLines,
+          style: GoogleFonts.poppins(fontSize: 14, color: kTextPrimary),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: GoogleFonts.poppins(fontSize: 14, color: kTextSecondary.withOpacity(0.6)),
+            filled: true,
+            fillColor: kBackgroundColor,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kPrimaryColor, width: 2)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Web Dropdown
+  Widget _buildWebDropdown(String label, String? value, List<String> items, Function(String?) onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: kBackgroundColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              hint: Text('Select $label', style: GoogleFonts.poppins(fontSize: 14, color: kTextSecondary.withOpacity(0.6))),
+              icon: const Icon(LucideIcons.chevronDown, size: 18, color: kTextSecondary),
+              style: GoogleFonts.poppins(fontSize: 14, color: kTextPrimary),
+              items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Web Price Chip
+  Widget _buildWebPriceChip(String type) {
+    final isSelected = _priceType == type;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => setState(() => _priceType = type),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? kPrimaryColor : kBackgroundColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isSelected ? kPrimaryColor : Colors.grey.shade300),
+          ),
+          child: Text(
+            type,
+            style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.white : kTextPrimary),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Web Category Dropdown
+  Widget _buildWebCategoryDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: kBackgroundColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedCategory,
+          isExpanded: true,
+          hint: Text('Select Category', style: GoogleFonts.poppins(fontSize: 14, color: kTextSecondary.withOpacity(0.6))),
+          icon: const Icon(LucideIcons.chevronDown, size: 18, color: kTextSecondary),
+          style: GoogleFonts.poppins(fontSize: 14, color: kTextPrimary),
+          items: kServiceCategories.map((cat) => DropdownMenuItem<String>(
+            value: cat['value'] as String,
+            child: Row(
+              children: [
+                Icon(cat['icon'] as IconData, size: 18, color: kPrimaryColor),
+                const SizedBox(width: 10),
+                Text(cat['label'] as String),
+              ],
+            ),
+          )).toList(),
+          onChanged: (v) => setState(() => _selectedCategory = v),
+        ),
+      ),
+    );
+  }
+
+  // Web Gallery
+  Widget _buildWebGallery() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            // Existing images
+            ..._existingImageUrls.map((url) => _buildWebImageTile(networkUrl: url)),
+            // New images
+            ..._images.map((img) => _buildWebImageTile(bytes: img['bytes'] as Uint8List)),
+            // Add button
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: _pickImage,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: kPrimaryLight,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: kPrimaryColor.withOpacity(0.3), width: 2, style: BorderStyle.solid),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(LucideIcons.plus, size: 24, color: kPrimaryColor),
+                      const SizedBox(height: 4),
+                      Text('Add', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kPrimaryColor)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWebImageTile({String? networkUrl, Uint8List? bytes}) {
+    return Stack(
+      children: [
+        Container(
+          width: 100,
+          height: 100,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: networkUrl != null
+                ? Image.network(networkUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade200, child: const Icon(Icons.broken_image)))
+                : Image.memory(bytes!, fit: BoxFit.cover),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (networkUrl != null) {
+                    _existingImageUrls.remove(networkUrl);
+                  } else if (bytes != null) {
+                    _images.removeWhere((img) => img['bytes'] == bytes);
+                  }
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(LucideIcons.x, size: 12, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Web Highlights
+  Widget _buildWebHighlights() {
+    if (_highlights.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: kBackgroundColor,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            const Icon(LucideIcons.sparkles, size: 18, color: kTextSecondary),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Add highlights to make your service stand out', style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary))),
+          ],
+        ),
+      );
+    }
+    return Column(
+      children: _highlights.map((h) => Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: kBackgroundColor,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(h['title'] ?? '', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kTextPrimary)),
+                  if ((h['url'] ?? '').isNotEmpty)
+                    Text(h['url'], style: GoogleFonts.poppins(fontSize: 11, color: kTextSecondary)),
+                ],
+              ),
+            ),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () => setState(() => _highlights.remove(h)),
+                child: const Icon(LucideIcons.x, size: 16, color: kTextSecondary),
+              ),
+            ),
+          ],
+        ),
+      )).toList(),
+    );
+  }
+
+  // Web Settings
+  Widget _buildWebSettings() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kBackgroundColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Visible in Search', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextPrimary)),
+                Text('Turn off if temporarily unavailable', style: GoogleFonts.poppins(fontSize: 12, color: kTextSecondary)),
+              ],
+            ),
+          ),
+          Switch(
+            value: _isVisible,
+            activeColor: kPrimaryColor,
+            onChanged: (v) => setState(() => _isVisible = v),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📱 MOBILE LAYOUT
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildMobileLayout() {
     return Scaffold(
       backgroundColor: kBackgroundColor,
       appBar: AppBar(

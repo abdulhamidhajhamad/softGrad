@@ -8,8 +8,9 @@ import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class NotificationProviderService {
-  static const String baseUrl = 'http://10.0.2.2:3000';
-  static const String wsUrl = 'http://10.0.2.2:3000';
+  // ✅ استخدام AuthService.baseUrl بدلاً من URL ثابت
+  static String get baseUrl => AuthService.baseUrl;
+  static String get wsUrl => AuthService.baseUrl;
 
   static final ValueNotifier<bool> hasUnreadNotifier = ValueNotifier<bool>(false);
   static final ValueNotifier<List<ProviderNotification>> notificationsNotifier = 

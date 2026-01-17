@@ -88,11 +88,15 @@ class _VerificationScreenState extends State<VerificationScreen>
 
   Future<void> _pickImage(ImageSource source) async {
     try {
+      // For document verification, we need HIGH QUALITY images for OCR
+      // Don't compress the image to maintain text clarity
       final XFile? image = await _picker.pickImage(
         source: source,
-        maxWidth: 2000,
-        maxHeight: 2000,
-        imageQuality: 85,
+        // Higher resolution for better OCR accuracy
+        maxWidth: 4096,
+        maxHeight: 4096,
+        // 100% quality - no compression for documents
+        imageQuality: 100,
       );
 
       if (image != null) {

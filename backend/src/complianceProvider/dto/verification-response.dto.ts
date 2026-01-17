@@ -8,240 +8,240 @@ import {
 } from '../constants/compliance.constants';
 
 /**
- * نتيجة استخراج البيانات من الوثيقة
+ * Result of data extraction from document
  */
 export class ExtractedDataDto {
   @ApiPropertyOptional({
-    description: 'رقم الهوية المستخرج',
+    description: 'Extracted ID number',
     example: '123456789',
   })
   idNumber?: string;
 
   @ApiPropertyOptional({
-    description: 'الاسم المستخرج من الوثيقة',
+    description: 'Extracted name from document',
     example: 'محمد أحمد علي',
   })
   extractedName?: string;
 
   @ApiPropertyOptional({
-    description: 'تاريخ الإصدار المستخرج',
+    description: 'Extracted issue date',
     example: '2024-01-15',
   })
   issueDate?: Date;
 
   @ApiPropertyOptional({
-    description: 'تاريخ الانتهاء المحسوب',
+    description: 'Calculated expiry date',
     example: '2025-01-15',
   })
   expiryDate?: Date;
 
   @ApiPropertyOptional({
-    description: 'اسم المنشأة (للشركات)',
+    description: 'Business name (for companies)',
     example: 'شركة النجاح للخدمات',
   })
   businessName?: string;
 
   @ApiPropertyOptional({
-    description: 'رقم السجل التجاري',
+    description: 'Commercial registration number',
     example: '12345',
   })
   commercialRegNumber?: string;
 
   @ApiPropertyOptional({
-    description: 'النص الكامل المستخرج من الوثيقة',
+    description: 'Full text extracted from document',
   })
   rawText?: string;
 
   @ApiPropertyOptional({
-    description: 'مستوى الثقة في الاستخراج (0-1)',
+    description: 'Extraction confidence level (0-1)',
     example: 0.95,
   })
   confidence?: number;
 }
 
 /**
- * نتيجة المطابقة
+ * Match result
  */
 export class MatchResultDto {
   @ApiProperty({
-    description: 'هل تطابق رقم الهوية؟',
+    description: 'Did the ID number match?',
     example: true,
   })
   idMatched: boolean;
 
   @ApiProperty({
-    description: 'هل تطابق الاسم؟',
+    description: 'Did the name match?',
     example: true,
   })
   nameMatched: boolean;
 
   @ApiProperty({
-    description: 'نسبة تشابه الاسم',
+    description: 'Name similarity score',
     example: 0.85,
   })
   nameSimilarityScore: number;
 
   @ApiProperty({
-    description: 'هل تطابق الاسم الأول على الأقل؟',
+    description: 'Did at least the first name match?',
     example: true,
   })
   firstNameMatched: boolean;
 
   @ApiProperty({
-    description: 'هل الوثيقة سارية الصلاحية؟',
+    description: 'Is the document valid?',
     example: true,
   })
   isValid: boolean;
 
   @ApiPropertyOptional({
-    description: 'عدد الأيام المتبقية للصلاحية',
+    description: 'Days remaining until expiry',
     example: 180,
   })
   daysUntilExpiry?: number;
 }
 
 /**
- * استجابة التحقق من الوثيقة
+ * Document verification response
  */
 export class VerificationResponseDto {
   @ApiProperty({
-    description: 'هل نجحت عملية التحقق؟',
+    description: 'Was the verification successful?',
     example: true,
   })
   success: boolean;
 
   @ApiProperty({
-    description: 'حالة التحقق الجديدة',
+    description: 'New verification status',
     enum: VerificationStatus,
     example: VerificationStatus.VERIFIED,
   })
   status: VerificationStatus;
 
   @ApiProperty({
-    description: 'رسالة توضيحية',
-    example: 'تم التحقق من الوثيقة بنجاح',
+    description: 'Explanatory message',
+    example: 'Document verified successfully',
   })
   message: string;
 
   @ApiPropertyOptional({
-    description: 'البيانات المستخرجة من الوثيقة',
+    description: 'Data extracted from document',
     type: ExtractedDataDto,
   })
   extractedData?: ExtractedDataDto;
 
   @ApiPropertyOptional({
-    description: 'نتيجة المطابقة',
+    description: 'Match result',
     type: MatchResultDto,
   })
   matchResult?: MatchResultDto;
 
   @ApiPropertyOptional({
-    description: 'سبب الرفض (في حالة الرفض)',
+    description: 'Rejection reason (in case of rejection)',
     enum: RejectionReason,
   })
   rejectionReason?: RejectionReason;
 
   @ApiPropertyOptional({
-    description: 'رابط الوثيقة المرفوعة',
+    description: 'Uploaded document URL',
     example: 'https://storage.supabase.co/...',
   })
   documentUrl?: string;
 
   @ApiPropertyOptional({
-    description: 'تاريخ انتهاء الصلاحية',
+    description: 'Expiry date',
     example: '2025-01-15T00:00:00.000Z',
   })
   expiryDate?: Date;
 }
 
 /**
- * استجابة حالة التحقق للمزود
+ * Provider verification status response
  */
 export class ProviderVerificationStatusDto {
   @ApiProperty({
-    description: 'معرف المزود',
+    description: 'Provider ID',
     example: '507f1f77bcf86cd799439011',
   })
   providerId: string;
 
   @ApiProperty({
-    description: 'حالة التحقق الحالية',
+    description: 'Current verification status',
     enum: VerificationStatus,
     example: VerificationStatus.VERIFIED,
   })
   verificationStatus: VerificationStatus;
 
   @ApiProperty({
-    description: 'نوع المزود',
+    description: 'Provider type',
     enum: ProviderType,
     example: ProviderType.INDIVIDUAL,
   })
   providerType: ProviderType;
 
   @ApiPropertyOptional({
-    description: 'رقم الهوية (مخفي جزئياً)',
+    description: 'ID number (partially masked)',
     example: '***456789',
   })
   maskedIdNumber?: string;
 
   @ApiPropertyOptional({
-    description: 'تاريخ إصدار الوثيقة',
+    description: 'Document issue date',
   })
   issueDate?: Date;
 
   @ApiPropertyOptional({
-    description: 'تاريخ انتهاء الصلاحية',
+    description: 'Expiry date',
   })
   licenseExpiryDate?: Date;
 
   @ApiPropertyOptional({
-    description: 'عدد الأيام المتبقية للصلاحية',
+    description: 'Days remaining until expiry',
     example: 180,
   })
   daysUntilExpiry?: number;
 
   @ApiProperty({
-    description: 'هل يمكن للمزود إضافة خدمات؟',
+    description: 'Can provider add services?',
     example: true,
   })
   canAddServices: boolean;
 
   @ApiPropertyOptional({
-    description: 'تاريخ آخر تحديث',
+    description: 'Last update date',
   })
   lastUpdated?: Date;
 
   @ApiPropertyOptional({
-    description: 'ملاحظات (في حالة الرفض أو المراجعة)',
+    description: 'Notes (in case of rejection or review)',
   })
   notes?: string;
 }
 
 /**
- * إحصائيات التحقق للوحة التحكم
+ * Verification statistics for dashboard
  */
 export class VerificationStatsDto {
-  @ApiProperty({ description: 'إجمالي المزودين' })
+  @ApiProperty({ description: 'Total providers' })
   total: number;
 
-  @ApiProperty({ description: 'المزودين الموثقين' })
+  @ApiProperty({ description: 'Verified providers' })
   verified: number;
 
-  @ApiProperty({ description: 'في انتظار المراجعة' })
+  @ApiProperty({ description: 'Pending review' })
   pendingReview: number;
 
-  @ApiProperty({ description: 'يحتاج مراجعة المشرف' })
+  @ApiProperty({ description: 'Requires admin review' })
   adminReview: number;
 
-  @ApiProperty({ description: 'منتهي الصلاحية' })
+  @ApiProperty({ description: 'Expired' })
   expired: number;
 
-  @ApiProperty({ description: 'مرفوض' })
+  @ApiProperty({ description: 'Rejected' })
   rejected: number;
 
-  @ApiProperty({ description: 'معطل' })
+  @ApiProperty({ description: 'Deactivated' })
   deactivated: number;
 
-  @ApiProperty({ description: 'المزودين الذين ستنتهي صلاحيتهم خلال 30 يوم' })
+  @ApiProperty({ description: 'Providers expiring within 30 days' })
   expiringWithin30Days: number;
 }

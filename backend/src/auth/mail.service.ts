@@ -295,7 +295,7 @@ export class MailService {
     `;
 
     const mailOptions = {
-      from: `"PlanMyWedding" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
+      from: `"Event Planner Support" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
       to: email,
       subject: '✨ Verify Your Email Address - PlanMyWedding',
       html: this.getEmailTemplate('Email Verification', content),
@@ -384,7 +384,7 @@ export class MailService {
     `;
 
     const mailOptions = {
-      from: `"PlanMyWedding" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
+      from: `"Event Planner Support" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
       to: email,
       subject: '🔐 Password Reset Request - PlanMyWedding',
       html: this.getEmailTemplate('Password Reset', content),
@@ -417,7 +417,7 @@ export class MailService {
     `;
 
     const mailOptions = {
-      from: `"PlanMyWedding" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
+      from: `"Event Planner Support" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
       to: to,
       subject: subject,
       html: this.getEmailTemplate(subject, content),

@@ -46,7 +46,7 @@ import {
 } from './dto/verification-response.dto';
 import { VerificationStatus } from './constants/compliance.constants';
 
-@ApiTags('Compliance - التوثيق والامتثال')
+@ApiTags('Compliance')
 @Controller('compliance')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -62,19 +62,19 @@ export class ComplianceProviderController {
   @Post('upload-document')
   @UseInterceptors(FileInterceptor('document'))
   @ApiOperation({ 
-    summary: 'رفع وثيقة التحقق',
-    description: 'يقوم المزود برفع وثيقة الهوية أو السجل التجاري للتحقق منها باستخدام Google Vision OCR',
+    summary: 'Upload verification document',
+    description: 'Provider uploads ID or business license document for verification using Google Vision OCR',
   })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ 
     status: 201, 
-    description: 'تم رفع الوثيقة ومعالجتها بنجاح',
+    description: 'Document uploaded and processed successfully',
     type: VerificationResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'بيانات غير صالحة' })
-  @ApiResponse({ status: 401, description: 'غير مصرح' })
+  @ApiResponse({ status: 400, description: 'Invalid data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async uploadDocument(
-    @UserDecorator('_id') userId: string,
+    @UserDecorator('userId') userId: string,
     @UploadedFile(
       new ParseFilePipe({
         validators: [
@@ -86,39 +86,39 @@ export class ComplianceProviderController {
     file: Express.Multer.File,
     @Body() dto: UploadDocumentDto,
   ): Promise<VerificationResponseDto> {
-    this.logger.log(`📤 رفع وثيقة من المستخدم: ${userId}`);
+    this.logger.log(`📤 Document upload from user: ${userId}`);
     return this.complianceService.uploadAndVerifyDocument(userId, file, dto);
   }
 
   @Get('status')
   @ApiOperation({ 
-    summary: 'جلب حالة التحقق',
-    description: 'يجلب حالة التحقق الحالية للمزود مع تفاصيل الصلاحية',
+    summary: 'Get verification status',
+    description: 'Gets the current verification status for the provider with validity details',
   })
   @ApiResponse({ 
     status: 200, 
-    description: 'حالة التحقق',
+    description: 'Verification status',
     type: ProviderVerificationStatusDto,
   })
   async getMyVerificationStatus(
-    @UserDecorator('_id') userId: string,
+    @UserDecorator('userId') userId: string,
   ): Promise<ProviderVerificationStatusDto> {
     return this.complianceService.getVerificationStatus(userId);
   }
 
   @Get('logs')
   @ApiOperation({ 
-    summary: 'جلب سجلات التحقق',
-    description: 'يجلب سجل جميع عمليات التحقق للمزود',
+    summary: 'Get verification logs',
+    description: 'Gets the log of all verification operations for the provider',
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async getMyComplianceLogs(
-    @UserDecorator('_id') userId: string,
+    @UserDecorator('userId') userId: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20,
   ) {
-    // جلب provider ID أولاً
+    // Get provider ID first
     const status = await this.complianceService.getVerificationStatus(userId);
     return this.complianceService.getComplianceLogs(status.providerId, page, limit);
   }
@@ -129,12 +129,12 @@ export class ComplianceProviderController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiOperation({ 
-    summary: 'إحصائيات التحقق (مشرف)',
-    description: 'يجلب إحصائيات شاملة عن حالات التحقق لجميع المزودين',
+    summary: 'Verification statistics (Admin)',
+    description: 'Gets comprehensive verification statistics for all providers',
   })
   @ApiResponse({ 
     status: 200, 
-    description: 'إحصائيات التحقق',
+    description: 'Verification statistics',
     type: VerificationStatsDto,
   })
   async getVerificationStats(): Promise<VerificationStatsDto> {
@@ -145,14 +145,14 @@ export class ComplianceProviderController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiOperation({ 
-    summary: 'جلب المزودين حسب حالة التحقق (مشرف)',
-    description: 'يجلب قائمة المزودين مع إمكانية الفلترة حسب حالة التحقق',
+    summary: 'Get providers by verification status (Admin)',
+    description: 'Gets list of providers with filtering by verification status',
   })
   @ApiQuery({ 
     name: 'status', 
     required: false, 
     enum: VerificationStatus,
-    description: 'فلترة حسب حالة التحقق',
+    description: 'Filter by verification status',
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -168,10 +168,10 @@ export class ComplianceProviderController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiOperation({ 
-    summary: 'تفاصيل مزود محدد (مشرف)',
-    description: 'يجلب تفاصيل التحقق لمزود محدد مع سجلاته',
+    summary: 'Specific provider details (Admin)',
+    description: 'Gets verification details for a specific provider with logs',
   })
-  @ApiParam({ name: 'providerId', description: 'معرف المزود' })
+  @ApiParam({ name: 'providerId', description: 'Provider ID' })
   async getProviderDetails(
     @Param('providerId') providerId: string,
   ) {
@@ -184,19 +184,19 @@ export class ComplianceProviderController {
   @Roles('admin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
-    summary: 'المراجعة اليدوية (مشرف)',
-    description: 'يقوم المشرف بالموافقة أو رفض وثائق المزود يدوياً',
+    summary: 'Manual review (Admin)',
+    description: 'Admin approves or rejects provider documents manually',
   })
   @ApiResponse({ 
     status: 200, 
-    description: 'تمت المراجعة بنجاح',
+    description: 'Review completed successfully',
     type: VerificationResponseDto,
   })
   async adminVerification(
-    @UserDecorator('_id') adminId: string,
+    @UserDecorator('userId') adminId: string,
     @Body() dto: AdminVerificationDto,
   ): Promise<VerificationResponseDto> {
-    this.logger.log(`🔍 مراجعة يدوية من المشرف: ${adminId}`);
+    this.logger.log(`🔍 Manual review by admin: ${adminId}`);
     return this.complianceService.adminVerification(adminId, dto);
   }
 
@@ -204,8 +204,8 @@ export class ComplianceProviderController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiOperation({ 
-    summary: 'المزودين في انتظار المراجعة (مشرف)',
-    description: 'يجلب قائمة المزودين الذين يحتاجون مراجعة يدوية',
+    summary: 'Providers awaiting review (Admin)',
+    description: 'Gets list of providers that need manual review',
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -224,8 +224,8 @@ export class ComplianceProviderController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiOperation({ 
-    summary: 'المزودين منتهيي الصلاحية (مشرف)',
-    description: 'يجلب قائمة المزودين الذين انتهت صلاحية وثائقهم',
+    summary: 'Expired providers (Admin)',
+    description: 'Gets list of providers whose documents have expired',
   })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -244,10 +244,10 @@ export class ComplianceProviderController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiOperation({ 
-    summary: 'سجلات التحقق لمزود (مشرف)',
-    description: 'يجلب سجل جميع عمليات التحقق لمزود محدد',
+    summary: 'Provider verification logs (Admin)',
+    description: 'Gets log of all verification operations for a specific provider',
   })
-  @ApiParam({ name: 'providerId', description: 'معرف المزود' })
+  @ApiParam({ name: 'providerId', description: 'Provider ID' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   async getProviderLogs(
@@ -262,10 +262,10 @@ export class ComplianceProviderController {
 
   @Get('check-verified/:providerId')
   @ApiOperation({ 
-    summary: 'التحقق من حالة مزود',
-    description: 'يتحقق مما إذا كان المزود موثقاً (للاستخدام الداخلي)',
+    summary: 'Check provider status',
+    description: 'Checks if provider is verified (for internal use)',
   })
-  @ApiParam({ name: 'providerId', description: 'معرف المزود' })
+  @ApiParam({ name: 'providerId', description: 'Provider ID' })
   @ApiResponse({ 
     status: 200, 
     schema: { 
@@ -280,7 +280,7 @@ export class ComplianceProviderController {
     @Param('providerId') providerId: string,
   ): Promise<{ isVerified: boolean; status: VerificationStatus }> {
     try {
-      // البحث عن المزود مباشرة
+      // Search for provider directly
       const status = await this.complianceService.getVerificationStatus(providerId);
       return {
         isVerified: status.verificationStatus === VerificationStatus.VERIFIED,

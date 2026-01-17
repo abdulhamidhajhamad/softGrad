@@ -35,37 +35,79 @@ export interface NameMatchResult {
 }
 
 /**
- * استخراج تاريخ الإصدار من النص العربي
- * يبحث عن نمط: "صدرت هذه الشهادة بتاريخ YYYY/MM/DD"
+ * Extract issue date from Arabic text
+ * Enhanced for Tesseract OCR - tries multiple patterns
+ * Supports formats: 2025/6/30, 30/06/2025, etc.
  */
 export function extractIssueDate(text: string): Date | null {
   try {
-    // البحث عن النمط الأساسي أولاً
+    // Pattern 1: صدرت هذه الشهادة بتاريخ 2025/6/30 (YYYY/M/DD)
     let match = text.match(ARABIC_PATTERNS.ISSUE_DATE);
-    
-    if (!match) {
-      // البحث عن النمط البديل
-      match = text.match(ARABIC_PATTERNS.ISSUE_DATE_ALT);
-    }
     
     if (match) {
       const year = parseInt(match[1], 10);
-      const month = parseInt(match[2], 10) - 1; // الأشهر في JS تبدأ من 0
+      const month = parseInt(match[2], 10) - 1;
       const day = parseInt(match[3], 10);
       
       const date = new Date(year, month, day);
       
-      // التحقق من صحة التاريخ
       if (isValidDate(date)) {
-        logger.log(`✅ تم استخراج تاريخ الإصدار: ${date.toISOString()}`);
+        logger.log(`✅ Issue date extracted (صدرت بتاريخ): ${date.toISOString()}`);
         return date;
       }
     }
     
-    logger.warn('⚠️ لم يتم العثور على تاريخ الإصدار بالنمط المطلوب');
+    // Pattern 2: تاريخ التحرير: 30/06/2025 (DD/MM/YYYY)
+    match = text.match(ARABIC_PATTERNS.ISSUE_DATE_ALT);
+    if (match) {
+      const day = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10) - 1;
+      const year = parseInt(match[3], 10);
+      
+      const date = new Date(year, month, day);
+      
+      if (isValidDate(date)) {
+        logger.log(`✅ Issue date extracted (تاريخ التحرير): ${date.toISOString()}`);
+        return date;
+      }
+    }
+    
+    // Fallback: Try generic YYYY/M/DD format anywhere in text
+    const genericMatches = [...text.matchAll(ARABIC_PATTERNS.DATE_GENERIC)];
+    for (const genericMatch of genericMatches) {
+      const year = parseInt(genericMatch[1], 10);
+      const month = parseInt(genericMatch[2], 10) - 1;
+      const day = parseInt(genericMatch[3], 10);
+      
+      if (year >= 2020 && year <= 2030) {
+        const date = new Date(year, month, day);
+        if (isValidDate(date)) {
+          logger.log(`✅ Issue date extracted (generic YYYY/M/DD): ${date.toISOString()}`);
+          return date;
+        }
+      }
+    }
+    
+    // Fallback: Try DD/MM/YYYY format (like 30/06/2025)
+    const reverseMatches = [...text.matchAll(ARABIC_PATTERNS.DATE_REVERSE)];
+    for (const reverseMatch of reverseMatches) {
+      const day = parseInt(reverseMatch[1], 10);
+      const month = parseInt(reverseMatch[2], 10) - 1;
+      const year = parseInt(reverseMatch[3], 10);
+      
+      if (year >= 2020 && year <= 2030 && day <= 31 && month <= 11) {
+        const date = new Date(year, month, day);
+        if (isValidDate(date)) {
+          logger.log(`✅ Issue date extracted (DD/MM/YYYY): ${date.toISOString()}`);
+          return date;
+        }
+      }
+    }
+    
+    logger.warn('⚠️ No issue date found in expected format');
     return null;
   } catch (error) {
-    logger.error(`❌ خطأ في استخراج تاريخ الإصدار: ${error.message}`);
+    logger.error(`❌ Error extracting issue date: ${error.message}`);
     return null;
   }
 }

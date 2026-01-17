@@ -9,7 +9,7 @@ import {
 } from '../constants/compliance.constants';
 
 /**
- * سجل التحقق - يحفظ جميع عمليات التحقق والتغييرات
+ * Compliance Log - stores all verification operations and changes
  */
 @Schema({ timestamps: true, collection: 'compliance_logs' })
 export class ComplianceLog extends Document {

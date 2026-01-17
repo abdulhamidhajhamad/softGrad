@@ -1,181 +1,188 @@
 // compliance.constants.ts
-// ثوابت وأنماط نظام التوثيق والامتثال
+// Compliance and verification system constants and patterns
 
 /**
- * حالات التحقق من المزود
+ * Provider verification statuses
  */
 export enum VerificationStatus {
-  /** لم يتم رفع أي وثائق بعد */
+  /** No documents uploaded yet */
   PENDING = 'pending',
   
-  /** الوثائق قيد المراجعة من قبل النظام */
+  /** Documents are being reviewed by the system */
   UNDER_REVIEW = 'under_review',
   
-  /** تم التحقق بنجاح */
+  /** Successfully verified */
   VERIFIED = 'verified',
   
-  /** يحتاج مراجعة يدوية من المشرف */
+  /** Requires manual review by admin */
   ADMIN_REVIEW = 'admin_review',
   
-  /** تم رفض الوثائق */
+  /** Documents were rejected */
   REJECTED = 'rejected',
   
-  /** انتهت صلاحية الوثائق */
+  /** Documents have expired */
   EXPIRED = 'expired',
   
-  /** تم تعطيل الحساب بسبب عدم التجديد */
+  /** Account deactivated due to non-renewal */
   DEACTIVATED = 'deactivated',
 }
 
 /**
- * أنواع الوثائق المدعومة
+ * Supported document types
  */
 export enum DocumentType {
-  /** بطاقة الهوية الشخصية */
+  /** National ID card */
   NATIONAL_ID = 'national_id',
   
-  /** شهادة تسجيل المنشأة / السجل التجاري */
+  /** Business registration certificate / Commercial register */
   BUSINESS_LICENSE = 'business_license',
   
-  /** رخصة مزاولة المهنة */
+  /** Professional practice license */
   PROFESSIONAL_LICENSE = 'professional_license',
 }
 
 /**
- * أنواع المزودين
+ * Provider types
  */
 export enum ProviderType {
-  /** فرد / شخص طبيعي */
+  /** Individual / Natural person */
   INDIVIDUAL = 'individual',
   
-  /** مؤسسة / شركة */
+  /** Business / Company */
   BUSINESS = 'business',
 }
 
 /**
- * أسباب الرفض
+ * Rejection reasons
  */
 export enum RejectionReason {
-  /** وثيقة منتهية الصلاحية */
+  /** Expired document */
   EXPIRED_DOCUMENT = 'expired_document',
   
-  /** وثيقة غير واضحة */
+  /** Unclear document */
   UNCLEAR_DOCUMENT = 'unclear_document',
   
-  /** عدم تطابق البيانات */
+  /** Data mismatch */
   DATA_MISMATCH = 'data_mismatch',
   
-  /** وثيقة غير صالحة */
+  /** Invalid document */
   INVALID_DOCUMENT = 'invalid_document',
   
-  /** رقم الهوية غير صحيح */
+  /** Invalid ID number */
   INVALID_ID_NUMBER = 'invalid_id_number',
 }
 
 /**
- * الأنماط المستخدمة لاستخراج البيانات من الوثائق العربية
+ * Patterns used to extract data from Arabic documents
+ * Enhanced patterns for Tesseract OCR compatibility
  */
 export const ARABIC_PATTERNS = {
-  // نمط تاريخ الإصدار: صدرت هذه الشهادة بتاريخ YYYY/MM/DD
+  // Issue date pattern: صدرت هذه الشهادة بتاريخ 2025/6/30 or 2025/06/30
   ISSUE_DATE: /صدرت\s*(?:هذه\s*)?(?:الشهادة|الوثيقة)?\s*بتاريخ\s*(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/i,
   
-  // نمط تاريخ بديل: تاريخ الإصدار: YYYY/MM/DD
-  ISSUE_DATE_ALT: /تاريخ\s*(?:الإصدار|الاصدار)\s*[:\s]*(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/i,
+  // Alternative: تاريخ الإصدار: or تاريخ التحرير:
+  ISSUE_DATE_ALT: /تاريخ\s*(?:الإصدار|الاصدار|التسجيل|التحرير)\s*[:\s]*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/i,
   
-  // نمط تاريخ الانتهاء (إن وجد)
+  // Generic date patterns YYYY/M/DD or YYYY/MM/DD (Arabic documents)
+  DATE_GENERIC: /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/g,
+  
+  // Pattern: DD/MM/YYYY (common in Arabic docs like 30/06/2025)
+  DATE_REVERSE: /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/g,
+  
+  // Expiry date pattern
   EXPIRY_DATE: /(?:تاريخ\s*(?:الانتهاء|الإنتهاء|صلاحية)|صالحة?\s*(?:حتى|لغاية))\s*[:\s]*(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/i,
   
-  // نمط رقم الهوية الفلسطينية (9 أرقام)
+  // Palestinian ID number pattern (9 digits)
   PALESTINIAN_ID: /(?:رقم\s*(?:الهوية|الهويه|البطاقة)|هوية\s*رقم)\s*[:\s]*(\d{9})/i,
   
-  // نمط رقم الهوية المباشر (9 أرقام متتالية)
+  // Direct ID number pattern (9 consecutive digits)
   ID_NUMBER_DIRECT: /\b(\d{9})\b/g,
   
-  // نمط اسم المنشأة
+  // Business name pattern
   BUSINESS_NAME: /(?:اسم\s*(?:المنشأة|الشركة|المؤسسة)|المنشأة\s*[:\s])\s*(.+?)(?:\n|$)/i,
   
-  // نمط رقم السجل التجاري
+  // Commercial registration number pattern
   COMMERCIAL_REG: /(?:رقم\s*(?:السجل\s*التجاري|التسجيل)|سجل\s*تجاري\s*رقم)\s*[:\s]*(\d+)/i,
 };
 
 /**
- * إعدادات نظام التحقق
+ * Verification system settings
  */
 export const VERIFICATION_CONFIG = {
-  /** الحد الأدنى لنسبة تشابه الاسم (50%) */
+  /** Minimum name similarity threshold (50%) */
   NAME_SIMILARITY_THRESHOLD: 0.5,
   
-  /** الحد الأدنى لتشابه الاسم الأول فقط (60%) */
+  /** Minimum first name similarity threshold (60%) */
   FIRST_NAME_SIMILARITY_THRESHOLD: 0.6,
   
-  /** طول رقم الهوية الفلسطينية */
+  /** Palestinian ID number length */
   PALESTINIAN_ID_LENGTH: 9,
   
-  /** عدد الأيام قبل الانتهاء لإرسال التنبيه الأول */
+  /** Days before expiry to send first warning */
   EXPIRY_WARNING_DAYS: 30,
   
-  /** مدة صلاحية الشهادة بالأيام (سنة واحدة) */
+  /** License validity period in days (one year) */
   LICENSE_VALIDITY_DAYS: 365,
   
-  /** فترة التذكير الأسبوعي بالأيام */
+  /** Weekly reminder interval in days */
   WEEKLY_REMINDER_INTERVAL: 7,
   
-  /** الحد الأقصى للتذكيرات (4 أسابيع) */
+  /** Maximum number of reminders (4 weeks) */
   MAX_REMINDERS_COUNT: 4,
   
-  /** عدد الأيام بعد الانتهاء قبل تعطيل الحساب */
+  /** Days after expiry before account deactivation */
   DEACTIVATION_GRACE_PERIOD_DAYS: 30,
 };
 
 /**
- * رسائل الإشعارات
+ * Notification messages
  */
 export const NOTIFICATION_MESSAGES = {
-  // تنبيه قبل الانتهاء
+  // Warning before expiry
   EXPIRY_WARNING: {
-    title: 'تنبيه: اقتراب انتهاء صلاحية الوثائق',
-    body: 'ستنتهي صلاحية وثائقك خلال {days} يوم. يرجى تجديدها لتجنب تعطيل خدماتك.',
+    title: 'Warning: Documents Expiring Soon',
+    body: 'Your documents will expire in {days} days. Please renew them to avoid service interruption.',
   },
   
-  // إشعار انتهاء الصلاحية
+  // Expiry notification
   EXPIRED: {
-    title: 'انتهت صلاحية وثائقك',
-    body: 'انتهت صلاحية وثائق التحقق الخاصة بك. تم تعطيل خدماتك مؤقتاً حتى التجديد.',
+    title: 'Your Documents Have Expired',
+    body: 'Your verification documents have expired. Your services are temporarily disabled until renewal.',
   },
   
-  // تذكير أسبوعي
+  // Weekly reminder
   WEEKLY_REMINDER: {
-    title: 'تذكير بتجديد الوثائق',
-    body: 'لا تزال وثائقك منتهية الصلاحية. يرجى التجديد لاستعادة خدماتك. ({remaining} تذكيرات متبقية)',
+    title: 'Document Renewal Reminder',
+    body: 'Your documents are still expired. Please renew them to restore your services. ({remaining} reminders remaining)',
   },
   
-  // تعطيل الحساب
+  // Account deactivation
   DEACTIVATED: {
-    title: 'تم تعطيل حسابك',
-    body: 'تم تعطيل حسابك بسبب عدم تجديد الوثائق. تواصل مع الدعم لإعادة التفعيل.',
+    title: 'Your Account Has Been Deactivated',
+    body: 'Your account has been deactivated due to document non-renewal. Contact support for reactivation.',
   },
   
-  // التحقق الناجح
+  // Successful verification
   VERIFIED: {
-    title: 'تم التحقق من وثائقك بنجاح',
-    body: 'تهانينا! تم التحقق من وثائقك بنجاح. يمكنك الآن إضافة خدماتك.',
+    title: 'Documents Verified Successfully',
+    body: 'Congratulations! Your documents have been verified successfully. You can now add your services.',
   },
   
-  // قيد المراجعة
+  // Under review
   ADMIN_REVIEW: {
-    title: 'وثائقك قيد المراجعة',
-    body: 'تم تحويل وثائقك للمراجعة اليدوية. سيتم إعلامك بالنتيجة قريباً.',
+    title: 'Documents Under Review',
+    body: 'Your documents have been forwarded for manual review. You will be notified of the result soon.',
   },
   
-  // الرفض
+  // Rejection
   REJECTED: {
-    title: 'تم رفض وثائقك',
-    body: 'للأسف تم رفض وثائقك. السبب: {reason}. يرجى إعادة الرفع بوثائق صحيحة.',
+    title: 'Documents Rejected',
+    body: 'Unfortunately, your documents were rejected. Reason: {reason}. Please re-upload valid documents.',
   },
 };
 
 /**
- * أسماء مجلدات التخزين في Supabase
+ * Supabase storage folder names
  */
 export const STORAGE_FOLDERS = {
   COMPLIANCE_DOCUMENTS: 'compliance-documents',
@@ -184,11 +191,11 @@ export const STORAGE_FOLDERS = {
 };
 
 /**
- * قائمة الأسماء العربية الشائعة للمطابقة
- * يمكن توسيعها حسب الحاجة
+ * Common Arabic name mappings for matching
+ * Can be extended as needed
  */
 export const ARABIC_NAME_MAPPINGS: Record<string, string[]> = {
-  // الأسماء الذكورية الشائعة
+  // Common male names
   'mohammed': ['محمد', 'محمود', 'أحمد'],
   'ahmad': ['أحمد', 'احمد'],
   'mahmoud': ['محمود', 'محمد'],
@@ -202,7 +209,7 @@ export const ARABIC_NAME_MAPPINGS: Record<string, string[]> = {
   'abdulrahman': ['عبدالرحمن', 'عبد الرحمن'],
   'abdullah': ['عبدالله', 'عبد الله'],
   
-  // الأسماء الأنثوية الشائعة
+  // Common female names
   'fatima': ['فاطمة', 'فاطمه'],
   'aisha': ['عائشة', 'عايشة'],
   'maryam': ['مريم', 'مريام'],

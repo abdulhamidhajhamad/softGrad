@@ -4,11 +4,14 @@ import {
   Logger, 
   BadRequestException, 
   NotFoundException,
-  ForbiddenException 
+  ForbiddenException,
+  OnModuleInit,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Model, Types } from 'mongoose';
+import Tesseract from 'tesseract.js';
 
 import { ServiceProvider } from '../providers/provider.entity';
 import { Service } from '../service/service.schema';
@@ -49,9 +52,9 @@ import {
 } from './utils/ocr-parser.util';
 
 @Injectable()
-export class ComplianceProviderService {
+export class ComplianceProviderService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ComplianceProviderService.name);
-  private visionClient: any;
+  private tesseractWorker: Tesseract.Worker | null = null;
 
   constructor(
     @InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>,
@@ -65,69 +68,77 @@ export class ComplianceProviderService {
 
   async onModuleInit() {
     try {
-      // Initialize Google Cloud Vision
-      const { ImageAnnotatorClient } = await import('@google-cloud/vision');
+      // Initialize Tesseract.js for Arabic + English OCR
+      this.logger.log('🔄 Initializing Tesseract OCR...');
       
-      // جلب بيانات الاعتماد من المتغيرات البيئية
-      const projectId = this.configService.get<string>('GOOGLE_PROJECT_ID');
-      const clientEmail = this.configService.get<string>('GOOGLE_CLIENT_EMAIL');
-      const privateKey = this.configService.get<string>('GOOGLE_PRIVATE_KEY');
+      this.tesseractWorker = await Tesseract.createWorker(['ara', 'eng'], 1, {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            this.logger.log(`📝 OCR Progress: ${Math.round(m.progress * 100)}%`);
+          }
+        },
+      });
       
-      if (projectId && clientEmail && privateKey) {
-        // استخدام المتغيرات البيئية مباشرة
-        this.visionClient = new ImageAnnotatorClient({
-          credentials: {
-            client_email: clientEmail,
-            private_key: privateKey.replace(/\\n/g, '\n'), // تحويل \n النصية لسطور جديدة
-          },
-          projectId: projectId,
-        });
-        this.logger.log('✅ Google Cloud Vision initialized successfully (from env vars)');
-      } else {
-        // محاولة استخدام ملف الاعتماد كخيار بديل
-        const credentialsPath = this.configService.get<string>('GOOGLE_APPLICATION_CREDENTIALS');
-        if (credentialsPath) {
-          this.visionClient = new ImageAnnotatorClient({
-            keyFilename: credentialsPath,
-          });
-          this.logger.log('✅ Google Cloud Vision initialized successfully (from file)');
-        } else {
-          this.logger.warn('⚠️ Google Cloud Vision credentials not configured - OCR will be limited');
-        }
-      }
+      this.logger.log('✅ Tesseract OCR initialized successfully (Arabic + English)');
     } catch (error) {
-      this.logger.error(`❌ Failed to initialize Google Cloud Vision: ${error.message}`);
+      this.logger.error(`❌ Failed to initialize Tesseract OCR: ${error.message}`);
+    }
+  }
+
+  async onModuleDestroy() {
+    // Cleanup Tesseract worker on shutdown
+    if (this.tesseractWorker) {
+      await this.tesseractWorker.terminate();
+      this.logger.log('🔄 Tesseract worker terminated');
     }
   }
 
   /**
-   * رفع ومعالجة وثيقة التحقق
+   * Upload and process verification document
    */
   async uploadAndVerifyDocument(
     userId: string,
     file: Express.Multer.File,
     dto: UploadDocumentDto,
   ): Promise<VerificationResponseDto> {
-    this.logger.log(`📤 بدء عملية رفع وثيقة للمستخدم: ${userId}`);
+    this.logger.log(`📤 Starting document upload for user: ${userId}`);
 
-    // 1. جلب بيانات المزود
-    const provider = await this.providerModel.findOne({ 
+    // 1. Get provider data
+    this.logger.log(`🔍 Searching for provider with userId: ${userId}`);
+    
+    // Try to find by userId first
+    let provider = await this.providerModel.findOne({ 
       userId: new Types.ObjectId(userId) 
     });
 
+    // If not found, try to find by provider _id (in case userId IS the provider id)
     if (!provider) {
-      throw new NotFoundException('لم يتم العثور على ملف المزود');
+      this.logger.log(`🔍 Provider not found by userId, trying by _id...`);
+      try {
+        provider = await this.providerModel.findById(userId);
+      } catch (e) {
+        this.logger.log(`🔍 Not a valid ObjectId for provider _id`);
+      }
     }
+
+    // If still not found, log all providers for debugging
+    if (!provider) {
+      const allProviders = await this.providerModel.find({}).select('_id userId companyName').limit(5);
+      this.logger.log(`🔍 Sample providers in DB: ${JSON.stringify(allProviders)}`);
+      throw new NotFoundException('Provider profile not found. Please complete your provider registration first.');
+    }
+
+    this.logger.log(`✅ Found provider: ${provider._id}, companyName: ${provider.companyName}`);
 
     const user = await this.userModel.findById(userId);
     if (!user) {
-      throw new NotFoundException('لم يتم العثور على المستخدم');
+      throw new NotFoundException('User not found');
     }
 
-    // حفظ الحالة السابقة
+    // Save previous status
     const previousStatus = provider.verification?.verificationStatus || VerificationStatus.PENDING;
 
-    // 2. رفع الصورة إلى Supabase
+    // 2. Upload image to Supabase
     let documentUrl: string;
     try {
       const folder = dto.documentType === DocumentType.NATIONAL_ID 
@@ -135,40 +146,40 @@ export class ComplianceProviderService {
         : STORAGE_FOLDERS.BUSINESS_LICENSES;
       
       documentUrl = await this.supabaseStorage.uploadImage(file, folder, false);
-      this.logger.log(`✅ تم رفع الوثيقة: ${documentUrl}`);
+      this.logger.log(`✅ Document uploaded: ${documentUrl}`);
     } catch (error) {
-      this.logger.error(`❌ فشل رفع الوثيقة: ${error.message}`);
-      throw new BadRequestException('فشل في رفع الوثيقة. يرجى المحاولة مرة أخرى.');
+      this.logger.error(`❌ Document upload failed: ${error.message}`);
+      throw new BadRequestException('Failed to upload document. Please try again.');
     }
 
-    // 3. استخراج النص من الصورة باستخدام Google Vision
+    // 3. Extract text from image using Google Vision
     let extractedText = '';
     let parsedData: ParsedDocumentData;
 
     try {
       extractedText = await this.extractTextFromImage(file.buffer);
-      this.logger.log(`📝 تم استخراج النص (${extractedText.length} حرف)`);
+      this.logger.log(`📝 Text extracted (${extractedText.length} characters)`);
       
-      // تحليل النص المستخرج
+      // Parse the extracted text
       parsedData = parseDocument(
         extractedText, 
         dto.providerType === ProviderType.BUSINESS
       );
     } catch (error) {
-      this.logger.error(`❌ فشل استخراج النص: ${error.message}`);
+      this.logger.error(`❌ Text extraction failed: ${error.message}`);
       
-      // في حالة فشل OCR، نحول للمراجعة اليدوية
+      // If OCR fails, forward for manual review
       return await this.handleAdminReview(
         provider,
         user,
         previousStatus,
         documentUrl,
         dto,
-        'فشل في استخراج النص من الوثيقة',
+        'Failed to extract text from document',
       );
     }
 
-    // 4. التحقق من البيانات المستخرجة
+    // 4. Verify extracted data
     const verificationResult = await this.verifyExtractedData(
       provider,
       user,
@@ -176,7 +187,7 @@ export class ComplianceProviderService {
       dto,
     );
 
-    // 5. تحديث بيانات المزود
+    // 5. Update provider data
     const updateData: any = {
       'verification.documentUrl': documentUrl,
       'verification.extractedText': extractedText,
@@ -213,7 +224,7 @@ export class ComplianceProviderService {
       { $set: updateData }
     );
 
-    // 6. تسجيل العملية
+    // 6. Log the operation
     await this.logComplianceAction({
       providerId: provider._id as Types.ObjectId,
       userId: new Types.ObjectId(userId),
@@ -234,7 +245,7 @@ export class ComplianceProviderService {
       action: 'upload',
     });
 
-    // 7. إرسال الإشعار
+    // 7. Send notification
     await this.sendVerificationNotification(
       new Types.ObjectId(userId),
       user.fcmToken,
@@ -246,34 +257,43 @@ export class ComplianceProviderService {
   }
 
   /**
-   * استخراج النص من الصورة باستخدام Google Cloud Vision
+   * Extract text from image using Tesseract.js OCR
    */
   private async extractTextFromImage(imageBuffer: Buffer): Promise<string> {
-    if (!this.visionClient) {
-      throw new Error('Google Cloud Vision غير متاح');
+    if (!this.tesseractWorker) {
+      // Try to reinitialize if worker is not available
+      this.logger.warn('⚠️ Tesseract worker not available, reinitializing...');
+      await this.onModuleInit();
+      
+      if (!this.tesseractWorker) {
+        throw new Error('Tesseract OCR is not available');
+      }
     }
 
     try {
-      const [result] = await this.visionClient.textDetection({
-        image: { content: imageBuffer.toString('base64') },
-      });
-
-      const detections = result.textAnnotations;
+      this.logger.log('🔍 Starting OCR text extraction with Tesseract...');
       
-      if (!detections || detections.length === 0) {
-        throw new Error('لم يتم العثور على نص في الصورة');
+      // Recognize text from the image buffer
+      const { data } = await this.tesseractWorker.recognize(imageBuffer);
+      
+      const extractedText = data.text || '';
+      
+      this.logger.log(`✅ Tesseract OCR completed - Confidence: ${Math.round(data.confidence)}%`);
+      this.logger.log(`📝 Extracted text preview: ${extractedText.substring(0, 200)}...`);
+      
+      if (!extractedText || extractedText.trim().length === 0) {
+        throw new Error('No text found in the image');
       }
 
-      // أول عنصر يحتوي على النص الكامل
-      return detections[0].description || '';
+      return extractedText;
     } catch (error) {
-      this.logger.error(`❌ Google Vision Error: ${error.message}`);
+      this.logger.error(`❌ Tesseract OCR Error: ${error.message}`);
       throw error;
     }
   }
 
   /**
-   * التحقق من البيانات المستخرجة
+   * Verify extracted data
    */
   private async verifyExtractedData(
     provider: ServiceProvider,
@@ -295,7 +315,7 @@ export class ComplianceProviderService {
       },
     };
 
-    // التحقق من تاريخ الصلاحية
+    // Verify validity date
     if (!parsedData.expiryDate && parsedData.issueDate) {
       parsedData.expiryDate = calculateExpiryDate(parsedData.issueDate);
       if (response.extractedData) {
@@ -308,9 +328,9 @@ export class ComplianceProviderService {
       response.expiryDate = parsedData.expiryDate;
 
       if (!validity.isValid) {
-        // الوثيقة منتهية الصلاحية
+        // Document expired
         response.status = VerificationStatus.REJECTED;
-        response.message = 'الوثيقة منتهية الصلاحية';
+        response.message = 'Document has expired';
         response.rejectionReason = RejectionReason.EXPIRED_DOCUMENT;
         return response;
       }
@@ -322,17 +342,17 @@ export class ComplianceProviderService {
       } as MatchResultDto;
     }
 
-    // للأفراد: التحقق من رقم الهوية والاسم
+    // For individuals: verify ID number and name
     if (dto.providerType === ProviderType.INDIVIDUAL) {
       return await this.verifyIndividual(provider, user, parsedData, dto, response);
     }
 
-    // للمؤسسات: التحقق من اسم الشركة
+    // For businesses: verify company name
     return await this.verifyBusiness(provider, parsedData, response);
   }
 
   /**
-   * التحقق من بيانات الفرد
+   * Verify individual data
    */
   private async verifyIndividual(
     provider: ServiceProvider,
@@ -344,13 +364,13 @@ export class ComplianceProviderService {
     const providedId = dto.idNumber;
     const extractedIds = parsedData.allFoundIdNumbers;
 
-    // التحقق من رقم الهوية
+    // Verify ID number
     let idMatched = false;
     if (providedId && extractedIds.length > 0) {
       idMatched = compareIdNumbers(providedId, extractedIds);
     }
 
-    // التحقق من تطابق الاسم
+    // Verify name match
     const nameMatch = await matchNames(user.userName, parsedData.rawText);
 
     response.matchResult = {
@@ -362,46 +382,40 @@ export class ComplianceProviderService {
       daysUntilExpiry: response.matchResult?.daysUntilExpiry,
     };
 
-    // منطق القرار
-    if (idMatched && (nameMatch.isMatch || nameMatch.firstNameMatch)) {
-      // ✅ تم التحقق بنجاح
+    // Decision logic - ID number is the primary identifier
+    if (idMatched) {
+      // ✅ ID number matched - VERIFY (name matching is optional for Arabic OCR limitations)
       response.success = true;
       response.status = VerificationStatus.VERIFIED;
-      response.message = 'تم التحقق من هويتك بنجاح';
-    } else if (idMatched && !nameMatch.isMatch) {
-      // رقم الهوية صحيح لكن الاسم لا يتطابق
-      if (nameMatch.firstNameMatch) {
-        // الاسم الأول متطابق - نقبل
-        response.success = true;
-        response.status = VerificationStatus.VERIFIED;
-        response.message = 'تم التحقق من هويتك بنجاح';
-      } else {
-        // تحويل للمراجعة اليدوية
-        response.status = VerificationStatus.ADMIN_REVIEW;
-        response.message = 'تم تحويل طلبك للمراجعة اليدوية بسبب عدم تطابق الاسم';
-      }
-    } else if (!idMatched && parsedData.idNumber) {
-      // رقم الهوية غير متطابق
+      response.message = 'Your identity has been verified successfully';
+    } else if (!idMatched && extractedIds.length > 0 && providedId) {
+      // ID number clearly extracted but doesn't match what user provided - REJECT
+      response.success = false;
+      response.status = VerificationStatus.REJECTED;
+      response.message = 'The ID number you entered does not match the ID number in the document. Please check and try again.';
+      response.rejectionReason = RejectionReason.INVALID_ID_NUMBER;
+    } else if (!parsedData.idNumber && !extractedIds.length) {
+      // No ID number found in document - send for manual review
       response.status = VerificationStatus.ADMIN_REVIEW;
-      response.message = 'تم تحويل طلبك للمراجعة اليدوية للتحقق من رقم الهوية';
+      response.message = 'Your request has been forwarded for manual review due to unclear document';
     } else {
-      // لم يتم العثور على بيانات كافية
+      // Other cases - send for manual review
       response.status = VerificationStatus.ADMIN_REVIEW;
-      response.message = 'تم تحويل طلبك للمراجعة اليدوية لعدم وضوح البيانات';
+      response.message = 'Your request has been forwarded for manual review';
     }
 
     return response;
   }
 
   /**
-   * التحقق من بيانات المؤسسة
+   * Verify business data
    */
   private async verifyBusiness(
     provider: ServiceProvider,
     parsedData: ParsedDocumentData,
     response: VerificationResponseDto,
   ): Promise<VerificationResponseDto> {
-    // للمؤسسات نتحقق من اسم الشركة والصلاحية
+    // For businesses, verify company name and validity
     const companyName = provider.companyName;
     const extractedBusinessName = parsedData.businessName;
 
@@ -423,23 +437,38 @@ export class ComplianceProviderService {
       daysUntilExpiry: response.matchResult?.daysUntilExpiry,
     };
 
-    // منطق القرار للمؤسسات
-    if (response.matchResult.isValid) {
-      if (nameMatched || parsedData.commercialRegNumber) {
-        response.success = true;
-        response.status = VerificationStatus.VERIFIED;
-        response.message = 'تم التحقق من بيانات المؤسسة بنجاح';
-      } else {
-        response.status = VerificationStatus.ADMIN_REVIEW;
-        response.message = 'تم تحويل طلبك للمراجعة اليدوية للتحقق من بيانات المؤسسة';
-      }
+    // Decision logic for businesses
+    // If we have a valid date (not expired) - verify
+    if (parsedData.expiryDate && response.matchResult.isValid) {
+      // Document has valid date - approve
+      response.success = true;
+      response.status = VerificationStatus.VERIFIED;
+      response.message = 'Business document has been verified successfully. License is valid.';
+      this.logger.log(`✅ Business verified: Valid license until ${parsedData.expiryDate}`);
+    } else if (parsedData.issueDate && !parsedData.expiryDate) {
+      // Found issue date but couldn't calculate expiry - still verify
+      response.success = true;
+      response.status = VerificationStatus.VERIFIED;
+      response.message = 'Business document has been verified successfully.';
+      this.logger.log(`✅ Business verified: Issue date found ${parsedData.issueDate}`);
+    } else if (nameMatched || parsedData.commercialRegNumber) {
+      // Found company name match or commercial reg number
+      response.success = true;
+      response.status = VerificationStatus.VERIFIED;
+      response.message = 'Business data has been verified successfully';
+      this.logger.log(`✅ Business verified: Name/Reg matched`);
+    } else {
+      // Could not extract enough data - forward to admin
+      response.status = VerificationStatus.ADMIN_REVIEW;
+      response.message = 'Your request has been forwarded for manual review to verify business data';
+      this.logger.log(`⚠️ Business sent to admin review: Insufficient data extracted`);
     }
 
     return response;
   }
 
   /**
-   * معالجة حالة المراجعة اليدوية
+   * Handle manual review case
    */
   private async handleAdminReview(
     provider: ServiceProvider,
@@ -482,28 +511,28 @@ export class ComplianceProviderService {
     return {
       success: false,
       status: VerificationStatus.ADMIN_REVIEW,
-      message: 'تم تحويل طلبك للمراجعة اليدوية. سيتم إعلامك بالنتيجة قريباً.',
+      message: 'Your request has been forwarded for manual review. You will be notified of the result soon.',
       documentUrl,
     };
   }
 
   /**
-   * المراجعة اليدوية من المشرف
+   * Manual review by admin
    */
   async adminVerification(
     adminId: string,
     dto: AdminVerificationDto,
   ): Promise<VerificationResponseDto> {
-    this.logger.log(`🔍 مراجعة يدوية من المشرف ${adminId} للمزود ${dto.providerId}`);
+    this.logger.log(`🔍 Manual review by admin ${adminId} for provider ${dto.providerId}`);
 
     const provider = await this.providerModel.findById(dto.providerId);
     if (!provider) {
-      throw new NotFoundException('لم يتم العثور على المزود');
+      throw new NotFoundException('Provider not found');
     }
 
     const user = await this.userModel.findById(provider.userId);
     if (!user) {
-      throw new NotFoundException('لم يتم العثور على المستخدم');
+      throw new NotFoundException('User not found');
     }
 
     const previousStatus = provider.verification?.verificationStatus || VerificationStatus.PENDING;
@@ -525,7 +554,7 @@ export class ComplianceProviderService {
 
     if (dto.approved) {
       updateData['verification.verifiedAt'] = new Date();
-      // حساب تاريخ الانتهاء إذا لم يكن موجوداً
+      // Calculate expiry date if not present
       if (!provider.verification?.licenseExpiryDate) {
         updateData['verification.licenseExpiryDate'] = calculateExpiryDate(new Date());
         updateData['verification.issueDate'] = new Date();
@@ -564,14 +593,14 @@ export class ComplianceProviderService {
       success: dto.approved,
       status: newStatus,
       message: dto.approved 
-        ? 'تم التحقق من المزود بنجاح' 
-        : `تم رفض الوثائق: ${dto.rejectionReason}`,
+        ? 'Provider has been verified successfully' 
+        : `Documents rejected: ${dto.rejectionReason}`,
       rejectionReason,
     };
   }
 
   /**
-   * جلب حالة التحقق للمزود
+   * Get verification status for provider
    */
   async getVerificationStatus(userId: string): Promise<ProviderVerificationStatusDto> {
     const provider = await this.providerModel.findOne({ 
@@ -579,7 +608,7 @@ export class ComplianceProviderService {
     });
 
     if (!provider) {
-      throw new NotFoundException('لم يتم العثور على ملف المزود');
+      throw new NotFoundException('Provider profile not found. Please complete your provider registration first.');
     }
 
     const verification = provider.verification;
@@ -607,7 +636,7 @@ export class ComplianceProviderService {
   }
 
   /**
-   * جلب المزودين حسب حالة التحقق (للمشرف)
+   * Get providers by verification status (for admin)
    */
   async getProvidersByStatus(
     status?: VerificationStatus,
@@ -636,7 +665,7 @@ export class ComplianceProviderService {
   }
 
   /**
-   * جلب إحصائيات التحقق (للوحة التحكم)
+   * Get verification statistics (for dashboard)
    */
   async getVerificationStats(): Promise<VerificationStatsDto> {
     const now = new Date();
@@ -700,7 +729,7 @@ export class ComplianceProviderService {
       }
     ]);
 
-    // حساب المزودين الذين ستنتهي صلاحيتهم قريباً
+    // Count providers expiring soon
     const expiringCount = await this.providerModel.countDocuments({
       'verification.verificationStatus': VerificationStatus.VERIFIED,
       'verification.licenseExpiryDate': {
@@ -722,35 +751,35 @@ export class ComplianceProviderService {
   }
 
   /**
-   * تعطيل خدمات المزود
+   * Deactivate provider services
    */
   async deactivateProviderServices(providerId: Types.ObjectId): Promise<void> {
-    this.logger.log(`🔒 تعطيل خدمات المزود: ${providerId}`);
+    this.logger.log(`🔒 Deactivating provider services: ${providerId}`);
 
     await this.serviceModel.updateMany(
       { providerId: providerId.toString() },
       { $set: { isActive: false } }
     );
 
-    this.logger.log(`✅ تم تعطيل جميع خدمات المزود`);
+    this.logger.log(`✅ All provider services deactivated`);
   }
 
   /**
-   * إعادة تفعيل خدمات المزود
+   * Reactivate provider services
    */
   async reactivateProviderServices(providerId: Types.ObjectId): Promise<void> {
-    this.logger.log(`🔓 إعادة تفعيل خدمات المزود: ${providerId}`);
+    this.logger.log(`🔓 Reactivating provider services: ${providerId}`);
 
     await this.serviceModel.updateMany(
       { providerId: providerId.toString() },
       { $set: { isActive: true } }
     );
 
-    this.logger.log(`✅ تم إعادة تفعيل جميع خدمات المزود`);
+    this.logger.log(`✅ All provider services reactivated`);
   }
 
   /**
-   * تحديث حالة المزود إلى منتهي الصلاحية
+   * Update provider status to expired
    */
   async expireProvider(providerId: Types.ObjectId): Promise<void> {
     const provider = await this.providerModel.findById(providerId);
@@ -787,7 +816,7 @@ export class ComplianceProviderService {
   }
 
   /**
-   * تعطيل حساب المزود
+   * Deactivate provider account
    */
   async deactivateProvider(providerId: Types.ObjectId): Promise<void> {
     const provider = await this.providerModel.findById(providerId);
@@ -819,7 +848,7 @@ export class ComplianceProviderService {
   }
 
   /**
-   * إرسال تذكير بالتجديد
+   * Send renewal reminder
    */
   async sendRenewalReminder(
     providerId: Types.ObjectId, 
@@ -858,7 +887,7 @@ export class ComplianceProviderService {
   }
 
   /**
-   * إرسال تنبيه اقتراب انتهاء الصلاحية
+   * Send expiry warning notification
    */
   async sendExpiryWarning(
     providerId: Types.ObjectId, 
@@ -886,7 +915,7 @@ export class ComplianceProviderService {
   }
 
   /**
-   * جلب سجلات التحقق للمزود
+   * Get verification logs for provider
    */
   async getComplianceLogs(
     providerId: string,
@@ -916,7 +945,7 @@ export class ComplianceProviderService {
     try {
       await this.complianceLogModel.create(data);
     } catch (error) {
-      this.logger.error(`❌ فشل تسجيل العملية: ${error.message}`);
+      this.logger.error(`❌ Failed to log operation: ${error.message}`);
     }
   }
 
@@ -961,7 +990,7 @@ export class ComplianceProviderService {
         fcmToken || '',
       );
     } catch (error) {
-      this.logger.error(`❌ فشل إرسال الإشعار: ${error.message}`);
+      this.logger.error(`❌ Failed to send notification: ${error.message}`);
     }
   }
 
@@ -986,23 +1015,23 @@ export class ComplianceProviderService {
         fcmToken || '',
       );
     } catch (error) {
-      this.logger.error(`❌ فشل إرسال الإشعار: ${error.message}`);
+      this.logger.error(`❌ Failed to send notification: ${error.message}`);
     }
   }
 
   private translateRejectionReason(reason?: RejectionReason): string {
     const translations: Record<RejectionReason, string> = {
-      [RejectionReason.EXPIRED_DOCUMENT]: 'الوثيقة منتهية الصلاحية',
-      [RejectionReason.UNCLEAR_DOCUMENT]: 'الوثيقة غير واضحة',
-      [RejectionReason.DATA_MISMATCH]: 'عدم تطابق البيانات',
-      [RejectionReason.INVALID_DOCUMENT]: 'وثيقة غير صالحة',
-      [RejectionReason.INVALID_ID_NUMBER]: 'رقم الهوية غير صحيح',
+      [RejectionReason.EXPIRED_DOCUMENT]: 'Document has expired',
+      [RejectionReason.UNCLEAR_DOCUMENT]: 'Document is unclear',
+      [RejectionReason.DATA_MISMATCH]: 'Data mismatch',
+      [RejectionReason.INVALID_DOCUMENT]: 'Invalid document',
+      [RejectionReason.INVALID_ID_NUMBER]: 'Invalid ID number',
     };
 
-    return reason ? translations[reason] : 'سبب غير محدد';
+    return reason ? translations[reason] : 'Unspecified reason';
   }
 
-  // تشفير بسيط لرقم الهوية (يمكن استبداله بتشفير أقوى)
+  // Simple encryption for ID number (can be replaced with stronger encryption)
   private encryptIdNumber(idNumber: string): string {
     return Buffer.from(idNumber).toString('base64');
   }

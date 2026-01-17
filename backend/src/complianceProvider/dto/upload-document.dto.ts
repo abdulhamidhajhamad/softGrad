@@ -4,11 +4,11 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DocumentType, ProviderType } from '../constants/compliance.constants';
 
 /**
- * DTO لرفع وثيقة التحقق
+ * DTO for uploading verification document
  */
 export class UploadDocumentDto {
   @ApiProperty({
-    description: 'نوع الوثيقة المرفوعة',
+    description: 'Type of uploaded document',
     enum: DocumentType,
     example: DocumentType.NATIONAL_ID,
   })
@@ -16,7 +16,7 @@ export class UploadDocumentDto {
   documentType: DocumentType;
 
   @ApiProperty({
-    description: 'نوع المزود (فرد أو مؤسسة)',
+    description: 'Provider type (individual or business)',
     enum: ProviderType,
     example: ProviderType.INDIVIDUAL,
   })
@@ -24,17 +24,17 @@ export class UploadDocumentDto {
   providerType: ProviderType;
 
   @ApiPropertyOptional({
-    description: 'رقم الهوية الفلسطينية (9 أرقام) - مطلوب للأفراد',
+    description: 'Palestinian ID number (9 digits) - required for individuals',
     example: '123456789',
   })
   @IsOptional()
   @IsString()
-  @Length(9, 9, { message: 'رقم الهوية يجب أن يتكون من 9 أرقام' })
-  @Matches(/^\d{9}$/, { message: 'رقم الهوية يجب أن يحتوي على أرقام فقط' })
+  @Length(9, 9, { message: 'ID number must be 9 digits' })
+  @Matches(/^\d{9}$/, { message: 'ID number must contain only digits' })
   idNumber?: string;
 
   @ApiPropertyOptional({
-    description: 'الاسم بالعربية للتحقق اليدوي (اختياري)',
+    description: 'Arabic name for manual verification (optional)',
     example: 'محمد أحمد علي',
   })
   @IsOptional()
@@ -43,33 +43,33 @@ export class UploadDocumentDto {
 }
 
 /**
- * DTO للتحقق اليدوي من قبل المشرف
+ * DTO for manual verification by admin
  */
 export class AdminVerificationDto {
   @ApiProperty({
-    description: 'معرف المزود',
+    description: 'Provider ID',
     example: '507f1f77bcf86cd799439011',
   })
   @IsString()
   providerId: string;
 
   @ApiProperty({
-    description: 'هل تتم الموافقة على التحقق؟',
+    description: 'Is verification approved?',
     example: true,
   })
   approved: boolean;
 
   @ApiPropertyOptional({
-    description: 'ملاحظات المشرف',
-    example: 'تم التحقق يدوياً - الوثائق سليمة',
+    description: 'Admin notes',
+    example: 'Manually verified - documents are valid',
   })
   @IsOptional()
   @IsString()
   adminNotes?: string;
 
   @ApiPropertyOptional({
-    description: 'سبب الرفض (في حالة الرفض)',
-    example: 'الوثيقة غير واضحة',
+    description: 'Rejection reason (in case of rejection)',
+    example: 'Document is unclear',
   })
   @IsOptional()
   @IsString()
@@ -77,11 +77,11 @@ export class AdminVerificationDto {
 }
 
 /**
- * DTO لتجديد الوثائق
+ * DTO for document renewal
  */
 export class RenewDocumentDto {
   @ApiProperty({
-    description: 'نوع الوثيقة المراد تجديدها',
+    description: 'Type of document to renew',
     enum: DocumentType,
     example: DocumentType.BUSINESS_LICENSE,
   })
@@ -90,11 +90,11 @@ export class RenewDocumentDto {
 }
 
 /**
- * DTO للبحث عن المزودين حسب حالة التحقق
+ * DTO for searching providers by verification status
  */
 export class SearchProvidersDto {
   @ApiPropertyOptional({
-    description: 'حالة التحقق للبحث',
+    description: 'Verification status to search for',
     example: 'verified',
   })
   @IsOptional()
@@ -102,7 +102,7 @@ export class SearchProvidersDto {
   verificationStatus?: string;
 
   @ApiPropertyOptional({
-    description: 'نوع المزود',
+    description: 'Provider type',
     enum: ProviderType,
   })
   @IsOptional()
@@ -110,14 +110,14 @@ export class SearchProvidersDto {
   providerType?: ProviderType;
 
   @ApiPropertyOptional({
-    description: 'عدد العناصر في الصفحة',
+    description: 'Number of items per page',
     example: 10,
   })
   @IsOptional()
   limit?: number;
 
   @ApiPropertyOptional({
-    description: 'رقم الصفحة',
+    description: 'Page number',
     example: 1,
   })
   @IsOptional()

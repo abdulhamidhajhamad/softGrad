@@ -12,6 +12,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Model, Types } from 'mongoose';
 import Tesseract from 'tesseract.js';
+import { spawn } from 'child_process';
+import * as path from 'path';
 
 import { ServiceProvider } from '../providers/provider.entity';
 import { Service } from '../service/service.schema';
@@ -30,7 +32,8 @@ import {
   ProviderVerificationStatusDto,
   ExtractedDataDto,
   MatchResultDto,
-  VerificationStatsDto 
+  VerificationStatsDto,
+  StampVerificationResultDto
 } from './dto/verification-response.dto';
 import { 
   VerificationStatus, 
@@ -45,11 +48,20 @@ import {
   parseDocument,
   matchNames,
   compareIdNumbers,
+  compareIdNumbersAdvanced,
   isDocumentValid,
   calculateExpiryDate,
   maskIdNumber,
   ParsedDocumentData,
 } from './utils/ocr-parser.util';
+
+// ============================================================================
+// 🔐 STAMP VERIFICATION THRESHOLDS
+// ============================================================================
+const STAMP_THRESHOLDS = {
+  id: 0.30,        // 30% for National ID stamps
+  business: 0.30,  // 30% for Business/Commercial stamps
+};
 
 @Injectable()
 export class ComplianceProviderService implements OnModuleInit, OnModuleDestroy {
@@ -179,13 +191,30 @@ export class ComplianceProviderService implements OnModuleInit, OnModuleDestroy 
       );
     }
 
+    // 3.5 🔐 Verify official stamp using Python OpenCV engine
+    this.logger.log('🔐 Starting hybrid verification: OCR + Stamp Detection...');
+    const stampResult = await this.verifyStamp(documentUrl, dto.providerType);
+    this.logger.log(`🔐 Stamp verification complete: found=${stampResult.found}, score=${stampResult.score}`);
+
     // 4. Verify extracted data
-    const verificationResult = await this.verifyExtractedData(
+    let verificationResult = await this.verifyExtractedData(
       provider,
       user,
       parsedData,
       dto,
     );
+
+    // 4.5 🔐 Apply stamp verification rules
+    // If OCR passed but stamp verification failed → ADMIN_REVIEW
+    if (verificationResult.status === VerificationStatus.VERIFIED && !stampResult.found) {
+      this.logger.warn('⚠️ OCR passed but stamp not found - sending to ADMIN_REVIEW');
+      verificationResult.status = VerificationStatus.ADMIN_REVIEW;
+      verificationResult.success = false;
+      verificationResult.message = 'البيانات صحيحة ولكن الأختام الرسمية غير واضحة، يرجى المراجعة اليدوية';
+    }
+    
+    // Add stamp verification result to response
+    verificationResult.stampVerification = stampResult;
 
     // 5. Update provider data
     const updateData: any = {
@@ -218,6 +247,19 @@ export class ComplianceProviderService implements OnModuleInit, OnModuleDestroy 
     if (verificationResult.rejectionReason) {
       updateData['verification.rejectionReason'] = verificationResult.rejectionReason;
     }
+    
+    // 🔐 Store stamp verification result
+    updateData['verification.stampVerification'] = {
+      found: stampResult.found,
+      score: stampResult.score,
+      stampType: stampResult.stampType,
+      checkedAt: new Date(),
+    };
+    
+    // 🔐 Add admin notes if stamp verification failed but OCR passed
+    if (!stampResult.found && verificationResult.status === VerificationStatus.ADMIN_REVIEW) {
+      updateData['verification.adminNotes'] = 'البيانات صحيحة ولكن الأختام الرسمية غير واضحة، يرجى المراجعة اليدوية';
+    }
 
     await this.providerModel.updateOne(
       { _id: provider._id },
@@ -243,6 +285,14 @@ export class ComplianceProviderService implements OnModuleInit, OnModuleDestroy 
       },
       matchResult: verificationResult.matchResult,
       action: 'upload',
+      metadata: {
+        stampVerification: {
+          found: stampResult.found,
+          score: stampResult.score,
+          stampType: stampResult.stampType,
+          threshold: stampResult.threshold,
+        },
+      },
     });
 
     // 7. Send notification
@@ -290,6 +340,106 @@ export class ComplianceProviderService implements OnModuleInit, OnModuleDestroy 
       this.logger.error(`❌ Tesseract OCR Error: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * 🔐 Verify official stamp using Python OpenCV engine
+   * Calls the external stamp_matcher.py script for template matching
+   */
+  private async verifyStamp(
+    documentUrl: string,
+    providerType: ProviderType,
+  ): Promise<StampVerificationResultDto> {
+    const stampType = providerType === ProviderType.INDIVIDUAL ? 'id' : 'business';
+    
+    this.logger.log(`🔐 Starting stamp verification for ${stampType} document...`);
+    
+    return new Promise((resolve) => {
+      // Use process.cwd() to get project root, then navigate to src folder
+      const projectRoot = process.cwd();
+      const scriptPath = path.join(projectRoot, 'src', 'verification-provider-engine', 'stamp_matcher.py');
+      
+      this.logger.log(`📁 Script path: ${scriptPath}`);
+      this.logger.log(`🔗 Document URL: ${documentUrl}`);
+      
+      const pythonProcess = spawn('python', [
+        scriptPath,
+        documentUrl,
+        stampType,
+      ]);
+
+      let stdout = '';
+      let stderr = '';
+
+      pythonProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      pythonProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+        this.logger.warn(`⚠️ Python stderr: ${data.toString()}`);
+      });
+
+      pythonProcess.on('close', (code) => {
+        this.logger.log(`🔐 Stamp verification process exited with code ${code}`);
+        this.logger.log(`📦 Python stdout: ${stdout}`);
+
+        try {
+          // Parse JSON result from Python script
+          const result = JSON.parse(stdout.trim());
+          
+          this.logger.log(`🔐 Stamp verification result: found=${result.found}, score=${result.score}`);
+          
+          resolve({
+            found: result.found === true,
+            score: typeof result.score === 'number' ? result.score : 0,
+            threshold: STAMP_THRESHOLDS[stampType],
+            stampType,
+            error: result.error || undefined,
+          });
+        } catch (parseError) {
+          this.logger.error(`❌ Failed to parse stamp verification result: ${parseError.message}`);
+          this.logger.error(`Raw stdout: ${stdout}`);
+          
+          // Return failure result if parsing fails
+          resolve({
+            found: false,
+            score: 0,
+            threshold: STAMP_THRESHOLDS[stampType],
+            stampType,
+            error: `Failed to parse result: ${parseError.message}. Raw output: ${stdout.substring(0, 200)}`,
+          });
+        }
+      });
+
+      pythonProcess.on('error', (error) => {
+        this.logger.error(`❌ Failed to spawn Python process: ${error.message}`);
+        
+        resolve({
+          found: false,
+          score: 0,
+          threshold: STAMP_THRESHOLDS[stampType],
+          stampType,
+          error: `Python process error: ${error.message}`,
+        });
+      });
+
+      // Set timeout for the process (30 seconds)
+      setTimeout(() => {
+        if (!pythonProcess.killed) {
+          pythonProcess.kill();
+          this.logger.warn('⚠️ Stamp verification timed out after 30 seconds');
+          
+          resolve({
+            found: false,
+            score: 0,
+            threshold: STAMP_THRESHOLDS[stampType],
+            stampType,
+            error: 'Verification timed out',
+          });
+        }
+      }, 30000);
+    });
   }
 
   /**
@@ -364,17 +514,17 @@ export class ComplianceProviderService implements OnModuleInit, OnModuleDestroy 
     const providedId = dto.idNumber;
     const extractedIds = parsedData.allFoundIdNumbers;
 
-    // Verify ID number
-    let idMatched = false;
+    // Verify ID number with advanced comparison
+    let idCompareResult = { isMatch: false, needsAdminReview: false, reason: '', similarity: 0 };
     if (providedId && extractedIds.length > 0) {
-      idMatched = compareIdNumbers(providedId, extractedIds);
+      idCompareResult = compareIdNumbersAdvanced(providedId, extractedIds);
     }
 
     // Verify name match
     const nameMatch = await matchNames(user.userName, parsedData.rawText);
 
     response.matchResult = {
-      idMatched,
+      idMatched: idCompareResult.isMatch,
       nameMatched: nameMatch.isMatch,
       nameSimilarityScore: nameMatch.similarityScore,
       firstNameMatched: nameMatch.firstNameMatch,
@@ -383,13 +533,19 @@ export class ComplianceProviderService implements OnModuleInit, OnModuleDestroy 
     };
 
     // Decision logic - ID number is the primary identifier
-    if (idMatched) {
-      // ✅ ID number matched - VERIFY (name matching is optional for Arabic OCR limitations)
+    if (idCompareResult.isMatch) {
+      // ✅ ID number matched - VERIFY
       response.success = true;
       response.status = VerificationStatus.VERIFIED;
       response.message = 'Your identity has been verified successfully';
-    } else if (!idMatched && extractedIds.length > 0 && providedId) {
-      // ID number clearly extracted but doesn't match what user provided - REJECT
+    } else if (idCompareResult.needsAdminReview) {
+      // ⚠️ ID number needs admin review (partial match or minor differences)
+      response.success = false;
+      response.status = VerificationStatus.ADMIN_REVIEW;
+      response.message = `رقم الهوية يحتاج مراجعة يدوية: ${idCompareResult.reason}`;
+      this.logger.log(`⚠️ ID needs admin review: ${idCompareResult.reason}, similarity: ${(idCompareResult.similarity * 100).toFixed(0)}%`);
+    } else if (!idCompareResult.isMatch && extractedIds.length > 0 && providedId) {
+      // ❌ ID number clearly extracted but doesn't match - REJECT
       response.success = false;
       response.status = VerificationStatus.REJECTED;
       response.message = 'The ID number you entered does not match the ID number in the document. Please check and try again.';

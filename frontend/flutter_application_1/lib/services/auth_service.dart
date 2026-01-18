@@ -1,6 +1,7 @@
 // lib/services/auth_service.dart
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
@@ -345,6 +346,64 @@ class AuthService {
     } catch (e) {
       print('❌ Error in registerProviderDetails: $e');
       rethrow;
+    }
+  }
+
+  // ====================== LOGO UPLOAD =========================
+
+  /// Upload company logo (optional)
+  /// Returns the logo URL if successful, null otherwise
+  static Future<String?> uploadCompanyLogo({
+    required dynamic logoFile, // File for mobile, Uint8List for web
+    String? fileName,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        throw Exception('Authentication token not found');
+      }
+
+      final uri = Uri.parse('$baseUrl/providers/upload-logo');
+      final request = http.MultipartRequest('POST', uri);
+      
+      request.headers['Authorization'] = 'Bearer $token';
+
+      if (kIsWeb) {
+        // للويب: استخدام bytes مباشرة
+        if (logoFile is List<int>) {
+          request.files.add(http.MultipartFile.fromBytes(
+            'logo',
+            logoFile,
+            filename: fileName ?? 'company_logo.png',
+          ));
+        }
+      } else {
+        // للموبايل: استخدام File
+        if (logoFile is File) {
+          request.files.add(await http.MultipartFile.fromPath(
+            'logo',
+            logoFile.path,
+            filename: fileName ?? 'company_logo.png',
+          ));
+        }
+      }
+
+      print('📤 Uploading company logo...');
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ Logo uploaded successfully: ${data['logoUrl']}');
+        return data['logoUrl'];
+      } else {
+        final errorData = json.decode(response.body);
+        print('❌ Logo upload failed: ${errorData['message']}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Error uploading logo: $e');
+      return null;
     }
   }
 }

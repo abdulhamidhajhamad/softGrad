@@ -1,22 +1,28 @@
 // provider.service.ts
-import { Injectable, NotFoundException, ForbiddenException, Logger, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ServiceProvider } from './provider.entity';
 import { CreateServiceProviderDto, UpdateServiceProviderDto } from './provider.dto';
 import { DeleteResult } from 'mongodb';
 import { User } from '../auth/user.entity'; 
-// 🆕 استيراد خدمة المصادقة
+// 🆕 استيراد خدمة المصادقة و Supabase Storage
 import { AuthService } from '../auth/auth.service';
+import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
+
 @Injectable()
 export class ProviderService {
   private readonly logger = new Logger(ProviderService.name);
+  
+  // الشعار الافتراضي
+  private readonly DEFAULT_LOGO_URL = 'https://hquymxmztgxpvsascxux.supabase.co/storage/v1/object/public/images/logos/default-company-logo.png';
   
 constructor(
     @InjectModel(ServiceProvider.name) private providerModel: Model<ServiceProvider>,
     // ✅ التصحيح: استخدام Model<User> بدلاً من Model<UserDocument>
     @InjectModel(User.name) private readonly userModel: Model<User>, 
-    private readonly authService: AuthService, 
+    private readonly authService: AuthService,
+    private readonly supabaseStorage: SupabaseStorageService, // 🆕 إضافة Supabase Storage
   ) {}
 
   // إنشاء مزود خدمة
@@ -215,6 +221,41 @@ async updateByUserId(userId: string, dto: UpdateServiceProviderDto): Promise<Ser
   
   if (!updatedCompany) throw new NotFoundException('Update failed after finding the company.'); 
   return updatedCompany;
+}
+
+// 🆕 رفع شعار الشركة
+async uploadLogo(userId: string, file: Express.Multer.File): Promise<string> {
+  try {
+    const userObjectId = new Types.ObjectId(userId);
+    
+    // 1. التحقق من وجود شركة للمستخدم
+    const company = await this.providerModel.findOne({ userId: userObjectId });
+    if (!company) {
+      throw new NotFoundException('No company found for this user');
+    }
+
+    // 2. رفع الشعار إلى Supabase
+    this.logger.debug(`📤 Uploading logo for company: ${company.companyName}`);
+    const logoUrl = await this.supabaseStorage.uploadImage(file, 'logos', true);
+    
+    // 3. تحديث الشركة بالشعار الجديد
+    await this.providerModel.findOneAndUpdate(
+      { userId: userObjectId },
+      { logoUrl },
+      { new: true }
+    );
+
+    this.logger.debug(`✅ Logo uploaded successfully: ${logoUrl}`);
+    return logoUrl;
+  } catch (error) {
+    this.logger.error(`❌ Error uploading logo: ${error.message}`);
+    throw error;
+  }
+}
+
+// 🆕 الحصول على الشعار الافتراضي
+getDefaultLogoUrl(): string {
+  return this.DEFAULT_LOGO_URL;
 }
 
 }

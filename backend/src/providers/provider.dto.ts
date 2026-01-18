@@ -20,6 +20,7 @@ export class CreateServiceProviderDto {
   @IsOptional() @IsString() venueType?: string;
   @IsOptional() @IsBoolean() hasGoogleMapLocation?: boolean;
   @IsOptional() @IsIn(['regular', 'mid', 'high']) targetCustomerType?: 'regular' | 'mid' | 'high';
+  @IsOptional() @IsString() logoUrl?: string; // شعار الشركة (اختياري)
 }
 
 export class UpdateServiceProviderDto {
@@ -30,4 +31,5 @@ export class UpdateServiceProviderDto {
   @IsOptional() @IsString() venueType?: string;
   @IsOptional() @IsBoolean() hasGoogleMapLocation?: boolean;
   @IsOptional() @IsIn(['regular', 'mid', 'high']) targetCustomerType?: 'regular' | 'mid' | 'high';
+  @IsOptional() @IsString() logoUrl?: string; // شعار الشركة (اختياري)
 }

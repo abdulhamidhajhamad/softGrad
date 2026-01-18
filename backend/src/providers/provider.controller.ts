@@ -1,4 +1,5 @@
-import { Controller,HttpCode,HttpStatus, Post, Body, Patch, Delete, Get, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, HttpCode, HttpStatus, Post, Body, Patch, Delete, Get, Param, Req, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ProviderService } from './provider.service';
 import { CreateServiceProviderDto, UpdateServiceProviderDto } from './provider.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -77,5 +78,34 @@ export class ProviderController {
   async get(@Req() req, @Param('companyName') companyName: string) {
     const userId = req.user.userId;
     return this.providerService.findByName(userId, companyName);
+  }
+
+  // 🆕 رفع شعار الشركة (Logo)
+  @Post('upload-logo')
+  @UseInterceptors(FileInterceptor('logo'))
+  async uploadLogo(
+    @Req() req,
+    @UploadedFile() file: Express.Multer.File
+  ): Promise<{ logoUrl: string }> {
+    const userId = req.user.userId;
+    
+    if (!file) {
+      throw new BadRequestException('Logo file is required');
+    }
+
+    // التحقق من نوع الملف
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Invalid file type. Allowed: JPEG, PNG, WebP, GIF');
+    }
+
+    // التحقق من حجم الملف (5MB max)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('File too large. Maximum size is 5MB');
+    }
+
+    const logoUrl = await this.providerService.uploadLogo(userId, file);
+    return { logoUrl };
   }
 }

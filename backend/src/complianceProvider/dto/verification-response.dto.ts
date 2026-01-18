@@ -101,6 +101,40 @@ export class MatchResultDto {
 }
 
 /**
+ * Stamp verification result from Python OpenCV engine
+ */
+export class StampVerificationResultDto {
+  @ApiProperty({
+    description: 'Was the stamp found?',
+    example: true,
+  })
+  found: boolean;
+
+  @ApiProperty({
+    description: 'Match score (0-1)',
+    example: 0.75,
+  })
+  score: number;
+
+  @ApiPropertyOptional({
+    description: 'Required threshold for this stamp type',
+    example: 0.5,
+  })
+  threshold?: number;
+
+  @ApiPropertyOptional({
+    description: 'Type of stamp checked',
+    example: 'id',
+  })
+  stampType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Error message if verification failed',
+  })
+  error?: string;
+}
+
+/**
  * Document verification response
  */
 export class VerificationResponseDto {
@@ -152,6 +186,12 @@ export class VerificationResponseDto {
     example: '2025-01-15T00:00:00.000Z',
   })
   expiryDate?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Stamp verification result from OpenCV engine',
+    type: StampVerificationResultDto,
+  })
+  stampVerification?: StampVerificationResultDto;
 }
 
 /**

@@ -648,14 +648,15 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(0, LucideIcons.home, 'Home'),
               _buildNavItem(1, LucideIcons.star, 'Reviews'),
-              _buildNavItem(2, LucideIcons.messageCircle, 'Messages', badgeCount: _unreadMessages),
-              _buildNavItem(3, LucideIcons.bell, 'Notifications', badgeCount: _unreadNotifications),
+              _buildNavItem(6, LucideIcons.shieldCheck, 'Verify'),
+              _buildNavItem(2, LucideIcons.messageCircle, 'Chat', badgeCount: _unreadMessages),
+              _buildNavItem(3, LucideIcons.bell, 'Alerts', badgeCount: _unreadNotifications),
             ],
           ),
         ),
@@ -671,7 +672,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? kPrimaryColor.withOpacity(0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
@@ -682,7 +683,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                Icon(icon, color: isSelected ? kPrimaryColor : Colors.grey[500], size: 22),
+                Icon(icon, color: isSelected ? kPrimaryColor : Colors.grey[500], size: 20),
                 if (badgeCount > 0)
                   Positioned(
                     right: -8,
@@ -764,6 +765,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
       case 3: return 'Notifications';
       case 4: return 'Services';
       case 5: return 'Packages';
+      case 6: return 'Verification';
       default: return 'Admin';
     }
   }

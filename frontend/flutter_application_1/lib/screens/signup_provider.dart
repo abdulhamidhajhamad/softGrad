@@ -1,7 +1,11 @@
 // signup_provider.dart (ملف مصحح)
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_1/services/auth_service.dart'; // استخدام AuthService
 import 'package:flutter_application_1/screens/provider/home_provider.dart'; // استيراد شاشة لوحة التحكم
 import 'package:flutter_application_1/services/vendor_auth_service.dart';
@@ -39,6 +43,12 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
   String? _selectedCity;
 
   bool _isLoading = false;
+
+  // 🆕 متغيرات الشعار
+  File? _logoFile; // للموبايل
+  Uint8List? _logoBytes; // للويب
+  String? _logoFileName;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -104,6 +114,53 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
       );
 
   // ======================================================
+  // 🆕 Logo Picker
+  // ======================================================
+  Future<void> _pickLogo() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        if (kIsWeb) {
+          // للويب
+          final bytes = await pickedFile.readAsBytes();
+          setState(() {
+            _logoBytes = bytes;
+            _logoFileName = pickedFile.name;
+          });
+        } else {
+          // للموبايل
+          setState(() {
+            _logoFile = File(pickedFile.path);
+            _logoFileName = pickedFile.name;
+          });
+        }
+      }
+    } catch (e) {
+      print('❌ Error picking logo: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to pick image. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _removeLogo() {
+    setState(() {
+      _logoFile = null;
+      _logoBytes = null;
+      _logoFileName = null;
+    });
+  }
+
+  // ======================================================
   // Submit → API Call
   // ======================================================
   Future<void> _submit() async {
@@ -124,8 +181,20 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
           description: _bioCtrl.text.trim(),
         );
 
-        // 2. النجاح - الانتقال إلى شاشة التحقق
-        // 🆕 تم التعديل: الانتقال إلى شاشة التحقق بدلاً من الرئيسية
+        // 2. 🆕 رفع الشعار إذا تم اختياره
+        if (_logoFile != null || _logoBytes != null) {
+          try {
+            await AuthService.uploadCompanyLogo(
+              logoFile: kIsWeb ? _logoBytes : _logoFile,
+              fileName: _logoFileName,
+            );
+          } catch (logoError) {
+            print('⚠️ Logo upload failed, continuing without logo: $logoError');
+            // نستمر حتى لو فشل رفع الشعار
+          }
+        }
+
+        // 3. النجاح - الانتقال إلى شاشة التحقق
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -195,6 +264,205 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
     );
   }
 
+  // ======================================================
+  // 🆕 Logo Picker Widget - Modern & Clean Design
+  // ======================================================
+  Widget _buildLogoPicker() {
+    final bool hasLogo = _logoFile != null || _logoBytes != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _label('Company Logo'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Optional',
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        
+        // Logo Container
+        Center(
+          child: GestureDetector(
+            onTap: _isLoading ? null : _pickLogo,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                color: hasLogo ? Colors.transparent : Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: hasLogo ? kPrimaryButtonColor.withOpacity(0.5) : Colors.grey.shade300,
+                  width: hasLogo ? 2 : 1.5,
+                  strokeAlign: BorderSide.strokeAlignOutside,
+                ),
+                boxShadow: hasLogo
+                    ? [
+                        BoxShadow(
+                          color: kPrimaryButtonColor.withOpacity(0.15),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : [],
+              ),
+              child: Stack(
+                children: [
+                  // الصورة أو الأيقونة الافتراضية
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: hasLogo
+                        ? _buildLogoPreview()
+                        : _buildDefaultLogoPlaceholder(),
+                  ),
+                  
+                  // زر الحذف
+                  if (hasLogo)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: GestureDetector(
+                        onTap: _removeLogo,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade400,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  
+                  // زر التعديل
+                  if (hasLogo)
+                    Positioned(
+                      bottom: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: kPrimaryButtonColor,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.edit,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        
+        const SizedBox(height: 12),
+        
+        // نص المساعدة
+        Center(
+          child: Text(
+            hasLogo 
+                ? 'Tap to change your logo' 
+                : 'Add your company logo for better visibility',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: Colors.grey.shade500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLogoPreview() {
+    if (kIsWeb && _logoBytes != null) {
+      return Image.memory(
+        _logoBytes!,
+        width: 140,
+        height: 140,
+        fit: BoxFit.cover,
+      );
+    } else if (_logoFile != null) {
+      return Image.file(
+        _logoFile!,
+        width: 140,
+        height: 140,
+        fit: BoxFit.cover,
+      );
+    }
+    return const SizedBox();
+  }
+
+  Widget _buildDefaultLogoPlaceholder() {
+    return SizedBox(
+      width: 140,
+      height: 140,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: kPrimaryButtonColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.add_photo_alternate_outlined,
+              size: 32,
+              color: kPrimaryButtonColor.withOpacity(0.7),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Upload Logo',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ===================== BUILD UI =====================
   @override
   Widget build(BuildContext context) {
@@ -243,6 +511,10 @@ class _SignUpProviderScreenState extends State<SignUpProviderScreen> {
                     color: Colors.grey.shade600,
                   ),
                 ),
+                const SizedBox(height: 24),
+
+                // 🆕 COMPANY LOGO PICKER (اختياري)
+                _buildLogoPicker(),
                 const SizedBox(height: 24),
 
                 // BRAND NAME

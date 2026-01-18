@@ -126,6 +126,9 @@ export class ServiceProvider extends Document {
   @Prop({ default: null })
   image?: string;
 
+  @Prop({ type: String, default: null })
+  logoUrl?: string; // شعار الشركة (اختياري)
+
   // ==================== حقول التحقق والامتثال ====================
   
   @Prop({ type: VerificationDataSchema, default: () => ({}) })

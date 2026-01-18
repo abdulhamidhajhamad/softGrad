@@ -1,0 +1,9 @@
+# Requirements for Stamp Verification Engine
+# ==========================================
+# Install with: pip install -r requirements.txt
+
+# OpenCV for image processing and template matching
+opencv-python>=4.8.0
+
+# NumPy for numerical operations (usually installed with OpenCV)
+numpy>=1.24.0

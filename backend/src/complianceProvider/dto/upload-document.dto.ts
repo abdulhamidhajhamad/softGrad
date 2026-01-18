@@ -1,5 +1,5 @@
 // upload-document.dto.ts
-import { IsEnum, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsBoolean, Length, Matches } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DocumentType, ProviderType } from '../constants/compliance.constants';
 
@@ -57,6 +57,7 @@ export class AdminVerificationDto {
     description: 'Is verification approved?',
     example: true,
   })
+  @IsBoolean()
   approved: boolean;
 
   @ApiPropertyOptional({

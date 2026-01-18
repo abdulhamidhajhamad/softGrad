@@ -452,21 +452,153 @@ function transliterateArabicToEnglish(arabicText: string): string {
 }
 
 /**
- * مقارنة أرقام الهوية
+ * نتيجة مقارنة رقم الهوية
  */
-export function compareIdNumbers(systemId: string, extractedIds: string[]): boolean {
-  const normalizedSystemId = systemId.replace(/\D/g, '');
+export interface IdCompareResult {
+  isMatch: boolean;
+  needsAdminReview: boolean;
+  reason: string;
+  similarity: number;
+}
+
+/**
+ * حساب نسبة التشابه بين رقمين
+ */
+function calculateSimilarity(str1: string, str2: string): number {
+  if (str1.length === 0 || str2.length === 0) return 0;
   
-  for (const extractedId of extractedIds) {
-    const normalizedExtractedId = extractedId.replace(/\D/g, '');
-    if (normalizedSystemId === normalizedExtractedId) {
-      logger.log('✅ تطابق رقم الهوية');
-      return true;
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+  
+  // عدد الأرقام المتطابقة في نفس الموقع
+  let matchingChars = 0;
+  for (let i = 0; i < shorter.length; i++) {
+    if (shorter[i] === longer[i]) {
+      matchingChars++;
     }
   }
   
-  logger.warn('⚠️ لم يتطابق رقم الهوية');
-  return false;
+  // أيضاً نتحقق من التطابق من النهاية
+  let matchingFromEnd = 0;
+  for (let i = 0; i < shorter.length; i++) {
+    if (shorter[shorter.length - 1 - i] === longer[longer.length - 1 - i]) {
+      matchingFromEnd++;
+    }
+  }
+  
+  // نأخذ أفضل نتيجة
+  const bestMatch = Math.max(matchingChars, matchingFromEnd);
+  return bestMatch / longer.length;
+}
+
+/**
+ * حساب عدد الأرقام المختلفة بين رقمين بنفس الطول
+ */
+function countDifferentDigits(str1: string, str2: string): number {
+  let differences = 0;
+  const minLen = Math.min(str1.length, str2.length);
+  
+  for (let i = 0; i < minLen; i++) {
+    if (str1[i] !== str2[i]) {
+      differences++;
+    }
+  }
+  
+  // إضافة الفرق في الطول
+  differences += Math.abs(str1.length - str2.length);
+  
+  return differences;
+}
+
+/**
+ * مقارنة أرقام الهوية - مع دعم ADMIN_REVIEW للحالات الغامضة
+ */
+export function compareIdNumbers(systemId: string, extractedIds: string[]): boolean {
+  const result = compareIdNumbersAdvanced(systemId, extractedIds);
+  return result.isMatch;
+}
+
+/**
+ * مقارنة أرقام الهوية المتقدمة - ترجع تفاصيل كاملة
+ */
+export function compareIdNumbersAdvanced(systemId: string, extractedIds: string[]): IdCompareResult {
+  const normalizedSystemId = systemId.replace(/\D/g, '');
+  const systemIdLength = normalizedSystemId.length;
+  
+  let bestResult: IdCompareResult = {
+    isMatch: false,
+    needsAdminReview: false,
+    reason: 'لم يتم العثور على رقم هوية في الوثيقة',
+    similarity: 0
+  };
+  
+  for (const extractedId of extractedIds) {
+    const normalizedExtractedId = extractedId.replace(/\D/g, '');
+    const extractedIdLength = normalizedExtractedId.length;
+    
+    // حساب نسبة التشابه
+    const similarity = calculateSimilarity(normalizedSystemId, normalizedExtractedId);
+    
+    // تطابق كامل 100%
+    if (normalizedSystemId === normalizedExtractedId) {
+      logger.log('✅ تطابق رقم الهوية (كامل 100%)');
+      return {
+        isMatch: true,
+        needsAdminReview: false,
+        reason: 'تطابق كامل',
+        similarity: 1.0
+      };
+    }
+    
+    // حالة: المستخدم أدخل 9 أرقام والنظام استخرج أقل
+    if (systemIdLength === 9 && extractedIdLength < 9 && extractedIdLength >= 6) {
+      if (similarity >= 0.6) {
+        logger.log(`⚠️ رقم الهوية يحتاج مراجعة - المستخرج ناقص (${extractedIdLength} أرقام) ونسبة التشابه ${(similarity * 100).toFixed(0)}%`);
+        if (similarity > bestResult.similarity) {
+          bestResult = {
+            isMatch: false,
+            needsAdminReview: true,
+            reason: `المستخرج ${extractedIdLength} أرقام بدلاً من 9، نسبة التشابه ${(similarity * 100).toFixed(0)}%`,
+            similarity
+          };
+        }
+        continue;
+      }
+    }
+    
+    // حالة: كلاهما 9 أرقام
+    if (systemIdLength === 9 && extractedIdLength === 9) {
+      const differences = countDifferentDigits(normalizedSystemId, normalizedExtractedId);
+      
+      if (differences <= 2) {
+        // اختلاف في 1-2 رقم فقط → ADMIN_REVIEW
+        logger.log(`⚠️ رقم الهوية يحتاج مراجعة - اختلاف في ${differences} أرقام فقط`);
+        if (similarity > bestResult.similarity) {
+          bestResult = {
+            isMatch: false,
+            needsAdminReview: true,
+            reason: `اختلاف في ${differences} أرقام فقط، قد يكون خطأ في القراءة`,
+            similarity
+          };
+        }
+        continue;
+      } else {
+        // اختلاف في أكثر من 2 رقم → رفض
+        logger.log(`❌ رقم الهوية مختلف - ${differences} أرقام مختلفة`);
+      }
+    }
+    
+    // تحديث أفضل نتيجة
+    if (similarity > bestResult.similarity) {
+      bestResult.similarity = similarity;
+    }
+  }
+  
+  if (!bestResult.needsAdminReview && bestResult.similarity < 0.6) {
+    logger.warn(`⚠️ لم يتطابق رقم الهوية - المدخل: ${normalizedSystemId}, المستخرج: ${extractedIds.join(', ')}, نسبة التشابه: ${(bestResult.similarity * 100).toFixed(0)}%`);
+  }
+  
+  return bestResult;
 }
 
 /**

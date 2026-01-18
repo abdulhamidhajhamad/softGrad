@@ -5,12 +5,14 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 import 'service_sales_screen.dart';
 import 'package_sales_screen.dart';
+import 'verification_requests_screen.dart';
 import '../widgets/overview_tiles/service_revenue_tile.dart';
 import '../widgets/overview_tiles/package_revenue_tile.dart';
 import '../widgets/overview_tiles/total_users_tile.dart';
 import '../widgets/overview_tiles/providers_count_tile.dart';
 import '../../../services/admin_service/admin_service.dart';
 import '../../../services/socket_service.dart';
+import '../../../screens/compliance_provider/compliance_provider_service.dart';
 import 'dart:async';
 import '../models/user.dart';
 
@@ -66,6 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingFinancial = true;
   bool _isLoadingTopProviders = true;
   bool _isLoadingCodes = true;
+  bool _isLoadingVerification = true;
 
   // Data
   double _totalRevenue = 0.0;
@@ -76,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<User> _users = [];
   String _searchQuery = '';
   String _providerSearchQuery = '';
+  int _pendingVerificationCount = 0;
 
   // Filtered lists - exclude admin
   List<User> get _regularUsers => _users.where((u) => u.role.toLowerCase() == 'user').toList();
@@ -124,6 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _fetchTopProviders(),
       _fetchPromoCodes(),
       _fetchUsers(),
+      _fetchPendingVerification(),
     ]);
   }
 
@@ -133,8 +138,24 @@ class _HomeScreenState extends State<HomeScreen> {
         // Refresh data when dashboard updates
         _fetchDashboardSummary();
         _fetchTopProviders();
+        _fetchPendingVerification();
       }
     });
+  }
+
+  Future<void> _fetchPendingVerification() async {
+    try {
+      final stats = await ComplianceProviderService.getVerificationStats();
+      if (mounted) {
+        setState(() {
+          _pendingVerificationCount = stats.adminReview;
+          _isLoadingVerification = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error fetching verification stats: $e');
+      if (mounted) setState(() => _isLoadingVerification = false);
+    }
   }
 
   Future<void> _fetchDashboardSummary() async {
@@ -273,7 +294,11 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             // ═══ WELCOME HEADER ═══
             _buildWebHeader(),
-            const SizedBox(height: 28),
+            const SizedBox(height: 20),
+            
+            // ═══ VERIFICATION ALERT ═══
+            _buildVerificationAlertCard(),
+            const SizedBox(height: 24),
 
             // ═══ ROW 1: 4 Stat Cards (Equal Width) ═══
             Row(
@@ -1056,6 +1081,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ═══ VERIFICATION ALERT ═══
+            _buildVerificationAlertCard(),
+            const SizedBox(height: 16),
+            
             // ═══ TOP: 2 Stat Cards ═══
             Row(
               children: [
@@ -1080,21 +1109,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
             
-            // ═══ Chart ═══
-            _buildChartCard(),
-            const SizedBox(height: 16),
-            
-            // ═══ 2 Column: Discount + Donut ═══
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _buildDiscountCodesCard()),
-                const SizedBox(width: 14),
-                Expanded(child: _buildTopProvidersDonutCard()),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
             // ═══ Overview Tiles ═══
             Row(
               children: [
@@ -1115,6 +1129,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Expanded(child: ProvidersCountTile()),
               ],
             ),
+            const SizedBox(height: 16),
+            
+            // ═══ Chart ═══
+            _buildChartCard(),
+            const SizedBox(height: 16),
+            
+            // ═══ 2 Column: Discount + Donut ═══
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _buildTopProvidersDonutCard()),
+                const SizedBox(width: 14),
+                Expanded(child: _buildDiscountCodesCard()),
+              ],
+            ),
           ],
         ),
       ),
@@ -1133,6 +1162,8 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _buildModernHeader(context),
             const SizedBox(height: 18),
+            
+            // ═══ QUICK STATS ROW ═══
             Row(
               children: [
                 Expanded(child: _buildPrimaryMetricCard()),
@@ -1140,40 +1171,64 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(child: _buildSecondaryMetricCard()),
               ],
             ),
-            const SizedBox(height: 18),
-            _buildChartCard(),
             const SizedBox(height: 14),
-            _buildDiscountCodesCard(),
-            const SizedBox(height: 14),
-            _buildTopProvidersDonutCard(),
+            
+            // ═══ VERIFICATION ALERT CARD ═══
+            _buildVerificationAlertCard(),
             const SizedBox(height: 18),
+            
+            // ═══ OVERVIEW SECTION ═══
             Text(
               'Overview',
               style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
                 color: kTextColor,
-                letterSpacing: -0.1,
+                letterSpacing: -0.3,
               ),
             ),
             const SizedBox(height: 12),
-            ServiceRevenueTile(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ServiceSalesScreen()),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: ServiceRevenueTile(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ServiceSalesScreen()),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: PackageRevenueTile(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PackageSalesScreen()),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
-            PackageRevenueTile(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PackageSalesScreen()),
-              ),
+            Row(
+              children: [
+                Expanded(child: TotalUsersTile(onTap: () => _showUsersModal(context))),
+                const SizedBox(width: 12),
+                const Expanded(child: ProvidersCountTile()),
+              ],
             ),
-            const SizedBox(height: 12),
-            TotalUsersTile(onTap: () => _showUsersModal(context)),
-            const SizedBox(height: 12),
-            const ProvidersCountTile(),
+            const SizedBox(height: 18),
+            
+            // ═══ FINANCIAL GROWTH ═══
+            _buildChartCard(),
+            const SizedBox(height: 14),
+            
+            // ═══ TOP PROVIDERS ═══
+            _buildTopProvidersDonutCard(),
+            const SizedBox(height: 14),
+            
+            // ═══ DISCOUNT CODES ═══
+            _buildDiscountCodesCard(),
           ],
         ),
       ),
@@ -1264,6 +1319,164 @@ class _HomeScreenState extends State<HomeScreen> {
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🔔 VERIFICATION ALERT CARD
+  // ═══════════════════════════════════════════════════════════════
+  Widget _buildVerificationAlertCard() {
+    if (_isLoadingVerification) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const SizedBox(width: 22, height: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 14,
+                    width: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    height: 10,
+                    width: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final hasPending = _pendingVerificationCount > 0;
+    
+    return GestureDetector(
+      onTap: () {
+        // Navigate to verification tab (index 6) via parent
+        final parentState = context.findAncestorStateOfType<State>();
+        if (parentState != null && parentState.mounted) {
+          // Try to find AdminMainScreen and call _onNavTap
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const VerificationRequestsScreen(),
+            ),
+          );
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: hasPending
+              ? LinearGradient(
+                  colors: [
+                    Colors.orange.shade400,
+                    Colors.orange.shade600,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: hasPending ? null : Colors.green.shade50,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: hasPending
+              ? [
+                  BoxShadow(
+                    color: Colors.orange.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: hasPending 
+                    ? Colors.white.withOpacity(0.2)
+                    : Colors.green.shade100,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                hasPending ? LucideIcons.shieldAlert : LucideIcons.shieldCheck,
+                size: 24,
+                color: hasPending ? Colors.white : Colors.green.shade600,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    hasPending 
+                        ? 'Pending Verifications'
+                        : 'All Verified',
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: hasPending ? Colors.white : Colors.green.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    hasPending
+                        ? '$_pendingVerificationCount provider${_pendingVerificationCount > 1 ? 's' : ''} awaiting review'
+                        : 'No pending requests',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: hasPending 
+                          ? Colors.white.withOpacity(0.9)
+                          : Colors.green.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: hasPending 
+                    ? Colors.white.withOpacity(0.2)
+                    : Colors.green.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                LucideIcons.chevronRight,
+                size: 18,
+                color: hasPending ? Colors.white : Colors.green.shade600,
               ),
             ),
           ],

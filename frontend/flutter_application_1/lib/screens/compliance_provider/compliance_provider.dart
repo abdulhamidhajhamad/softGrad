@@ -704,6 +704,32 @@ class _VerificationScreenState extends State<VerificationScreen>
 
             // Document Upload
             _buildSectionTitle('Upload Document', LucideIcons.upload),
+            const SizedBox(height: 8),
+            // ⚠️ تنبيه مهم للمستخدم
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: kWarningColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: kWarningColor.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.alertTriangle, color: kWarningColor, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'تأكد أن الصورة واضحة وكاملة، ورقم الهوية ظاهر بشكل كامل وغير مغطى',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: kWarningColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 12),
             _buildDocumentUploader(),
 
@@ -1070,11 +1096,14 @@ class _VerificationScreenState extends State<VerificationScreen>
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    'Verifying...',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      'جاري تحليل البيانات والأختام الرسمية...',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ],
@@ -1223,7 +1252,14 @@ class _VerificationResultDialog extends StatelessWidget {
         message = 'Your account has been verified successfully. You can now add services and start receiving bookings.';
         break;
       case VerificationStatus.adminReview:
-        message = 'Your documents require manual review by our team. This usually takes 1-2 business days. You can continue using the app, but adding services will be available after approval.';
+        // 🔐 Special message for stamp verification issues
+        if (response.isStampReview) {
+          message = 'وثيقتك قيد المراجعة الإضافية من قبل الإدارة.\n\n'
+              'تم استخراج البيانات بنجاح، لكن تحتاج الأختام الرسمية للتأكد منها يدوياً. '
+              'سيتم إخطارك بالنتيجة خلال 1-2 يوم عمل.';
+        } else {
+          message = 'Your documents require manual review by our team. This usually takes 1-2 business days. You can continue using the app, but adding services will be available after approval.';
+        }
         break;
       case VerificationStatus.underReview:
         message = 'Your documents are being processed. Please wait while we verify your information.';
@@ -1240,14 +1276,61 @@ class _VerificationResultDialog extends StatelessWidget {
         message = response.message;
     }
 
-    return Text(
-      message,
-      style: GoogleFonts.poppins(
-        fontSize: 14,
-        color: kTextSecondary,
-        height: 1.5,
-      ),
-      textAlign: TextAlign.center,
+    // 🔐 Add stamp verification score info if available
+    Widget? stampInfo;
+    if (response.stampVerification != null) {
+      final stamp = response.stampVerification!;
+      stampInfo = Container(
+        margin: const EdgeInsets.only(top: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: stamp.found 
+              ? kSuccessColor.withOpacity(0.1) 
+              : kWarningColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: stamp.found 
+                ? kSuccessColor.withOpacity(0.3) 
+                : kWarningColor.withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              stamp.found ? LucideIcons.checkCircle2 : LucideIcons.alertCircle,
+              size: 18,
+              color: stamp.found ? kSuccessColor : kWarningColor,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              stamp.found 
+                  ? 'الختم الرسمي: تم التحقق ✓' 
+                  : 'الختم الرسمي: يحتاج مراجعة',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: stamp.found ? kSuccessColor : kWarningColor,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Text(
+          message,
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            color: kTextSecondary,
+            height: 1.5,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        if (stampInfo != null) stampInfo,
+      ],
     );
   }
 

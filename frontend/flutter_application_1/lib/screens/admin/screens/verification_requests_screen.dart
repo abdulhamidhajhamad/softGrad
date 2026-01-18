@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_application_1/screens/compliance_provider/compliance_provider_service.dart';
+import 'package:flutter_application_1/services/admin_service/admin_service.dart';
 import '../theme/app_theme.dart';
 
 // ============================================================================
@@ -83,13 +84,30 @@ class _VerificationRequestsScreenState extends State<VerificationRequestsScreen>
         providerId: provider.id,
         approved: approved,
         notes: notes,
+        rejectionReason: approved ? null : notes,
       );
+
+      // If rejected, start a chat with the provider and send the rejection reason
+      if (!approved && notes != null && notes.isNotEmpty) {
+        try {
+          // Use userId for chat (the actual user account), fallback to provider.id if not available
+          final chatUserId = provider.userId ?? provider.id;
+          print('🔵 Starting chat with user: $chatUserId (userId: ${provider.userId}, providerId: ${provider.id})');
+          
+          final rejectionMessage = '❌ Your verification request has been rejected.\n\n📋 Reason: $notes\n\nIf you have any questions or want to appeal this decision, please reply to this message.';
+          await AdminService.startChatWithUser(chatUserId, rejectionMessage);
+          print('✅ Chat message sent successfully');
+        } catch (chatError) {
+          print('⚠️ Could not start chat: $chatError');
+          // Don't fail the whole operation if chat fails
+        }
+      }
 
       // Show success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(approved ? 'Provider verified successfully!' : 'Provider rejected'),
+            content: Text(approved ? 'Provider verified successfully!' : 'Provider rejected and notified via chat'),
             backgroundColor: approved ? kSuccessColor : kErrorColor,
           ),
         );
@@ -152,6 +170,401 @@ class _VerificationRequestsScreenState extends State<VerificationRequestsScreen>
   }
 
   Widget _buildContent() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+        
+        if (isMobile) {
+          return _buildMobileContent();
+        } else {
+          return _buildWebContent();
+        }
+      },
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // 📱 MOBILE CONTENT - Clean & Modern Layout
+  // ═══════════════════════════════════════════════════════════════
+  Widget _buildMobileContent() {
+    return Column(
+      children: [
+        // ═══ COMPACT STATS ROW ═══
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              _buildMiniStat(_stats?.total ?? 0, 'Total', kPrimaryColor),
+              _buildStatDivider(),
+              _buildMiniStat(_stats?.verified ?? 0, 'Verified', kSuccessColor),
+              _buildStatDivider(),
+              _buildMiniStat(_stats?.adminReview ?? 0, 'Pending', kWarningColor),
+              _buildStatDivider(),
+              _buildMiniStat(_stats?.rejected ?? 0, 'Rejected', kErrorColor),
+            ],
+          ),
+        ),
+        
+        // ═══ TAB BAR - Simplified for Mobile ═══
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TabBar(
+            controller: _tabController,
+            labelColor: Colors.white,
+            unselectedLabelColor: kTextSecondary,
+            labelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13),
+            unselectedLabelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 13),
+            indicator: BoxDecoration(
+              color: kPrimaryColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicatorPadding: const EdgeInsets.all(4),
+            dividerColor: Colors.transparent,
+            tabs: [
+              Tab(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.clock, size: 16),
+                    const SizedBox(width: 6),
+                    Text('Pending${_pendingProviders.isNotEmpty ? ' (${_pendingProviders.length})' : ''}'),
+                  ],
+                ),
+              ),
+              Tab(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.xCircle, size: 16),
+                    const SizedBox(width: 6),
+                    Text('Rejected${_rejectedProviders.isNotEmpty ? ' (${_rejectedProviders.length})' : ''}'),
+                  ],
+                ),
+              ),
+              Tab(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.alertTriangle, size: 16),
+                    const SizedBox(width: 6),
+                    Text('Expired${_expiredProviders.isNotEmpty ? ' (${_expiredProviders.length})' : ''}'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        
+        // ═══ TAB CONTENT ═══
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildMobileProvidersList(_pendingProviders, showActions: true),
+              _buildMobileProvidersList(_rejectedProviders, showActions: false),
+              _buildMobileProvidersList(_expiredProviders, showActions: false),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMiniStat(int value, String label, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              value.toString(),
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: kTextSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatDivider() {
+    return Container(
+      width: 1,
+      height: 40,
+      color: Colors.grey.shade200,
+    );
+  }
+
+  Widget _buildMobileProvidersList(List<ProviderForReview> providers, {required bool showActions}) {
+    if (providers.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(LucideIcons.inbox, size: 48, color: Colors.grey.shade400),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No requests found',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: kTextSecondary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Check back later',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: Colors.grey.shade400,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      color: kPrimaryColor,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: providers.length,
+        itemBuilder: (context, index) {
+          return _buildMobileProviderCard(providers[index], showActions: showActions);
+        },
+      ),
+    );
+  }
+
+  Widget _buildMobileProviderCard(ProviderForReview provider, {required bool showActions}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showProviderDetails(provider),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                // ═══ HEADER ROW ═══
+                Row(
+                  children: [
+                    // Avatar
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.7)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: Text(
+                          provider.companyName.isNotEmpty 
+                              ? provider.companyName[0].toUpperCase() 
+                              : '?',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            provider.companyName,
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: kTextPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: provider.providerType == ProviderType.business 
+                                      ? Colors.blue.withOpacity(0.1) 
+                                      : Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  provider.providerType == ProviderType.business ? 'Business' : 'Individual',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: provider.providerType == ProviderType.business 
+                                        ? Colors.blue 
+                                        : Colors.green,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Status Badge
+                    _buildMobileStatusBadge(provider.verificationStatus),
+                  ],
+                ),
+                
+                // ═══ ACTION BUTTONS (only for pending) ═══
+                if (showActions) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showRejectDialog(provider),
+                          icon: const Icon(LucideIcons.x, size: 16),
+                          label: Text('Reject', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: kErrorColor,
+                            side: BorderSide(color: kErrorColor.withOpacity(0.5)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _handleVerification(provider, true),
+                          icon: const Icon(LucideIcons.check, size: 16),
+                          label: Text('Approve', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kSuccessColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileStatusBadge(VerificationStatus status) {
+    Color color;
+    IconData icon;
+
+    switch (status) {
+      case VerificationStatus.verified:
+        color = kSuccessColor;
+        icon = LucideIcons.checkCircle;
+        break;
+      case VerificationStatus.adminReview:
+        color = kWarningColor;
+        icon = LucideIcons.clock;
+        break;
+      case VerificationStatus.rejected:
+        color = kErrorColor;
+        icon = LucideIcons.xCircle;
+        break;
+      case VerificationStatus.expired:
+        color = Colors.orange;
+        icon = LucideIcons.alertTriangle;
+        break;
+      default:
+        color = kTextSecondary;
+        icon = LucideIcons.helpCircle;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(icon, size: 18, color: color),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🖥️ WEB CONTENT - Original Layout
+  // ═══════════════════════════════════════════════════════════════
+  Widget _buildWebContent() {
     return Column(
       children: [
         // Stats Cards

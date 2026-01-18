@@ -119,6 +119,39 @@ class MatchResult {
   }
 }
 
+/// 🔐 نتيجة التحقق من الختم الرسمي
+class StampVerificationResult {
+  final bool found;
+  final double score;
+  final double? threshold;
+  final String? stampType;
+  final String? error;
+
+  StampVerificationResult({
+    required this.found,
+    required this.score,
+    this.threshold,
+    this.stampType,
+    this.error,
+  });
+
+  factory StampVerificationResult.fromJson(Map<String, dynamic> json) {
+    return StampVerificationResult(
+      found: json['found'] ?? false,
+      score: (json['score'] as num?)?.toDouble() ?? 0.0,
+      threshold: (json['threshold'] as num?)?.toDouble(),
+      stampType: json['stampType'] as String?,
+      error: json['error'] as String?,
+    );
+  }
+  
+  /// هل الختم مقبول؟
+  bool get isAcceptable => found && (threshold == null || score >= threshold!);
+  
+  /// نسبة التطابق كنسبة مئوية
+  String get scorePercentage => '${(score * 100).toStringAsFixed(1)}%';
+}
+
 /// استجابة التحقق من الوثيقة
 class VerificationResponse {
   final bool success;
@@ -129,6 +162,7 @@ class VerificationResponse {
   final RejectionReason? rejectionReason;
   final String? documentUrl;
   final DateTime? expiryDate;
+  final StampVerificationResult? stampVerification;
 
   VerificationResponse({
     required this.success,
@@ -139,7 +173,14 @@ class VerificationResponse {
     this.rejectionReason,
     this.documentUrl,
     this.expiryDate,
+    this.stampVerification,
   });
+  
+  /// هل الطلب محول للمراجعة اليدوية بسبب الختم؟
+  bool get isStampReview => 
+      status == VerificationStatus.adminReview && 
+      stampVerification != null && 
+      !stampVerification!.found;
 
   factory VerificationResponse.fromJson(Map<String, dynamic> json) {
     return VerificationResponse(
@@ -156,6 +197,9 @@ class VerificationResponse {
       documentUrl: json['documentUrl'] as String?,
       expiryDate: json['expiryDate'] != null 
           ? DateTime.tryParse(json['expiryDate'].toString()) 
+          : null,
+      stampVerification: json['stampVerification'] != null 
+          ? StampVerificationResult.fromJson(json['stampVerification']) 
           : null,
     );
   }
@@ -247,10 +291,10 @@ class VerificationStats {
     );
   }
 }
-
 /// معلومات المزود للمراجعة (للأدمن)
 class ProviderForReview {
   final String id;
+  final String? userId; // User ID for chat functionality
   final String companyName;
   final String email;
   final String? phone;
@@ -263,6 +307,7 @@ class ProviderForReview {
 
   ProviderForReview({
     required this.id,
+    this.userId,
     required this.companyName,
     required this.email,
     this.phone,
@@ -275,11 +320,22 @@ class ProviderForReview {
   });
 
   factory ProviderForReview.fromJson(Map<String, dynamic> json) {
+    // Extract userId from populated userId field or direct field
+    String? userIdValue;
+    if (json['userId'] != null) {
+      if (json['userId'] is String) {
+        userIdValue = json['userId'];
+      } else if (json['userId'] is Map) {
+        userIdValue = json['userId']['_id'] ?? json['userId']['id'];
+      }
+    }
+    
     return ProviderForReview(
       id: json['_id'] ?? json['id'] ?? '',
+      userId: userIdValue,
       companyName: json['companyName'] ?? '',
-      email: json['email'] ?? '',
-      phone: json['phone'] as String?,
+      email: json['email'] ?? json['userId']?['email'] ?? '',
+      phone: json['phone'] as String? ?? json['userId']?['phone'] as String?,
       verificationStatus: _parseVerificationStatus(json['verification']?['verificationStatus']),
       providerType: _parseProviderType(json['verification']?['providerType']),
       documentUrl: json['verification']?['documentUrl'] as String?,
@@ -672,7 +728,7 @@ class ComplianceProviderService {
         'approved': approved,
       };
       
-      if (notes != null) body['notes'] = notes;
+      if (notes != null) body['adminNotes'] = notes;
       if (rejectionReason != null) body['rejectionReason'] = rejectionReason;
 
       final response = await http.put(

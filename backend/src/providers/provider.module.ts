@@ -8,6 +8,7 @@ import { ServiceProvider, ServiceProviderSchema } from './provider.entity';
 // ✅ يجب استيراد User و UserSchema
 import { User, UserSchema } from '../auth/user.entity'; 
 import { AuthModule } from '../auth/auth.module'; // ✅ يجب استيرادها
+import { SupabaseStorageModule } from '../subbase/supabaseStorage.module'; // 🆕 لرفع الشعار
 
 @Module({
   imports: [
@@ -17,7 +18,8 @@ import { AuthModule } from '../auth/auth.module'; // ✅ يجب استيراده
       { name: User.name, schema: UserSchema }, 
     ]),
     // ✅ التأكد من وجود AuthModule هنا
-    AuthModule, 
+    AuthModule,
+    SupabaseStorageModule, // 🆕 لرفع الشعار
   ],
   controllers: [ProviderController],
   providers: [ProviderService],

@@ -38,7 +38,20 @@ import { join } from 'path';
       useFactory: async (configService: ConfigService) => ({
         uri:
           configService.get<string>('MONGO_URI') ||
-          'mongodb+srv://abdulhamid:0592370454@weddingplanner.yq50n6g.mongodb.net/?appName=WeddingPlanner',
+          'mongodb+srv://fordep:0592370454@weddingplanner.ledafad.mongodb.net/?appName=weddingplanner',
+        connectionFactory: (connection) => {
+          connection.on('connected', () => {
+            console.log('✅ MongoDB connected successfully to Atlas!');
+            console.log(`📦 Database: ${connection.name}`);
+          });
+          connection.on('error', (err) => {
+            console.error('❌ MongoDB connection error:', err.message);
+          });
+          connection.on('disconnected', () => {
+            console.log('⚠️ MongoDB disconnected');
+          });
+          return connection;
+        },
       }),
       inject: [ConfigService],
     }),

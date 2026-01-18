@@ -40,10 +40,11 @@ export class User extends Document {
   favoritePackages: Types.ObjectId[];
   
   // FCM Token for push notifications (not unique - same token can be reused)
-  @Prop({ default: null })
+  @Prop({ default: null, unique: true, sparse: true })
   fcmToken?: string; 
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-UserSchema.index({ email: 1 });
+UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ fcmToken: 1 }, { unique: true, sparse: true });

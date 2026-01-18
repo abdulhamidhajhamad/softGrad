@@ -1,123 +1,293 @@
-import { IsString, IsNumber, IsArray, IsOptional, IsObject, IsNotEmpty, Min, IsDate, MinLength, Max } from 'class-validator';
+import { 
+  IsString, IsNumber, IsOptional, IsArray, IsObject, 
+  IsEnum, IsBoolean, ValidateNested, Min, Max 
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { BookingType, PayType } from './service.schema';
+
+// ... (PricingOptionsDto & LocationDto بقيت كما هي) ...
+export class PricingOptionsDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  perHour?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  perDay?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  perPerson?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  fullVenue?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  basePrice?: number;
+}
 
 export class LocationDto {
-  @IsNumber()
-  @IsNotEmpty()
-  latitude: number;
-
-  @IsNumber()
-  @IsNotEmpty()
-  longitude: number;
-
-  @IsString()
   @IsOptional()
+  @IsNumber()
+  latitude?: number;
+  
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+  
+  @IsOptional()
+  @IsString()
   address?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
   city?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
   country?: string;
 }
 
 export class CreateServiceDto {
+  // ... (الحقول السابقة كما هي) ...
   @IsString()
-  @IsNotEmpty()
   serviceName: string;
 
-  @IsArray()
   @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   images?: string[];
 
-  @IsObject()
-  @IsNotEmpty()
+  @IsEnum(BookingType)
+  bookingType: BookingType;
+
+  @ValidateNested()
+  @Type(() => LocationDto)
   location: LocationDto;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  price: number;
+  price?: number;
+
+  @IsOptional()
+  @IsString()
+  externalLink?: string;
 
   @IsString()
-  @IsNotEmpty()
   category: string;
 
+  @IsEnum(PayType)
+  payType: PayType;
+
   @IsOptional()
+  @IsObject()
   additionalInfo?: any;
 
-  @IsString()
   @IsOptional()
-  companyName?: string;
-
-  @IsArray()
-  @IsOptional()
-  @IsDate({ each: true })
-  bookedDates?: Date[];
-
-  // ✅ إضافة الرايتنج الافتراضي
   @IsNumber()
   @Min(0)
   @Max(5)
-  @IsOptional()
   rating?: number;
+
+  // ✅ الحقول الاختيارية
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxCapacity?: number;
+
+  // 🆕 حقل جديد: الحد الأقصى للفعاليات في نفس الوقت
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  maxConcurrency?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minBookingHours?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxBookingHours?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  availableHours?: number[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  cleanupTimeMinutes?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  workingDays?: string[];
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  // 🆕 هل الخدمة لها موقع ثابت
+  @IsOptional()
+  @IsBoolean()
+  hasFixedLocation?: boolean;
 }
 
 export class UpdateServiceDto {
-  @IsString()
+  // ... (نفس التعديل هنا) ...
   @IsOptional()
+  @IsString()
   serviceName?: string;
 
-  @IsArray()
   @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   images?: string[];
 
-  @IsObject()
   @IsOptional()
+  @IsEnum(BookingType)
+  bookingType?: BookingType;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LocationDto)
   location?: LocationDto;
 
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  @IsOptional()
   price?: number;
 
-  @IsString()
   @IsOptional()
+  @IsString()
+  externalLink?: string;
+
+  @IsOptional()
+  @IsString()
   category?: string;
 
   @IsOptional()
+  @IsEnum(PayType)
+  payType?: PayType;
+
+  @IsOptional()
+  @IsObject()
   additionalInfo?: any;
 
-  @IsString()
   @IsOptional()
-  companyName?: string;
-
-  @IsArray()
-  @IsOptional()
-  @IsDate({ each: true })
-  bookedDates?: Date[];
-
-  // ✅ إضافة الرايتنج للتحديث
   @IsNumber()
   @Min(0)
   @Max(5)
-  @IsOptional()
   rating?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxCapacity?: number;
+
+  // 🆕 حقل جديد
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  maxConcurrency?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minBookingHours?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxBookingHours?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  availableHours?: number[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  cleanupTimeMinutes?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  workingDays?: string[];
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  // 🆕 هل الخدمة لها موقع ثابت
+  @IsOptional()
+  @IsBoolean()
+  hasFixedLocation?: boolean;
+}
+//  NEW: Offer DTO for creating/updating service offers
+export class CreateOfferDto {
+  @IsNumber()
+  @Min(0)
+  discountedPrice: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPercentage?: number;
+
+  @IsString()
+  startDate: string; // ISO date string
+
+  @IsString()
+  endDate: string; // ISO date string
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 }
 
-export class ServiceResponseDto {
-  _id: string;
-  providerId: string;
-  serviceName: string;
-  images: string[];
-  reviews: any[];
-  location: any;
-  price: number;
-  category: string;
-  additionalInfo?: any;
-  createdAt: Date;
-  updatedAt: Date;
-  companyName?: string;
-  bookedDates: Date[];
-  rating: number; // ✅ إضافة الرايتنج للاستجابة
+export class UpdateOfferDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discountedPrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  discountPercentage?: number;
+
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 }

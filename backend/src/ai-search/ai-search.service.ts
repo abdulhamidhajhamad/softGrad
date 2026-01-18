@@ -5,13 +5,19 @@ import { GoogleGenAI } from '@google/genai';
 import { AiSearchFilters } from './ai-search.interface'; 
 import { AiSearchBlueprint } from './ai-search.interface'; 
 
+// Interface for service priority with budget
+interface ServicePriority {
+  name: string;
+  priority: number;
+  budgetPercent?: number;
+}
+
 @Injectable()
 export class AiSearchService {
   private readonly logger = new Logger(AiSearchService.name);
   private readonly ai: GoogleGenAI;
 
   constructor() {
-
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       this.logger.error('GEMINI_API_KEY is not set.');
@@ -20,90 +26,177 @@ export class AiSearchService {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-    async extractSearchFilters(userPrompt: string): Promise<AiSearchBlueprint> {    this.logger.log(`Starting AI filter extraction for prompt: ${userPrompt.substring(0, 50)}...`);
+  /**
+   * 🧠 استخلاص 3 باكجات بناءً على مدخلات اليوزر وتفضيلاته
+   */
+  async extractSearchFilters(
+    city: string,
+    guestCount: number,
+    budgetMin: number,
+    budgetMax: number,
+    eventType: string,
+    eventDate: string,
+    userTags: string[],      // 🆕 قائمة التاجز من اليوزر
+    additionalNotes?: string, // 🆕 ملاحظات إضافية
+    startTime?: string,
+    endTime?: string,
+    servicePriorities?: ServicePriority[], // 🆕 أولويات الخدمات مع النسب
+    budgetFlexibility?: number, // 🆕 نسبة المرونة في الميزانية
+  ): Promise<AiSearchBlueprint> {
+    
+    this.logger.log(`AI Search: ${eventType} in ${city}, Tags: [${userTags.join(', ')}]`);
 
-        const prompt = `
-            You are an expert Event Planner AI. Your task is to analyze the user's request
-            (which is in English) and design THREE comprehensive event package blueprints.
+    // 🆕 تحضير النص الخاص بتفضيلات المستخدم لإضافته للبرومبت
+    const userPreferencesText = `
+      USER PREFERENCES (MUST BE RESPECTED):
+      - Specific Style/Requirement Tags: [${userTags.join(', ')}]
+      - Additional Notes: "${additionalNotes || 'None'}"
+    `;
 
-            User Request: "${userPrompt}"
+    // 🆕 NEW: Check if user provided budget percentages for services
+    const hasUserBudgetPercentages = servicePriorities?.some(s => s.budgetPercent && s.budgetPercent > 0);
+    
+    // Build service constraints text if user provided percentages
+    let serviceConstraintsText = '';
+    if (hasUserBudgetPercentages && servicePriorities) {
+      const servicesBudgetText = servicePriorities
+        .filter(s => s.budgetPercent && s.budgetPercent > 0)
+        .map(s => `  - ${s.name}: ~${s.budgetPercent}% of total budget (±5% tolerance)`)
+        .join('\n');
+      
+      serviceConstraintsText = `
+      USER-DEFINED BUDGET ALLOCATION (CRITICAL - MUST FOLLOW):
+      The user has specified approximate budget percentages for each service type.
+      You MUST respect these allocations with ±5% tolerance:
+${servicesBudgetText}
 
-            INSTRUCTIONS:
-            1. **Budget Calculation**: Based on the price range mentioned (e.g., 30,000 to 45,000), use the HIGHEST value (e.g., 45000) as the base 'Original Budget'.
-            2. **Design Packages**: Create three distinct packages based on this base budget:
-            * **Package 1 (Essential)**: Target Price is 10% LESS than the base budget. Tags should focus on "Value" and "Efficiency".
-            * **Package 2 (Standard)**: Target Price is EQUAL to the base budget. Tags should focus on "Quality" and "Atmosphere".
-            * **Package 3 (Premium)**: Target Price is 10% MORE than the base budget. Tags should focus on "Luxury" and "High-End".
-            3. **Required Services**: For the determined event type (e.g., Wedding), each package MUST specify the required services in order of priority (Venue, Photography, Catering, etc.) and assign specific AI search tags for each service based on the package's quality level.
-
-            Return the result as a raw JSON object ONLY, adhering to the required schema: AiSearchBlueprint.
-        `;
-
-        try {
-            const response = await this.ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    // 🛑 تحديث الـ Schema هنا ليتطابق مع AiSearchBlueprint
-                    responseSchema: {
-                        type: "object",
-                        properties: {
-                            city: { type: "string" },
-                            originalBudget: { type: "number" },
-                            eventCategory: { type: "string" },
-                            packages: { 
-                                type: "array", 
-                                items: {
-                                    type: "object",
-                                    properties: {
-                                        packageName: { type: "string" },
-                                        description: { type: "string" },
-                                        targetPrice: { type: "number" },
-                                        requiredServices: { 
-                                            type: "array", 
-                                            items: {
-                                                type: "object",
-                                                properties: {
-                                                    categoryName: { type: "string", description: "e.g., Venue, Photography, Catering" },
-                                                    priority: { type: "number", description: "1 is highest priority" },
-                                                    budgetWeight: { type: "number", description: "Approximate percentage of total price this service should consume (e.g., 0.5 for venue)" },
-                                                    aiTags: { type: "array", items: { type: "string" }, description: "Specific tags to search for (e.g., 'Grand Hall', 'Professional Team')" }
-                                                },
-                                                required: ["categoryName", "priority", "budgetWeight", "aiTags"]
-                                            }
-                                        }
-                                    },
-                                    required: ["packageName", "description", "targetPrice", "requiredServices"]
-                                }
-                            }
-                        },
-                        required: ["city", "originalBudget", "eventCategory", "packages"]
-                    }
-                }
-            });
-
-            if (!response || !response.text) {
-                this.logger.error(`Gemini returned empty response for prompt: ${userPrompt.substring(0, 50)}...`);
-                throw new Error('Gemini API returned an empty or invalid text response.');
-            }
-
-            const jsonText = response.text.trim();
-            const filters: AiSearchFilters = JSON.parse(jsonText);
-            
-            this.logger.log(`AI Filters extracted successfully: ${JSON.stringify(filters)}`);
-
-            if (filters.priceRange) {
-                filters.priceRange.min = Number(filters.priceRange.min);
-                filters.priceRange.max = Number(filters.priceRange.max);
-            }
-
-            const blueprint: AiSearchBlueprint = JSON.parse(jsonText);
-            return blueprint
-
-        } catch (error) {
-            this.logger.error(`AI Search API Error:`, error);
-            throw new Error(`Failed to extract search filters using AI: ${error.message}`);
-        }
+      IMPORTANT: Convert these percentages to budgetWeight values (percentage/100).
+      `;
     }
+
+    // حساب البدجت المتوسط والباكجات الثلاثة
+    const flexibility = budgetFlexibility || 15;
+    const averageBudget = (budgetMin + budgetMax) / 2;
+    const budgetMinus = Math.round(averageBudget * (1 - flexibility/100));
+    const budgetPlus = Math.round(averageBudget * (1 + flexibility/100));
+
+    const prompt = `
+      You are an expert Event Planning AI. Your task is to create THREE comprehensive event packages based on the user's requirements.
+
+      USER REQUIREMENTS:
+      - City: "${city}"
+      - Number of Guests: ${guestCount}
+      - Budget Range: ${budgetMin} - ${budgetMax}
+      - Event Type: "${eventType}"
+      - Event Date: "${eventDate}"
+      ${startTime && endTime ? `- Time: ${startTime} to ${endTime}` : ''}
+
+      ${userPreferencesText}
+
+      ${serviceConstraintsText}
+
+      CRITICAL INSTRUCTIONS:
+
+      1. **Budget Distribution (VERY IMPORTANT)**:
+         - Package 1 (Budget-Friendly): Target price = ${budgetMinus} (${flexibility}% BELOW average budget)
+         - Package 2 (Standard): Target price = ${Math.round(averageBudget)} (Within the budget range)
+         - Package 3 (Premium): Target price = ${budgetPlus} (${flexibility}% ABOVE average budget)
+
+      2. **Service Priority Based on Event Type (CRITICAL)**:
+         - You MUST adjust service priorities based on the event type "${eventType}".
+         - EXAMPLES:
+           * "Business Lunch/Corporate Event": Venue (priority 1), Catering (priority 2), maybe Photography. NO DJ needed.
+           * "Wedding": Venue (priority 1), Catering (priority 2), Photography (priority 3), DJ/Music (priority 4), Decoration (priority 5)
+           * "Birthday Party": Venue (priority 1), Catering (priority 2), DJ/Music (priority 3), Decoration (priority 4)
+           * "Conference": Venue (priority 1), Catering (priority 2), Audio/Visual Equipment (priority 3)
+         - DO NOT include irrelevant services (e.g., DJ for a business meeting).
+         - Higher priority = lower number (1 is highest priority).
+         - Budget weight should reflect priority (higher priority services get more budget).
+
+      3. **Location Filtering (MANDATORY)**:
+         - ALL services MUST be available in the city: "${city}".
+         - This is the MOST IMPORTANT filter - never suggest services from other cities.
+
+      4. **AI Tags Logic (CRITICAL)**:
+         - You MUST include relevant tags from the user's "Specific Style/Requirement Tags" in the 'aiTags' list for the appropriate services.
+         - EXAMPLE: If user tag is "Outdoor", add "Outdoor" to the Venue service tags.
+         - EXAMPLE: If user tag is "Indoor", add "Indoor" to the Venue service tags.
+         - EXAMPLE: If user tag is "Buffet", add "Buffet" to the Catering service tags.
+         - **HYBRID APPROACH**: Mix user tags with quality-level tags:
+           * Budget-Friendly: Combine [User Tags] + ["Basic", "Affordable", "Simple", "Value"]
+           * Standard: Combine [User Tags] + ["Professional", "Reliable", "Good Quality"]
+           * Premium: Combine [User Tags] + ["Luxury", "High-End", "Exclusive", "Premium"]
+         - Intelligently ADD related tags to ensure good search results.
+
+      5. **Required Services Structure**:
+         - Each service needs: categoryName, priority (1-10), budgetWeight (0.0-1.0, sum should be ~1.0), aiTags
+         - Return ONLY a valid JSON object matching the AiSearchBlueprint schema.
+    `;
+
+    try {
+        const response = await this.ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: "object",
+                    properties: {
+                        city: { type: "string" },
+                        originalBudget: { type: "number" },
+                        eventCategory: { type: "string" },
+                        packages: { 
+                            type: "array", 
+                            items: {
+                                type: "object",
+                                properties: {
+                                    packageName: { type: "string" },
+                                    description: { type: "string" },
+                                    targetPrice: { type: "number" },
+                                    requiredServices: { 
+                                        type: "array", 
+                                        items: {
+                                            type: "object",
+                                            properties: {
+                                                categoryName: { type: "string" },
+                                                priority: { type: "number" },
+                                                budgetWeight: { type: "number" },
+                                                aiTags: { type: "array", items: { type: "string" } }
+                                            },
+                                            required: ["categoryName", "priority", "budgetWeight", "aiTags"]
+                                        }
+                                    }
+                                },
+                                required: ["packageName", "description", "targetPrice", "requiredServices"]
+                            }
+                        }
+                    },
+                    required: ["city", "originalBudget", "eventCategory", "packages"]
+                }
+            }
+        });
+
+        if (!response || !response.text) {
+            throw new Error('Gemini API returned an empty or invalid text response.');
+        }
+
+        const jsonText = response.text.trim();
+        const aiResponse = JSON.parse(jsonText);
+        
+        // 🆕 إضافة البيانات المهمة التي لا يرجعها الـ AI
+        const blueprint: AiSearchBlueprint = {
+            ...aiResponse,
+            guestCount: guestCount,
+            eventDate: eventDate,
+            startTime: startTime,
+            endTime: endTime,
+        };
+        
+        return blueprint;
+
+    } catch (error) {
+        this.logger.error(`AI Search API Error:`, error);
+        throw new Error(`Failed to extract search filters using AI: ${error.message}`);
+    }
+  }
 }

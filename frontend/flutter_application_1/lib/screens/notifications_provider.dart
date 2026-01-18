@@ -2,22 +2,20 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_application_1/services/notification_provider_service.dart';
 
-/// Core colors – keep in sync with your app theme
 const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
 
-/// Different kinds of notifications that a provider can receive.
 enum NotificationType {
-  message, // New message from customer
-  booking, // New booking / update
-  favorite, // Customer added service to favorites
-  review, // New review / rating
-  system, // System or app-level info
+  message,
+  booking,
+  favorite,
+  review,
+  system,
 }
 
-/// Model for a single notification.
 class ProviderNotification {
   final String id;
   final String title;
@@ -37,38 +35,9 @@ class ProviderNotification {
   });
 }
 
-/// Repository / data source – connect this to your backend / Firestore / API.
-class NotificationsRepository {
-  /// Fetch all notifications for a provider.
-  static Future<List<ProviderNotification>> fetchNotificationsForProvider(
-    String providerId,
-  ) async {
-    await Future.delayed(const Duration(milliseconds: 400));
-    // TODO: Replace with real implementation:
-    //  - Call your REST API or Firestore here
-    //  - Map response to List<ProviderNotification>
-    return [];
-  }
-
-  /// Mark a list of notifications as read.
-  static Future<void> markAsRead(List<String> notificationIds) async {
-    // TODO: Implement backend call
-  }
-
-  /// Mark all notifications as read.
-  static Future<void> markAllAsRead(String providerId) async {
-    // TODO: Implement backend call
-  }
-
-  /// Delete a list of notifications.
-  static Future<void> deleteNotifications(List<String> notificationIds) async {
-    // TODO: Implement backend call
-  }
-}
-
-/// Main notifications screen for providers.
 class NotificationsProviderScreen extends StatefulWidget {
-  final String? providerId;
+  // غيرنا الاسم ليكون عاماً أو اتركناه كما هو لكن جعلناه اختياري ?
+  final String? providerId; 
 
   const NotificationsProviderScreen({Key? key, this.providerId})
       : super(key: key);
@@ -93,28 +62,63 @@ class _NotificationsProviderScreenState
   void initState() {
     super.initState();
     _loadNotifications();
+    _listenToRealtimeUpdates();
+  }
+
+  @override
+  void dispose() {
+    // ✅ عند الخروج من الصفحة، علّم الكل كمقروء
+    _markAllAsReadOnExit();
+    super.dispose();
+  }
+
+  /// 🔥 الاستماع للتحديثات الفورية
+  void _listenToRealtimeUpdates() {
+    // ✅ الاستماع لتغييرات قائمة الإشعارات
+    NotificationProviderService.notificationsNotifier.addListener(() {
+      if (mounted) {
+        setState(() {
+          _notifications = NotificationProviderService.notificationsNotifier.value;
+        });
+        debugPrint('🔄 Notifications list updated. Total: ${_notifications.length}');
+      }
+    });
+  }
+
+  /// ✅ دالة منفصلة لتعليم الكل كمقروء عند الخروج
+  Future<void> _markAllAsReadOnExit() async {
+    if (_notifications.any((n) => !n.isRead)) {
+      debugPrint('📖 Marking all notifications as read on exit...');
+      await NotificationProviderService.markAllAsRead();
+    }
   }
 
   Future<void> _loadNotifications() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final data = await NotificationsRepository.fetchNotificationsForProvider(
-        widget.providerId ?? 'provider-id',
-      );
+      debugPrint('📥 Loading notifications...');
+      final data = await NotificationProviderService.fetchNotifications();
+      
+      if (!mounted) return;
+      
       setState(() {
         _notifications = data;
+        _isLoading = false;
       });
+
+      debugPrint('✅ Loaded ${data.length} notifications');
+
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to load notifications.';
-      });
-    } finally {
+      debugPrint('❌ Error loading notifications: $e');
       if (mounted) {
         setState(() {
+          _errorMessage = 'Failed to load notifications.';
           _isLoading = false;
         });
       }
@@ -169,35 +173,47 @@ class _NotificationsProviderScreenState
         }
       }
     });
-    await NotificationsRepository.markAsRead(ids);
     _exitSelectionMode();
   }
 
   Future<void> _markAllAsRead() async {
+    debugPrint('📖 User manually marking all as read...');
+    
+    // ✅ تحديث محلي فوري
     setState(() {
       for (final n in _notifications) {
         n.isRead = true;
       }
     });
-    await NotificationsRepository.markAllAsRead(
-      widget.providerId ?? 'provider-id',
-    );
+    
+    // ✅ إرسال للسيرفر في الخلفية
+    await NotificationProviderService.markAllAsRead();
+    
+    debugPrint('✅ All marked as read');
   }
 
   Future<void> _deleteSelected() async {
     final ids = _selectedIds.toList();
+    
     setState(() {
       _notifications.removeWhere((n) => ids.contains(n.id));
     });
-    await NotificationsRepository.deleteNotifications(ids);
     _exitSelectionMode();
+
+    for (String id in ids) {
+      try {
+        await NotificationProviderService.deleteNotification(id);
+      } catch (e) {
+        debugPrint("❌ Error deleting $id: $e");
+      }
+    }
   }
 
   Future<void> _deleteSingle(String id) async {
     setState(() {
       _notifications.removeWhere((n) => n.id == id);
     });
-    await NotificationsRepository.deleteNotifications([id]);
+    await NotificationProviderService.deleteNotification(id);
   }
 
   void _toggleFilterUnread() {
@@ -208,7 +224,6 @@ class _NotificationsProviderScreenState
 
   PreferredSizeWidget _buildAppBar() {
     if (_selectionMode) {
-      // Selection mode app bar
       return AppBar(
         backgroundColor: kBackgroundColor,
         elevation: 0,
@@ -239,14 +254,16 @@ class _NotificationsProviderScreenState
       );
     }
 
-    // Normal app bar
     return AppBar(
       backgroundColor: kBackgroundColor,
       elevation: 0,
       centerTitle: true,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new, color: kTextColor),
-        onPressed: () => Navigator.of(context).pop(),
+        onPressed: () async {
+          await _markAllAsReadOnExit();
+          Navigator.of(context).pop();
+        },
       ),
       title: Text(
         'Notifications',
@@ -281,80 +298,80 @@ class _NotificationsProviderScreenState
   Widget build(BuildContext context) {
     final visible = _visibleNotifications;
 
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: kBackgroundColor,
-        appBar: _buildAppBar(),
-        body: _isLoading
-            ? const _LoadingState()
-            : _errorMessage != null
-                ? _ErrorState(onRetry: _loadNotifications)
-                : visible.isEmpty
-                    ? const _EmptyState()
-                    : RefreshIndicator(
-                        onRefresh: _loadNotifications,
-                        child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          itemCount: visible.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final notification = visible[index];
-                            final isSelected =
-                                _selectedIds.contains(notification.id);
+    return WillPopScope(
+      onWillPop: () async {
+        await _markAllAsReadOnExit();
+        return true;
+      },
+      child: SafeArea(
+        child: Scaffold(
+          backgroundColor: kBackgroundColor,
+          appBar: _buildAppBar(),
+          body: _isLoading
+              ? const _LoadingState()
+              : _errorMessage != null
+                  ? _ErrorState(onRetry: _loadNotifications)
+                  : visible.isEmpty
+                      ? const _EmptyState()
+                      : RefreshIndicator(
+                          onRefresh: _loadNotifications,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            itemCount: visible.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final notification = visible[index];
+                              final isSelected =
+                                  _selectedIds.contains(notification.id);
 
-                            return Dismissible(
-                              key: ValueKey(notification.id),
-                              direction: DismissDirection.endToStart,
-                              background: Container(
-                                alignment: Alignment.centerRight,
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 20),
-                                decoration: BoxDecoration(
-                                  color: Colors.redAccent.withOpacity(0.08),
-                                  borderRadius: BorderRadius.circular(18),
+                              return Dismissible(
+                                key: ValueKey(notification.id),
+                                direction: DismissDirection.endToStart,
+                                background: Container(
+                                  alignment: Alignment.centerRight,
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  child: const Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.redAccent,
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.redAccent,
+                                onDismissed: (_) =>
+                                    _deleteSingle(notification.id),
+                                child: _NotificationTile(
+                                  notification: notification,
+                                  isSelected: isSelected,
+                                  selectionMode: _selectionMode,
+                                  onTap: () {
+                                    if (_selectionMode) {
+                                      _toggleSelection(notification.id);
+                                      return;
+                                    }
+                                  },
+                                  onLongPress: () {
+                                    if (!_selectionMode) {
+                                      _enterSelectionMode(notification.id);
+                                    } else {
+                                      _toggleSelection(notification.id);
+                                    }
+                                  },
                                 ),
-                              ),
-                              onDismissed: (_) =>
-                                  _deleteSingle(notification.id),
-                              child: _NotificationTile(
-                                notification: notification,
-                                isSelected: isSelected,
-                                selectionMode: _selectionMode,
-                                onTap: () {
-                                  if (_selectionMode) {
-                                    _toggleSelection(notification.id);
-                                    return;
-                                  }
-                                  setState(() {
-                                    notification.isRead = true;
-                                  });
-                                  // TODO: Navigate based on notification.type
-                                  // e.g. open chat, booking details, etc.
-                                },
-                                onLongPress: () {
-                                  if (!_selectionMode) {
-                                    _enterSelectionMode(notification.id);
-                                  } else {
-                                    _toggleSelection(notification.id);
-                                  }
-                                },
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
+        ),
       ),
     );
   }
 }
 
-/// Single notification tile with modern styling.
 class _NotificationTile extends StatelessWidget {
   final ProviderNotification notification;
   final bool isSelected;
@@ -392,11 +409,11 @@ class _NotificationTile extends StatelessWidget {
       case NotificationType.message:
         return kPrimaryColor;
       case NotificationType.booking:
-        return const Color(0xFF22C55E); // green
+        return const Color(0xFF22C55E);
       case NotificationType.favorite:
-        return const Color(0xFFEF4444); // red
+        return const Color(0xFFEF4444);
       case NotificationType.review:
-        return const Color(0xFFF59E0B); // amber
+        return const Color(0xFFF59E0B);
       case NotificationType.system:
       default:
         return Colors.grey.shade700;
@@ -482,7 +499,6 @@ class _NotificationTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title + time
                   Row(
                     children: [
                       Expanded(
@@ -509,7 +525,6 @@ class _NotificationTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  // Body text
                   Text(
                     notification.body,
                     maxLines: 2,
@@ -540,7 +555,6 @@ class _NotificationTile extends StatelessWidget {
   }
 }
 
-/// Loading state while notifications are being fetched.
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
 
@@ -568,7 +582,6 @@ class _LoadingState extends StatelessWidget {
   }
 }
 
-/// Empty state when there are no notifications.
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
@@ -610,7 +623,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// Error state for network / backend errors.
 class _ErrorState extends StatelessWidget {
   final VoidCallback onRetry;
 
@@ -640,7 +652,7 @@ class _ErrorState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'We couldn’t load your notifications.\nPlease try again.',
+              'We couldnt load your notifications.\nPlease try again.',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 fontSize: 13,
@@ -672,4 +684,4 @@ class _ErrorState extends StatelessWidget {
       ),
     );
   }
-}
+} 

@@ -1,434 +1,645 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+// booking.service.ts
+import { Injectable, HttpException, HttpStatus, Logger, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Booking, BookingDocument, PaymentStatus } from './booking.entity';
-import { CreateBookingDto } from './booking.dto';
-import { Service } from '../service/service.entity';
-import { ShoppingCart } from '../shoppingCart/shoppingCart.schema';
-
-interface PreparedService {
-  serviceId: string;
-  bookingDate: Date;
-}
+import { Booking, BookingStatus } from './booking.entity';
+import { Service, BookingType } from '../service/service.schema';
+import { Cart } from '../shoppingCart/shoppingCart.schema';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType, RecipientType } from '../notification/notification.schema';
+import { User } from '../auth/user.entity';
+import Stripe from 'stripe';
+import { ConfigService } from '@nestjs/config';
+import { PaymentService } from '../payment/payment.service';
 
 @Injectable()
 export class BookingService {
+  private readonly logger = new Logger(BookingService.name);
+  private stripe: Stripe;
+
   constructor(
-    @InjectModel(Booking.name)
-    private readonly bookingModel: Model<BookingDocument>,
-    @InjectModel(Service.name)
-    private readonly serviceModel: Model<Service & Document>,
-    @InjectModel(ShoppingCart.name)
-    private readonly shoppingCartModel: Model<ShoppingCart & Document>,
-  ) {}
-
-  private extractServiceId(serviceId: any): string {
-    if (!serviceId) {
-      throw new BadRequestException('Invalid service ID');
+    @InjectModel(Booking.name) private bookingModel: Model<Booking>,
+    @InjectModel(Service.name) private serviceModel: Model<Service>,
+    @InjectModel(Cart.name) private cartModel: Model<Cart>,
+    @InjectModel(User.name) private userModel: Model<User>,
+    private notificationService: NotificationService,
+    private configService: ConfigService,
+    @Inject(forwardRef(() => PaymentService)) // ✅ استخدام forwardRef في الحقن
+    private paymentService: PaymentService,
+  ) {
+    const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
+    if (!secretKey) {
+      throw new Error('STRIPE_SECRET_KEY is not set');
     }
-
-    if (typeof serviceId === 'string') {
-      if (serviceId.includes('bookedDates') || serviceId.includes('_id: new ObjectId')) {
-        try {
-          const cleanedString = serviceId
-            .replace(/new ObjectId\(['"]([^'"]+)['"]\)/g, '"$1"')
-            .replace(/(\w+):/g, '"$1":') // إضافة quotes للمفاتيح
-            .replace(/'/g, '"'); // استبدال single quotes بdouble quotes
-          
-          const serviceObj = JSON.parse(cleanedString);
-          return serviceObj._id;
-        } catch (error) {
-          const idMatch = serviceId.match(/_id: new ObjectId\('([^']+)'\)/);
-          if (idMatch && idMatch[1]) {
-            return idMatch[1];
-          }
-          const objectIdMatch = serviceId.match(/'([0-9a-fA-F]{24})'/);
-          if (objectIdMatch && objectIdMatch[1]) {
-            return objectIdMatch[1];
-          }
-          throw new BadRequestException('Invalid service ID format');
-        }
-      }
-      return serviceId;
-    }
-    
-    if (typeof serviceId === 'object') {
-      return serviceId._id?.toString() || serviceId.toString();
-    }
-    
-    return serviceId.toString();
+this.stripe = new Stripe(secretKey);
   }
 
-  async findByUser(userId: string): Promise<any[]> {
-    const bookings = await this.bookingModel.find({ userId }).exec();
-    
-    return bookings.map(booking => this.formatBookingResponse(booking));
+
+  /**
+   * 📌 إنشاء حجوزات منفصلة من السلة بعد نجاح الدفع
+   * كل خدمة في السلة = booking منفصل
+   */
+  /**
+ * 📌 إنشاء حجوزات منفصلة من السلة بعد نجاح الدفع (مع دعم الباقات)
+ */
+async createBookingsFromCart(userId: string, paymentIntentId: string): Promise<Booking[]> {
+  const userObjectId = new Types.ObjectId(userId);
+  const cart = await this.cartModel.findOne({ userId: userObjectId }).populate('items.serviceId').exec();
+
+  if (!cart || cart.items.length === 0) {
+    this.logger.warn(`Cart is empty for user ${userId}. No bookings created.`);
+    return [];
   }
 
-  async createFromCart(userId: string): Promise<any> {
-    const shoppingCart = await this.shoppingCartModel
-      .findOne({ userId: new Types.ObjectId(userId) })
-      .exec();
+  // 💤 جلب معلومات المستخدم لإرساله في الإشعار
+  const user = await this.userModel.findById(userObjectId).select('name email').lean().exec();
+  const clientName = (user as any)?.name || (user as any)?.email || 'Client';
 
-    if (!shoppingCart || shoppingCart.services.length === 0) {
-      throw new BadRequestException('Shopping cart is empty');
-    }
+  const createdBookings: Booking[] = [];
+  
+  // لتجميع الإشعارات حسب الـ vendor (لإرسال إشعار واحد لكل vendor عن الباقة)
+  const packageNotifications: Map<string, { 
+    packageName: string, 
+    services: string[], 
+    date: string,
+    fcmToken?: string 
+  }> = new Map();
 
-    const preparedServices: PreparedService[] = [];
-    
-    for (const cartService of shoppingCart.services) {
-      const serviceId = this.extractServiceId(cartService.serviceId);
-      
-      const service = await this.serviceModel.findById(serviceId).exec();
-      if (!service) {
-        throw new NotFoundException(`Service with ID '${serviceId}' not found`);
-      }
-
-      const serviceDoc = service as any;
-      if (serviceDoc.bookedDates && serviceDoc.bookedDates.includes(cartService.bookingDate)) {
-        throw new BadRequestException(
-          `Date ${cartService.bookingDate} is already booked for service ${serviceDoc.name}`
-        );
-      }
-
-      preparedServices.push({
-        serviceId: serviceId, // تخزين الـ ID فقط
-        bookingDate: cartService.bookingDate,
-      });
-    }
-
-    let totalAmount = 0;
-    for (const service of preparedServices) {
-      const serviceDoc = await this.serviceModel.findById(service.serviceId).exec();
-      if (serviceDoc) {
-        totalAmount += (serviceDoc as any).price || 0;
-      }
-    }
+  // 🔄 التكرار على كل عنصر في السلة لإنشاء حجز منفصل
+  for (const item of cart.items) {
+    const service = item.serviceId as any;
 
     const newBooking = new this.bookingModel({
-      userId,
-      services: preparedServices, // بيانات مرتبة
-      totalAmount,
-      paymentStatus: PaymentStatus.SUCCESSFUL,
+      userId: userObjectId,
+      paymentIntentId: paymentIntentId,
+      serviceId: service._id,
+      serviceName: service.serviceName,
+      providerId: service.providerId,
+      companyName: service.companyName,
+      bookingType: service.bookingType,
+      bookingDetails: {
+        date: item.bookingDetails.date,
+        startHour: item.bookingDetails.startHour,
+        endHour: item.bookingDetails.endHour,
+        numberOfPeople: item.bookingDetails.numberOfPeople,
+        isFullVenue: item.bookingDetails.isFullVenue,
+        // 🆕 موقع العميل ووصف الحجز
+        clientLocation: item.bookingDetails.clientLocation,
+        bookingDescription: item.bookingDetails.bookingDescription,
+      },
+      price: item.price,
+      status: BookingStatus.CONFIRMED,
+      refunded: false,
+      seen: false,
     });
 
-    try {
-      const savedBooking = await newBooking.save();
+    const booking = await newBooking.save();
+    createdBookings.push(booking);
 
-      for (const service of preparedServices) {
-        await this.serviceModel.findByIdAndUpdate(
-          service.serviceId,
-          { 
-            $push: { 
-              bookedDates: service.bookingDate 
-            } 
-          }
-        ).exec();
-      }
+    // 📅 تنسيق التاريخ
+    const bookingDateStr = new Date(item.bookingDetails.date).toLocaleDateString('en-GB');
 
-      await this.shoppingCartModel.findOneAndUpdate(
-        { userId: new Types.ObjectId(userId) },
-        { 
-          $set: { 
-            services: [],
-            totalPrice: 0 
-          } 
+    // إذا كان الحجز جزء من باقة
+    if (item.packageId && item.packageName) {
+      const vendorId = service.providerId.toString();
+      
+      if (!packageNotifications.has(vendorId)) {
+        // جلب FCM token للـ vendor
+        const vendor = await this.userModel.findById(service.providerId).select('fcmToken').lean().exec();
+        
+        packageNotifications.set(vendorId, {
+          packageName: item.packageName,
+          services: [service.serviceName],
+          date: bookingDateStr,
+          fcmToken: (vendor as any)?.fcmToken
+        });
+      } else {
+        const notification = packageNotifications.get(vendorId);      
+      if (notification) {
+             notification.services.push(service.serviceName);
         }
-      ).exec();
+      }
+    } else {
+      // 🔧 جلب FCM token للـ vendor (للحجوزات العادية)
+      const vendor = await this.userModel.findById(service.providerId).select('fcmToken').lean().exec();
+      const vendorFcmToken = (vendor as any)?.fcmToken as string | undefined;
 
-      return this.formatBookingResponse(savedBooking);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create booking';
-      throw new BadRequestException(errorMessage);
+      // 🔔 إرسال الإشعار للـ vendor (حجز عادي)
+      const notificationBody = `${service.serviceName} has been booked successfully at ${bookingDateStr} by ${clientName}`;
+      
+      try {
+        await this.notificationService.createNotification(
+          {
+            recipientId: new Types.ObjectId(service.providerId),
+            recipientType: RecipientType.VENDOR,
+            title: 'New Booking Confirmed',
+            body: notificationBody,
+            type: NotificationType.BOOKING_CONFIRMED,
+            metadata: { 
+              bookingId: (booking._id as Types.ObjectId).toString(), 
+              serviceId: service._id.toString(),
+              clientName: clientName,
+              bookingDate: bookingDateStr,
+            }
+          },
+          vendorFcmToken || ''
+        );
+      } catch (notifError) {
+        this.logger.error(`Failed to send notification for booking ${booking._id}:`, notifError.message);
+      }
     }
   }
 
-  async create(userId: string, createBookingDto: CreateBookingDto): Promise<any> {
-    const { services, totalAmount } = createBookingDto;
+  // 📦 إرسال إشعارات الباقات (إشعار واحد لكل vendor)
+  for (const [vendorId, data] of packageNotifications.entries()) {
+    const servicesText = data.services.join(', ');
+    const notificationBody = `${clientName} booked "${data.packageName}" package (${servicesText}) at ${data.date}`;
+    
+    try {
+      await this.notificationService.createNotification(
+        {
+          recipientId: new Types.ObjectId(vendorId),
+          recipientType: RecipientType.VENDOR,
+          title: 'New Package Booking',
+          body: notificationBody,
+          type: NotificationType.BOOKING_CONFIRMED,
+          metadata: { 
+            packageName: data.packageName,
+            services: data.services,
+            clientName: clientName,
+            bookingDate: data.date,
+          }
+        },
+        data.fcmToken || ''
+      );
+    } catch (notifError) {
+      this.logger.error(`Failed to send package notification to vendor ${vendorId}:`, notifError.message);
+    }
+  }
+  
+  this.logger.log(`✅ ${createdBookings.length} separate bookings created for user ${userId}`);
+  return createdBookings;
+}
 
-    const preparedServices: PreparedService[] = services.map(service => ({
-      serviceId: service.serviceId, // التأكد من أن الـ ID صحيح
-      bookingDate: new Date(service.bookingDate),
-    }));
+  /**
+   * 🆕 حساب عدد الحجوزات غير المقروءة للفندر
+   */
+  async getUnseenCount(vendorId: string): Promise<number> {
+    return this.bookingModel.countDocuments({
+      providerId: vendorId, // تأكدنا من الـ Entity أن هذا الحقل String
+      seen: false           // نبحث عن غير المقروء فقط
+    }).exec();
+  }
 
-    const serviceIds = preparedServices.map(s => s.serviceId);
-    const foundServices = await this.serviceModel.find({ 
-      _id: { $in: serviceIds } 
+
+  /**
+   * 🚫 إلغاء الحجز من قبل الـ Vendor مع Refund
+   */
+  async cancelBookingByVendor(
+    bookingId: string, 
+    vendorId: string, 
+    reason: string = 'Vendor cancelled the service'
+  ): Promise<Booking> {
+    const booking = await this.bookingModel.findOne({
+      _id: new Types.ObjectId(bookingId),
+      providerId: vendorId, // 🛡️ التأكد من أن الـ vendor يملك هذا الحجز
+      status: { $in: [BookingStatus.CONFIRMED, BookingStatus.PENDING] }
     }).exec();
 
-    if (foundServices.length !== serviceIds.length) {
-      throw new NotFoundException('One or more services not found');
-    }
-
-    const newBooking = new this.bookingModel({
-      userId,
-      services: preparedServices,
-      totalAmount,
-      paymentStatus: PaymentStatus.SUCCESSFUL,
-    });
-
-    try {
-      const savedBooking = await newBooking.save();
-
-      for (const service of preparedServices) {
-        await this.serviceModel.findByIdAndUpdate(
-          service.serviceId,
-          { 
-            $push: { 
-              bookedDates: service.bookingDate 
-            } 
-          }
-        ).exec();
-      }
-
-      return this.formatBookingResponse(savedBooking);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create booking';
-      throw new BadRequestException(errorMessage);
-    }
-  }
-
-  async cancelBooking(userId: string, bookingId: string): Promise<{ message: string }> {
-    const booking = await this.bookingModel.findById(bookingId).exec();
-    
     if (!booking) {
-      throw new NotFoundException(`Booking with ID '${bookingId}' not found`);
+      throw new NotFoundException('Booking not found or not owned by this vendor');
     }
-
-    if (booking.userId !== userId) {
-      throw new ForbiddenException('You can only cancel your own bookings');
-    }
-
-    for (const serviceItem of booking.services) {
-      const serviceId = this.extractServiceId(serviceItem.serviceId);
       
-      if (serviceId && Types.ObjectId.isValid(serviceId)) {
-        await this.serviceModel.findByIdAndUpdate(
-          serviceId,
-          { 
-            $pull: { 
-              bookedDates: serviceItem.bookingDate 
-            } 
-          }
-        ).exec();
-      }
+    if (booking.refunded) {
+      throw new BadRequestException('This booking has already been refunded.');
     }
 
-    booking.paymentStatus = PaymentStatus.CANCELLED;
+    // 1️⃣ طلب الـ Refund الجزئي
+    try {
+      await this.paymentService.processPartialRefund(booking.paymentIntentId, booking.price);
+      this.logger.log(`✅ Refund of $${booking.price} processed for booking ${bookingId}`);
+    } catch (error) {
+      this.logger.error(`❌ Refund failed: ${error.message}`);
+      throw new BadRequestException('Refund processing failed. Please try again later.');
+    }
+      
+    // 2️⃣ تحديث حالة الحجز في DB
+    booking.status = BookingStatus.CANCELLED;
+    booking.refunded = true;
+    booking.cancellationReason = reason;
     await booking.save();
 
-    return { 
-      message: `Booking ${bookingId} cancelled successfully and dates removed from services` 
-    };
-  }
+    // 3️⃣ إرسال إشعار للعميل
+    await this.sendCancellationNotification(booking);
 
-  async findAll(): Promise<any[]> {
-    const bookings = await this.bookingModel.find().exec();
-    return bookings.map(booking => this.formatBookingResponse(booking));
+    return booking;
   }
-
-  private formatBookingResponse(booking: any): any {
-    const formattedBooking = booking.toObject ? booking.toObject() : { ...booking };
     
-    if (formattedBooking.services && Array.isArray(formattedBooking.services)) {
-      formattedBooking.services = formattedBooking.services.map(service => ({
-        serviceId: this.extractServiceId(service.serviceId),
-        bookingDate: service.bookingDate
-      }));
-    }
-
-    delete formattedBooking.__v;
-    
-    return formattedBooking;
-  }
-
-  async fixExistingBookings(): Promise<{ message: string; fixedCount: number }> {
-    const bookings = await this.bookingModel.find().exec();
-    let fixedCount = 0;
-
-    for (const booking of bookings) {
-      let needsUpdate = false;
-      const fixedServices: PreparedService[] = [];
-
-      for (const serviceItem of booking.services) {
-        const originalServiceId = serviceItem.serviceId;
-        const fixedServiceId = this.extractServiceId(originalServiceId);
-
-        if (originalServiceId !== fixedServiceId) {
-          needsUpdate = true;
-        }
-
-        fixedServices.push({
-          serviceId: fixedServiceId,
-          bookingDate: serviceItem.bookingDate
-        });
-      }
-
-      if (needsUpdate) {
-        await this.bookingModel.findByIdAndUpdate(booking._id, {
-          services: fixedServices
-        }).exec();
-        fixedCount++;
-      }
-    }
-
-    return { 
-      message: `Fixed ${fixedCount} bookings with invalid service IDs`,
-      fixedCount 
-    };
-  }
-
-  async debugServiceId(serviceId: any): Promise<{ original: any; extracted: string; type: string }> {
-    return {
-      original: serviceId,
-      extracted: this.extractServiceId(serviceId),
-      type: typeof serviceId
-    };
-  }
-
-
-  // 1. New Service: Get Total Sales
-  async getTotalSales(): Promise<{ totalSales: number }> {
-    const successfulBookings = await this.bookingModel.find({ 
-      paymentStatus: PaymentStatus.SUCCESSFUL 
-    }).exec();
-
-    const totalSales = successfulBookings.reduce(
-      (sum, booking) => sum + booking.totalAmount,
-      0,
-    );
-
-    return { totalSales };
-  }
-
-  // 2. New Service: Get Total Bookings and Services Details
-  async getTotalBookingsAndServices(): Promise<{ totalBookings: number, bookedServices: { serviceId: string, bookingDate: Date }[] }> {
-    const bookings = await this.bookingModel.find().exec();
-    const totalBookings = bookings.length;
-    
-    let bookedServices: { serviceId: string, bookingDate: Date }[] = [];
-
-    bookings.forEach(booking => {
-      if (Array.isArray(booking.services)) {
-        booking.services.forEach(serviceItem => {
-          const formattedItem = this.formatBookingResponse({ services: [serviceItem] }).services[0];
-          
-          bookedServices.push({
-            serviceId: formattedItem.serviceId,
-            bookingDate: formattedItem.bookingDate,
-          });
-        });
-      }
-    });
-
-    return { 
-      totalBookings, 
-      bookedServices 
-    };
-  }
-
-
-
-
-
-/**
- * Creates a Booking and updates the payment status to PENDING.
- * This should be called BEFORE the actual payment is made in Stripe.
- * @param userId - ID of the user.
- * @returns The newly created booking document.
- */
-async createPendingBookingFromCart(userId: string): Promise<any> {
-    const shoppingCart = await this.shoppingCartModel
-      .findOne({ userId: new Types.ObjectId(userId) })
-      .exec();
-
-    if (!shoppingCart || shoppingCart.services.length === 0) {
-      throw new BadRequestException('Shopping cart is empty');
-    }
-
-    // 1. Prepare services and check availability (Logic is similar to original createFromCart)
-    const preparedServices: PreparedService[] = [];
-    for (const cartService of shoppingCart.services) {
-      // ... (Availability check logic remains here)
-      const serviceId = this.extractServiceId(cartService.serviceId);
-      const service = await this.serviceModel.findById(serviceId).exec();
-      if (!service) {
-        throw new NotFoundException(`Service with ID '${serviceId}' not found`);
-      }
-      // Assuming availability check is done here.
-
-      preparedServices.push({
-        serviceId: serviceId,
-        bookingDate: cartService.bookingDate,
-      });
-    }
-
-    // 2. Calculate Total Amount
-    let totalAmount = shoppingCart.totalPrice; // Assuming total price is calculated in the cart
-    
-    // 3. Create Booking with PENDING status (Crucial change)
-    const newBooking = new this.bookingModel({
-      userId,
-      services: preparedServices,
-      totalAmount,
-      paymentStatus: PaymentStatus.PENDING, // <-- Start as PENDING
-    });
-
+  /**
+   * 📧 دالة مساعدة لإرسال إشعار الإلغاء للمستخدم
+   */
+  private async sendCancellationNotification(booking: Booking): Promise<void> {
     try {
-      const savedBooking = await newBooking.save();
+      const user = await this.userModel.findById(booking.userId).select('fcmToken').lean().exec();
+      const fcmToken = (user as any)?.fcmToken as string | undefined;
       
-      // Do NOT empty the cart or update bookedDates yet.
-      // This is done ONLY after SUCCESSFUL payment confirmation.
-
-      return this.formatBookingResponse(savedBooking);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create pending booking';
-      throw new BadRequestException(errorMessage);
-    }
-}
-
-/**
- * Confirms payment, updates booking status to SUCCESSFUL, and finalizes cart/service dates.
- * This is called AFTER Flutter confirms successful Stripe payment.
- */
-async confirmPaymentAndUpdateBooking(bookingId: string): Promise<any> {
-    const booking = await this.bookingModel.findById(bookingId).exec();
-
-    if (!booking) {
-        throw new NotFoundException(`Booking with ID '${bookingId}' not found`);
-    }
-
-    if (booking.paymentStatus === PaymentStatus.SUCCESSFUL) {
-        return this.formatBookingResponse(booking); // Already processed
-    }
-    
-    // 1. Finalize payment status
-    booking.paymentStatus = PaymentStatus.SUCCESSFUL;
-    const savedBooking = await booking.save();
-
-    // 2. Update all associated services (add bookedDates)
-    for (const service of booking.services) {
-        await this.serviceModel.findByIdAndUpdate(
-            service.serviceId,
-            { 
-              $push: { 
-                bookedDates: service.bookingDate 
-              } 
-            }
-        ).exec();
-    }
-
-    // 3. Clear the user's shopping cart
-    await this.shoppingCartModel.findOneAndUpdate(
-        { userId: new Types.ObjectId(booking.userId) },
-        { 
-          $set: { 
-            services: [],
-            totalPrice: 0 
-          } 
+      const notificationDto = {
+        recipientId: booking.userId,
+        recipientType: RecipientType.USER,
+        title: 'Booking Cancelled',
+        body: `Your booking for ${booking.serviceName} has been cancelled. A refund of $${booking.price.toFixed(2)} has been initiated.${booking.cancellationReason ? ` Reason: ${booking.cancellationReason}` : ''}`,
+        type: NotificationType.BOOKING_CANCELLED,
+        metadata: {
+          bookingId: (booking._id as Types.ObjectId).toString(),
+          serviceId: booking.serviceId.toString(),
+          refunded: true,
+          refundAmount: booking.price,
+          cancellationReason: booking.cancellationReason,
         }
+      };
+
+      await this.notificationService.createNotification(
+        notificationDto,
+        fcmToken || ''
+      );
+
+      this.logger.log(`✅ Cancellation notification sent to user ${booking.userId}`);
+    } catch (error) {
+      this.logger.error('Failed to send cancellation notification:', error.message);
+    }
+  }
+
+  /**
+   * 🆕 تحديد الحجز كـ "تمت مشاهدته" بواسطة الـ vendor
+   */
+  async markBookingAsSeen(bookingId: string, vendorId: string): Promise<Booking> {
+    const booking = await this.bookingModel.findOneAndUpdate(
+      { 
+        _id: new Types.ObjectId(bookingId), 
+        providerId: vendorId,
+        seen: false
+      },
+      { $set: { seen: true } },
+      { new: true }
     ).exec();
 
-    return this.formatBookingResponse(savedBooking);
+    if (!booking) {
+      const existingBooking = await this.bookingModel.findOne({ 
+        _id: new Types.ObjectId(bookingId), 
+        providerId: vendorId 
+      }).exec();
+      
+      if (existingBooking) return existingBooking;
+      
+      throw new NotFoundException('Booking not found or not owned by this vendor.');
+    }
+
+    return booking;
+  }
+
+  /**
+   * 🆕 جلب الحجوزات بناءً على دور المستخدم مع تصفية الحقول المطلوبة
+   */
+  async getBookingsByRole(userId: string, role: string): Promise<any[]> {
+    let query: any;
+    let populateOptions: any[] = [];
+    const clientRoles = ['user', 'client']; 
+    const isVendor = role === 'vendor';
+
+    // --- 1. تحديد الـ Query والـ Population ---
+    if (isVendor) {
+      // 👑 لـ Vendor: يحتاج اسم العميل (Client Name) من جدول User
+      query = { providerId: userId };
+      // 🔗 ربط حقل userId لجلب اسم العميل (userName) فقط
+      // يجب أن يكون ref 'User' معرفًا في booking.entity.ts
+      populateOptions.push({ path: 'userId', select: 'userName -_id' });
+      // 🆕 ربط حقل serviceId لجلب صورة الخدمة
+      populateOptions.push({ path: 'serviceId', select: 'images -_id' }); 
+      
+    } else if (clientRoles.includes(role)) {
+      // 👤 لـ Client: يبحث بـ userId
+      if (!Types.ObjectId.isValid(userId)) {
+          throw new BadRequestException('Invalid user ID format.');
+      }
+      query = { userId: new Types.ObjectId(userId) };
+    } else {
+      throw new BadRequestException('User role is not recognized.');
+    }
+
+    const rawBookings = await this.bookingModel
+      .find(query)
+      .sort({ createdAt: -1 })
+      .populate(populateOptions) 
+      .exec();
+
+    // 🔄 2. تحويل النتائج لتطابق الهيكل المطلوب (Projection)
+    return rawBookings.map(booking => {
+        // Mongoose document conversion
+        const bookingObject: any = booking.toObject({ virtuals: true });
+        
+        if (isVendor) {
+            // 📝 الحقول المطلوبة للـ Vendor: جميع تفاصيل الحجز
+            
+            // 💡Fix: تم حل مشكلة TypeError/Compilation error عبر التحقق من الـ Population
+            const populatedUser = bookingObject.userId as { userName: string } | Types.ObjectId | null;
+            const clientName = (populatedUser && typeof populatedUser === 'object' && 'userName' in populatedUser)
+                               ? populatedUser.userName 
+                               : 'Unknown Client';
+            
+            // 🆕 جلب صورة الخدمة
+            const populatedService = bookingObject.serviceId as { images: string[] } | Types.ObjectId | null;
+            const serviceImage = (populatedService && typeof populatedService === 'object' && 'images' in populatedService)
+                               ? populatedService.images?.[0] ?? null
+                               : null;
+            
+            return {
+                bookingId: bookingObject._id,
+                clientName: clientName, // ✅ اسم الشخص الذي قام بالحجز (من جدول User)
+                serviceName: bookingObject.serviceName, // ✅ اسم الخدمة
+                serviceImage: serviceImage, // 🆕 صورة الخدمة
+                bookingDate: bookingObject.bookingDetails?.date, // ✅ تاريخ الحجز
+                status: bookingObject.status,
+                seen: bookingObject.seen,
+                // 🆕 تفاصيل إضافية للحجز
+                startHour: bookingObject.bookingDetails?.startHour ?? null,
+                endHour: bookingObject.bookingDetails?.endHour ?? null,
+                numberOfPeople: bookingObject.bookingDetails?.numberOfPeople ?? null,
+                isFullVenue: bookingObject.bookingDetails?.isFullVenue ?? false,
+                // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
+                clientLocation: bookingObject.bookingDetails?.clientLocation ?? null,
+                // 🆕 وصف الحجز (ملاحظات خاصة من العميل)
+                bookingDescription: bookingObject.bookingDetails?.bookingDescription ?? null,
+                price: bookingObject.price,
+                bookingType: bookingObject.bookingType,
+                companyName: bookingObject.companyName,
+                createdAt: bookingObject.createdAt,
+            };
+        } else {
+            // 📝 الحقول المطلوبة للـ Client: اسم الحجز، status، Cancellation Reason
+            return {
+                bookingId: bookingObject._id,
+                serviceName: bookingObject.serviceName, // ✅ اسم الحجز
+                serviceId: bookingObject.serviceId, //  معرف الخدمة للريفيو
+                status: bookingObject.status, // ✅ حالته
+                cancellationReason: bookingObject.cancellationReason || null, // ✅ سبب الإلغاء
+                bookingDate: bookingObject.bookingDetails?.date , // إضافة التاريخ للمستخدم
+                isReviewed: bookingObject.isReviewed || false, //  حالة الريفيو
+            };
+        }
+    });
+  }
+
+  // 🗑️ تم حذف الدوال القديمة (getUserBookings و getVendorBookings)
+  /*
+  async getUserBookings(userId: string): Promise<Booking[]> { ... }
+  async getVendorBookings(vendorId: string): Promise<Booking[]> { ... }
+  */
+  
+  /**
+   * 🔍 جلب حجز واحد بالـ ID
+   */
+  async getBookingById(bookingId: string): Promise<Booking> {
+    const booking = await this.bookingModel.findById(bookingId);
+    if (!booking) {
+      throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
+    }
+    return booking;
+  }
+
+  /**
+   * 🆕 4. تحديد جميع حجوزات البائع التي لم تتم مشاهدتها كـ "تمت مشاهدتها"
+   * @param vendorId معرف البائع
+   * @returns نتيجة عملية التحديث (كم بوكينج تم تعديله)
+   */
+  async markAllVendorBookingsAsSeen(vendorId: string): Promise<any> {
+    const result = await this.bookingModel.updateMany(
+      { 
+        providerId: vendorId, // 👈 الفلترة بالـ Vendor ID فقط
+        seen: false // 👈 فقط التي لم تتم مشاهدتها بعد
+      },
+      { $set: { seen: true } } // 👈 تحديث قيمة seen إلى true
+    ).exec();
+    
+    this.logger.log(`✅ Marked ${result.modifiedCount} bookings as seen for vendor ${vendorId}`);
+    return result; // ترجع { acknowledged: true, modifiedCount: N }
+  }
+
+  // داخل كلاس BookingService
+
+async getSalesStats(vendorId?: string) {
+  const matchQuery: any = {};
+  if (vendorId) matchQuery.providerId = vendorId;
+
+  const now = new Date();
+  const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+  const stats = await this.bookingModel.aggregate([
+    { $match: matchQuery },
+    {
+      $facet: {
+        // الإحصائيات العامة (التي عملناها سابقاً)
+        "overallStats": [
+          {
+            $group: {
+              _id: null,
+              totalSalesAmount: { $sum: { $cond: [{ $in: ["$status", ["confirmed", "completed"]] }, "$price", 0] } },
+              totalSalesCount: { $sum: { $cond: [{ $in: ["$status", ["confirmed", "completed"]] }, 1, 0] } },
+              totalCancelledAmount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, "$price", 0] } },
+              totalCancelledCount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } }
+            }
+          }
+        ],
+        // مبيعات الشهر الحالي
+        "currentMonthSales": [
+          { $match: { createdAt: { $gte: startOfCurrentMonth }, status: { $in: ["confirmed", "completed"] } } },
+          { $group: { _id: null, amount: { $sum: "$price" } } }
+        ],
+        // مبيعات الشهر الماضي (لحساب النمو)
+        "lastMonthSales": [
+          { $match: { createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth }, status: { $in: ["confirmed", "completed"] } } },
+          { $group: { _id: null, amount: { $sum: "$price" } } }
+        ]
+      }
+    }
+  ]);
+
+  const result = stats[0];
+  const overall = result.overallStats[0] || { totalSalesAmount: 0, totalSalesCount: 0, totalCancelledAmount: 0, totalCancelledCount: 0 };
+  const currentMonthAmount = result.currentMonthSales[0]?.amount || 0;
+  const lastMonthAmount = result.lastMonthSales[0]?.amount || 0;
+
+  // حساب نسبة النمو
+  let growthRate = 0;
+  if (lastMonthAmount > 0) {
+    growthRate = ((currentMonthAmount - lastMonthAmount) / lastMonthAmount) * 100;
+  } else if (currentMonthAmount > 0) {
+    growthRate = 100; // نمو 100% إذا لم تكن هناك مبيعات سابقاً
+  }
+
+  return {
+    ...overall,
+    currentMonthSales: currentMonthAmount,
+    growthRate: parseFloat(growthRate.toFixed(2)) // تقريب الرقم
+  };
 }
+
+  /**
+   * 📊 جلب إحصائيات مالية شاملة للـ Provider
+   */
+  async getFinanceStats(vendorId: string) {
+    const now = new Date();
+    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+    const stats = await this.bookingModel.aggregate([
+      { $match: { providerId: vendorId } },
+      {
+        $facet: {
+          // 📈 إجمالي المبيعات
+          "totalStats": [
+            {
+              $group: {
+                _id: null,
+                totalRevenue: { $sum: { $cond: [{ $in: ["$status", ["confirmed", "completed"]] }, "$price", 0] } },
+                totalBookings: { $sum: { $cond: [{ $in: ["$status", ["confirmed", "completed"]] }, 1, 0] } },
+                cancelledAmount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, "$price", 0] } },
+                cancelledCount: { $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] } }
+              }
+            }
+          ],
+          // 📅 مبيعات الشهر الحالي
+          "currentMonth": [
+            { $match: { createdAt: { $gte: startOfCurrentMonth }, status: { $in: ["confirmed", "completed"] } } },
+            { $group: { _id: null, amount: { $sum: "$price" }, count: { $sum: 1 } } }
+          ],
+          // 📅 مبيعات الشهر الماضي
+          "lastMonth": [
+            { $match: { createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth }, status: { $in: ["confirmed", "completed"] } } },
+            { $group: { _id: null, amount: { $sum: "$price" }, count: { $sum: 1 } } }
+          ],
+          // 📅 مبيعات هذه السنة
+          "yearToDate": [
+            { $match: { createdAt: { $gte: startOfYear }, status: { $in: ["confirmed", "completed"] } } },
+            { $group: { _id: null, amount: { $sum: "$price" }, count: { $sum: 1 } } }
+          ],
+          // 📊 مبيعات حسب الخدمة
+          "byService": [
+            { $match: { status: { $in: ["confirmed", "completed"] } } },
+            {
+              $group: {
+                _id: { serviceId: "$serviceId", serviceName: "$serviceName" },
+                revenue: { $sum: "$price" },
+                bookings: { $sum: 1 }
+              }
+            },
+            { $sort: { revenue: -1 } },
+            { $limit: 10 }
+          ],
+          // 📅 مبيعات آخر 12 شهر (للـ Chart - يدعم خيار السنة)
+          "monthlyTrend": [
+            { $match: { status: { $in: ["confirmed", "completed"] } } },
+            {
+              $group: {
+                _id: {
+                  year: { $year: "$createdAt" },
+                  month: { $month: "$createdAt" }
+                },
+                revenue: { $sum: "$price" },
+                bookings: { $sum: 1 }
+              }
+            },
+            { $sort: { "_id.year": -1, "_id.month": -1 } },
+            { $limit: 12 }
+          ],
+          // 📊 توزيع حسب حالة الحجز
+          "statusDistribution": [
+            {
+              $group: {
+                _id: "$status",
+                count: { $sum: 1 },
+                amount: { $sum: "$price" }
+              }
+            }
+          ],
+          // 📅 آخر 5 حجوزات
+          "recentBookings": [
+            { $sort: { createdAt: -1 } },
+            { $limit: 5 },
+            {
+              $project: {
+                serviceName: 1,
+                price: 1,
+                status: 1,
+                createdAt: 1,
+                "bookingDetails.date": 1
+              }
+            }
+          ]
+        }
+      }
+    ]);
+
+    const result = stats[0];
+    const total = result.totalStats[0] || { totalRevenue: 0, totalBookings: 0, cancelledAmount: 0, cancelledCount: 0 };
+    const currentMonth = result.currentMonth[0] || { amount: 0, count: 0 };
+    const lastMonth = result.lastMonth[0] || { amount: 0, count: 0 };
+    const yearToDate = result.yearToDate[0] || { amount: 0, count: 0 };
+
+    // حساب نسبة النمو
+    let growthRate = 0;
+    if (lastMonth.amount > 0) {
+      growthRate = ((currentMonth.amount - lastMonth.amount) / lastMonth.amount) * 100;
+    } else if (currentMonth.amount > 0) {
+      growthRate = 100;
+    }
+
+    // معالجة مبيعات الخدمات
+    const servicesSales = result.byService.map((s: any) => ({
+      serviceId: s._id.serviceId,
+      serviceName: s._id.serviceName,
+      revenue: s.revenue,
+      bookings: s.bookings,
+      percentage: total.totalRevenue > 0 ? parseFloat(((s.revenue / total.totalRevenue) * 100).toFixed(1)) : 0
+    }));
+
+    // معالجة الترند الشهري
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthlyTrend = result.monthlyTrend.map((m: any) => ({
+      month: monthNames[m._id.month - 1],
+      year: m._id.year,
+      revenue: m.revenue,
+      bookings: m.bookings
+    })).reverse();
+
+    // معالجة توزيع الحالات
+    const statusMap: any = {};
+    result.statusDistribution.forEach((s: any) => {
+      statusMap[s._id] = { count: s.count, amount: s.amount };
+    });
+
+    return {
+      summary: {
+        totalRevenue: total.totalRevenue,
+        totalBookings: total.totalBookings,
+        cancelledAmount: total.cancelledAmount,
+        cancelledCount: total.cancelledCount,
+        currentMonthRevenue: currentMonth.amount,
+        currentMonthBookings: currentMonth.count,
+        lastMonthRevenue: lastMonth.amount,
+        yearToDateRevenue: yearToDate.amount,
+        yearToDateBookings: yearToDate.count,
+        growthRate: parseFloat(growthRate.toFixed(1))
+      },
+      servicesSales,
+      monthlyTrend,
+      statusDistribution: statusMap,
+      recentBookings: result.recentBookings
+    };
+  }
+
+
 }

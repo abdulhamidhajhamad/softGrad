@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@google-cloud/vision": "^4.3.3",
     "@google/genai": "^1.31.0",
     "@nestjs/bull": "^11.0.4",
     "@nestjs/common": "^10.0.0",
@@ -30,6 +31,8 @@
     "@nestjs/passport": "^10.0.0",
     "@nestjs/platform-express": "^10.4.20",
     "@nestjs/platform-socket.io": "^10.4.20",
+    "@nestjs/schedule": "^6.1.0",
+    "@nestjs/serve-static": "^4.0.2",
     "@nestjs/swagger": "^7.4.2",
     "@nestjs/typeorm": "^10.0.2",
     "@nestjs/websockets": "^10.4.20",
@@ -50,7 +53,9 @@
     "rxjs": "^7.8.1",
     "sharp": "^0.34.5",
     "socket.io": "^4.8.1",
-    "stripe": "^20.0.0",
+    "string-similarity": "^4.0.4",
+    "stripe": "^20.1.2",
+    "tesseract.js": "^7.0.0",
     "typeorm": "^0.3.20",
     "uuid": "^13.0.0"
   },
@@ -66,6 +71,7 @@
     "@types/passport-jwt": "^3.0.8",
     "@types/sharp": "^0.31.1",
     "@types/socket.io": "^3.0.1",
+    "@types/string-similarity": "^4.0.2",
     "@types/stripe": "^8.0.416",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",

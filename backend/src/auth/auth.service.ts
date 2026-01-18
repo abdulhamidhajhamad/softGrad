@@ -14,13 +14,16 @@ import {
   SignUpDto, 
   LoginDto, 
   VerifyEmailDto,
-  ResendVerificationDto 
+  ResendVerificationDto, 
+  ResetPasswordDto
 } from './auth.dto';
 import { MailService } from './mail.service';
 import { SupabaseStorageService } from '../subbase/supabaseStorage.service';
 import * as crypto from 'crypto';
 import { PasswordResetToken } from './password-reset-token.schema'; 
 import { UpdateFCMTokenDto } from './auth.dto'; // Need to create this DTO
+import { AdminStats } from '../admin/admin-stats.schema';
+
 @Injectable()
 export class AuthService {
   private verificationCodes = new Map<string, { code: string; expires: Date }>();
@@ -29,11 +32,14 @@ export class AuthService {
     private userModel: Model<User>,
     @InjectModel(PasswordResetToken.name)
     private passwordResetTokenModel: Model<PasswordResetToken>,
-
+    @InjectModel(AdminStats.name) 
+    private adminStatsModel: Model<AdminStats>,
     private jwtService: JwtService,
     private mailService: MailService,
     private supabaseStorage: SupabaseStorageService,
   ) {}
+
+
   private generateVerificationCode(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
@@ -105,6 +111,7 @@ export class AuthService {
 
     await user.save();
     console.log('👤 User created with image:', imageUrl);
+    await this.incrementStats(signUpDto.role || 'user');
 
     // إرسال email التحقق
     try {
@@ -119,6 +126,36 @@ export class AuthService {
       imageUrl: imageUrl,
     };
   }
+
+  private async incrementStats(userRole: string): Promise<void> {
+    try {
+      // البحث عن الإحصائيات أو إنشاء جديدة
+      let stats = await this.adminStatsModel.findOne();
+      
+      if (!stats) {
+        stats = new this.adminStatsModel({
+          totalUsers: 0,
+          totalVendors: 0,
+          totalSales: 0
+        });
+      }
+
+      // زيادة العداد المناسب
+      if (userRole === 'user' || userRole === 'USER') {
+        stats.totalUsers += 1;
+      } else if (userRole === 'vendor' || userRole === 'VENDOR') {
+        stats.totalVendors += 1;
+      }
+
+      stats.lastUpdated = new Date();
+      await stats.save();
+      
+      console.log(`📊 Stats updated - Users: ${stats.totalUsers}, Vendors: ${stats.totalVendors}`);
+    } catch (error) {
+      console.error('❌ Failed to update stats:', error);
+    }
+  }
+
 
   // ✅ Verify email with code (using in-memory storage)
   async verifyEmail(verifyEmailDto: VerifyEmailDto): Promise<{ token: string; user: any }> {
@@ -163,7 +200,9 @@ export class AuthService {
     // Generate JWT token
     const token = this.jwtService.sign({ 
       userId: (user._id as Types.ObjectId).toString(), 
-      email: user.email 
+      email: user.email ,
+      username: user.userName // ADD THIS LINE
+
     });
     
     // Return user without sensitive data
@@ -217,14 +256,14 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto): Promise<{ token: string; user: any }> {
-    const { email, password } = loginDto;
+    const { email, password, fcmToken } = loginDto; // 👈 تم إضافة fcmToken
     
     const user = await this.userModel.findOne({ email }).exec();
     if (!user) {
       throw new UnauthorizedException('Invalid Email/Pass');
     }
 
-    // ✅ Check if email is verified
+    // Check if email is verified
     if (!user.isVerified) {
       throw new UnauthorizedException('Please verify your email before logging in');
     }
@@ -233,10 +272,25 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid Email/Pass');
     }
+
+   if (fcmToken) {
+      // الخطوة 1: حذف الرمز من أي مستخدم آخر يحمله لضمان فرادته (unique)
+      await this.userModel.updateOne(
+        { fcmToken },
+        { $unset: { fcmToken: 1 } }
+      ).exec();
+
+      // الخطوة 2: تحديث رمز المستخدم الحالي
+      user.fcmToken = fcmToken;
+      await user.save();
+      console.log(`FCM Token updated upon login for user: ${user.email}`);
+    }
     
     const token = this.jwtService.sign({ 
       userId: (user._id as Types.ObjectId).toString(), 
-      email: user.email 
+      email: user.email,
+          username: user.userName 
+ 
     });
     
     const userObject = user.toObject();
@@ -248,27 +302,63 @@ export class AuthService {
   }
 
   // ✅ Update user profile with image handling
-  async updateProfile(
+ async updateProfile(
     userId: string,
     updateData: Partial<{
       userName: string;
       phone: string;
       city: string;
+      // 🆕 الحقول الجديدة لكلمة المرور
+      currentPassword?: string; 
+      newPassword?: string;
+      confirmNewPassword?: string;
     }>,
     file?: Express.Multer.File
-  ): Promise<{ message: string; user: any }> {
+  ): Promise<{ message: string; user: any; newToken?: string }> {
     const user = await this.userModel.findById(userId).exec();
     
     if (!user) {
       throw new NotFoundException('User not found');
     }
+    
+    // ----------------------------------------------------------------
+    // 🛑 منطق التحقق من كلمة المرور الجديدة
+    // ----------------------------------------------------------------
+    // فصل حقول كلمة المرور عن باقي بيانات الملف الشخصي (profileData)
+    const { currentPassword, newPassword, confirmNewPassword, ...profileData } = updateData; 
 
-    let imageUrl = user.imageUrl;
+    if (newPassword || currentPassword || confirmNewPassword) {
+      // 1. يجب أن تكون جميع الحقول موجودة لتغيير كلمة المرور
+      if (!currentPassword || !newPassword || !confirmNewPassword) {
+        throw new BadRequestException('Current password, new password, and confirmation are all required to change password.');
+      }
+
+      // 2. التحقق من تطابق كلمة المرور الجديدة وتأكيدها
+      if (newPassword !== confirmNewPassword) {
+        throw new BadRequestException('New password and confirmation do not match.');
+      }
+      
+      // 3. التحقق من صحة كلمة المرور الحالية
+      const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Current password is not correct.');
+      }
+      
+      // 4. تشفير وتحديث كلمة المرور
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      user.password = hashedPassword;
+      console.log(`Password updated for user: ${user.email}`);
+    } // 👈 القوس الناقص الذي كان يسبب خطأ التجميع
+    // ----------------------------------------------------------------
+    
+    // منطق تحديث الصورة والحقول الأخرى
+    let imageUrl = user.imageUrl; 
 
     if (file) {
       try {
         console.log('📤 Uploading new image to Supabase...');
         
+        // حذف الصورة القديمة إذا لم تكن الصورة الافتراضية
         if (user.imageUrl && !user.imageUrl.includes('ui-avatars.com')) {
           console.log('🗑️ Deleting old image:', user.imageUrl);
           await this.supabaseStorage.deleteImage(user.imageUrl);
@@ -282,15 +372,16 @@ export class AuthService {
       }
     }
 
-    if (updateData.userName) user.userName = updateData.userName;
-    if (updateData.phone) user.phone = updateData.phone;
-    if (updateData.city) user.city = updateData.city;
+    // 🛑 استخدام profileData لتحديث باقي الحقول (لأن حقول كلمة المرور تم فصلها في الأعلى)
+    if (profileData.userName) user.userName = profileData.userName;
+    if (profileData.phone) user.phone = profileData.phone;
+    if (profileData.city) user.city = profileData.city;
     user.imageUrl = imageUrl;
 
     await user.save();
 
     const userObject = user.toObject();
-    const { password, ...userWithoutPassword } = userObject;
+    const { password: _, ...userWithoutPassword } = userObject;
 
     return {
       message: 'Profile updated successfully',
@@ -298,56 +389,44 @@ export class AuthService {
     };
   }
 
-  // Clean up expired verification codes (call this periodically)
-  cleanupExpiredVerificationCodes(): void {
-    const now = new Date();
-    for (const [email, data] of this.verificationCodes.entries()) {
-      if (now > data.expires) {
-        this.verificationCodes.delete(email);
-      }
-    }
-  }
-
 
 async forgotPassword(email: string) {
   const user = await this.userModel.findOne({ email });
   if (!user) {
-    console.log('❌ User not found for email:', email);
     return { message: 'If this email exists, a reset link has been sent.' };
   }
-
-  console.log('✅ User found:', user.email);
-
-  // إنشاء التوكن
+  
+  await this.passwordResetTokenModel.deleteMany({ email });
   const token = crypto.randomBytes(32).toString('hex');
-  console.log('🔑 Original token:', token);
-
-  // حساب الـ hash بشكل صحيح
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-  console.log('🔑 Token hash:', tokenHash);
-
-  // التأكد من عدم وجود مسافات أو أخطاء
-  if (tokenHash.includes(' ')) {
-    console.error('❌ ERROR: Token hash contains spaces!');
-  }
-
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-  // حفظ في قاعدة البيانات
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); 
+  
   await this.passwordResetTokenModel.create({
     email,
     tokenHash,
     expiresAt
   });
 
-  console.log('💾 Token saved to database successfully');
+  const frontendBaseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  
+  // ✅ للويب: استخدم # للتوافق مع Flutter Web routing
+  const resetUrl = `${frontendBaseUrl}/#/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
 
-  // لأغراض الت testing - إرجاع التوكن في ال response
+  try {
+    await this.mailService.sendPasswordResetEmail(email, resetUrl);
+    console.log(`✅ Password reset email sent to: ${email}`);
+    console.log(`🔗 Reset URL: ${resetUrl}`);
+  } catch (error) {
+    console.error('❌ Error sending reset email:', error);
+    throw new BadRequestException('Failed to send reset email, please try again later.');
+  }
+
   return { 
-    message: 'If this email exists, a reset link has been sent.',
-    debug_token: token // ✅ إرجاع التوكن للتجربة
+    message: 'If this email exists, a reset link has been sent.' 
   };
 }
+
+
 
 async verifyResetToken(token: string, email: string) {
   console.log('🔍 Verifying token for email:', email);
@@ -390,31 +469,42 @@ async verifyResetToken(token: string, email: string) {
 
 
 
-  async resetPassword(email: string, token: string, newPassword: string) {
-  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+async resetPassword(resetData: ResetPasswordDto) {
+  const { email, token, newPassword, confirmPassword } = resetData;
 
-  const record = await this.passwordResetTokenModel.findOne({
+  // 1. 🔥 التحقق من تطابق كلمتي السر في الباك إند
+  if (newPassword !== confirmPassword) {
+    throw new BadRequestException('Passwords do not match');
+  }
+
+  // 2. التحقق من صحة التوكن (Hash comparison)
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const storedToken = await this.passwordResetTokenModel.findOne({
     email,
     tokenHash,
-    expiresAt: { $gt: new Date() }
+    expiresAt: { $gt: new Date() }, // تأكد أنه لم ينتهِ
   });
 
-  if (!record)
-    throw new BadRequestException('Invalid or expired token');
+  if (!storedToken) {
+    throw new BadRequestException('Invalid or expired reset token');
+  }
 
-  // hash new password
-  const hashedPassword = await bcrypt.hash(newPassword, 12);
-
-  // update user password
-  await this.userModel.updateOne(
+  // 3. تحديث كلمة السر للمستخدم
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  const user = await this.userModel.findOneAndUpdate(
     { email },
-    { $set: { password: hashedPassword } }
+    { password: hashedPassword },
+    { new: true }
   );
 
-  // حذف التوكن
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  // 4. 🔥 مسح التوكن بعد الاستخدام الناجح (أفضل ممارسة)
   await this.passwordResetTokenModel.deleteMany({ email });
 
-  return { message: 'Password has been reset successfully.' };
+  return { message: 'Password has been reset successfully' };
 }
 
 async getUserProfile(userId: string): Promise<{
@@ -452,4 +542,67 @@ async getUserProfile(userId: string): Promise<{
     await user.save();
     console.log(`FCM Token updated for user ${userId}`);
   }
+
+async generateToken(user: any): Promise<string> {
+    const payload = { 
+        email: user.email, 
+        userId: user._id, 
+        role: user.role,
+        username: user.userName // ADD THIS LINE
+
+    };
+    return this.jwtService.sign(payload);
+  }
+
+
+  async toggleFavoriteService(userId: string, serviceId: string): Promise<Types.ObjectId[]> {
+  const user = await this.userModel.findById(userId);
+  if (!user) throw new NotFoundException('User not found');
+
+  const sId = new Types.ObjectId(serviceId);
+  const index = user.favoriteServices.indexOf(sId);
+
+  if (index > -1) {
+    // إذا كان موجوداً، نقوم بحذفه
+    user.favoriteServices.splice(index, 1);
+  } else {
+    // إذا لم يكن موجوداً، نقوم بإضافته
+    user.favoriteServices.push(sId);
+  }
+
+  await user.save();
+  return user.favoriteServices;
+}
+
+async toggleFavoritePackage(userId: string, packageId: string): Promise<Types.ObjectId[]> {
+  const user = await this.userModel.findById(userId);
+  if (!user) throw new NotFoundException('User not found');
+
+  const pId = new Types.ObjectId(packageId);
+  const index = user.favoritePackages.indexOf(pId);
+
+  if (index > -1) {
+    user.favoritePackages.splice(index, 1);
+  } else {
+    user.favoritePackages.push(pId);
+  }
+
+  await user.save();
+  return user.favoritePackages;
+}
+
+async getUserFavorites(userId: string): Promise<{ favoriteServices: any[]; favoritePackages: any[] }> {
+  const user = await this.userModel.findById(userId)
+    .select('favoriteServices favoritePackages -_id')
+    .exec();
+
+  if (!user) {
+    throw new NotFoundException('User not found'); //
+  }
+
+  return {
+    favoriteServices: user.favoriteServices || [],
+    favoritePackages: user.favoritePackages || []
+  };
+}
 }

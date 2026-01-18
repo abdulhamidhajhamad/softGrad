@@ -9,6 +9,12 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+export class PaymentConfirmationDto {
+    @IsString()
+    @IsNotEmpty()
+    bookingId: string;
+}
+
 export class BookingServiceItemDto {
   @IsString()
   @IsNotEmpty()

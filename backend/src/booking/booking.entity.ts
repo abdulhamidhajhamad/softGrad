@@ -1,48 +1,103 @@
-import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+// booking.entity.ts
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Types } from 'mongoose';
+import { BookingType } from '../service/service.schema';
 
-export enum PaymentStatus {
-  SUCCESSFUL = 'successful',
-  PENDING = 'pending', // <--- ADD THIS
+export enum BookingStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
   CANCELLED = 'cancelled',
+  COMPLETED = 'completed'
 }
 
-// Subdocument for service items in booking
 @Schema({ _id: false })
-export class BookingServiceItem {
-  @Prop({ required: true })
-  serviceId: string;
-
+export class BookingDetails {
   @Prop({ type: Date, required: true })
-  bookingDate: Date;
+  date: Date;
+
+  @Prop({ type: Number })
+  startHour?: number;
+
+  @Prop({ type: Number })
+  endHour?: number;
+
+  @Prop({ type: Number })
+  numberOfPeople?: number;
+
+  @Prop({ type: Boolean, default: false })
+  isFullVenue?: boolean;
+
+  // 🆕 موقع العميل (للخدمات التي تذهب للعميل مثل الكيترينج)
+  @Prop({
+    type: {
+      latitude: { type: Number },
+      longitude: { type: Number },
+      address: { type: String },
+      city: { type: String },
+      locationDescription: { type: String } // 🆕 وصف الموقع (landmark)
+    },
+    required: false
+  })
+  clientLocation?: {
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+    city?: string;
+    locationDescription?: string; // 🆕 وصف الموقع (landmark)
+  };
+
+  // 🆕 وصف الحجز (ملاحظات خاصة من العميل)
+  @Prop({ type: String, required: false })
+  bookingDescription?: string;
 }
 
-const BookingServiceItemSchema = SchemaFactory.createForClass(BookingServiceItem);
-
-@Schema({ 
-  collection: 'bookings', 
-  timestamps: true,
-  toJSON: { virtuals: true }, 
-  toObject: { virtuals: true } 
-})
+@Schema({ timestamps: true })
 export class Booking extends Document {
-  @Prop({ required: true })
-  userId: string;
+  @Prop({ type: String, required: true })
+  paymentIntentId: string;
 
-  @Prop({ type: [BookingServiceItemSchema], default: [] })
-  services: BookingServiceItem[];
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  userId: Types.ObjectId;
 
-  @Prop({ type: Number, required: true, min: 0 })
-  totalAmount: number;
+  @Prop({ type: Types.ObjectId, ref: 'Service', required: true })
+  serviceId: Types.ObjectId;
 
-  @Prop({
-    type: String,
-    enum: Object.values(PaymentStatus),
-    required: true,
-  })
-  paymentStatus: PaymentStatus;
+  @Prop({ type: String, required: true })
+  serviceName: string;
+
+  @Prop({ type: String, required: true })
+  providerId: string;
+
+  @Prop({ type: String, required: true })
+  companyName: string;
+
+  @Prop({ type: String, enum: Object.values(BookingType), required: true })
+  bookingType: BookingType;
+
+  @Prop({ type: BookingDetails, required: true })
+  bookingDetails: BookingDetails;
+
+  @Prop({ type: Number, required: true })
+  price: number;
+
+  @Prop({ type: String, enum: Object.values(BookingStatus), default: BookingStatus.PENDING })
+  status: BookingStatus;
+
+  @Prop({ type: Boolean, default: false })
+  refunded: boolean;
+
+  @Prop({ type: String, required: false })
+  cancellationReason?: string;
+
+  @Prop({ type: Boolean, default: false })
+  seen: boolean;
+
+  // ✅ NEW: Review Tracking
+  @Prop({ type: Boolean, default: false })
+  isReviewed: boolean;
+
+  @Prop({ type: Date })
+  reviewedAt?: Date;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);
-
-export type BookingDocument = Booking & Document;

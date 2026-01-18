@@ -1,7 +1,7 @@
 // lib/screens/ai_assistant.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'profile.dart'; // for kAccentColor
+import 'user/profile/profile.dart'; // for kAccentColor
 
 const String kAiSystemPrompt = '''
 You are "My Wedding AI Assistant", a friendly, smart planner that helps users organize their wedding based on their budget and preferences.
@@ -22,7 +22,7 @@ Available wedding categories:
 - Flower Shops
 - Decor & Lighting
 - Music & Entertainment
-- Wedding Planners & Coordinators
+- Event Planners & Coordinators
 - Card Printing
 - Jewelry & Accessories
 - Car Rental & Transportation

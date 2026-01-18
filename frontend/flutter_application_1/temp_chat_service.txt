@@ -1,0 +1,345 @@
+﻿// chat.service.ts - FIXED VERSION (No DB notification for messages)
+import { Injectable, NotFoundException , forwardRef, Inject, Logger} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Chat, LastReadStatus } from './chat.schema';
+import { Message } from './message.schema';
+import { Model, Types } from 'mongoose';
+import { User } from '../auth/user.entity'; 
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType, RecipientType } from '../notification/notification.schema';
+import { ProviderService } from '../providers/provider.service'; 
+import { ChatGateway } from './chat.gateway';
+import { NotificationsGateway } from '../notification/notification.gateway';
+
+@Injectable()
+export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
+  constructor(
+    @InjectModel(Chat.name) private chatModel: Model<Chat>,
+    @InjectModel(Message.name) private messageModel: Model<Message>,
+    @InjectModel(User.name) private userModel: Model<User>, 
+    private notificationService: NotificationService,
+    private providerService: ProviderService,
+    @Inject(forwardRef(() => ChatGateway))
+    private chatGateway: ChatGateway,
+    private notificationsGateway: NotificationsGateway,
+  ) {}
+
+  async createChat(userId: string, receiverId: string) {
+    let chat = await this.chatModel.findOne({
+      participants: { $all: [userId, receiverId] },
+   
+    });
+
+    if (!chat) {
+      chat = await this.chatModel.create({
+        participants: [userId, receiverId],
+        lastRead: [
+          { userId: new Types.ObjectId(userId), lastReadAt: new Date() },
+          { userId: new Types.ObjectId(receiverId), lastReadAt: null },
+        ]
+      });
+    }
+
+    if (chat && (!chat.lastRead || chat.lastRead.length === 0)) {
+      chat.lastRead = [
+        { userId: new Types.ObjectId(userId), lastReadAt: new Date() },
+        { userId: new Types.ObjectId(receiverId), lastReadAt: null }, 
+      ];
+      await chat.save();
+    }
+
+    return chat;
+  }
+
+  async sendMessage(senderId: string, chatId: string, content: string): Promise<{ message: Message, recipientId: string | null, newUnreadCount: number }> {
+    this.logger.log(`\nðŸ”µ ===== SEND MESSAGE START =====`);
+    this.logger.log(`Sender: ${senderId}, Chat: ${chatId}`);
+    
+    const chat = await this.chatModel.findById(chatId);
+    if (!chat) {
+      this.logger.error(`âŒ Chat not found: ${chatId}`);
+      throw new NotFoundException('Chat not found');
+    }
+
+    // Create message
+    const message = await this.messageModel.create({ sender: senderId, chatId, content });
+    this.logger.log(`âœ… Message created with ID: ${message._id}`);
+    
+    chat.lastMessage = content;
+    
+    // Find recipient
+    const participantObject = chat.participants.find(
+      (p) => p.toString() !== senderId.toString()
+    );
+    const recipientId: string | null = participantObject ? participantObject.toString() : null;
+    this.logger.log(`ðŸ“¤ Recipient ID: ${recipientId}`);
+
+    // Update lastRead status
+    chat.lastRead = chat.lastRead.map(status => {
+      if (status.userId.toString() === senderId) {
+        status.lastReadAt = new Date();
+      } else if (recipientId && status.userId.toString() === recipientId) {
+        status.lastReadAt = null;
+      }
+      return status;
+    });
+
+    await chat.save();
+    this.logger.log(`âœ… Chat updated`);
+    
+    // Send via WebSocket
+    try {
+      this.chatGateway.sendNewMessageToRoom(chatId, message);
+      this.logger.log(`âœ… Message sent to WebSocket room`);
+    } catch (wsError) {
+      this.logger.error(`âŒ WebSocket error: ${wsError.message}`);
+    }
+    
+    // Get sender info
+    const sender = await this.userModel.findById(senderId).exec();
+    if (!sender) {
+      this.logger.error(`âŒ Sender not found: ${senderId}`);
+      throw new NotFoundException('Sender user not found'); 
+    }
+    
+    let notificationTitle: string;
+    const senderRole = sender['role'] as string;
+    this.logger.log(`ðŸ“‹ Sender role: ${senderRole}`);
+    
+    if (senderRole === 'vendor') {
+      try {
+        const companyName = await this.providerService.findCompanyNameByUserId(senderId);
+        notificationTitle = `New message from ${companyName}`; 
+      } catch (e) {
+        this.logger.error(`Could not find company name for vendor: ${senderId}`, e.message);
+        notificationTitle = `New message from Vendor`;
+      }
+    } else if (senderRole === 'admin') {
+      notificationTitle = `New message from Admin`; 
+    } else {
+      const userName = sender['userName'] || 'User';
+      notificationTitle = `New message from ${userName}`; 
+    }
+
+    let newUnreadCount = 0;
+    
+    if (recipientId) {
+      this.logger.log(`\nðŸ“¬ Processing notification for recipient: ${recipientId}`);
+      
+      newUnreadCount = await this.getUnreadChatsCount(recipientId);
+      this.logger.log(`ðŸ“Š Unread count: ${newUnreadCount}`);
+
+      const recipient = await this.userModel.findById(recipientId);
+      if (!recipient) {
+        this.logger.warn(`âš ï¸ Recipient not found: ${recipientId}`);
+      } else {
+        this.logger.log(`âœ… Recipient found: ${recipient['userName']}`);
+        
+        const fcmToken = recipient['fcmToken'] as string | undefined;
+        const recipientRole = recipient['role'] as string;
+        
+        this.logger.log(`ðŸ“± FCM Token: ${fcmToken ? 'EXISTS' : 'MISSING'}`);
+        this.logger.log(`ðŸ‘¤ Recipient role: ${recipientRole}`);
+        
+        // âœ… Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø­Ø§Ù„Ø© Ø§ØªØµØ§Ù„ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…
+        const isRecipientOnline = this.notificationsGateway.isUserConnected(recipientId);
+        this.logger.log(`ðŸ”Œ Recipient online status: ${isRecipientOnline}`);
+        
+        // âœ… Ø¥Ø±Ø³Ø§Ù„ FCM ÙÙ‚Ø· Ø¥Ø°Ø§ ÙƒØ§Ù† Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… offline Ùˆ Ø¹Ù†Ø¯Ù‡ token
+        const shouldSendFCM = !isRecipientOnline && fcmToken && fcmToken.trim() !== '';
+        
+        if (shouldSendFCM) {
+          this.logger.log(`ðŸš€ Recipient is OFFLINE - Sending FCM notification ONLY`);
+          
+          try {
+            // âœ… Ø¥Ø±Ø³Ø§Ù„ FCM Ù…Ø¨Ø§Ø´Ø±Ø© Ø¨Ø¯ÙˆÙ† Ø­ÙØ¸ ÙÙŠ Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
+            await this.notificationService.sendNotification(
+              fcmToken!,
+              notificationTitle,
+              content.substring(0, 100) + (content.length > 100 ? '...' : '')
+            );
+            
+            this.logger.log(`âœ… FCM notification sent successfully (no DB save)`);
+          } catch (fcmError) {
+            this.logger.error(`âŒ Error sending FCM notification: ${fcmError.message}`);
+          }
+        } else if (isRecipientOnline) {
+          this.logger.log(`âœ… Recipient is ONLINE - Message delivered via WebSocket (no FCM needed)`);
+        } else if (!fcmToken) {
+          this.logger.log(`âš ï¸ No FCM token - Cannot send push notification`);
+        }
+      }
+    } else {
+      this.logger.warn(`âš ï¸ No recipient found in chat`);
+    }
+    
+    this.logger.log(`ðŸ”µ ===== SEND MESSAGE END =====\n`);
+    return { message, recipientId, newUnreadCount };
+  }
+
+  async getMessages(chatId: string) {
+    return this.messageModel
+      .find({ chatId: chatId })
+      .populate('sender', 'userName imageUrl role')
+      .sort({ createdAt: 1 });
+  }
+
+  async getUserChats(userId: string) {
+    return this.chatModel
+      .find({ participants: userId })
+      .populate('participants', 'userName imageUrl role')
+      .sort({ updatedAt: -1 });
+  }
+
+  async deleteChat(userId: string, chatId: string): Promise<any> {
+    const chat = await this.chatModel.findById(chatId);
+
+    if (!chat) {
+      throw new NotFoundException('Chat not found');
+    }
+
+    if (!chat.participants.map(p => p.toString()).includes(userId)) {
+      throw new NotFoundException('Chat not found or access denied');
+    }
+
+    await this.messageModel.deleteMany({ chatId: chatId });
+    const result = await this.chatModel.deleteOne({ _id: chatId });
+
+    return { deleted: result.deletedCount > 0, chatId };
+  }
+
+  async markMessagesAsRead(userId: string, chatId: string): Promise<{ messagesMarkedReadCount: number, newUnreadCount: number }> {
+    console.log(`\nðŸ”µ ===== MARK AS READ DEBUG START (Bulk Update) =====`);
+    
+    let userIdObj: Types.ObjectId;
+    
+    try {
+      userIdObj = new Types.ObjectId(userId);
+    } catch (error) {
+      throw new Error('Invalid User ID format');
+    }
+
+    const chat = await this.chatModel.findById(chatId); 
+
+    if (!chat) {
+        throw new NotFoundException('Chat not found');
+    }
+
+    const isParticipant = chat.participants.some(p => p.toString() === userId);
+    if (!isParticipant) {
+        throw new NotFoundException('User is not a participant in this chat');
+    }
+    
+    const updateResult = await this.messageModel.updateMany(
+      {
+        chatId: chatId,
+        isRead: false,
+        sender: { $ne: userIdObj } 
+      },
+      { $set: { isRead: true } }
+    );
+    
+    const messagesMarkedReadCount = updateResult.modifiedCount;
+    
+    console.log(`âœ… Bulk Update executed. Messages marked as read: ${messagesMarkedReadCount}`);
+
+    console.log(`ðŸ“– Updating lastRead in Chat document...`);
+    
+    let lastReadUpdated = false;
+    for (const status of chat.lastRead) {
+        if (status.userId.equals(userIdObj)) {
+            status.lastReadAt = new Date();
+            lastReadUpdated = true;
+            break;
+        }
+    }
+
+    if (!lastReadUpdated) {
+        chat.lastRead.push({
+            userId: userIdObj,
+            lastReadAt: new Date(),
+        });
+        lastReadUpdated = true;
+    }
+
+    if (chat.lastRead.length === 0 && chat.participants.length > 0) {
+        const otherParticipantId = chat.participants.find(p => p.toString() !== userId);
+        
+        const initialStatuses: LastReadStatus[] = [
+            { userId: userIdObj, lastReadAt: new Date() }
+        ];
+
+        if (otherParticipantId) {
+             initialStatuses.push({ 
+                userId: new Types.ObjectId(otherParticipantId), 
+                lastReadAt: null 
+             });
+        }
+        
+        chat.lastRead = initialStatuses;
+        console.log(`âœ… Initialized lastRead array`);
+    }
+    
+    await chat.save(); 
+    console.log(`âœ… Chat document saved`);
+
+    const newUnreadCount = await this.getUnreadChatsCount(userId);
+    
+    console.log(`ðŸ“Š New unread count for user: ${newUnreadCount}`);
+    console.log(`ðŸ”µ ===== MARK AS READ DEBUG END (Bulk Update) =====\n`);
+
+    return { messagesMarkedReadCount, newUnreadCount };
+  }
+
+  async getUnreadChatsCount(userId: string): Promise<number> {
+    const unreadChats = await this.messageModel.aggregate([
+      {
+        $match: {
+          $expr: {
+            $and: [
+              { $ne: [{ $toString: "$sender" }, userId] },
+              { $eq: ["$isRead", false] }
+            ]
+          }
+        },
+      },
+      {
+        $group: {
+          _id: '$chatId',
+        },
+      },
+    ]);
+    
+    return unreadChats.length;
+  }
+
+async getUnreadCountsPerChat(userId: string) {
+  const unreadCounts = await this.messageModel.aggregate([
+    {
+      $match: {
+        // 1. Ø§Ø³ØªØ¨Ø¹Ø§Ø¯ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ Ø§Ù„ØªÙŠ Ø£Ø±Ø³Ù„Ù‡Ø§ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ù†ÙØ³Ù‡
+        sender: { $ne: new Types.ObjectId(userId) },
+        // 2. Ø¬Ù„Ø¨ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ ØºÙŠØ± Ø§Ù„Ù…Ù‚Ø±ÙˆØ¡Ø© ÙÙ‚Ø·
+        isRead: false,
+      },
+    },
+    {
+      $group: {
+        // 3. ØªØ¬Ù…ÙŠØ¹ Ø§Ù„Ù†ØªØ§Ø¦Ø¬ Ø­Ø³Ø¨ Ù…Ø¹Ø±Ù Ø§Ù„Ø´Ø§Øª
+        _id: '$chatId',
+        // 4. Ø­Ø³Ø§Ø¨ Ø¹Ø¯Ø¯ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ ÙÙŠ ÙƒÙ„ Ù…Ø¬Ù…ÙˆØ¹Ø©
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // ØªÙ†Ø³ÙŠÙ‚ Ø§Ù„Ù†ØªÙŠØ¬Ø© Ù„ØªÙƒÙˆÙ† Ø£Ø³Ù‡Ù„ ÙÙŠ Ø§Ù„Ù‚Ø±Ø§Ø¡Ø© Ù„Ù„ÙØ±ÙˆÙ†Øª Ø¥Ù†Ø¯
+  return unreadCounts.map((item) => ({
+    chatId: item._id,
+    unreadCount: item.count,
+  }));
+}
+  
+}

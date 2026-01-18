@@ -1,42 +1,83 @@
-// src/ai-search/ai-search.controller.ts (الإصلاح)
+// src/ai-search/ai-search.controller.ts
 
 import { Controller, Post, Body, HttpCode, HttpStatus, HttpException } from '@nestjs/common';
 import { AiSearchService } from './ai-search.service';
-import { AiSearchDto } from './ai-search.dto';
-// 🛑 يجب استيراد الواجهة الجديدة AiSearchBlueprint هنا
+import { AiSearchDto, SingleServiceSearchDto } from './ai-search.dto';
 import { AggregatedPackage, AiSearchBlueprint } from './ai-search.interface'; 
 import { PackageBuilderService } from './package-builder.service'; 
 
 @Controller('ai-search')
 export class AiSearchController {
-    constructor(
-        private readonly aiSearchService: AiSearchService,
-        private readonly packageBuilderService: PackageBuilderService,
-    ) {}
+    constructor(
+        private readonly aiSearchService: AiSearchService,
+        private readonly packageBuilderService: PackageBuilderService,
+    ) {}
 
-    /**
-     * POST /ai-search
-     */
-    @Post()
-    @HttpCode(HttpStatus.OK) 
-    async aiPackageSearch(@Body() dto: AiSearchDto): Promise<AggregatedPackage[]> {
-        
-        // 1. استخلاص مخططات الباكجات من نص المستخدم باستخدام AI
-        // 🛑 تم إضافة التصريح الصريح لنوع المتغير AiSearchBlueprint
-        const blueprint: AiSearchBlueprint = await this.aiSearchService.extractSearchFilters(dto.prompt);
-        
-        // 2. استخدام المخطط لتجميع الخدمات من قاعدة البيانات
-        // الآن المتغير blueprint من النوع الصحيح، فلن يظهر الخطأ هنا
-     const aggregatedPackages = await this.packageBuilderService.buildPackages(blueprint);
+    @Post()
+    @HttpCode(HttpStatus.OK) 
+    async aiPackageSearch(@Body() dto: AiSearchDto): Promise<AggregatedPackage[]> {
+        
+        // 1. استخلاص مخططات الباكجات من الـ AI (تم إضافة userTags و additionalNotes)
+        const blueprint: AiSearchBlueprint = await this.aiSearchService.extractSearchFilters(
+            dto.city,
+            dto.guestCount,
+            dto.budgetMin,
+            dto.budgetMax,
+            dto.eventType,
+            dto.eventDate,
+            dto.userTags,       // 🆕 تمرير التاجز
+            dto.additionalNotes, // 🆕 تمرير الملاحظات
+            dto.startTime,
+            dto.endTime,
+            dto.servicePriorities, // 🆕 تمرير أولويات الخدمات مع النسب
+            dto.budgetFlexibility, // 🆕 تمرير نسبة المرونة
+        );
+        
+        // 2. استخدام المخطط لتجميع الخدمات (هذا الجزء يبقى كما هو لا يتغير)
+        const aggregatedPackages = await this.packageBuilderService.buildPackages(blueprint);
 
-    // 3. التحقق من النتائج قبل الإرجاع
-        if (!aggregatedPackages || aggregatedPackages.length === 0) {
-            throw new HttpException(
-                'Could not build any packages matching your criteria.',
-                HttpStatus.NOT_FOUND
-            );
-        }
+        if (!aggregatedPackages || aggregatedPackages.length === 0) {
+            throw new HttpException(
+                'Could not build any packages matching your criteria.',
+                HttpStatus.NOT_FOUND
+            );
+        }
 
-        return aggregatedPackages;
-    }
+        return aggregatedPackages;
+    }
+
+    /**
+     * 🆕 NEW: Single Service Search Endpoint
+     * البحث عن خدمة واحدة فقط بناءً على الفلاتر
+     */
+    @Post('single-service')
+    @HttpCode(HttpStatus.OK)
+    async searchSingleService(@Body() dto: SingleServiceSearchDto) {
+        const services = await this.packageBuilderService.searchSingleServiceType(
+            dto.category,
+            dto.city,
+            dto.guestCount,
+            dto.budgetMin,
+            dto.budgetMax,
+            dto.eventDate,
+            dto.startTime,
+            dto.endTime,
+            dto.budgetFlexibility,
+        );
+
+        if (!services || services.length === 0) {
+            throw new HttpException(
+                `No ${dto.category} services found matching your criteria in ${dto.city}.`,
+                HttpStatus.NOT_FOUND
+            );
+        }
+
+        return { 
+            success: true,
+            category: dto.category,
+            city: dto.city,
+            services: services,
+            count: services.length,
+        };
+    }
 }

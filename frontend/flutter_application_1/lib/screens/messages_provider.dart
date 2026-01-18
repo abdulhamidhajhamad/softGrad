@@ -2,14 +2,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_application_1/services/auth_service.dart';
+import 'package:flutter_application_1/services/chat_provider_service.dart';
 import 'chat_screen.dart';
 
-/// Core colors – keep in sync with your app theme
 const Color kPrimaryColor = Color.fromARGB(255, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
 
-/// Conversation model between provider and customer.
 class ConversationThread {
   final String id;
   final String customerName;
@@ -33,38 +33,95 @@ class ConversationThread {
   });
 }
 
-/// Data source abstraction – connect this to your backend / Firestore / API.
 class MessagesRepository {
+
+
   static Future<List<ConversationThread>> fetchConversationsForProvider(
     String providerId,
   ) async {
-    await Future.delayed(const Duration(milliseconds: 400));
-    // TODO: Replace with real implementation:
-    //  - Call your REST API or Firestore query here
-    //  - Map the response to a List<ConversationThread>
-    return [];
+    try {
+      final chats = await ChatProviderService().fetchUserChats();
+      final userMap = await AuthService.getUserData();
+      final currentUserId = userMap?['_id']?.toString() ?? userMap?['id']?.toString();
+      
+      // ✅ تعيين الـ currentUserId في الـ Service
+      ChatProviderService().currentUserId = currentUserId;
+      
+      // ✅ جلب عدد الرسائل غير المقروءة لكل chat من الـ API
+      final unreadCounts = await ChatProviderService().fetchUnreadCountsPerChat();
+      
+      List<ConversationThread> conversations = [];
+      
+      for (var chat in chats) {
+        final chatId = chat['_id']?.toString() ?? '';
+        final participants = chat['participants'] as List<dynamic>;
+        
+        // Find the other participant (customer)
+        Map<String, dynamic>? otherParticipant;
+        for (var p in participants) {
+          final participantId = p['_id'] ?? p['id'];
+          if (participantId.toString() != currentUserId) {
+            otherParticipant = p as Map<String, dynamic>;
+            break;
+          }
+        } 
+        
+        if (otherParticipant == null) continue;
+        
+        // ✅ تحديد اسم المستخدم حسب نوعه
+        final role = otherParticipant['role']?.toString() ?? 'user';
+        String displayName;
+        if (role == 'admin') {
+          displayName = 'eventPlanner Support';
+        } else {
+          displayName = otherParticipant['userName']?.toString() ?? 'User';
+        }
+        
+        // ✅ استخدام الـ unreadCount من الـ API
+        final unreadCount = unreadCounts[chatId] ?? 0;
+        print('💬 Chat $chatId: $unreadCount unread messages');
+        
+        conversations.add(ConversationThread(
+          id: chatId,
+          customerName: displayName,
+          avatarUrl: otherParticipant['imageUrl'],
+          lastMessage: chat['lastMessage'] ?? 'Attachment',
+          lastMessageTime: DateTime.tryParse(chat['updatedAt'] ?? chat['createdAt']) ?? DateTime.now(),
+          unreadCount: unreadCount,
+        ));
+      }
+      
+      return conversations;
+    } catch (e) {
+      print('Error in fetchConversationsForProvider: $e');
+      return [];
+    }
   }
 
   static Future<void> markConversationsAsRead(
     List<String> conversationIds,
   ) async {
-    // TODO: Call backend to mark selected conversations as read
+    for (var id in conversationIds) {
+      await ChatProviderService().markAsRead(id);
+    }
   }
 
   static Future<void> markConversationsAsUnread(
     List<String> conversationIds,
   ) async {
-    // TODO: Call backend to mark selected conversations as unread
+    // Backend doesn't have mark as unread, so we skip this
   }
 
   static Future<void> deleteConversations(
     List<String> conversationIds,
   ) async {
-    // TODO: Call backend to delete/archive selected conversations
+    for (var id in conversationIds) {
+      await ChatProviderService().deleteChat(id);
+    }
   }
 
   static Future<void> pinConversation(String id, bool pinned) async {
-    // TODO: Call backend to pin/unpin a conversation
+    // Pin functionality not implemented in backend yet
   }
 }
 
@@ -72,10 +129,7 @@ enum MessageFilter { all, unreadOnly }
 
 enum _ConversationMenuAction { togglePin, toggleRead, delete }
 
-/// Messages screen for providers (vendors).
-/// Shows a list of conversations with customers.
 class MessagesProviderScreen extends StatefulWidget {
-  /// Optionally pass providerId if you want to fetch based on provider.
   final String? providerId;
 
   const MessagesProviderScreen({Key? key, this.providerId}) : super(key: key);
@@ -97,36 +151,83 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeChat();
     _loadConversations();
+    
+    // ✅ Listen for real-time updates (message status changes)
+    ChatProviderService().onMessageStatusUpdate = () {
+      if (mounted) {
+        print('🔄 Message status update received, refreshing conversations');
+        _loadConversations();
+      }
+    };
+    
+    // ✅ Listen for new messages in real-time
+    ChatProviderService().onNewMessage = (message) {
+      if (mounted) {
+        print('💬 New message received in messages list, refreshing');
+        _loadConversations();
+      }
+    };
+    
+    // ✅ Listen to global unread count changes
+    ChatProviderService.unreadGlobalCount.addListener(_onUnreadCountChanged);
+  }
+  
+  void _onUnreadCountChanged() {
+    if (mounted) {
+      print('🔔 Unread count changed, refreshing conversations');
+      _loadConversations();
+    }
+  }
+  
+  @override
+  void dispose() {
+    ChatProviderService().onMessageStatusUpdate = null;
+    ChatProviderService().onNewMessage = null;
+    ChatProviderService.unreadGlobalCount.removeListener(_onUnreadCountChanged);
+    super.dispose();
+  }
+
+  Future<void> _initializeChat() async {
+    await ChatProviderService().initSocket();
+    // ✅ Fetch initial unread count
+    await ChatProviderService().fetchUnreadCount();
   }
 
   Future<void> _loadConversations() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    // Don't show loading spinner on refresh to avoid flashing
+    final showLoading = _allConversations.isEmpty;
+    
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       final data = await MessagesRepository.fetchConversationsForProvider(
         widget.providerId ?? 'provider-id',
       );
-      setState(() {
-        _allConversations = data;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to load messages.';
-      });
-    } finally {
       if (mounted) {
         setState(() {
+          _allConversations = data;
+          _isLoading = false;
+        });
+        print('✅ Conversations loaded: ${data.length} chats');
+      }
+    } catch (e) {
+      print('❌ Error loading conversations: $e');
+      if (mounted) {
+        setState(() {
+          if(_allConversations.isEmpty) _errorMessage = 'Failed to load messages.';
           _isLoading = false;
         });
       }
     }
   }
 
-  /// Opens search over all conversations (by name or last message).
   void _openSearch() async {
     if (_allConversations.isEmpty) return;
 
@@ -138,7 +239,7 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     );
 
     if (selected != null) {
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ChatScreen(
@@ -147,6 +248,9 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
           ),
         ),
       );
+      // ✅ Refresh list after returning from chat
+      _loadConversations();
+      ChatProviderService().fetchUnreadCount();
     }
   }
 
@@ -164,7 +268,6 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
 
     final list = source.toList();
 
-    // Sort: pinned first, then by lastMessageTime desc
     list.sort((a, b) {
       if (a.isPinned != b.isPinned) {
         return a.isPinned ? -1 : 1;
@@ -215,6 +318,8 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     });
     await MessagesRepository.markConversationsAsRead(ids);
     _exitSelectionMode();
+    // ✅ Update global unread count
+    ChatProviderService().fetchUnreadCount();
   }
 
   Future<void> _markSelectedAsUnread() async {
@@ -222,7 +327,7 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     setState(() {
       for (final conv in _allConversations) {
         if (ids.contains(conv.id)) {
-          conv.unreadCount = 1; // minimal unread; backend should set real value
+          conv.unreadCount = 1;
         }
       }
     });
@@ -237,9 +342,10 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     });
     await MessagesRepository.deleteConversations(ids);
     _exitSelectionMode();
+    // ✅ Update global unread count
+    ChatProviderService().fetchUnreadCount();
   }
 
-  /// Delete single conversation
   Future<void> _deleteSingleConversation(ConversationThread conv) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -276,9 +382,11 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     if (_selectionMode && _selectedIds.isEmpty) {
       _selectionMode = false;
     }
+    
+    // ✅ Update global unread count
+    ChatProviderService().fetchUnreadCount();
   }
 
-  /// Pin / Unpin single conversation
   Future<void> _togglePinConversation(ConversationThread conv) async {
     final newValue = !conv.isPinned;
     setState(() {
@@ -287,7 +395,6 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     await MessagesRepository.pinConversation(conv.id, newValue);
   }
 
-  /// Toggle read/unread for single conversation
   Future<void> _toggleReadConversation(ConversationThread conv) async {
     final isCurrentlyUnread = conv.unreadCount > 0;
 
@@ -297,6 +404,8 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
 
     if (isCurrentlyUnread) {
       await MessagesRepository.markConversationsAsRead([conv.id]);
+      // ✅ Update global unread count
+      ChatProviderService().fetchUnreadCount();
     } else {
       await MessagesRepository.markConversationsAsUnread([conv.id]);
     }
@@ -380,7 +489,6 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
     );
   }
 
-  /// Opens bottom sheet for global actions (3-dots menu).
   void _openMoreMenu() {
     showModalBottomSheet<void>(
       context: context,
@@ -503,6 +611,8 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
       }
     });
     await MessagesRepository.markConversationsAsRead(ids);
+    // ✅ Update global unread count
+    ChatProviderService().fetchUnreadCount();
   }
 
   Future<void> _markAllAsUnread() async {
@@ -554,11 +664,12 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
       _selectionMode = false;
     });
     await MessagesRepository.deleteConversations(ids);
+    // ✅ Update global unread count
+    ChatProviderService().fetchUnreadCount();
   }
 
   PreferredSizeWidget _buildAppBar() {
     if (_selectionMode) {
-      // Selection mode AppBar
       return AppBar(
         backgroundColor: kBackgroundColor,
         elevation: 0,
@@ -595,7 +706,6 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
       );
     }
 
-    // Normal AppBar
     return AppBar(
       backgroundColor: kBackgroundColor,
       elevation: 0,
@@ -663,11 +773,11 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
                               conversation: convo,
                               isSelected: isSelected,
                               selectionMode: _selectionMode,
-                              onTap: () {
+                              onTap: () async {
                                 if (_selectionMode) {
                                   _toggleSelection(convo.id);
                                 } else {
-                                  Navigator.push(
+                                  await Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => ChatScreen(
@@ -676,6 +786,9 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
                                       ),
                                     ),
                                   );
+                                  // ✅ Refresh after returning from chat
+                                  _loadConversations();
+                                  ChatProviderService().fetchUnreadCount();
                                 }
                               },
                               onLongPress: () {
@@ -698,7 +811,6 @@ class _MessagesProviderScreenState extends State<MessagesProviderScreen> {
   }
 }
 
-/// Search delegate for conversations (by customer name and last message).
 class ConversationSearchDelegate extends SearchDelegate<ConversationThread?> {
   final List<ConversationThread> conversations;
 
@@ -824,7 +936,6 @@ class ConversationSearchDelegate extends SearchDelegate<ConversationThread?> {
   }
 }
 
-/// Conversation list item UI – modern, compact, and supports selection.
 class _ConversationTile extends StatelessWidget {
   final ConversationThread conversation;
   final bool isSelected;
@@ -917,7 +1028,6 @@ class _ConversationTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Name + time + pin badge
                   Row(
                     children: [
                       Expanded(
@@ -960,17 +1070,18 @@ class _ConversationTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  // Last message preview
                   Text(
                     conversation.lastMessage,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.poppins(
                       fontSize: 13,
+                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w400,
                       color: hasUnread ? Colors.black87 : Colors.grey.shade700,
                     ),
                   ),
                   const SizedBox(height: 6),
+                  // ✅ Show "new" badge ONLY if there are unread messages
                   if (hasUnread)
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -992,6 +1103,7 @@ class _ConversationTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
+            // ✅ Show purple dot ONLY if there are unread messages
             if (hasUnread && !selectionMode)
               Container(
                 width: 10,
@@ -1089,7 +1201,6 @@ class _ConversationTile extends StatelessWidget {
   }
 }
 
-/// Avatar widget – uses image if available, otherwise first letter.
 class _Avatar extends StatelessWidget {
   final String customerName;
   final String? url;
@@ -1121,7 +1232,6 @@ class _Avatar extends StatelessWidget {
   }
 }
 
-/// Loading state while conversations are being fetched.
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
 
@@ -1149,7 +1259,6 @@ class _LoadingState extends StatelessWidget {
   }
 }
 
-/// Empty state when there are no conversations.
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
@@ -1191,7 +1300,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// Error state for network / backend errors.
 class _ErrorState extends StatelessWidget {
   final VoidCallback onRetry;
 
@@ -1221,7 +1329,7 @@ class _ErrorState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'We couldn’t load your messages.\nPlease try again.',
+              'We couldn\'t load your messages.\nPlease try again.',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 fontSize: 13,

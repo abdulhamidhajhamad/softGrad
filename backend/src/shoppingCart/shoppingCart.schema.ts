@@ -1,25 +1,99 @@
+// cart.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { BookingType } from '../service/service.schema';
 
-@Schema({ _id: true })
-export class CartService {
-  @Prop({ type: Types.ObjectId, required: true, ref: 'Service' })
+// 🆕 موقع العميل
+@Schema({ _id: false })
+export class ClientLocation {
+  @Prop({ type: Number })
+  latitude?: number;
+
+  @Prop({ type: Number })
+  longitude?: number;
+
+  @Prop({ type: String })
+  address?: string;
+
+  @Prop({ type: String })
+  city?: string;
+
+  @Prop({ type: String })
+  locationDescription?: string;
+}
+
+@Schema({ _id: false })
+export class CartItemBookingDetails {
+  @Prop({ type: Date, required: true })
+  date: Date;
+
+  // For Hourly bookings
+  @Prop({ type: Number })
+  startHour?: number;
+
+  @Prop({ type: Number })
+  endHour?: number;
+
+  // For Capacity bookings
+  @Prop({ type: Number })
+  numberOfPeople?: number;
+
+  // For full venue bookings
+  @Prop({ type: Boolean, default: false })
+  isFullVenue?: boolean;
+
+  // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
+  @Prop({ type: ClientLocation })
+  clientLocation?: ClientLocation;
+
+  // 🆕 وصف الحجز (ملاحظات خاصة من العميل)
+  @Prop({ type: String })
+  bookingDescription?: string;
+}
+
+@Schema({ _id: false })
+export class CartItem {
+  @Prop({ type: Types.ObjectId, ref: 'Service', required: true })
   serviceId: Types.ObjectId;
 
-  @Prop({ type: Date, required: true })
-  bookingDate: Date;
+  @Prop({ type: String, required: true })
+  serviceName: string;
+
+  @Prop({ type: String, required: true })
+  providerId: string;
+
+  @Prop({ type: String, required: true })
+  companyName: string;
+
+  @Prop({ type: String, enum: Object.values(BookingType), required: true })
+  bookingType: BookingType;
+
+  @Prop({ type: CartItemBookingDetails, required: true })
+  bookingDetails: CartItemBookingDetails;
+
+  @Prop({ type: Number, required: true })
+  price: number;
+
+  @Prop({ type: String })
+  imageUrl?: string;
+  
+  @Prop({ type: Types.ObjectId, ref: 'Package' })
+  packageId?: Types.ObjectId;
+
+  @Prop({ type: String })
+  packageName?: string;
 }
 
 @Schema({ timestamps: true })
-export class ShoppingCart extends Document {
-  @Prop({ type: Types.ObjectId, required: true, ref: 'User', unique: true })
+export class Cart extends Document {
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true, unique: true })
   userId: Types.ObjectId;
 
-  @Prop({ type: [CartService], default: [] })
-  services: CartService[];
+  @Prop({ type: [CartItem], default: [] })
+  items: CartItem[];
 
   @Prop({ type: Number, default: 0 })
-  totalPrice: number;
+  totalAmount: number;
 }
 
-export const ShoppingCartSchema = SchemaFactory.createForClass(ShoppingCart);
+export const CartSchema = SchemaFactory.createForClass(Cart);

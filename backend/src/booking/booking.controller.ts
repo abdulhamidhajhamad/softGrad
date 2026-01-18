@@ -1,105 +1,89 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Delete,
-  Body,
-  Param,
-  HttpCode,
-  HttpStatus,
-  UseGuards,
-  Request,
-} from '@nestjs/common';
+// booking.controller.ts
+import { Controller, Post, Get, Body, Param, UseGuards, Request, HttpCode, HttpStatus, Patch } from '@nestjs/common';
 import { BookingService } from './booking.service';
-import { CreateBookingDto } from './booking.dto';
-import { Booking } from './booking.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { AdminGuard } from '../admin/admin.guard'; // 👈 يجب استيراد AdminGuard
-class PaymentConfirmationDto {
-    bookingId: string;
+import { IsString, IsOptional } from 'class-validator';
+import { AdminGuard } from '../admin/admin.guard';
+
+class CancelBookingDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
+
 @Controller('bookings')
+@UseGuards(JwtAuthGuard)
 export class BookingController {
   constructor(private readonly bookingService: BookingService) {}
 
-  // 1. Get all bookings for the authenticated user
-  @Get()
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  async getMyBookings(@Request() req): Promise<Booking[]> {
-    const userId = req.user.userId || req.user.id;
-    return this.bookingService.findByUser(userId);
+@Get()
+  async getBookings(@Request() req) {
+    const userId = req.user.userId;
+    const userRole = req.user.role; // 👈 نفترض أن الـ Role موجود في الـ Token
+
+    // نمرر الـ ID ونوع الـ Role إلى Service ليقوم بتحديد دالة البحث المناسبة
+    return this.bookingService.getBookingsByRole(userId, userRole);
   }
 
-  // 2. Create booking from shopping cart 
-@Post('')
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.CREATED)
-  async createPendingBooking(@Request() req): Promise<any> {
-    const userId = req.user.userId || req.user.id;
-    // Call the new PENDING creation service
-    return this.bookingService.createPendingBookingFromCart(userId); 
+  @Get(':id')
+  async getBookingById(@Param('id') id: string) {
+    return this.bookingService.getBookingById(id);
   }
 
-  // NEW: 3. Endpoint to finalize the booking after successful Stripe payment
-  @Post('confirm-payment')
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  async confirmPayment(
-    @Request() req,
-    @Body() dto: PaymentConfirmationDto
-  ): Promise<any> {
-    // In a real app, you might also pass the Stripe PaymentIntent ID for extra verification
-    return this.bookingService.confirmPaymentAndUpdateBooking(dto.bookingId);
-  }
-/*
-  // 3. Create booking with custom data
-  @Post()
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.CREATED)
-  async create(@Request() req, @Body() dto: CreateBookingDto): Promise<Booking> {
-    const userId = req.user.userId || req.user.id;
-    return this.bookingService.create(userId, dto);
-  }
-*/
-  // 4. Cancel booking (remove booking dates from services)
-  @Delete(':bookingId')
-  @UseGuards(JwtAuthGuard)
+  @Patch(':id/cancel')
   @HttpCode(HttpStatus.OK)
   async cancelBooking(
+    @Param('id') id: string,
     @Request() req,
-    @Param('bookingId') bookingId: string,
-  ): Promise<{ message: string }> {
-    const userId = req.user.userId || req.user.id;
-    return this.bookingService.cancelBooking(userId, bookingId);
+    @Body() cancelDto: CancelBookingDto
+  ) {
+    return this.bookingService.cancelBookingByVendor(
+      id,
+      req.user.userId,
+      cancelDto.reason
+    );
   }
 
-  // 5. Get all bookings for all users (admin endpoint)
-  @Get('allbooking')
-  @UseGuards(JwtAuthGuard)
+  @Get('vendor/unseen-count')
   @HttpCode(HttpStatus.OK)
-  async findAll(): Promise<Booking[]> {
-    return this.bookingService.findAll();
-  }
-
-  // 6. Admin Endpoint: Get Total Sales
-  @Get('admin/sales/total')
-  @UseGuards(JwtAuthGuard, AdminGuard)
-  @HttpCode(HttpStatus.OK)
-  async getTotalSales(): Promise<{ totalSales: number }> {
-    return this.bookingService.getTotalSales();
-  }
-
-  // 7. Admin Endpoint: Get Total Bookings and Services Details
-  @Get('admin/bookings/details')
-  @UseGuards(JwtAuthGuard, AdminGuard)
-  @HttpCode(HttpStatus.OK)
-  async getBookingsDetails(): Promise<{ totalBookings: number, bookedServices: { serviceId: string, bookingDate: Date }[] }> {
-    return this.bookingService.getTotalBookingsAndServices();
+  async getUnseenBookingCount(@Request() req) {
+    // نرسل ID الفندر لخدمة الحجز
+    const count = await this.bookingService.getUnseenCount(req.user.userId);
+    // نرجع الرقم في اوبجيكت بسيط
+    return { count };
   }
 
 
+// 🆕 PATCH /bookings/mark-all-seen - التعديل ليناسب طلبك (تحديث الكل)
+  @Patch('mark-all-seen')
+  @HttpCode(HttpStatus.NO_CONTENT) // 204 No Content هو الأفضل لعمليات التحديث التي لا ترجع محتوى
+  async markAllAsSeen(@Request() req) {
+    const vendorId = req.user.userId;
+    // 👈 استدعاء الدالة الجديدة التي تحدث جميع حجوزات البائع غير المشاهدة
+    await this.bookingService.markAllVendorBookingsAsSeen(vendorId); 
+    // لا نرجع شيء (204)
+  }
 
+  // 🟢 إحصائيات البروفايدر (تعتمد على الـ Token الخاص به)
+@Get('vendor/stats')
+async getVendorStats(@Request() req) {
+  const vendorId = req.user.userId; // جلب الـ ID من التوكن
+  return this.bookingService.getSalesStats(vendorId);
+}
 
+  // 🔴 إحصائيات الأدمن (تجلب مبيعات كل المنصة)
+  @UseGuards(AdminGuard)
+  @Get('admin/stats')
+  // يفضل هنا إضافة Guard للتأكد أن المستخدم هو Admin فعلاً
+  async getAdminStats() {
+    return this.bookingService.getSalesStats(); // استدعاء بدون براميتر لجلب الكل
+  }
+
+  // 📊 Finance Stats للـ Provider - إحصائيات مالية شاملة
+  @Get('vendor/finance')
+  async getVendorFinanceStats(@Request() req) {
+    const vendorId = req.user.userId;
+    return this.bookingService.getFinanceStats(vendorId);
+  }
 
 }

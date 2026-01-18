@@ -2,28 +2,106 @@ import {
   Controller, Get, Post, Put, Delete, Body, Param, 
   UseGuards, Request, HttpException, HttpStatus, Query,
   UseInterceptors,
-  UploadedFiles
+  UploadedFiles,
+  DefaultValuePipe,
+  ParseIntPipe
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ServiceService } from './service.service';
 import { CreateServiceDto, UpdateServiceDto } from './service.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { VerificationGuard, RequireVerification } from '../complianceProvider/guards/verification.guard';
 
 @Controller('services')
 export class ServiceController {
   constructor(private readonly serviceService: ServiceService) {}
-  //test
-  @Post()
+  
+  // 13. Get Vendor Services Details (ID, Name, Price) - محمي للـ Vendor
+  @Get('vendor-services-details') // مسار جديد لعدم التعارض
   @UseGuards(JwtAuthGuard)
+  async getVendorServicesDetails(@Request() req: any): Promise<any[]> {
+    try {
+      const providerId = req.user.userId; 
+      // استدعاء الدالة التي تم إنشاؤها في الخدمة
+      return await this.serviceService.getVendorServicesDetails(providerId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch vendor services details',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+  @Get('home-service')
+async getHomepageCategoriesPreview() {
+  try {
+    return await this.serviceService.getHomepageServicesByCategories();
+  } catch (error) {
+    throw new HttpException(
+      error.message || 'Failed to fetch homepage services',
+      error.status || HttpStatus.INTERNAL_SERVER_ERROR
+    );
+  }
+}
+
+  // ✅ Homepage endpoint - Get 5 random trending services (Public - no auth required)
+  @Get('home/trending')
+  async getRandomServicesForHome() {
+    try {
+      return await this.serviceService.getRandomServicesForHome(5);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch trending services',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // ✅ PUBLIC: Get all services with active offers for customers
+  @Get('offers/active')
+  async getActiveOffers() {
+    try {
+      return await this.serviceService.getActiveOffers();
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch active offers',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // ✅ Search/Browse endpoint - Get all services formatted for search display (Public)
+  @Get('browse/all')
+  async getAllServicesForBrowse() {
+    try {
+      return await this.serviceService.getAllServicesForBrowse();
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch services for browse',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post()
+  @UseGuards(JwtAuthGuard, VerificationGuard)
+  @RequireVerification()
   @UseInterceptors(FilesInterceptor('images', 10)) 
   async addService(
-    @Body() createServiceDto: CreateServiceDto, 
+    @Body('data') data: string, // ⬅️ يتوقع 'data' من form-data
     @Request() req: any,
     @UploadedFiles() files?: Express.Multer.File[] 
   ) {
     try {
+      // 🆕 التحقق من data لتجنب خطأ JSON.parse
+      if (!data) {
+        throw new HttpException(
+          'Missing required field: "data" (JSON string of CreateServiceDto)',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const createServiceDto: CreateServiceDto = JSON.parse(data); //
       const userId = req.user.userId;
-      const userRole = req.user.role;
+      const userRole = req.user.role
       if (userRole !== 'vendor') {
         throw new HttpException(
           'Only vendors can add services',
@@ -39,16 +117,93 @@ export class ServiceController {
     }
   }
 
+  // 🆕 3. Update Service by ID - Protected (Vendor)
+  @Put('id/:serviceId')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FilesInterceptor('images', 10)) 
+  async updateServiceById( 
+    @Param('serviceId') serviceId: string, 
+    @Body('data') data: string, // ⬅️ تم التعديل لاستقبال 'data' كـ string
+    @Request() req: any,
+    @UploadedFiles() files?: Express.Multer.File[]
+  ) {
+    try {
+      // 🆕 يجب تحليل JSON يدوياً هنا أيضاً
+      if (!data) {
+        throw new HttpException(
+          'Missing required field: "data" (JSON string of UpdateServiceDto)',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const updateServiceDto: UpdateServiceDto = JSON.parse(data);
+      
+      const userId = req.user.userId;
+      const userRole = req.user.role;
+
+      if (userRole !== 'vendor') {
+        throw new HttpException(
+          'Only vendors can update services',
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      return await this.serviceService.updateServiceById( 
+        serviceId,
+        userId,
+        updateServiceDto,
+        files
+      );
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to update service',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // 🆕 4. Delete Service by ID - Protected (Vendor)
+  @Delete('id/:serviceId') //
+  @UseGuards(JwtAuthGuard)
+  async deleteServiceById(@Param('serviceId') serviceId: string, @Request() req: any) { //
+    try {
+      const userId = req.user.userId;
+      const userRole = req.user.role;
+
+      if (userRole !== 'vendor') {
+        throw new HttpException(
+          'Only vendors can delete services',
+          HttpStatus.FORBIDDEN
+        );
+      }
+
+      return await this.serviceService.deleteServiceById(serviceId, userId); //
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to delete service',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
   @Put('/:serviceName')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 10)) 
   async updateServiceByName(
     @Param('serviceName') serviceName: string,
-    @Body() updateServiceDto: UpdateServiceDto,
+    @Body('data') data: string, // ⬅️ تم التعديل لاستقبال 'data' كـ string
     @Request() req: any,
     @UploadedFiles() files?: Express.Multer.File[]
   ) {
     try {
+      // 🆕 يجب تحليل JSON يدوياً هنا أيضاً
+      if (!data) {
+        throw new HttpException(
+          'Missing required field: "data" (JSON string of UpdateServiceDto)',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const updateServiceDto: UpdateServiceDto = JSON.parse(data);
+      
       const userId = req.user.userId;
       const userRole = req.user.role;
 
@@ -72,155 +227,94 @@ export class ServiceController {
       );
     }
   }
-  
+
+  // 5. Delete Service By Name
+  @Delete('name/:serviceName')
+  @UseGuards(JwtAuthGuard)
+  async deleteServiceByName(
+    @Param('serviceName') serviceName: string,
+    @Request() req: any
+  ) {
+    try {
+      const providerId = req.user.userId;
+      return await this.serviceService.deleteServiceByName(serviceName, providerId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to delete service by name',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  // 6. Get All Services (Public)
   @Get()
   async getAllServices() {
     try {
       return await this.serviceService.getAllServices();
     } catch (error) {
       throw new HttpException(
-        error.message || 'Failed to fetch services',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-
-  // 2. Delete Service - محمي بالـ JWT
-  @Delete('/:serviceName')
-  @UseGuards(JwtAuthGuard)
-  async deleteServiceByName(@Param('serviceName') serviceName: string, @Request() req: any) {
-    try {
-      const userId = req.user.userId;
-      const userRole = req.user.role;
-
-      if (userRole !== 'vendor') {
-        throw new HttpException(
-          'Only vendors can delete services',
-          HttpStatus.FORBIDDEN
-        );
-      }
-
-      return await this.serviceService.deleteServiceByName(serviceName, userId);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to delete service',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  // 6. Get Services by Vendor Name - مفتوح للجميع
-  @Get('vendor/:companyName')
-  async getServicesByVendor(@Param('companyName') companyName: string) {
-    try {
-      return await this.serviceService.getServicesByVendorName(companyName);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to fetch vendor services',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      );
-    }
-  }
-
-  // API جديد: يحصل على خدمات المزود الحالي المسجل دخولاً
-  @Get('my-services')
-  @UseGuards(JwtAuthGuard)
-  async getMyServices(@Request() req: any) {
-    try {
-      const userId = req.user.userId;
-      const userRole = req.user.role;
-      
-      if (userRole !== 'vendor') {
-        throw new HttpException(
-          'Only vendors can access their services',
-          HttpStatus.FORBIDDEN
-        );
-      }
-      return await this.serviceService.getServicesByVendorId(userId);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to fetch your services',
+        error.message || 'Failed to fetch all services',
         error.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
   
-  // 7. Get Services by Vendor ID - مفتوح للجميع
-  @Get('vendor/id/:vendorId')
-  async getServicesByVendorId(@Param('vendorId') vendorId: string) {
+  // 7. Get Services By Vendor Company Name (Public)
+  @Get('vendor/name/:companyName')
+  async getServicesByVendorName(@Param('companyName') companyName: string) {
     try {
-      return await this.serviceService.getServicesByVendorId(vendorId);
+      return await this.serviceService.getServicesByVendorName(companyName); // ✅ تم التأكد من وجود هذه الدالة في الـ Service
     } catch (error) {
       throw new HttpException(
-        error.message || 'Failed to fetch vendor services',
+        error.message || 'Failed to fetch services by vendor name',
         error.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
 
-  // 8. Search services with multiple filters - مفتوح للجميع
-  @Get('search')
-  async searchServices(
-    @Query('city') city: string,
-    @Query('minPrice') minPrice: string,
-    @Query('maxPrice') maxPrice: string,
-    @Query('category') category: string,
-    @Query('serviceName') serviceName: string,
-    @Query('companyName') companyName: string,
-    @Query('lat') lat: string,
-    @Query('lng') lng: string,
-    @Query('radius') radius: string
-  ) {
+  // 8. Get Services By Vendor ID (Protected)
+  @Get('my-services') 
+  @UseGuards(JwtAuthGuard)
+  async getMyServices(@Request() req: any) {
     try {
-      const filters: any = {};
-      if (city && city.trim() !== '') {
-        filters.city = city.trim();
-      }
-      if (minPrice || maxPrice) {
-        filters.priceRange = {
-          min: minPrice ? parseFloat(minPrice) : 0,
-          max: maxPrice ? parseFloat(maxPrice) : Number.MAX_SAFE_INTEGER
-        };
-      }
-      if (category && category.trim() !== '') {
-        filters.category = category.trim();
-      }
+      const userId = req.user.userId;
+      // 🚨 تم تعديل الاستدعاء من getServicesByVendorId إلى getServicesByVendor
+      return await this.serviceService.getServicesByVendor(userId); 
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch my services',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
-      if (serviceName && serviceName.trim() !== '') {
-        filters.serviceName = serviceName.trim();
-      }
+  // 9. Get Services By Vendor ID (Public - used for profile viewing)
+  @Get('vendor/:vendorId') 
+  async getServicesByVendorId(@Param('vendorId') vendorId: string) {
+    try {
+       // 🚨 تم تعديل الاستدعاء من getServicesByVendorId إلى getServicesByVendor
+      return await this.serviceService.getServicesByVendor(vendorId); 
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch services by vendor ID',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
-      if (companyName && companyName.trim() !== '') {
-        filters.companyName = companyName.trim();
-      }
-
-      if (lat && lng) {
-        const latitude = parseFloat(lat);
-        const longitude = parseFloat(lng);
-        const radiusInKm = radius ? parseFloat(radius) : 50;
-
-        if (isNaN(latitude) || isNaN(longitude)) {
-          throw new HttpException(
-            'Invalid latitude or longitude',
-            HttpStatus.BAD_REQUEST
-          );
+  // 10. Search Services (Public)
+  @Get('search')
+  async searchServices(@Query() query: any) {
+    try {
+      // تحويل سلاسل JSON في الـ Query إلى كائنات
+      const filters = {};
+      for (const key in query) {
+        try {
+          filters[key] = JSON.parse(query[key]);
+        } catch (e) {
+          filters[key] = query[key];
         }
-
-        filters.location = {
-          lat: latitude,
-          lng: longitude,
-          radius: radiusInKm
-        };
       }
-
-      if (Object.keys(filters).length === 0) {
-        throw new HttpException(
-          'At least one search filter is required',
-          HttpStatus.BAD_REQUEST
-        );
-      }
-
       return await this.serviceService.searchServices(filters);
     } catch (error) {
       throw new HttpException(
@@ -229,11 +323,12 @@ export class ServiceController {
       );
     }
   }
-  // 10. Get services by category - مفتوح للجميع
+
+  // 11. Get Services By Category (Public)
   @Get('category/:category')
   async getServicesByCategory(@Param('category') category: string) {
     try {
-      return await this.serviceService.getServicesByCategory(category);
+      return await this.serviceService.getServicesByCategory(category); // ✅ تم التأكد من وجود هذه الدالة في الـ Service
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to fetch services by category',
@@ -241,4 +336,129 @@ export class ServiceController {
       );
     }
   }
+
+
+  // 12. Get Service Details by ID - مفتوح للجميع ويرجع حقول محددة
+  @Get(':serviceId') // ⬅️ استخدام مسار محدد لتجنب التعارض مع Get()
+async getServiceDetailsById(@Param('serviceId') serviceId: string) {
+  try {
+    // هذه الدالة الآن ترجع الـ Object المفلتر تماماً كما طلبت
+    return await this.serviceService.getServiceById(serviceId); 
+  } catch (error) {
+    throw new HttpException(
+      error.message || 'Failed to fetch service details',
+      error.status || HttpStatus.INTERNAL_SERVER_ERROR
+    );
+  }
+}
+
+
+
+
+  // ✅ NEW ENDPOINT: جلب الخدمات مع تفاصيل محددة لدعم التمرير اللانهائي
+  @Get('public/paginate-details')
+  // @Public() // 👈 يجب إضافة هذا الـ Decorator أو الترتيب لتجاوز JwtAuthGuard
+  async getPaginatedServicesDetails(
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number, // افتراضياً 20 عنصر
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,   // افتراضياً الصفحة الأولى
+  ) {
+    if (limit > 50) limit = 50; 
+    
+    return this.serviceService.getPaginatedServicesWithDetails(limit, page);
+  }
+
+  // ============================================================================
+  // ✅ OFFER MANAGEMENT ENDPOINTS
+  // ============================================================================
+
+  /**
+   * Get provider's services with offer status (Active Offers + Available Services)
+   */
+  @Get('offers/my-services')
+  @UseGuards(JwtAuthGuard)
+  async getMyServicesWithOffers(@Request() req: any) {
+    try {
+      const providerId = req.user.userId;
+      return await this.serviceService.getProviderServicesWithOffers(providerId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch services with offers',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Create an offer for a service
+   */
+  @Post('offers/:serviceId')
+  @UseGuards(JwtAuthGuard)
+  async createOffer(
+    @Param('serviceId') serviceId: string,
+    @Body() offerData: {
+      discountedPrice: number;
+      discountPercentage?: number;
+      startDate: string;
+      endDate: string;
+      description?: string;
+    },
+    @Request() req: any
+  ) {
+    try {
+      const providerId = req.user.userId;
+      if (req.user.role !== 'vendor') {
+        throw new HttpException('Only vendors can create offers', HttpStatus.FORBIDDEN);
+      }
+      return await this.serviceService.createOffer(serviceId, providerId, offerData);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to create offer',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Remove an offer from a service
+   */
+  @Delete('offers/:serviceId')
+  @UseGuards(JwtAuthGuard)
+  async removeOffer(
+    @Param('serviceId') serviceId: string,
+    @Request() req: any
+  ) {
+    try {
+      const providerId = req.user.userId;
+      if (req.user.role !== 'vendor') {
+        throw new HttpException('Only vendors can remove offers', HttpStatus.FORBIDDEN);
+      }
+      return await this.serviceService.removeOffer(serviceId, providerId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to remove offer',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  /**
+   * Admin: Cleanup expired offers (can also be called by cron job)
+   */
+  @Post('offers/cleanup-expired')
+  @UseGuards(JwtAuthGuard)
+  async cleanupExpiredOffers(@Request() req: any) {
+    try {
+      if (req.user.role !== 'admin') {
+        throw new HttpException('Only admins can trigger cleanup', HttpStatus.FORBIDDEN);
+      }
+      const count = await this.serviceService.cleanupExpiredOffers();
+      return { message: `Cleaned up ${count} expired offers` };
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to cleanup offers',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+  
 }

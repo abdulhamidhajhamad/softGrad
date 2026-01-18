@@ -10,7 +10,10 @@ import {
   UseInterceptors,
   UploadedFile,
   Put,
-  Query
+  Query,
+  Param,
+  NotFoundException,
+  Patch
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
@@ -24,10 +27,39 @@ import {
 } from './auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ApiConsumes, ApiBody } from '@nestjs/swagger';
-
+import { User } from './user.entity'; // 👈 تأكد من مسار ملف الـ User entity الصحيح
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService,
+    @InjectModel(User.name) private userModel: Model<User>
+  ) {}
+
+
+  @Post('favorites/service/:serviceId')
+@UseGuards(JwtAuthGuard)
+async toggleServiceFavorite(@Req() req, @Param('serviceId') serviceId: string) {
+  const favorites = await this.authService.toggleFavoriteService(req.user.userId, serviceId);
+  return { message: 'Favorite services updated', favorites };
+}
+
+@Post('favorites/package/:packageId')
+@UseGuards(JwtAuthGuard)
+async togglePackageFavorite(@Req() req, @Param('packageId') packageId: string) {
+  const favorites = await this.authService.toggleFavoritePackage(req.user.userId, packageId);
+  return { message: 'Favorite packages updated', favorites };
+}
+
+// تعديل بسيط على getUserProfile ليعيد المفضلات أيضاً
+@Get('favorites')
+@UseGuards(JwtAuthGuard) //
+async getFavorites(@Req() req) {
+  // req.user.userId يأتي من الـ JwtStrategy بعد التحقق من التوكن
+  return this.authService.getUserFavorites(req.user.userId);
+}
+
+
 
   @Post('signup')
   @ApiConsumes('multipart/form-data')
@@ -67,20 +99,23 @@ async getProfile(@Req() req) {
     return this.authService.login(loginDto);
   }
 
-  @Put('profile')
-  @UseGuards(JwtAuthGuard)
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('image'))
+ @Patch('profile') // أو @Patch('profile') حسب استخدامك، في الملف المرفق كان @Put
+  @UseGuards(JwtAuthGuard) //
+  @ApiConsumes('multipart/form-data') //
+  @UseInterceptors(FileInterceptor('image')) //
   async updateProfile(
     @Req() req,
     @Body() updateData: {
       userName?: string;
       phone?: string;
       city?: string;
+      currentPassword?: string; 
+      newPassword?: string;
+      confirmNewPassword?: string;
     },
-    @UploadedFile() file?: Express.Multer.File
+    @UploadedFile() file?: Express.Multer.File //
   ) {
-    return this.authService.updateProfile(req.user.userId, updateData, file);
+    return this.authService.updateProfile(req.user.userId, updateData, file); //
   }
 
 
@@ -94,11 +129,11 @@ async getProfile(@Req() req) {
     return this.authService.verifyResetToken(token, email);
   }
 
-  @Post('reset-password')
-  async resetPassword(@Body() body: any) {
-    const { email, token, newPassword } = body;
-    return this.authService.resetPassword(email, token, newPassword);
-  }
+@Post('reset-password')
+@HttpCode(HttpStatus.OK)
+async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+  return this.authService.resetPassword(resetPasswordDto);
+}
 
   // ✅ NEW: Endpoint to receive and store FCM token
   @Put('fcm-token')
@@ -108,6 +143,15 @@ async getProfile(@Req() req) {
     await this.authService.updateFCMToken(req.user.userId, fcmToken);
     return { message: 'FCM token updated successfully' };
   }
+
+  @Get(':id')
+async getUserById(@Param('id') id: string) {
+  const user = await this.userModel.findById(id).select('userName email').lean().exec();
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+  return user;
+}
 
 
 }

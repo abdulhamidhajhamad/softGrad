@@ -3,25 +3,34 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull'; // 👈 NEW IMPORT
+import { ScheduleModule } from '@nestjs/schedule'; // 👈 NEW IMPORT FOR CRON JOBS
 
 import { AuthModule } from './auth/auth.module';
 import { ProviderModule } from './providers/provider.module';
 import { ServiceModule } from './service/service.module';
 import { BookingModule } from './booking/booking.module';
 import { AdminModule } from './admin/admin.module';
-import { ShoppingCartModule } from './shoppingCart/shoppingCart.module';
+import { CartModule } from './shoppingCart/shoppingCart.module';
 import { ChatModule } from './chatingService/chat.module';
 import { PaymentModule } from './payment/payment.module';
-
+import { PackageModule } from './Package/package.module'; // 💡 يجب استيراد هذه الوحدة
 // ✅ NEW MODULE IMPORTS
 import { NotificationModule } from './notification/notification.module';
 import { PromotionModule } from './promotion/promotion.module';
 import { ReviewModule } from './review/review.module';
 import { AiSearchModule } from './ai-search/ai-search.module';
+import { ComplianceProviderModule } from './complianceProvider/compliance-provider.module'; // ✅ COMPLIANCE
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    ScheduleModule.forRoot(), // 👈 ADD SCHEDULE MODULE FOR CRON JOBS
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
+      exclude: ['/auth*'], // استثني routes الـ API
     }),
 
     MongooseModule.forRootAsync({
@@ -52,14 +61,15 @@ import { AiSearchModule } from './ai-search/ai-search.module';
     ServiceModule,
     BookingModule,
     AdminModule,
-    ShoppingCartModule,
+    PackageModule,
+    CartModule,
     ChatModule,
     ReviewModule,
     PaymentModule,
     NotificationModule,
     PromotionModule,
     AiSearchModule,
-
+    ComplianceProviderModule, // ✅ COMPLIANCE MODULE
   ],
   controllers: [],
   providers: [],

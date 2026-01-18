@@ -1,37 +1,49 @@
+import { BookingType } from './service.schema';
+
+// ✅ تعديل PayType
+export type PayType = 'per hour' | 'per person' | 'per day' | 'display';
+
 export class Service {
   serviceId: number;
   providerId: string;
   serviceName: string;
   images: string[];
-  reviews: Review[];
-  location: Location;
-  price: number;
+  reviews: any[];
+  location: any;
+  
+  // ✅ السعر أصبح number بسيط (اختياري)
+  price?: number;
+  
+  bookingType: BookingType;
+  externalLink?: string;
+  
   category: string;
   additionalInfo?: any;
   createdAt: Date;
+  payType: PayType;
   updatedAt: Date;
-  bookedDates: Date[];
-  rating: number; // ✅ إضافة حقل الرايتنج
+  rating: number; 
+  isActive: boolean;
+  description?: string;
+
+  // ✅ الحقول الاختيارية
+  maxCapacity?: number; // سعة الأشخاص (للقاعات)
+  
+  // 🆕 إضافة حقل الحد الأقصى للحجوزات المتزامنة (default 1)
+  maxConcurrency?: number; 
+
+  minBookingHours?: number;
+  maxBookingHours?: number;
+  availableHours?: number[];
+  cleanupTimeMinutes?: number;
+  workingDays?: string[];
 
   constructor(data: Partial<Service>) {
     Object.assign(this, data);
-    this.bookedDates = data?.bookedDates || [];
-    this.rating = data?.rating || 0; // ✅ تعيين قيمة افتراضية
+    this.isActive = data?.isActive ?? true;
+    this.rating = data?.rating || 0;
+    this.bookingType = data?.bookingType || BookingType.Daily;
+    // 🆕 القيمة الافتراضية
+    this.maxConcurrency = data?.maxConcurrency || 1;
   }
-}
-
-export interface Review {
-  userId: string;
-  userName: string;
-  rating: number;
-  comment: string;
-  createdAt: Date;
-}
-
-export interface Location {
-  latitude: number;
-  longitude: number;
-  address?: string;
-  city?: string;
-  country?: string;
 }

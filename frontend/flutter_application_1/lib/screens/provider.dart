@@ -1,7 +1,7 @@
 // lib/features/provider/provider.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'become_provider.dart';
+import 'user/profile/become_provider.dart';
 
 class ProviderScreen extends StatefulWidget {
   final bool isDarkMode;

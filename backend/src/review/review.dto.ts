@@ -1,24 +1,64 @@
-import { IsString, IsNumber, IsNotEmpty, Min, Max } from 'class-validator';
-import { Types } from 'mongoose';
+// src/review/review.dto.ts
+import { IsString, IsNumber, IsNotEmpty, Min, Max, IsOptional, MaxLength, IsArray } from 'class-validator';
+import { Type } from 'class-transformer';
 
-// DTO لاستقبال بيانات التقييم من Flutter
 export class CreateReviewDto {
   @IsString()
   @IsNotEmpty()
-  serviceId: string; // ID of the service being reviewed
+  serviceId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  bookingId: string;
 
   @IsNumber()
   @IsNotEmpty()
   @Min(1)
   @Max(5)
-  rating: number; // The user's star rating
+  @Type(() => Number)
+  rating: number;
 
   @IsString()
-  @IsNotEmpty()
-  comment: string; // The user's text review (in English)
+  @IsOptional()
+  @MaxLength(500)
+  comment?: string;
 
-  // ⚠️ نضيف bookingId للتحقق من أن المستخدم قام بالشراء والخدمة اكتملت
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  images?: string[];
+}
+
+export class GetReviewsQueryDto {
   @IsString()
-  @IsNotEmpty()
-  bookingId: string; 
+  @IsOptional()
+  serviceId?: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  @Type(() => Number)
+  page?: number = 1;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  @Max(50)
+  @Type(() => Number)
+  limit?: number = 10;
+}
+
+export class GetMyReviewsQueryDto {
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  @Type(() => Number)
+  page?: number = 1;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  @Max(50)
+  @Type(() => Number)
+  limit?: number = 10;
 }

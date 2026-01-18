@@ -1,9 +1,14 @@
+// src/review/review.service.ts
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Document, Types } from 'mongoose';
-import { CreateReviewDto } from './review.dto'; // يجب التأكد من وجود هذا الملف
-import { Service } from '../service/service.schema'; // يجب التأكد من وجود هذا الملف
-import { Booking, BookingDocument, PaymentStatus } from '../booking/booking.entity'; // يجب التأكد من وجود هذا الملف
+import { Model, Types } from 'mongoose';
+import { CreateReviewDto, GetReviewsQueryDto, GetMyReviewsQueryDto } from './review.dto';
+import { Review } from './review.schema';
+import { Service } from '../service/service.schema';
+import { Booking, BookingStatus } from '../booking/booking.entity';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType, RecipientType } from '../notification/notification.schema';
+import { User } from '../auth/user.entity';
 import { AiAnalysisService, AiAnalysisUpdate } from '../ai-analysis/ai-analysis.service';
 
 @Injectable()
@@ -11,105 +16,170 @@ export class ReviewService {
   private readonly logger = new Logger(ReviewService.name);
 
   constructor(
-    @InjectModel(Service.name) private readonly serviceModel: Model<Service & Document>,
-    @InjectModel(Booking.name) private readonly bookingModel: Model<BookingDocument>,
+    @InjectModel(Review.name) private readonly reviewModel: Model<Review>,
+    @InjectModel(Service.name) private readonly serviceModel: Model<Service>,
+    @InjectModel(Booking.name) private readonly bookingModel: Model<Booking>,
+    @InjectModel(User.name) private readonly userModel: Model<User>,
     private readonly aiAnalysisService: AiAnalysisService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
-   * 1. Check if the user is authorized to review (Booking status and date).
-   * 2. Save the review to the Service document.
-   * 3. Trigger the asynchronous AI analysis.
+   * ✅ 1. التحقق من إمكانية المراجعة
    */
-  async createReviewAndAnalyze(
-    userId: string,
-    dto: CreateReviewDto,
-  ): Promise<{ reviewId: string }> {
-    const { serviceId, bookingId, comment, rating } = dto;
+  async canUserReview(userId: string, bookingId: string): Promise<{ canReview: boolean; reason?: string }> {
+    try {
+      const booking = await this.bookingModel.findOne({
+        _id: new Types.ObjectId(bookingId),
+        userId: new Types.ObjectId(userId),
+      }).exec();
 
-    // ----------------------------------------------------
-    // 🛑 1. التحقق من الحجز (الأمان)
-    // ----------------------------------------------------
-    const booking = await this.bookingModel.findOne({
-      _id: new Types.ObjectId(bookingId),
-      userId: userId,
-      'services.serviceId': serviceId,
-    }).exec();
+      if (!booking) {
+        return { canReview: false, reason: 'Booking not found or does not belong to you' };
+      }
 
-    if (!booking) {
-      throw new NotFoundException('Booking not found or you are not authorized.');
+      if (booking.status !== BookingStatus.CONFIRMED && booking.status !== BookingStatus.COMPLETED) {
+        return { canReview: false, reason: 'Booking must be confirmed or completed' };
+      }
+
+      const bookingDate = new Date(booking.bookingDetails.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (bookingDate >= today) {
+        return { canReview: false, reason: 'Cannot review before the booking date has passed' };
+      }
+
+      if (booking.isReviewed) {
+        return { canReview: false, reason: 'You have already reviewed this booking' };
+      }
+
+      return { canReview: true };
+    } catch (error) {
+      this.logger.error(`Error in canUserReview: ${error.message}`);
+      throw new BadRequestException('Failed to check review eligibility');
     }
-
-    if (booking.paymentStatus !== PaymentStatus.SUCCESSFUL) {
-      throw new BadRequestException('Cannot review an unsuccessful or pending booking.');
-    }
-
-    // 💡 التحقق الزمني: التأكد من أن التقييم بعد تاريخ الخدمة
-    const serviceItem = booking.services.find(s => s.serviceId === serviceId);
-    if (!serviceItem) {
-        throw new NotFoundException('Service not found in this booking.');
-    }
-    
-    // تاريخ اليوم (الوقت الحالي) يجب أن يكون أكبر من تاريخ الخدمة
-    if (new Date() < new Date(serviceItem.bookingDate)) {
-      throw new BadRequestException('Cannot review service before the event date has passed.');
-    }
-    
-    // ----------------------------------------------------
-    // ✅ 2. حفظ التقييم في Service Document
-    // ----------------------------------------------------
-const newReviewId = new Types.ObjectId(); 
-
-const review = {
-  _id: newReviewId, // 🆕 إضافة المعرّف المحلي
-  userId: userId,
-  userName: 'placeholder-user', 
-  rating: rating,
-  comment: comment,
-  createdAt: new Date(),
-};
-
-const updatedService = await this.serviceModel.findByIdAndUpdate(
-  serviceId,
-  {
-    $push: { reviews: review },
-  },
-  { new: true },
-).exec();
-
-if (!updatedService) {
-  throw new NotFoundException('Service not found.');
-}
-// ----------------------------------------------------
-// 🧠 3. تشغيل تحليل الذكاء الاصطناعي (Async/Background)
-// ----------------------------------------------------
-this.processAiAnalysis(serviceId, comment).catch(err => {
-    this.logger.error(`AI Analysis failed in background for service ${serviceId}.`);
-});
-
-// 🛠️ FIX: الآن نرجع المعرّف الذي أنشأناه محلياً بدلاً من محاولة قراءته من الـ Array.
-return { reviewId: newReviewId.toString() };
   }
 
   /**
-   * 🧠 دالة مساعدة لمعالجة تحليل الذكاء الاصطناعي وتحديث DB بشكل غير متزامن.
+   * ✅ 2. إنشاء Review + تحديث Booking + تحديث Service Stats + AI Analysis + Notification
+   */
+  async createReview(userId: string, dto: CreateReviewDto): Promise<Review> {
+    const { serviceId, bookingId, rating, comment, images } = dto;
+
+    // 🔍 1. التحقق من الصلاحية
+    const eligibility = await this.canUserReview(userId, bookingId);
+    if (!eligibility.canReview) {
+      throw new BadRequestException(eligibility.reason);
+    }
+
+    // 🔍 2. جلب بيانات المستخدم والخدمة
+    const user = await this.userModel.findById(userId).select('userName').exec();
+    if (!user) throw new NotFoundException('User not found');
+
+    const service = await this.serviceModel.findById(serviceId).exec();
+    if (!service) throw new NotFoundException('Service not found');
+
+    // 💾 3. حفظ الـ Review في الجدول الجديد
+    const newReview = await this.reviewModel.create({
+      userId: new Types.ObjectId(userId),
+      serviceId: new Types.ObjectId(serviceId),
+      bookingId: new Types.ObjectId(bookingId),
+      rating: Number(rating),
+      comment: comment || '',
+      images: images || [],
+      userName: user.userName,
+      isVisible: true,
+    });
+
+    this.logger.log(`✅ Review created with ID: ${newReview._id}`);
+
+    // 📝 4. تحديث حالة الـ Booking
+    await this.bookingModel.findByIdAndUpdate(bookingId, {
+      $set: {
+        isReviewed: true,
+        reviewedAt: new Date(),
+      },
+    }).exec();
+
+    // 📊 5. تحديث إحصائيات الخدمة (averageRating & totalReviews)
+    await this.updateServiceRatingStats(serviceId);
+
+    // 🧠 6. تشغيل AI Analysis في الخلفية (Async)
+    this.processAiAnalysis(serviceId, comment || '').catch(err => {
+      this.logger.error(`AI Analysis failed for service ${serviceId}: ${err.message}`);
+    });
+
+    // 🔔 7. إرسال إشعار للـ Vendor
+    await this.sendReviewNotificationToVendor(
+      service, 
+      user.userName, 
+      rating, 
+      (newReview._id as Types.ObjectId).toString()
+    );
+
+    // 🔔 8. إرسال إشعار للـ Admin (جديد)
+await this.sendReviewNotificationToAdmin(
+  service,
+  user.userName,
+  rating,
+  (newReview._id as Types.ObjectId).toString()
+);
+
+
+    return newReview;
+  }
+
+  /**
+   * ✅ 3. تحديث إحصائيات التقييم (averageRating & totalReviews)
+   */
+  private async updateServiceRatingStats(serviceId: string): Promise<void> {
+    const stats = await this.reviewModel.aggregate([
+      { $match: { serviceId: new Types.ObjectId(serviceId), isVisible: true } },
+      {
+        $group: {
+          _id: null,
+          averageRating: { $avg: '$rating' },
+          totalReviews: { $sum: 1 },
+        },
+      },
+    ]).exec();
+
+    const { averageRating = 0, totalReviews = 0 } = stats[0] || {};
+
+    await this.serviceModel.findByIdAndUpdate(serviceId, {
+      $set: {
+        averageRating: Math.round(averageRating * 10) / 10, // تقريب لأقرب رقم عشري
+        totalReviews,
+      },
+    }).exec();
+
+    this.logger.log(`📊 Service ${serviceId} stats updated: ${averageRating.toFixed(1)} (${totalReviews} reviews)`);
+  }
+
+  /**
+   * 🧠 4. معالجة AI Analysis باستخدام Gemini
    */
   private async processAiAnalysis(serviceId: string, newComment: string): Promise<void> {
     try {
-      // 💡 جلب البيانات السابقة
-      const service = await this.serviceModel.findById(serviceId, 'reviews aiAnalysis').exec();
-      if (!service) return;
-      
-      const previousComments = service.reviews.map(r => r.comment).slice(-5); // آخر 5 تعليقات
+      // 📖 جلب آخر 5 تعليقات من الجدول الجديد
+      const recentReviews = await this.reviewModel
+        .find({ serviceId: new Types.ObjectId(serviceId), isVisible: true })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select('comment')
+        .exec();
 
-      // استدعاء خدمة الذكاء الاصطناعي (قد تُلقي خطأ هنا)
+      const previousComments = recentReviews.map(r => r.comment).filter(c => c);
+
+      // 🤖 استدعاء Gemini API
       const aiResult: AiAnalysisUpdate = await this.aiAnalysisService.analyzeReview(
         serviceId,
         newComment,
         previousComments,
       );
 
-      // ✅ فقط إذا نجح التحليل (أي لم يتم إلقاء أي خطأ)، نقوم بالتحديث في الداتابيس
+      // ✅ تحديث حقل aiAnalysis في Service
       await this.serviceModel.findByIdAndUpdate(serviceId, {
         $set: {
           'aiAnalysis.score': aiResult.score,
@@ -119,13 +189,205 @@ return { reviewId: newReviewId.toString() };
         },
       }).exec();
 
-      this.logger.log(`Service ${serviceId} AI analysis successfully updated.`);
-
+      this.logger.log(`🧠 AI Analysis updated for service ${serviceId}: Score ${aiResult.score.toFixed(2)}`);
     } catch (error) {
-      // 🛑 عند فشل الـ AI Analysis:
-      // يتم التقاط الخطأ هنا، ويتم تسجيل تحذير، وبذلك نتخطى تحديث الـ DB.
-      // هذا يضمن أن بيانات aiAnalysis القديمة تبقى سليمة.
-      this.logger.warn(`Skipping AI analysis update for ${serviceId} due to error: ${error.message}`);
+      this.logger.warn(`⚠️ AI Analysis skipped for ${serviceId}: ${error.message}`);
     }
   }
+
+  /**
+   * 🔔 5. إرسال إشعار للـ Vendor
+   */
+  private async sendReviewNotificationToVendor(
+    service: Service,
+    userName: string,
+    rating: number,
+    reviewId: string,
+  ): Promise<void> {
+    try {
+      const vendor = await this.userModel.findById(service.providerId).select('fcmToken').lean().exec();
+      const fcmToken = (vendor as any)?.fcmToken;
+
+      await this.notificationService.createNotification(
+        {
+          recipientId: new Types.ObjectId(service.providerId),
+          recipientType: RecipientType.VENDOR,
+          title: 'New Review Received',
+          body: `${userName} rated "${service.serviceName}" with ${rating} stars`,
+          type: NotificationType.NEW_REVIEW,
+          metadata: {
+            reviewId,
+            serviceId: (service._id as Types.ObjectId).toString(),
+            serviceName: service.serviceName,
+            rating,
+            userName,
+          },
+        },
+        fcmToken || '',
+      );
+
+      this.logger.log(`🔔 Review notification sent to vendor ${service.providerId}`);
+    } catch (error) {
+      this.logger.error(`❌ Failed to send review notification: ${error.message}`);
+    }
+  }
+
+  /**
+   * ✅ 6. جلب Reviews لخدمة معينة (مع Pagination)
+   */
+  async getServiceReviews(serviceId: string, query: GetReviewsQueryDto) {
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+
+    const [reviews, totalCount] = await Promise.all([
+      this.reviewModel
+        .find({ serviceId: new Types.ObjectId(serviceId), isVisible: true })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('userId', 'userName imageUrl')
+        .lean()
+        .exec(),
+      this.reviewModel.countDocuments({ serviceId: new Types.ObjectId(serviceId), isVisible: true }),
+    ]);
+
+    const service = await this.serviceModel.findById(serviceId).select('averageRating totalReviews').lean().exec();
+
+    return {
+      reviews,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit),
+      averageRating: service?.averageRating || 0,
+      totalReviews: service?.totalReviews || 0,
+    };
+  }
+
+  /**
+   * ✅ 7. جلب الحجوزات المعلقة (Pending Reviews)
+   */
+  async getPendingReviews(userId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // First get bookings WITHOUT populate to preserve serviceId
+    const bookings = await this.bookingModel
+      .find({
+        userId: new Types.ObjectId(userId),
+        status: { $in: [BookingStatus.CONFIRMED, BookingStatus.COMPLETED] },
+        'bookingDetails.date': { $lt: today },
+        isReviewed: false,
+      })
+      .sort({ 'bookingDetails.date': -1 })
+      .lean()
+      .exec();
+
+    // Get service details separately
+    const result: any[] = [];
+    for (const booking of bookings) {
+      const service = await this.serviceModel.findById(booking.serviceId).select('serviceName images companyName').lean().exec();
+      
+        console.log('Full booking:', JSON.stringify(booking, null, 2));
+        console.log('Booking serviceId:', booking.serviceId, 'type:', typeof booking.serviceId);
+        
+        // Skip if no serviceId
+        if (!booking.serviceId) {
+          console.log('Skipping booking without serviceId:', booking._id);
+          continue;
+        }
+      result.push({
+        bookingId: (booking._id as Types.ObjectId).toString(),
+        serviceId: booking.serviceId.toString(),
+        serviceName: service?.serviceName || booking.serviceName || '',
+        serviceImage: service?.images?.[0] || null,
+        companyName: service?.companyName || booking.companyName || '',
+        bookingDate: booking.bookingDetails.date,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * ✅ 8. جلب Reviews الخاصة بالمستخدم
+   */
+  async getMyReviews(userId: string, query: GetMyReviewsQueryDto) {
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+
+    const [reviews, totalCount] = await Promise.all([
+      this.reviewModel
+        .find({ userId: new Types.ObjectId(userId) })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('serviceId', 'serviceName images companyName')
+        .lean()
+        .exec(),
+      this.reviewModel.countDocuments({ userId: new Types.ObjectId(userId) }),
+    ]);
+
+    return {
+      reviews,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit),
+    };
+  }
+  /**
+ * 🔔 إرسال إشعار للـ Admin عند إضافة Review جديد
+ */
+private async sendReviewNotificationToAdmin(
+  service:  Service,
+  userName:  string,
+  rating: number,
+  reviewId: string,
+): Promise<void> {
+  try {
+    // جلب جميع الـ Admins
+    const admins = await this. userModel
+      . find({ role: 'admin' })
+      .select('_id fcmToken')
+      .lean()
+      .exec();
+
+    if (!admins || admins. length === 0) {
+      this. logger.warn('⚠️ No admins found to notify about new review');
+      return;
+    }
+
+    const notificationBody = `⭐ ${userName} rated "${service.serviceName}" with ${rating} stars`;
+
+    for (const admin of admins) {
+      try {
+        await this.notificationService.createNotification(
+          {
+            recipientId: new Types.ObjectId(String(admin._id)),
+            recipientType: RecipientType.ADMIN,
+            title: '⭐ New Review Posted',
+            body:  notificationBody,
+            type: NotificationType.NEW_REVIEW,
+            metadata: {
+              reviewId: reviewId,
+              serviceId: (service._id as Types.ObjectId).toString(),
+              serviceName: service.serviceName,
+              vendorId: service.providerId?. toString(),
+              rating: rating,
+              userName: userName,
+              timestamp: new Date().toISOString(),
+            }
+          },
+          (admin as any).fcmToken || ''
+        );
+      } catch (notifError) {
+        this.logger.error(`Failed to send review notification to admin ${admin._id}:`, notifError);
+      }
+    }
+
+    this.logger.log(`✅ New review notifications sent to ${admins.length} admin(s)`);
+  } catch (error) {
+    this.logger.error('❌ Failed to notify admins of new review:', error);
+  }
+}
+
 }

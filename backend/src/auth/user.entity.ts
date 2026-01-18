@@ -32,10 +32,15 @@ export class User extends Document {
   @Prop({ default: false })
   isVerified: boolean;
 
-  // ✅ NEW FIELD: For Firebase Cloud Messaging Token
-  // unique: true with sparse: true ensures that only unique tokens are stored, 
-  // but null values (for users who haven't logged in on the app) are allowed.
-  @Prop({ default: null, unique: true, sparse: true })
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Service' }], default: [] })
+  favoriteServices: Types.ObjectId[];
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Package' }], default: [] })
+  favoritePackages: Types.ObjectId[];
+  
+  // FCM Token for push notifications (not unique - same token can be reused)
+  @Prop({ default: null })
   fcmToken?: string; 
 }
 

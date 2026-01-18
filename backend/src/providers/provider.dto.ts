@@ -20,13 +20,16 @@ export class CreateServiceProviderDto {
   @IsOptional() @IsString() venueType?: string;
   @IsOptional() @IsBoolean() hasGoogleMapLocation?: boolean;
   @IsOptional() @IsIn(['regular', 'mid', 'high']) targetCustomerType?: 'regular' | 'mid' | 'high';
+  @IsOptional() @IsString() logoUrl?: string; // شعار الشركة (اختياري)
 }
 
 export class UpdateServiceProviderDto {
+  @IsOptional() @IsString() companyName?: string; // ✅ أضف هذا السطر
   @IsOptional() @IsString() description?: string;
   @IsOptional() @Type(() => LocationDto) location?: LocationDto;
   @IsOptional() @IsObject() details?: Record<string, any>;
   @IsOptional() @IsString() venueType?: string;
   @IsOptional() @IsBoolean() hasGoogleMapLocation?: boolean;
   @IsOptional() @IsIn(['regular', 'mid', 'high']) targetCustomerType?: 'regular' | 'mid' | 'high';
+  @IsOptional() @IsString() logoUrl?: string; // شعار الشركة (اختياري)
 }

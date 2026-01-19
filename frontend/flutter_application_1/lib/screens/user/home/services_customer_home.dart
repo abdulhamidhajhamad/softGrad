@@ -128,7 +128,18 @@ class ServiceItem {
   /// uploaded image url
   final String? imageUrl;
  final double? lat;
-  final double? lng;
+    final double? lng;
+
+  //  NEW: Availability & Rules Fields
+  final String? venueType;
+  final int? maxCapacity;
+  final int? minBookingHours;
+  final int? maxBookingHours;
+  final List<int>? availableHours;
+  final List<String>? workingDays;
+  final List<Map<String, String>>? timeSlots;
+  final int? cleanupTimeMinutes;
+  final bool hasFixedLocation;
 
   const ServiceItem({
     required this.id,
@@ -147,7 +158,15 @@ class ServiceItem {
     this.payType,
     this.lat,
     this.lng,
-
+    this.venueType,
+    this.maxCapacity,
+    this.minBookingHours,
+    this.maxBookingHours,
+    this.availableHours,
+    this.workingDays,
+    this.timeSlots,
+    this.cleanupTimeMinutes,
+    this.hasFixedLocation = true,
   });
 
   bool get hasDiscount =>
@@ -169,7 +188,30 @@ class ServiceItem {
       description: json['description'] ?? '',
       payType: json['payType'],
     lat: json['latitude'] != null ? double.tryParse(json['latitude'].toString()) : null,
-    lng: json['longitude'] != null ? double.tryParse(json['longitude'].toString()) : null,
+        lng: json['longitude'] != null ? double.tryParse(json['longitude'].toString()) : null,
+      
+      //  NEW: Parse fields
+      venueType: json['venueType'],
+      maxCapacity: json['maxCapacity'] != null ? int.tryParse(json['maxCapacity'].toString()) : null,
+      minBookingHours: json['minBookingHours'] != null ? int.tryParse(json['minBookingHours'].toString()) : null,
+      maxBookingHours: json['maxBookingHours'] != null ? int.tryParse(json['maxBookingHours'].toString()) : null,
+      cleanupTimeMinutes: json['cleanupTimeMinutes'] != null ? int.tryParse(json['cleanupTimeMinutes'].toString()) : null,
+      hasFixedLocation: json['hasFixedLocation'] ?? true,
+      
+      availableHours: json['availableHours'] != null 
+          ? (json['availableHours'] as List).map((e) => int.parse(e.toString())).toList() 
+          : null,
+      
+      workingDays: json['workingDays'] != null 
+          ? (json['workingDays'] as List).map((e) => e.toString()).toList() 
+          : null,
+          
+      timeSlots: json['timeSlots'] != null
+          ? (json['timeSlots'] as List).map((e) => {
+                'startTime': e['startTime'].toString(),
+                'endTime': e['endTime'].toString(),
+              }).toList()
+          : null,
     );
   }
 

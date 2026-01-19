@@ -105,6 +105,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
   bool _isFullVenue = false;
   bool _isLoading = false;
   
+  // 🆕 حالة توسيع/طي قسم Working Service Info
+
+  
   // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
   final _clientAddressController = TextEditingController();
   final _locationDescriptionController = TextEditingController(); // 🆕 وصف الموقع (landmark)
@@ -1763,80 +1766,413 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     );
   }
 
+  // ✅ NEW: جلب timeSlots من الـ API
+  List<Map<String, String>>? get _timeSlots {
+    final slots = widget.serviceData['timeSlots'] as List<dynamic>?;
+    if (slots == null || slots.isEmpty) return null;
+    return slots.map((slot) {
+      return {
+        'startTime': slot['startTime']?.toString() ?? '',
+        'endTime': slot['endTime']?.toString() ?? '',
+      };
+    }).where((slot) => slot['startTime']!.isNotEmpty && slot['endTime']!.isNotEmpty).toList();
+  }
+
   Widget _buildInfoCard() {
-    final info = <String>[];
-
-    if (widget.bookingType == BookingType.hourly) {
-      if (_minBookingHours != null) {
-        info.add('Min. booking: $_minBookingHours hours');
-      }
-      if (_maxBookingHours != null) {
-        info.add('Max. booking: $_maxBookingHours hours');
-      }
+    // Check if there's any info to show
+    final hasBookingInfo = (_minBookingHours != null || _maxBookingHours != null || _maxCapacity != null);
+    final hasWorkingDays = _workingDays != null && _workingDays!.isNotEmpty;
+    final hasTimeSlots = _timeSlots != null && _timeSlots!.isNotEmpty;
+    final hasAvailableHours = _availableHours != null && _availableHours!.isNotEmpty;
+    
+    if (!hasBookingInfo && !hasWorkingDays && !hasTimeSlots && !hasAvailableHours) {
+      return const SizedBox.shrink();
     }
-
-    if (_maxCapacity != null) {
-      info.add('Max capacity: $_maxCapacity people');
-    }
-
-    if (_workingDays != null && _workingDays!.isNotEmpty) {
-      final days = _workingDays!.map((d) => _capitalize(d)).join(', ');
-      info.add('Working days: $days');
-    }
-
-    if (info.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: kBlue.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kBlue.withOpacity(0.16)),
+        color: const Color(0xFFF8FAFC), // Light gray background
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.info_outline_rounded, color: kBlue, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Service Info',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                  color: kText,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          for (final i in info) ...[
-            Row(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showWorkingInfoDialog(context),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
                 Container(
-                  width: 6,
-                  height: 6,
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
+                    color: kBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.info_outline_rounded,
                     color: kBlue,
-                    shape: BoxShape.circle,
+                    size: 22,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 14),
                 Expanded(
-                  child: Text(
-                    i,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: kText,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Working Service Info',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: kText,
+                        ),
+                      ),
+                      Text(
+                        'Tap to view availability & rules',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: kMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black.withOpacity(0.05)),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: kText.withOpacity(0.5),
                   ),
                 ),
               ],
             ),
-            if (i != info.last) const SizedBox(height: 6),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ NEW: Popup Window for Working Info
+  void _showWorkingInfoDialog(BuildContext context) {
+    final hasBookingInfo = (_minBookingHours != null || _maxBookingHours != null || _maxCapacity != null);
+    final hasWorkingDays = _workingDays != null && _workingDays!.isNotEmpty;
+    final hasTimeSlots = _timeSlots != null && _timeSlots!.isNotEmpty;
+    final hasAvailableHours = _availableHours != null && _availableHours!.isNotEmpty;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Service Details',
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: kText,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              
+              // Content
+              Flexible(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Working Days Section
+                      if (hasWorkingDays) ...[
+                        _buildSectionHeader('Working Days', Icons.calendar_month_rounded),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _workingDays!.map((day) => _buildDayChip(day)).toList(),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // Time Slots Section
+                      if (hasTimeSlots) ...[
+                        _buildSectionHeader('Available Time Slots', Icons.schedule_rounded),
+                        const SizedBox(height: 12),
+                        ..._timeSlots!.map((slot) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildTimeSlotCard(slot['startTime']!, slot['endTime']!),
+                        )).toList(),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // Available Hours Section (if no time slots)
+                      if (!hasTimeSlots && hasAvailableHours) ...[
+                        _buildSectionHeader('Available Hours', Icons.access_time_filled_rounded),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _availableHours!.map((hour) => _buildHourChip(hour)).toList(),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // Booking Details Section
+                      if (hasBookingInfo) ...[
+                        _buildSectionHeader('Booking Rules', Icons.rule_rounded),
+                        const SizedBox(height: 12),
+                        
+                        if (_minBookingHours != null)
+                          _buildInfoDetailCard(
+                            icon: Icons.timer_outlined,
+                            title: 'Minimum Duration',
+                            value: '$_minBookingHours hours',
+                            color: const Color(0xFF2196F3),
+                          ),
+                        
+                        if (_maxBookingHours != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: _buildInfoDetailCard(
+                              icon: Icons.timer_off_outlined,
+                              title: 'Maximum Duration',
+                              value: '$_maxBookingHours hours',
+                              color: const Color(0xFF9C27B0),
+                            ),
+                          ),
+                        
+                        if (_maxCapacity != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: _buildInfoDetailCard(
+                              icon: Icons.people_outline_rounded,
+                              title: 'Maximum Capacity',
+                              value: '$_maxCapacity people',
+                              color: const Color(0xFF4CAF50),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ Helper Widgets for Info Card
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: kBlue),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: kText,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDayChip(String day) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            kBlue.withOpacity(0.12),
+            kBlue.withOpacity(0.06),
           ],
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kBlue.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle_rounded, size: 12, color: kBlue),
+          const SizedBox(width: 4),
+          Text(
+            _capitalize(day),
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: kBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHourChip(int hour) {
+    final timeStr = hour < 12 
+        ? '${hour == 0 ? 12 : hour}:00 AM'
+        : '${hour == 12 ? 12 : hour - 12}:00 PM';
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: kBlue.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: kBlue.withOpacity(0.15)),
+      ),
+      child: Text(
+        timeStr,
+        style: GoogleFonts.poppins(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: kBlue,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeSlotCard(String startTime, String endTime) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            kBlue.withOpacity(0.06),
+            kBlue.withOpacity(0.02),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBlue.withOpacity(0.12)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: kBlue.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.schedule_rounded,
+              size: 16,
+              color: kBlue,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            startTime,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: kText,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            Icons.arrow_forward_rounded,
+            size: 14,
+            color: kBlue.withOpacity(0.5),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            endTime,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: kText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoDetailCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 14, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: kMuted,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: kText,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

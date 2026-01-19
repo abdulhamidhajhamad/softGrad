@@ -1840,6 +1840,13 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                 
                 const SizedBox(height: 12),
                 
+                // ✅ Working Hours & Availability - NEW SECTION
+                if (_hasWorkingInfo())
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _WorkingInfoSection(serviceData: _serviceData),
+                  ),
+                
                 // Description - only show if has content
                 if (_hasDescription())
                   Padding(
@@ -2000,6 +2007,17 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
 
   bool _hasLocation() {
     return widget.service.latitude != null && widget.service.longitude != null;
+  }
+
+  // ✅ Check if service has working hours/availability info
+  bool _hasWorkingInfo() {
+    final workingDays = _serviceData?['workingDays'] as List<dynamic>?;
+    final timeSlots = _serviceData?['timeSlots'] as List<dynamic>?;
+    final availableHours = _serviceData?['availableHours'] as List<dynamic>?;
+    
+    return (workingDays != null && workingDays.isNotEmpty) ||
+           (timeSlots != null && timeSlots.isNotEmpty) ||
+           (availableHours != null && availableHours.isNotEmpty);
   }
 
   List<Widget> _buildCompanyInfoRows() {
@@ -2166,6 +2184,456 @@ class _InfoRow extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+// ✅ NEW: Working Hours & Availability Section
+class _WorkingInfoSection extends StatefulWidget {
+  final Map<String, dynamic>? serviceData;
+  
+  const _WorkingInfoSection({required this.serviceData});
+
+  @override
+  State<_WorkingInfoSection> createState() => _WorkingInfoSectionState();
+}
+
+class _WorkingInfoSectionState extends State<_WorkingInfoSection> with SingleTickerProviderStateMixin {
+  bool _isExpanded = false;
+  late AnimationController _animationController;
+  late Animation<double> _iconRotation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _iconRotation = Tween<double>(begin: 0.0, end: 0.5).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _toggleExpanded() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+      if (_isExpanded) {
+        _animationController.forward();
+      } else {
+        _animationController.reverse();
+      }
+    });
+    HapticFeedback.selectionClick();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final workingDays = (widget.serviceData?['workingDays'] as List<dynamic>?)?.cast<String>() ?? [];
+    final timeSlots = widget.serviceData?['timeSlots'] as List<dynamic>? ?? [];
+    final availableHours = (widget.serviceData?['availableHours'] as List<dynamic>?)?.cast<int>() ?? [];
+    final minBookingHours = widget.serviceData?['minBookingHours'] as num?;
+    final maxBookingHours = widget.serviceData?['maxBookingHours'] as num?;
+    final maxCapacity = widget.serviceData?['maxCapacity'] as num?;
+    final cleanupTime = widget.serviceData?['cleanupTimeMinutes'] as num?;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        boxShadow: [
+          BoxShadow(
+            color: kNavBlue.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // ✅ Header (clickable to expand/collapse)
+          InkWell(
+            onTap: _toggleExpanded,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(22),
+              topRight: Radius.circular(22),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    kNavBlue.withOpacity(0.08),
+                    kNavBlue.withOpacity(0.04),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(22),
+                  topRight: const Radius.circular(22),
+                  bottomLeft: _isExpanded ? Radius.zero : const Radius.circular(22),
+                  bottomRight: _isExpanded ? Radius.zero : const Radius.circular(22),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: kNavBlue.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.access_time_rounded,
+                      color: kNavBlue,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Working Hours & Availability',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF0B1220),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _isExpanded ? 'Tap to hide details' : 'Tap to view schedule',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  RotationTransition(
+                    turns: _iconRotation,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: kNavBlue,
+                      size: 28,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ✅ Expandable Content
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Working Days
+                  if (workingDays.isNotEmpty) ...[
+                    _buildSectionTitle('Working Days', Icons.calendar_month_rounded),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: workingDays.map((day) {
+                        return _buildDayChip(day);
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Time Slots
+                  if (timeSlots.isNotEmpty) ...[
+                    _buildSectionTitle('Available Time Slots', Icons.schedule_rounded),
+                    const SizedBox(height: 12),
+                    ...timeSlots.map((slot) {
+                      final startTime = slot['startTime']?.toString() ?? '';
+                      final endTime = slot['endTime']?.toString() ?? '';
+                      if (startTime.isEmpty || endTime.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _buildTimeSlotCard(startTime, endTime),
+                      );
+                    }).toList(),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Available Hours (if no time slots)
+                  if (timeSlots.isEmpty && availableHours.isNotEmpty) ...[
+                    _buildSectionTitle('Available Hours', Icons.access_time_filled_rounded),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: availableHours.map((hour) {
+                        return _buildHourChip(hour);
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Booking Details
+                  _buildSectionTitle('Booking Details', Icons.info_outline_rounded),
+                  const SizedBox(height: 12),
+                  
+                  if (minBookingHours != null || maxBookingHours != null)
+                    _buildInfoCard(
+                      icon: Icons.timer_outlined,
+                      title: 'Booking Duration',
+                      value: _formatBookingHours(minBookingHours, maxBookingHours),
+                      color: const Color(0xFF2196F3),
+                    ),
+                  
+                  if (maxCapacity != null && maxCapacity > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: _buildInfoCard(
+                        icon: Icons.people_outline_rounded,
+                        title: 'Maximum Capacity',
+                        value: '${maxCapacity.toInt()} persons',
+                        color: const Color(0xFF4CAF50),
+                      ),
+                    ),
+                  
+                  if (cleanupTime != null && cleanupTime > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: _buildInfoCard(
+                        icon: Icons.cleaning_services_outlined,
+                        title: 'Cleanup Time',
+                        value: '${cleanupTime.toInt()} minutes',
+                        color: const Color(0xFFFF9800),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            crossFadeState: _isExpanded 
+              ? CrossFadeState.showSecond 
+              : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 300),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: kNavBlue),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF0B1220),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDayChip(String day) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            kNavBlue.withOpacity(0.12),
+            kNavBlue.withOpacity(0.08),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kNavBlue.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle_rounded, size: 14, color: kNavBlue),
+          const SizedBox(width: 6),
+          Text(
+            _capitalizeFirst(day),
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: kNavBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHourChip(int hour) {
+    final timeStr = hour < 12 
+      ? '${hour == 0 ? 12 : hour}:00 AM'
+      : '${hour == 12 ? 12 : hour - 12}:00 PM';
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: kNavBlue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kNavBlue.withOpacity(0.2)),
+      ),
+      child: Text(
+        timeStr,
+        style: GoogleFonts.poppins(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: kNavBlue,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeSlotCard(String startTime, String endTime) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            kNavBlue.withOpacity(0.06),
+            kNavBlue.withOpacity(0.02),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kNavBlue.withOpacity(0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: kNavBlue.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.schedule_rounded,
+              size: 20,
+              color: kNavBlue,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(
+              children: [
+                Text(
+                  startTime,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0B1220),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 16,
+                  color: kNavBlue.withOpacity(0.6),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  endTime,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0B1220),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF0B1220),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _capitalizeFirst(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1).toLowerCase();
+  }
+
+  String _formatBookingHours(num? min, num? max) {
+    if (min != null && max != null) {
+      return '${min.toInt()} - ${max.toInt()} hours';
+    } else if (min != null) {
+      return 'Minimum ${min.toInt()} hours';
+    } else if (max != null) {
+      return 'Maximum ${max.toInt()} hours';
+    }
+    return 'Flexible';
   }
 }
 

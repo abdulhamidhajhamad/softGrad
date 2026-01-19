@@ -160,6 +160,16 @@ class ServiceService {
     if (service['workingDays'] != null) {
       normalized['workingDays'] = service['workingDays'];
     }
+    
+    // ✅ NEW: timeSlots & venueType
+    if (service['timeSlots'] != null) {
+      normalized['timeSlots'] = service['timeSlots'];
+    }
+    
+    normalized['venueType'] = (service['venueType'] ?? '').toString();
+    if (normalized['venueType'] == '' && service['additionalInfo'] != null) {
+      normalized['venueType'] = (service['additionalInfo']['venueType'] ?? '').toString();
+    }
 
     // External link
     normalized['externalLink'] = (service['externalLink'] ?? '').toString();

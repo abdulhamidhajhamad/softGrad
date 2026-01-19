@@ -86,7 +86,11 @@ constructor(
         ...createServiceDto,
         images: imageUrls,
         reviews: [],
-        rating: createServiceDto.rating || 0
+        rating: createServiceDto.rating || 0,
+        //  Extract venueType from additionalInfo if present
+        venueType: createServiceDto.venueType || createServiceDto.additionalInfo?.venueType,
+        //  Persist timeSlots if provided
+        timeSlots: createServiceDto.timeSlots || []
       };
 
       const newService = new this.serviceModel(newServiceData);

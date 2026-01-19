@@ -719,7 +719,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'تأكد أن الصورة واضحة وكاملة، ورقم الهوية ظاهر بشكل كامل وغير مغطى',
+                      'Make sure the image is clear and complete, and the ID number is fully visible and not covered.',
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         color: kWarningColor,
@@ -921,7 +921,7 @@ class _VerificationScreenState extends State<VerificationScreen>
       controller: _arabicNameCtrl,
       textDirection: TextDirection.rtl,
       decoration: InputDecoration(
-        hintText: 'الاسم بالعربية (اختياري)',
+        hintText: 'Arabic name (optional)',
         hintStyle: GoogleFonts.cairo(fontSize: 14, color: Colors.grey.shade500),
         filled: true,
         fillColor: kBackgroundColor,
@@ -1098,7 +1098,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                   const SizedBox(width: 12),
                   Flexible(
                     child: Text(
-                      'جاري تحليل البيانات والأختام الرسمية...',
+                      'Analyzing data and official stamps...',
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -1254,9 +1254,9 @@ class _VerificationResultDialog extends StatelessWidget {
       case VerificationStatus.adminReview:
         // 🔐 Special message for stamp verification issues
         if (response.isStampReview) {
-          message = 'وثيقتك قيد المراجعة الإضافية من قبل الإدارة.\n\n'
-              'تم استخراج البيانات بنجاح، لكن تحتاج الأختام الرسمية للتأكد منها يدوياً. '
-              'سيتم إخطارك بالنتيجة خلال 1-2 يوم عمل.';
+            message = 'Your document is under additional review by the administration.\n\n'
+              'The data has been extracted successfully, but the official stamps require manual verification. '
+              'You will be notified of the result within 1-2 business days.';
         } else {
           message = 'Your documents require manual review by our team. This usually takes 1-2 business days. You can continue using the app, but adding services will be available after approval.';
         }
@@ -1304,9 +1304,9 @@ class _VerificationResultDialog extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              stamp.found 
-                  ? 'الختم الرسمي: تم التحقق ✓' 
-                  : 'الختم الرسمي: يحتاج مراجعة',
+                stamp.found 
+                  ? 'Official stamp: Verified ✓' 
+                  : 'Official stamp: Needs review',
               style: GoogleFonts.poppins(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,

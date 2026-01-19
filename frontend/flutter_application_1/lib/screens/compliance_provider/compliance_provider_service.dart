@@ -1,5 +1,5 @@
 // lib/screens/compliance_provider/compliance_provider_service.dart
-// خدمة التوثيق والامتثال للمزودين
+// Compliance and verification service for providers
 
 import 'dart:convert';
 import 'dart:io';
@@ -9,10 +9,10 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_application_1/services/auth_service.dart';
 
 // ============================================================================
-// 📊 ENUMS - حالات التحقق وأنواع المزودين والوثائق
+// 📊 ENUMS - Verification statuses, provider types, and document types
 // ============================================================================
 
-/// حالات التحقق من المزود
+/// Provider verification statuses
 enum VerificationStatus {
   pending,
   underReview,
@@ -23,20 +23,20 @@ enum VerificationStatus {
   deactivated,
 }
 
-/// أنواع الوثائق المدعومة
+/// Supported document types
 enum DocumentType {
   nationalId,
   businessLicense,
   professionalLicense,
 }
 
-/// أنواع المزودين
+/// Provider types
 enum ProviderType {
   individual,
   business,
 }
 
-/// أسباب الرفض
+/// Rejection reasons
 enum RejectionReason {
   expiredDocument,
   unclearDocument,
@@ -46,10 +46,10 @@ enum RejectionReason {
 }
 
 // ============================================================================
-// 📦 MODELS - نماذج البيانات
+// 📦 MODELS - Data models
 // ============================================================================
 
-/// البيانات المستخرجة من الوثيقة
+/// Extracted data from the document
 class ExtractedData {
   final String? idNumber;
   final String? extractedName;
@@ -89,7 +89,7 @@ class ExtractedData {
   }
 }
 
-/// نتيجة المطابقة
+/// Matching result
 class MatchResult {
   final bool idMatched;
   final bool nameMatched;
@@ -119,7 +119,7 @@ class MatchResult {
   }
 }
 
-/// 🔐 نتيجة التحقق من الختم الرسمي
+/// 🔐 Official stamp verification result
 class StampVerificationResult {
   final bool found;
   final double score;
@@ -145,14 +145,14 @@ class StampVerificationResult {
     );
   }
   
-  /// هل الختم مقبول؟
+  /// Is the stamp acceptable?
   bool get isAcceptable => found && (threshold == null || score >= threshold!);
   
-  /// نسبة التطابق كنسبة مئوية
+  /// Match percentage as a percent value
   String get scorePercentage => '${(score * 100).toStringAsFixed(1)}%';
 }
 
-/// استجابة التحقق من الوثيقة
+/// Document verification response
 class VerificationResponse {
   final bool success;
   final VerificationStatus status;
@@ -176,7 +176,7 @@ class VerificationResponse {
     this.stampVerification,
   });
   
-  /// هل الطلب محول للمراجعة اليدوية بسبب الختم؟
+  /// Is the request referred for manual review due to the stamp?
   bool get isStampReview => 
       status == VerificationStatus.adminReview && 
       stampVerification != null && 
@@ -205,7 +205,7 @@ class VerificationResponse {
   }
 }
 
-/// حالة التحقق للمزود
+/// Provider verification status
 class ProviderVerificationStatus {
   final String providerId;
   final VerificationStatus verificationStatus;
@@ -256,7 +256,7 @@ class ProviderVerificationStatus {
   }
 }
 
-/// إحصائيات التحقق للأدمن
+/// Verification statistics for admin
 class VerificationStats {
   final int total;
   final int verified;
@@ -291,7 +291,7 @@ class VerificationStats {
     );
   }
 }
-/// معلومات المزود للمراجعة (للأدمن)
+/// Provider information for admin review
 class ProviderForReview {
   final String id;
   final String? userId; // User ID for chat functionality

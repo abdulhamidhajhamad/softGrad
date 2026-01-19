@@ -1,10 +1,11 @@
-import { 
-  Controller, Get, Post, Put, Delete, Body, Param, 
+import {
+  Controller, Get, Post, Put, Delete, Body, Param,
   UseGuards, Request, HttpException, HttpStatus, Query,
   UseInterceptors,
   UploadedFiles,
   DefaultValuePipe,
-  ParseIntPipe
+  ParseIntPipe,
+  Logger
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ServiceService } from './service.service';
@@ -14,14 +15,16 @@ import { VerificationGuard, RequireVerification } from '../complianceProvider/gu
 
 @Controller('services')
 export class ServiceController {
-  constructor(private readonly serviceService: ServiceService) {}
-  
+  private readonly logger = new Logger(ServiceController.name);
+
+  constructor(private readonly serviceService: ServiceService) { }
+
   // 13. Get Vendor Services Details (ID, Name, Price) - محمي للـ Vendor
   @Get('vendor-services-details') // مسار جديد لعدم التعارض
   @UseGuards(JwtAuthGuard)
   async getVendorServicesDetails(@Request() req: any): Promise<any[]> {
     try {
-      const providerId = req.user.userId; 
+      const providerId = req.user.userId;
       // استدعاء الدالة التي تم إنشاؤها في الخدمة
       return await this.serviceService.getVendorServicesDetails(providerId);
     } catch (error) {
@@ -32,16 +35,16 @@ export class ServiceController {
     }
   }
   @Get('home-service')
-async getHomepageCategoriesPreview() {
-  try {
-    return await this.serviceService.getHomepageServicesByCategories();
-  } catch (error) {
-    throw new HttpException(
-      error.message || 'Failed to fetch homepage services',
-      error.status || HttpStatus.INTERNAL_SERVER_ERROR
-    );
+  async getHomepageCategoriesPreview() {
+    try {
+      return await this.serviceService.getHomepageServicesByCategories();
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch homepage services',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
-}
 
   // ✅ Homepage endpoint - Get 5 random trending services (Public - no auth required)
   @Get('home/trending')
@@ -85,11 +88,11 @@ async getHomepageCategoriesPreview() {
   @Post()
   @UseGuards(JwtAuthGuard, VerificationGuard)
   @RequireVerification()
-  @UseInterceptors(FilesInterceptor('images', 10)) 
+  @UseInterceptors(FilesInterceptor('images', 10))
   async addService(
     @Body('data') data: string, // ⬅️ يتوقع 'data' من form-data
     @Request() req: any,
-    @UploadedFiles() files?: Express.Multer.File[] 
+    @UploadedFiles() files?: Express.Multer.File[]
   ) {
     try {
       // 🆕 التحقق من data لتجنب خطأ JSON.parse
@@ -99,7 +102,21 @@ async getHomepageCategoriesPreview() {
           HttpStatus.BAD_REQUEST
         );
       }
-      const createServiceDto: CreateServiceDto = JSON.parse(data); //
+      //  Log request details for debugging mobile issues
+      this.logger.log(` Request from: ${req.headers['user-agent'] || 'unknown'}`);
+      this.logger.log(` Files received: ${files?.length || 0}`);
+      this.logger.log(` Data field present: ${!!data}`);
+
+      let createServiceDto: CreateServiceDto;
+      try {
+        createServiceDto = JSON.parse(data);
+      } catch (parseError) {
+        this.logger.error(` JSON parse error: ${parseError.message}`);
+        throw new HttpException(
+          `Invalid JSON in data field: ${parseError.message}`,
+          HttpStatus.BAD_REQUEST
+        );
+      }
       const userId = req.user.userId;
       const userRole = req.user.role
       if (userRole !== 'vendor') {
@@ -120,9 +137,9 @@ async getHomepageCategoriesPreview() {
   // 🆕 3. Update Service by ID - Protected (Vendor)
   @Put('id/:serviceId')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FilesInterceptor('images', 10)) 
-  async updateServiceById( 
-    @Param('serviceId') serviceId: string, 
+  @UseInterceptors(FilesInterceptor('images', 10))
+  async updateServiceById(
+    @Param('serviceId') serviceId: string,
     @Body('data') data: string, // ⬅️ تم التعديل لاستقبال 'data' كـ string
     @Request() req: any,
     @UploadedFiles() files?: Express.Multer.File[]
@@ -136,7 +153,7 @@ async getHomepageCategoriesPreview() {
         );
       }
       const updateServiceDto: UpdateServiceDto = JSON.parse(data);
-      
+
       const userId = req.user.userId;
       const userRole = req.user.role;
 
@@ -147,7 +164,7 @@ async getHomepageCategoriesPreview() {
         );
       }
 
-      return await this.serviceService.updateServiceById( 
+      return await this.serviceService.updateServiceById(
         serviceId,
         userId,
         updateServiceDto,
@@ -187,7 +204,7 @@ async getHomepageCategoriesPreview() {
 
   @Put('/:serviceName')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FilesInterceptor('images', 10)) 
+  @UseInterceptors(FilesInterceptor('images', 10))
   async updateServiceByName(
     @Param('serviceName') serviceName: string,
     @Body('data') data: string, // ⬅️ تم التعديل لاستقبال 'data' كـ string
@@ -203,7 +220,7 @@ async getHomepageCategoriesPreview() {
         );
       }
       const updateServiceDto: UpdateServiceDto = JSON.parse(data);
-      
+
       const userId = req.user.userId;
       const userRole = req.user.role;
 
@@ -258,7 +275,7 @@ async getHomepageCategoriesPreview() {
       );
     }
   }
-  
+
   // 7. Get Services By Vendor Company Name (Public)
   @Get('vendor/name/:companyName')
   async getServicesByVendorName(@Param('companyName') companyName: string) {
@@ -273,13 +290,13 @@ async getHomepageCategoriesPreview() {
   }
 
   // 8. Get Services By Vendor ID (Protected)
-  @Get('my-services') 
+  @Get('my-services')
   @UseGuards(JwtAuthGuard)
   async getMyServices(@Request() req: any) {
     try {
       const userId = req.user.userId;
       // 🚨 تم تعديل الاستدعاء من getServicesByVendorId إلى getServicesByVendor
-      return await this.serviceService.getServicesByVendor(userId); 
+      return await this.serviceService.getServicesByVendor(userId);
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to fetch my services',
@@ -289,11 +306,11 @@ async getHomepageCategoriesPreview() {
   }
 
   // 9. Get Services By Vendor ID (Public - used for profile viewing)
-  @Get('vendor/:vendorId') 
+  @Get('vendor/:vendorId')
   async getServicesByVendorId(@Param('vendorId') vendorId: string) {
     try {
-       // 🚨 تم تعديل الاستدعاء من getServicesByVendorId إلى getServicesByVendor
-      return await this.serviceService.getServicesByVendor(vendorId); 
+      // 🚨 تم تعديل الاستدعاء من getServicesByVendorId إلى getServicesByVendor
+      return await this.serviceService.getServicesByVendor(vendorId);
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to fetch services by vendor ID',
@@ -340,17 +357,17 @@ async getHomepageCategoriesPreview() {
 
   // 12. Get Service Details by ID - مفتوح للجميع ويرجع حقول محددة
   @Get(':serviceId') // ⬅️ استخدام مسار محدد لتجنب التعارض مع Get()
-async getServiceDetailsById(@Param('serviceId') serviceId: string) {
-  try {
-    // هذه الدالة الآن ترجع الـ Object المفلتر تماماً كما طلبت
-    return await this.serviceService.getServiceById(serviceId); 
-  } catch (error) {
-    throw new HttpException(
-      error.message || 'Failed to fetch service details',
-      error.status || HttpStatus.INTERNAL_SERVER_ERROR
-    );
+  async getServiceDetailsById(@Param('serviceId') serviceId: string) {
+    try {
+      // هذه الدالة الآن ترجع الـ Object المفلتر تماماً كما طلبت
+      return await this.serviceService.getServiceById(serviceId);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to fetch service details',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
-}
 
 
 
@@ -362,8 +379,8 @@ async getServiceDetailsById(@Param('serviceId') serviceId: string) {
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number, // افتراضياً 20 عنصر
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,   // افتراضياً الصفحة الأولى
   ) {
-    if (limit > 50) limit = 50; 
-    
+    if (limit > 50) limit = 50;
+
     return this.serviceService.getPaginatedServicesWithDetails(limit, page);
   }
 
@@ -460,5 +477,5 @@ async getServiceDetailsById(@Param('serviceId') serviceId: string) {
       );
     }
   }
-  
+
 }

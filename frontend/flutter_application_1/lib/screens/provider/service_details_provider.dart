@@ -8,6 +8,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:video_player/video_player.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../user/profile/favorites.dart';
 import '../user/payment/cart.dart' as cart;
@@ -327,6 +328,10 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
                                 if (_hasDescription()) ...[
                                   const SizedBox(height: 24),
                                   _buildModernDescriptionCard(),
+                                ],
+                                if (_hasServiceInfo()) ...[
+                                  const SizedBox(height: 24),
+                                  _buildWebServiceInformationCard(),
                                 ],
                                 const SizedBox(height: 24),
                                 _buildWebReviewsSection(s),
@@ -1429,6 +1434,603 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
     );
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📋 SERVICE INFORMATION SECTION
+  // ══════════════════════════════════════════════════════════════════════════
+  
+  bool _hasServiceInfo() {
+    // Always show service information section - it contains booking type, pay type, etc.
+    // These are always available for any service
+    return true;
+  }
+
+  Widget _buildWebServiceInformationCard() {
+    final venueType = _serviceData?['venueType']?.toString();
+    final maxCapacity = _serviceData?['maxCapacity'];
+    final minHours = _serviceData?['minBookingHours'];
+    final maxHours = _serviceData?['maxBookingHours'];
+    final workingDays = _serviceData?['workingDays'] as List?;
+    final availableHours = _serviceData?['availableHours'] as List?;
+    final payType = _serviceData?['payType']?.toString();
+    final category = _serviceData?['category']?.toString();
+    final bookingType = _bookingType;
+    final additionalInfo = _serviceData?['additionalInfo'] as Map<String, dynamic>?;
+    
+    // Filter out description from additionalInfo
+    final customInfo = <String, dynamic>{};
+    if (additionalInfo != null) {
+      additionalInfo.forEach((key, value) {
+        if (key != 'description' && value != null && value.toString().isNotEmpty) {
+          customInfo[key] = value;
+        }
+      });
+    }
+
+    // Format working hours
+    String? workingHoursStr;
+    if (availableHours != null && availableHours.isNotEmpty) {
+      final hours = availableHours.map((e) => e as int).toList()..sort();
+      if (hours.isNotEmpty) {
+        workingHoursStr = '${hours.first.toString().padLeft(2, '0')}:00 - ${hours.last.toString().padLeft(2, '0')}:00';
+      }
+    }
+
+    // Format working days
+    String? workingDaysStr;
+    if (workingDays != null && workingDays.isNotEmpty && workingDays.length < 7) {
+      final dayNames = workingDays.map((d) {
+        final day = d.toString().toLowerCase();
+        return day.substring(0, 1).toUpperCase() + day.substring(1, 3);
+      }).toList();
+      workingDaysStr = dayNames.join(', ');
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: kCardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 5))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [kPrimaryColor.withOpacity(0.15), kPrimaryColor.withOpacity(0.05)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(LucideIcons.info, color: kPrimaryColor, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Text('Service Information', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w800, color: kTextPrimary)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          
+          // Info Grid
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              // Booking Type
+              if (bookingType != null && bookingType.isNotEmpty)
+                _buildInfoChip(
+                  icon: _getBookingTypeIcon(bookingType),
+                  label: 'Booking Type',
+                  value: _formatBookingType(bookingType),
+                  color: const Color(0xFF6366F1),
+                ),
+              
+              // Pay Type
+              if (payType != null && payType.isNotEmpty && payType != 'display')
+                _buildInfoChip(
+                  icon: LucideIcons.wallet,
+                  label: 'Payment',
+                  value: _formatPayType(payType),
+                  color: const Color(0xFF059669),
+                ),
+              
+              // Venue Type (for Venues category)
+              if (venueType != null && venueType.isNotEmpty)
+                _buildInfoChip(
+                  icon: venueType == 'indoor' ? LucideIcons.building : LucideIcons.trees,
+                  label: 'Venue Type',
+                  value: venueType == 'indoor' ? 'Indoor' : 'Outdoor',
+                  color: venueType == 'indoor' ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
+                ),
+              
+              // Max Capacity
+              if (maxCapacity != null && maxCapacity > 0)
+                _buildInfoChip(
+                  icon: LucideIcons.users,
+                  label: 'Max Capacity',
+                  value: '$maxCapacity guests',
+                  color: const Color(0xFFF59E0B),
+                ),
+              
+              // Min Booking Hours
+              if (minHours != null && minHours > 0)
+                _buildInfoChip(
+                  icon: LucideIcons.clock,
+                  label: 'Min Booking',
+                  value: '$minHours ${minHours == 1 ? 'hour' : 'hours'}',
+                  color: const Color(0xFF8B5CF6),
+                ),
+              
+              // Max Booking Hours
+              if (maxHours != null && maxHours > 0)
+                _buildInfoChip(
+                  icon: LucideIcons.timer,
+                  label: 'Max Booking',
+                  value: '$maxHours hours',
+                  color: const Color(0xFFEC4899),
+                ),
+              
+              // Working Hours
+              if (workingHoursStr != null)
+                _buildInfoChip(
+                  icon: LucideIcons.clock4,
+                  label: 'Working Hours',
+                  value: workingHoursStr,
+                  color: const Color(0xFF0891B2),
+                ),
+              
+              // Working Days (only if not all days)
+              if (workingDaysStr != null)
+                _buildInfoChip(
+                  icon: LucideIcons.calendar,
+                  label: 'Available Days',
+                  value: workingDaysStr,
+                  color: const Color(0xFFDC2626),
+                ),
+            ],
+          ),
+          
+          // Additional Info Section
+          if (customInfo.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kBackgroundColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(LucideIcons.listPlus, size: 16, color: kTextSecondary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Additional Details',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: kTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ...customInfo.entries.map((entry) => _buildAdditionalInfoItem(entry.key, entry.value.toString())),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  IconData _getBookingTypeIcon(String bookingType) {
+    switch (bookingType.toLowerCase()) {
+      case 'hourly': return LucideIcons.clock;
+      case 'daily': return LucideIcons.sun;
+      case 'capacity': return LucideIcons.users;
+      case 'mixed': return LucideIcons.layers;
+      case 'display': return LucideIcons.eye;
+      default: return LucideIcons.calendar;
+    }
+  }
+
+  String _formatBookingType(String bookingType) {
+    switch (bookingType.toLowerCase()) {
+      case 'hourly': return 'Per Hour';
+      case 'daily': return 'Per Day';
+      case 'capacity': return 'Per Person';
+      case 'mixed': return 'Flexible';
+      case 'display': return 'Display Only';
+      default: return bookingType;
+    }
+  }
+
+  String _formatPayType(String payType) {
+    switch (payType.toLowerCase()) {
+      case 'per hour': return 'Per Hour';
+      case 'per day': return 'Per Day';
+      case 'per person': return 'Per Person';
+      case 'display': return 'Display Only';
+      default: return payType;
+    }
+  }
+
+  Widget _buildInfoChip({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: color),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: kTextSecondary,
+                ),
+              ),
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: color.withOpacity(0.9),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdditionalInfoItem(String key, String value) {
+    // Check if value is a URL
+    final isUrl = value.startsWith('http://') || value.startsWith('https://') || value.startsWith('www.');
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 6),
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: kPrimaryColor,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _formatInfoKey(key),
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: kTextPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                if (isUrl)
+                  GestureDetector(
+                    onTap: () => _launchUrl(value),
+                    child: Row(
+                      children: [
+                        Icon(LucideIcons.externalLink, size: 12, color: kPrimaryColor),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            value,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: kPrimaryColor,
+                              decoration: TextDecoration.underline,
+                              decorationColor: kPrimaryColor,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Text(
+                    value,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: kTextSecondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatInfoKey(String key) {
+    // Convert camelCase or snake_case to Title Case
+    return key
+        .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}')
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((word) => word.isNotEmpty ? '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}' : '')
+        .join(' ');
+  }
+
+  Future<void> _launchUrl(String url) async {
+    String finalUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      finalUrl = 'https://$url';
+    }
+    
+    final uri = Uri.parse(finalUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // Mobile version of Service Information
+  Widget _buildMobileServiceInformationCard() {
+    final venueType = _serviceData?['venueType']?.toString();
+    final maxCapacity = _serviceData?['maxCapacity'];
+    final minHours = _serviceData?['minBookingHours'];
+    final maxHours = _serviceData?['maxBookingHours'];
+    final workingDays = _serviceData?['workingDays'] as List?;
+    final availableHours = _serviceData?['availableHours'] as List?;
+    final payType = _serviceData?['payType']?.toString();
+    final bookingType = _bookingType;
+    final additionalInfo = _serviceData?['additionalInfo'] as Map<String, dynamic>?;
+    
+    // Filter out description
+    final customInfo = <String, dynamic>{};
+    if (additionalInfo != null) {
+      additionalInfo.forEach((key, value) {
+        if (key != 'description' && value != null && value.toString().isNotEmpty) {
+          customInfo[key] = value;
+        }
+      });
+    }
+
+    // Format working hours
+    String? workingHoursStr;
+    if (availableHours != null && availableHours.isNotEmpty) {
+      final hours = availableHours.map((e) => e as int).toList()..sort();
+      if (hours.isNotEmpty) {
+        workingHoursStr = '${hours.first.toString().padLeft(2, '0')}:00 - ${hours.last.toString().padLeft(2, '0')}:00';
+      }
+    }
+
+    // Format working days
+    String? workingDaysStr;
+    if (workingDays != null && workingDays.isNotEmpty && workingDays.length < 7) {
+      final dayNames = workingDays.map((d) {
+        final day = d.toString().toLowerCase();
+        return day.substring(0, 1).toUpperCase() + day.substring(1, 3);
+      }).toList();
+      workingDaysStr = dayNames.join(', ');
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 8))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [kPrimaryColor.withOpacity(0.15), kPrimaryColor.withOpacity(0.05)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(LucideIcons.info, color: kPrimaryColor, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Text('Service Information', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Booking Type
+          if (bookingType != null && bookingType.isNotEmpty)
+            _buildMobileInfoRow(
+              icon: _getBookingTypeIcon(bookingType),
+              label: 'Booking Type',
+              value: _formatBookingType(bookingType),
+              color: const Color(0xFF6366F1),
+            ),
+          
+          // Pay Type
+          if (payType != null && payType.isNotEmpty && payType != 'display')
+            _buildMobileInfoRow(
+              icon: LucideIcons.wallet,
+              label: 'Payment',
+              value: _formatPayType(payType),
+              color: const Color(0xFF059669),
+            ),
+          
+          // Venue Type
+          if (venueType != null && venueType.isNotEmpty)
+            _buildMobileInfoRow(
+              icon: venueType == 'indoor' ? LucideIcons.building : LucideIcons.trees,
+              label: 'Venue Type',
+              value: venueType == 'indoor' ? 'Indoor' : 'Outdoor',
+              color: venueType == 'indoor' ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
+            ),
+          
+          // Max Capacity
+          if (maxCapacity != null && maxCapacity > 0)
+            _buildMobileInfoRow(
+              icon: LucideIcons.users,
+              label: 'Maximum Capacity',
+              value: '$maxCapacity guests',
+              color: const Color(0xFFF59E0B),
+            ),
+          
+          // Min Booking Hours
+          if (minHours != null && minHours > 0)
+            _buildMobileInfoRow(
+              icon: LucideIcons.clock,
+              label: 'Minimum Booking',
+              value: '$minHours ${minHours == 1 ? 'hour' : 'hours'}',
+              color: const Color(0xFF8B5CF6),
+            ),
+          
+          // Max Booking Hours
+          if (maxHours != null && maxHours > 0)
+            _buildMobileInfoRow(
+              icon: LucideIcons.timer,
+              label: 'Maximum Booking',
+              value: '$maxHours hours',
+              color: const Color(0xFFEC4899),
+            ),
+          
+          // Working Hours
+          if (workingHoursStr != null)
+            _buildMobileInfoRow(
+              icon: LucideIcons.clock4,
+              label: 'Working Hours',
+              value: workingHoursStr,
+              color: const Color(0xFF0891B2),
+            ),
+          
+          // Working Days
+          if (workingDaysStr != null)
+            _buildMobileInfoRow(
+              icon: LucideIcons.calendar,
+              label: 'Available Days',
+              value: workingDaysStr,
+              color: const Color(0xFFDC2626),
+            ),
+          
+          // Additional Info
+          if (customInfo.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: kBackgroundColor,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Additional Details',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: kTextSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...customInfo.entries.map((entry) => _buildAdditionalInfoItem(entry.key, entry.value.toString())),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: kTextSecondary,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: kTextPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWebLocationCard() {
     final locationAddress = _serviceData?['locationAddress']?.toString() ?? '';
     
@@ -1845,6 +2447,7 @@ class _ServiceDetailsProviderPageState extends State<ServiceDetailsProviderPage>
                   if (s.price > 0 || _bookingType?.toLowerCase() != 'display') _buildMobilePriceCard(),
                   const SizedBox(height: 16),
                   if (_hasDescription()) _buildMobileDescriptionCard(),
+                  if (_hasServiceInfo()) ...[const SizedBox(height: 16), _buildMobileServiceInformationCard()],
                   if (_lat != null && _lng != null) ...[const SizedBox(height: 16), _buildMobileLocationCard()],
                   if (_hasCompanyInfo(companyName, companyEmail, companyPhone)) ...[const SizedBox(height: 16), _buildMobileCompanyInfoCard(companyName, companyEmail, companyPhone)],
                   const SizedBox(height: 16),

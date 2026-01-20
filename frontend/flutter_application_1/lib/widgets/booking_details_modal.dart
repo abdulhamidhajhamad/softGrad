@@ -255,6 +255,19 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     }
 
     final allPrices = widget.serviceData['allPrices'] as Map<String, dynamic>?;
+    final priceOptions = widget.serviceData['priceOptions'] as Map<String, dynamic>?;
+    
+    // Parse price from string or number
+    double fallbackPrice = 0;
+    final rawPrice = widget.serviceData['price'];
+    if (rawPrice != null) {
+      if (rawPrice is num) {
+        fallbackPrice = rawPrice.toDouble();
+      } else if (rawPrice is String) {
+        fallbackPrice = double.tryParse(rawPrice.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+      }
+    }
+    
     double basePrice = 0;
 
     if (widget.bookingType == BookingType.hourly) {
@@ -278,7 +291,10 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
         return;
       }
 
-      basePrice = (allPrices?['perHour'] ?? 0).toDouble();
+      // Try allPrices['perHour'], priceOptions['perHour'], then fallback to main price
+      basePrice = (allPrices?['perHour'] as num?)?.toDouble() 
+                ?? (priceOptions?['perHour'] as num?)?.toDouble() 
+                ?? fallbackPrice;
       final total = basePrice * hours;
 
       setState(() {
@@ -293,7 +309,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     }
 
     if (widget.bookingType == BookingType.capacity) {
-      basePrice = (allPrices?['perPerson'] ?? 0).toDouble();
+      basePrice = (allPrices?['perPerson'] as num?)?.toDouble() 
+                ?? (priceOptions?['perPerson'] as num?)?.toDouble() 
+                ?? fallbackPrice;
       final total = basePrice * _numberOfPeople;
 
       setState(() {
@@ -309,7 +327,10 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
 
     if (widget.bookingType == BookingType.mixed) {
       if (_isFullVenue) {
-        basePrice = (allPrices?['perEvent'] ?? 0).toDouble();
+        basePrice = (allPrices?['perEvent'] as num?)?.toDouble() 
+                  ?? (priceOptions?['fullVenue'] as num?)?.toDouble()
+                  ?? (priceOptions?['perEvent'] as num?)?.toDouble() 
+                  ?? fallbackPrice;
         setState(() {
           _calculatedPrice = basePrice;
           _priceBreakdown = {
@@ -318,7 +339,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
           };
         });
       } else {
-        basePrice = (allPrices?['perPerson'] ?? 0).toDouble();
+        basePrice = (allPrices?['perPerson'] as num?)?.toDouble() 
+                  ?? (priceOptions?['perPerson'] as num?)?.toDouble() 
+                  ?? fallbackPrice;
         final total = basePrice * _numberOfPeople;
         setState(() {
           _calculatedPrice = total;
@@ -333,7 +356,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     }
 
     if (widget.bookingType == BookingType.daily) {
-      basePrice = (allPrices?['perDay'] ?? 0).toDouble();
+      basePrice = (allPrices?['perDay'] as num?)?.toDouble() 
+                ?? (priceOptions?['perDay'] as num?)?.toDouble() 
+                ?? fallbackPrice;
       setState(() {
         _calculatedPrice = basePrice;
         _priceBreakdown = {
@@ -345,7 +370,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     }
 
     if (widget.bookingType == BookingType.display) {
-      basePrice = (allPrices?['displayPrice'] ?? 0).toDouble();
+      basePrice = (allPrices?['displayPrice'] as num?)?.toDouble() 
+                ?? (priceOptions?['basePrice'] as num?)?.toDouble() 
+                ?? fallbackPrice;
       setState(() {
         _calculatedPrice = basePrice;
         _priceBreakdown = {
@@ -731,174 +758,170 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isWeb = screenWidth > 600; // Check if it's web/tablet
 
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
-        child: DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.75,
-          minChildSize: 0.5,
-          maxChildSize: 0.92,
-          builder: (context, scrollController) {
-            return Container(
-              margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.14),
-                    blurRadius: 30,
-                    offset: const Offset(0, 18),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  // Drag Handle
-                  Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+        child: isWeb 
+            ? _buildWebLayout(screenWidth, screenHeight)
+            : _buildMobileLayout(),
+      ),
+    );
+  }
 
-                  // Header
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Book Service',
-                          style: GoogleFonts.poppins(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: kText,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close_rounded),
-                        tooltip: 'Close',
-                      ),
-                    ],
-                  ),
+  // 📱 Mobile Layout with DraggableScrollableSheet
+  Widget _buildMobileLayout() {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      minChildSize: 0.5,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) {
+        return _buildModalContent(scrollController);
+      },
+    );
+  }
 
-                  Text(
-                    widget.serviceName,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: kMuted,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Scrollable Content
-                  Expanded(
-                    child: ListView(
-                      controller: scrollController,
-                      physics: const BouncingScrollPhysics(),
-                      children: [
-                        // Date Picker
-                        _buildDateField(),
-                        const SizedBox(height: 16),
-
-                        // Type-specific fields
-                        if (widget.bookingType == BookingType.hourly) ...[
-                          _buildTimeFields(),
-                          const SizedBox(height: 16),
-                        ],
-
-                        if (widget.bookingType == BookingType.capacity) ...[
-                          _buildCapacityField(),
-                          const SizedBox(height: 16),
-                        ],
-
-                        if (widget.bookingType == BookingType.mixed) ...[
-                          _buildFullVenueToggle(),
-                          const SizedBox(height: 16),
-                          if (!_isFullVenue) ...[
-                            _buildCapacityField(),
-                            const SizedBox(height: 16),
-                          ],
-                        ],
-
-                        // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
-                        if (!_hasFixedLocation) ...[
-                          _buildClientLocationField(),
-                          const SizedBox(height: 16),
-                        ],
-
-                        // 🆕 وصف الحجز (اختياري - لجميع الخدمات)
-                        _buildBookingDescriptionField(),
-                        const SizedBox(height: 16),
-
-                        // Price Display
-                        if (_calculatedPrice != null && _calculatedPrice! > 0) ...[
-                          _buildPriceDisplay(),
-                          const SizedBox(height: 16),
-                        ],
-
-                        // Info Cards
-                        _buildInfoCard(),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Action Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _submitBooking,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kText,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.black.withOpacity(0.14),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.add_shopping_cart_rounded, size: 20),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'Add to Cart',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+  // 🖥️ Web Layout - Centered Dialog Style
+  Widget _buildWebLayout(double screenWidth, double screenHeight) {
+    final maxWidth = screenWidth > 800 ? 520.0 : screenWidth * 0.85;
+    final maxHeight = screenHeight * 0.85;
+    
+    return Center(
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
         ),
+        child: _buildModalContent(null),
+      ),
+    );
+  }
+
+  // 🎨 Shared Modal Content
+  Widget _buildModalContent(ScrollController? scrollController) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.14),
+            blurRadius: 30,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Drag Handle
+          Container(
+            width: 44,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Header
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Book Service',
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: kText,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded),
+                tooltip: 'Close',
+              ),
+            ],
+          ),
+
+          Text(
+            widget.serviceName,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: kMuted,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Scrollable Content
+          Expanded(
+            child: ListView(
+              controller: scrollController,
+              physics: const BouncingScrollPhysics(),
+              children: [
+                // Date Picker
+                _buildDateField(),
+                const SizedBox(height: 16),
+
+                // Type-specific fields
+                if (widget.bookingType == BookingType.hourly) ...[
+                  _buildTimeFields(),
+                  const SizedBox(height: 16),
+                ],
+
+                if (widget.bookingType == BookingType.capacity) ...[
+                  _buildCapacityField(),
+                  const SizedBox(height: 16),
+                ],
+
+                if (widget.bookingType == BookingType.mixed) ...[
+                  _buildFullVenueToggle(),
+                  const SizedBox(height: 16),
+                  if (!_isFullVenue) ...[
+                    _buildCapacityField(),
+                    const SizedBox(height: 16),
+                  ],
+                ],
+
+                // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
+                if (!_hasFixedLocation) ...[
+                  _buildClientLocationField(),
+                  const SizedBox(height: 16),
+                ],
+
+                // 🆕 وصف الحجز (اختياري - لجميع الخدمات)
+                _buildBookingDescriptionField(),
+                const SizedBox(height: 16),
+
+                // Price Display (in scroll area for reference)
+                if (_calculatedPrice != null && _calculatedPrice! > 0) ...[
+                  _buildPriceDisplay(),
+                  const SizedBox(height: 16),
+                ],
+
+                // Info Cards
+                _buildInfoCard(),
+                
+                // Extra padding at bottom for web
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 💰 Live Price Display + Action Button (Always visible at bottom)
+          _buildBottomActionBar(),
+        ],
       ),
     );
   }
@@ -1330,6 +1353,382 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
         ],
       ),
     );
+  }
+
+  // 💰 Bottom Action Bar with Live Price Display
+  Widget _buildBottomActionBar() {
+    final hasPrice = _calculatedPrice != null && _calculatedPrice! > 0;
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: kBlue.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+        border: Border.all(
+          color: hasPrice ? kBlue.withOpacity(0.15) : Colors.black.withOpacity(0.06),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 💵 Live Price Display (shows when price is calculated)
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: hasPrice
+                ? Column(
+                    children: [
+                      // Price breakdown summary
+                      _buildLivePriceSummary(),
+                      const SizedBox(height: 12),
+                      // Divider with gradient
+                      Container(
+                        height: 1,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              kBlue.withOpacity(0.2),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+          
+          // 🛒 Action Row: Total + Add to Cart Button
+          Row(
+            children: [
+              // Total Price Display
+              if (hasPrice) ...[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: kMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            '₪',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: kBlue,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: _calculatedPrice ?? 0),
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, child) {
+                              return Text(
+                                value.toStringAsFixed(0),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  color: kText,
+                                  height: 1,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+              ],
+              
+              // Add to Cart Button
+              Expanded(
+                flex: hasPrice ? 2 : 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        kText,
+                        kText.withBlue(60),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: kText.withOpacity(0.25),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _isLoading ? null : _submitBooking,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                        child: _isLoading
+                            ? const Center(
+                                child: SizedBox(
+                                  height: 22,
+                                  width: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.add_shopping_cart_rounded,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Add to Cart',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 📊 Live Price Summary Widget
+  Widget _buildLivePriceSummary() {
+    if (_priceBreakdown == null) return const SizedBox.shrink();
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            kBlue.withOpacity(0.06),
+            kBlue.withOpacity(0.02),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBlue.withOpacity(0.08)),
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: kBlue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _getPriceIcon(),
+              color: kBlue,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          
+          // Price Details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _getPriceLabel(),
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: kMuted,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _getPriceDescription(),
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: kText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Unit Price Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: kBlue.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              _getUnitPrice(),
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: kBlue,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🎯 Helper methods for price display
+  IconData _getPriceIcon() {
+    switch (widget.bookingType) {
+      case BookingType.hourly:
+        return Icons.schedule_rounded;
+      case BookingType.daily:
+        return Icons.calendar_today_rounded;
+      case BookingType.capacity:
+        return Icons.people_rounded;
+      case BookingType.mixed:
+        return _isFullVenue ? Icons.domain_rounded : Icons.people_rounded;
+      case BookingType.display:
+        return Icons.storefront_rounded;
+    }
+  }
+
+  String _getPriceLabel() {
+    switch (widget.bookingType) {
+      case BookingType.hourly:
+        return 'Hourly Booking';
+      case BookingType.daily:
+        return 'Daily Rate';
+      case BookingType.capacity:
+        return 'Per Person';
+      case BookingType.mixed:
+        return _isFullVenue ? 'Full Venue' : 'Per Person';
+      case BookingType.display:
+        return 'Display Price';
+    }
+  }
+
+  String _getPriceDescription() {
+    if (_priceBreakdown == null) return '';
+    
+    switch (widget.bookingType) {
+      case BookingType.hourly:
+        final hours = _priceBreakdown!['hours'] ?? 0;
+        return '${hours.toStringAsFixed(1)} hours selected';
+      case BookingType.daily:
+        return '1 day selected';
+      case BookingType.capacity:
+        return '$_numberOfPeople ${_numberOfPeople == 1 ? 'person' : 'people'} selected';
+      case BookingType.mixed:
+        if (_isFullVenue) {
+          return 'Entire venue booked';
+        }
+        return '$_numberOfPeople ${_numberOfPeople == 1 ? 'person' : 'people'} selected';
+      case BookingType.display:
+        return 'Fixed price';
+    }
+  }
+
+  String _getUnitPrice() {
+    final allPrices = widget.serviceData['allPrices'] as Map<String, dynamic>?;
+    final priceOptions = widget.serviceData['priceOptions'] as Map<String, dynamic>?;
+    
+    // Parse price from string or number
+    double fallbackPrice = 0;
+    final rawPrice = widget.serviceData['price'];
+    if (rawPrice != null) {
+      if (rawPrice is num) {
+        fallbackPrice = rawPrice.toDouble();
+      } else if (rawPrice is String) {
+        fallbackPrice = double.tryParse(rawPrice.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+      }
+    }
+    
+    switch (widget.bookingType) {
+      case BookingType.hourly:
+        final perHour = (allPrices?['perHour'] as num?)?.toDouble() 
+                      ?? (priceOptions?['perHour'] as num?)?.toDouble() 
+                      ?? fallbackPrice;
+        return '₪${perHour.toStringAsFixed(0)}/hr';
+      case BookingType.daily:
+        final perDay = (allPrices?['perDay'] as num?)?.toDouble() 
+                     ?? (priceOptions?['perDay'] as num?)?.toDouble() 
+                     ?? fallbackPrice;
+        return '₪${perDay.toStringAsFixed(0)}/day';
+      case BookingType.capacity:
+        final perPerson = (allPrices?['perPerson'] as num?)?.toDouble() 
+                        ?? (priceOptions?['perPerson'] as num?)?.toDouble() 
+                        ?? fallbackPrice;
+        return '₪${perPerson.toStringAsFixed(0)}/person';
+      case BookingType.mixed:
+        if (_isFullVenue) {
+          final perEvent = (allPrices?['perEvent'] as num?)?.toDouble() 
+                         ?? (priceOptions?['fullVenue'] as num?)?.toDouble() 
+                         ?? fallbackPrice;
+          return '₪${perEvent.toStringAsFixed(0)}';
+        }
+        final perPerson = (allPrices?['perPerson'] as num?)?.toDouble() 
+                        ?? (priceOptions?['perPerson'] as num?)?.toDouble() 
+                        ?? fallbackPrice;
+        return '₪${perPerson.toStringAsFixed(0)}/person';
+      case BookingType.display:
+        final displayPrice = (allPrices?['displayPrice'] as num?)?.toDouble() 
+                           ?? (priceOptions?['basePrice'] as num?)?.toDouble() 
+                           ?? fallbackPrice;
+        return '₪${displayPrice.toStringAsFixed(0)}';
+    }
   }
 
   // 🆕 حقل موقع العميل للخدمات التي تذهب للعميل

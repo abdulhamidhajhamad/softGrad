@@ -281,7 +281,7 @@ class _MyAppState extends State<MyApp> {
         '/ai-generator': (context) => const AiScreenLayout(),
 
         // ✅ Review System Routes
-        '/my-bookings': (_) => const MyBookingsScreen(),
+        '/my-bookings': (_) => const MyBookingsScreen(),   
         '/pending-reviews': (_) => const PendingReviewsScreen(),
         '/my-reviews': (_) => const MyReviewsScreen(),
       },

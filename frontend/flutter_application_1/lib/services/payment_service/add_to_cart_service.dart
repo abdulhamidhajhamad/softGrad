@@ -73,6 +73,50 @@ class AddToCartService {
     }
   }
 
+  /// 🆕 Get alternative available slots when booking conflicts
+  static Future<Map<String, dynamic>> getAlternativeSlots({
+    required String serviceId,
+    required String date,
+    int? startHour,
+    int? endHour,
+    int? numberOfPeople,
+  }) async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Please login');
+      }
+
+      final body = <String, dynamic>{
+        'date': date,
+      };
+      if (startHour != null) body['startHour'] = startHour;
+      if (endHour != null) body['endHour'] = endHour;
+      if (numberOfPeople != null) body['numberOfPeople'] = numberOfPeople;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/cart/check-alternatives/$serviceId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(body),
+      );
+
+      print('📡 Alternative slots response: ${response.statusCode}');
+      print('📡 Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to get alternatives');
+      }
+    } catch (e) {
+      print('❌ Error getting alternatives: $e');
+      rethrow;
+    }
+  }
+
   /// Get current cart
   static Future<Map<String, dynamic>> getCart() async {
     try {

@@ -651,4 +651,244 @@ async addPackageToCart(userId: string, dto: AddPackageToCartDto): Promise<Cart> 
   return await cart.save();
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// 🆕 GET ALTERNATIVE AVAILABILITY - Find nearest available slots
+// ══════════════════════════════════════════════════════════════════════════
+
+async getAlternativeAvailability(
+  serviceId: string,
+  requestedBooking: { date: string; startHour?: number; endHour?: number; numberOfPeople?: number }
+): Promise<{
+  bookingType: string;
+  requestedDate: string;
+  requestedTime?: { start: number; end: number };
+  alternatives: Array<{
+    date: string;
+    dayName: string;
+    availableSlots?: Array<{ startHour: number; endHour: number }>;
+    availableCapacity?: number;
+    isAvailable: boolean;
+  }>;
+}> {
+  const service = await this.serviceModel.findById(serviceId);
+  if (!service) {
+    throw new NotFoundException('Service not found');
+  }
+
+  const requestedDate = new Date(requestedBooking.date);
+  requestedDate.setHours(0, 0, 0, 0);
+
+  const alternatives: Array<{
+    date: string;
+    dayName: string;
+    availableSlots?: Array<{ startHour: number; endHour: number }>;
+    availableCapacity?: number;
+    isAvailable: boolean;
+  }> = [];
+
+  const maxDaysToCheck = 14; // Check up to 14 days ahead
+  const workingDays = service.workingDays || [];
+  const availableHours = service.availableHours || [];
+
+  switch (service.bookingType) {
+    case BookingType.Hourly:
+      // Find available time slots
+      for (let dayOffset = 0; dayOffset < maxDaysToCheck && alternatives.length < 5; dayOffset++) {
+        const checkDate = new Date(requestedDate);
+        checkDate.setDate(checkDate.getDate() + dayOffset);
+        
+        const dayName = this.getDayName(checkDate);
+        if (workingDays.length > 0 && !workingDays.includes(dayName)) continue;
+
+        const slots = await this.findAvailableHourlySlots(
+          service,
+          checkDate,
+          requestedBooking.startHour,
+          requestedBooking.endHour
+        );
+
+        if (slots.length > 0) {
+          alternatives.push({
+            date: checkDate.toISOString(),
+            dayName: this.capitalizeFirstLetter(dayName),
+            availableSlots: slots,
+            isAvailable: true,
+          });
+        }
+      }
+      break;
+
+    case BookingType.Daily:
+      // Find available dates
+      for (let dayOffset = 0; dayOffset < maxDaysToCheck && alternatives.length < 5; dayOffset++) {
+        const checkDate = new Date(requestedDate);
+        checkDate.setDate(checkDate.getDate() + dayOffset);
+        
+        const dayName = this.getDayName(checkDate);
+        if (workingDays.length > 0 && !workingDays.includes(dayName)) continue;
+
+        const isAvailable = await this.isDayAvailable(service, checkDate);
+        
+        if (isAvailable) {
+          alternatives.push({
+            date: checkDate.toISOString(),
+            dayName: this.capitalizeFirstLetter(dayName),
+            isAvailable: true,
+          });
+        }
+      }
+      break;
+
+    case BookingType.Capacity:
+    case BookingType.Mixed:
+      // Find dates with available capacity
+      for (let dayOffset = 0; dayOffset < maxDaysToCheck && alternatives.length < 5; dayOffset++) {
+        const checkDate = new Date(requestedDate);
+        checkDate.setDate(checkDate.getDate() + dayOffset);
+        
+        const dayName = this.getDayName(checkDate);
+        if (workingDays.length > 0 && !workingDays.includes(dayName)) continue;
+
+        const availableCapacity = await this.getAvailableCapacity(service, checkDate);
+        
+        if (availableCapacity > 0) {
+          alternatives.push({
+            date: checkDate.toISOString(),
+            dayName: this.capitalizeFirstLetter(dayName),
+            availableCapacity,
+            isAvailable: true,
+          });
+        }
+      }
+      break;
+
+    default:
+      break;
+  }
+
+  return {
+    bookingType: service.bookingType,
+    requestedDate: requestedDate.toISOString(),
+    requestedTime: requestedBooking.startHour !== undefined ? {
+      start: requestedBooking.startHour,
+      end: requestedBooking.endHour || requestedBooking.startHour + 1,
+    } : undefined,
+    alternatives,
+  };
+}
+
+// Helper: Find available hourly slots for a specific date
+private async findAvailableHourlySlots(
+  service: Service,
+  date: Date,
+  requestedStart?: number,
+  requestedEnd?: number
+): Promise<Array<{ startHour: number; endHour: number }>> {
+  const availableHours = service.availableHours || [];
+  const minHours = service.minBookingHours || 1;
+  const maxConcurrency = service.maxConcurrency || 1;
+  const buffer = (service.cleanupTimeMinutes || 0) / 60;
+
+  // Get existing bookings for this date
+  const existingBookings = await this.bookingModel.find({
+    serviceId: service._id,
+    'bookingDetails.date': date,
+    status: { $ne: BookingStatus.CANCELLED },
+  }).exec();
+
+  const availableSlots: Array<{ startHour: number; endHour: number }> = [];
+  
+  // Determine hours to check
+  let hoursToCheck = availableHours.length > 0 
+    ? availableHours 
+    : Array.from({ length: 24 }, (_, i) => i);
+
+  // Sort hours
+  hoursToCheck = [...hoursToCheck].sort((a, b) => a - b);
+
+  // If requested time provided, prioritize slots close to it
+  if (requestedStart !== undefined) {
+    hoursToCheck.sort((a, b) => {
+      const diffA = Math.abs(a - requestedStart);
+      const diffB = Math.abs(b - requestedStart);
+      return diffA - diffB;
+    });
+  }
+
+  // Check each possible start hour
+  for (const startHour of hoursToCheck) {
+    if (availableSlots.length >= 3) break; // Limit to 3 slots per day
+
+    for (let duration = minHours; duration <= (service.maxBookingHours || 8); duration++) {
+      const endHour = startHour + duration;
+      
+      // Check if end hour is within available hours
+      if (availableHours.length > 0 && !availableHours.includes(endHour - 1)) continue;
+      if (endHour > 24) continue;
+
+      // Count concurrent bookings in this time range
+      let concurrentCount = 0;
+      for (const booking of existingBookings) {
+        const exStart = booking.bookingDetails.startHour ?? 0;
+        const exEnd = booking.bookingDetails.endHour ?? 0;
+        const exEndWithBuffer = exEnd + buffer;
+        const newEndWithBuffer = endHour + buffer;
+
+        if (startHour < exEndWithBuffer && newEndWithBuffer > exStart) {
+          concurrentCount++;
+        }
+      }
+
+      if (concurrentCount < maxConcurrency) {
+        // Check if this slot is not already added
+        const alreadyAdded = availableSlots.some(
+          s => s.startHour === startHour && s.endHour === endHour
+        );
+        if (!alreadyAdded) {
+          availableSlots.push({ startHour, endHour });
+          break; // Found a valid slot for this start hour, move to next
+        }
+      }
+    }
+  }
+
+  return availableSlots;
+}
+
+// Helper: Check if a day is available for daily booking
+private async isDayAvailable(service: Service, date: Date): Promise<boolean> {
+  const maxConcurrency = service.maxConcurrency || 1;
+  
+  const existingCount = await this.bookingModel.countDocuments({
+    serviceId: service._id,
+    'bookingDetails.date': date,
+    status: { $ne: BookingStatus.CANCELLED },
+  }).exec();
+
+  return existingCount < maxConcurrency;
+}
+
+// Helper: Get available capacity for a date
+private async getAvailableCapacity(service: Service, date: Date): Promise<number> {
+  if (!service.maxCapacity) return 999; // No limit
+
+  const bookings = await this.bookingModel.find({
+    serviceId: service._id,
+    'bookingDetails.date': date,
+    status: { $ne: BookingStatus.CANCELLED },
+  }).exec();
+
+  const bookedCount = bookings.reduce(
+    (sum, b) => sum + (b.bookingDetails.numberOfPeople || 0),
+    0
+  );
+
+  return Math.max(0, service.maxCapacity - bookedCount);
+}
+
+// Helper: Capitalize first letter
+private capitalizeFirstLetter(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 }

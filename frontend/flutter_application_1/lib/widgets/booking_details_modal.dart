@@ -567,7 +567,8 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
                        message.toLowerCase().contains('booked');
 
     if (isConflict) {
-      _showBookingConflictPopup(message);
+      // 🆕 Fetch alternatives and show smart popup
+      _showSmartConflictPopup(message);
     } else {
       // Regular error dialog
       showDialog(
@@ -600,6 +601,482 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
         ),
       );
     }
+  }
+
+  // 🆕 Smart Conflict Popup with Alternatives
+  void _showSmartConflictPopup(String errorMessage) async {
+    // Show loading first
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: kBlue),
+      ),
+    );
+
+    try {
+      // Fetch alternative slots from API
+      final alternatives = await AddToCartService.getAlternativeSlots(
+        serviceId: widget.serviceId,
+        date: _selectedDate!.toIso8601String(),
+        startHour: _startTime?.hour,
+        endHour: _endTime?.hour,
+        numberOfPeople: _numberOfPeople,
+      );
+
+      if (mounted) Navigator.pop(context); // Close loading
+
+      if (mounted) {
+        _showAlternativesDialog(errorMessage, alternatives);
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Close loading
+      // Fallback to simple conflict popup
+      _showBookingConflictPopup(errorMessage);
+    }
+  }
+
+  // 🆕 Beautiful Alternatives Dialog
+  void _showAlternativesDialog(String errorMessage, Map<String, dynamic> data) {
+    final bookingType = data['bookingType']?.toString() ?? '';
+    final alternatives = data['alternatives'] as List<dynamic>? ?? [];
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        backgroundColor: Colors.white,
+        child: Container(
+          padding: const EdgeInsets.all(0),
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 🔴 Header with gradient
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(28),
+                    topRight: Radius.circular(28),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.event_busy_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Time Slot Unavailable',
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'This slot is already booked',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // 🟢 Alternatives Section
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (alternatives.isEmpty) ...[
+                        // No alternatives found
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No alternatives found in the next 14 days',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: kMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        // 💡 Suggestion header
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.lightbulb_rounded,
+                                color: Color(0xFF10B981),
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Available Alternatives',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: kText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Alternative cards
+                        ...alternatives.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final alt = entry.value as Map<String, dynamic>;
+                          return _buildAlternativeCard(
+                            ctx,
+                            alt,
+                            bookingType,
+                            isFirst: index == 0,
+                          );
+                        }),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              
+              // 🔵 Bottom Actions
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.grey.shade300),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Change Manually',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w700,
+                            color: kMuted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🆕 Alternative Card Widget
+  Widget _buildAlternativeCard(
+    BuildContext dialogContext,
+    Map<String, dynamic> alternative,
+    String bookingType,
+    {bool isFirst = false}
+  ) {
+    final dateStr = alternative['date']?.toString() ?? '';
+    final dayName = alternative['dayName']?.toString() ?? '';
+    final slots = alternative['availableSlots'] as List<dynamic>?;
+    final availableCapacity = alternative['availableCapacity'];
+
+    DateTime? date;
+    try {
+      date = DateTime.parse(dateStr);
+    } catch (_) {}
+
+    final formattedDate = date != null 
+        ? DateFormat('MMM dd, yyyy').format(date)
+        : dateStr;
+
+    final isToday = date != null && 
+        date.year == DateTime.now().year &&
+        date.month == DateTime.now().month &&
+        date.day == DateTime.now().day;
+
+    final isTomorrow = date != null && 
+        date.difference(DateTime.now()).inDays == 0 &&
+        date.day == DateTime.now().add(const Duration(days: 1)).day;
+
+    String dayLabel = dayName;
+    if (isToday) dayLabel = 'Today';
+    if (isTomorrow) dayLabel = 'Tomorrow';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isFirst ? const Color(0xFF10B981).withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFirst ? const Color(0xFF10B981).withOpacity(0.3) : Colors.grey.shade200,
+          width: isFirst ? 2 : 1,
+        ),
+        boxShadow: isFirst ? [
+          BoxShadow(
+            color: const Color(0xFF10B981).withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ] : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            // Apply this alternative
+            _applyAlternative(dialogContext, alternative, bookingType);
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Date row with badge
+                Row(
+                  children: [
+                    if (isFirst)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'RECOMMENDED',
+                          style: GoogleFonts.poppins(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    if (isFirst) const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: kBlue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.calendar_today_rounded,
+                        color: kBlue,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            dayLabel,
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: kText,
+                            ),
+                          ),
+                          Text(
+                            formattedDate,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: kMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 16,
+                      color: isFirst ? const Color(0xFF10B981) : kMuted,
+                    ),
+                  ],
+                ),
+                
+                // Time slots or capacity info
+                if (slots != null && slots.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: slots.take(3).map((slot) {
+                      final start = slot['startHour'] as int? ?? 0;
+                      final end = slot['endHour'] as int? ?? 0;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.access_time_rounded, size: 14, color: kMuted),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${_formatHour24(start)} - ${_formatHour24(end)}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: kText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                
+                if (availableCapacity != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.people_rounded, size: 14, color: kMuted),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$availableCapacity spots available',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: kText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🆕 Apply selected alternative
+  void _applyAlternative(BuildContext dialogContext, Map<String, dynamic> alternative, String bookingType) {
+    Navigator.pop(dialogContext); // Close alternatives dialog
+
+    final dateStr = alternative['date']?.toString() ?? '';
+    final slots = alternative['availableSlots'] as List<dynamic>?;
+
+    try {
+      final newDate = DateTime.parse(dateStr);
+      
+      setState(() {
+        _selectedDate = newDate;
+        
+        // Apply first available time slot if hourly
+        if (slots != null && slots.isNotEmpty && bookingType.toLowerCase() == 'hourly') {
+          final firstSlot = slots.first as Map<String, dynamic>;
+          _startTime = TimeOfDay(hour: firstSlot['startHour'] as int? ?? 9, minute: 0);
+          _endTime = TimeOfDay(hour: firstSlot['endHour'] as int? ?? 10, minute: 0);
+        }
+      });
+
+      _calculatePrice();
+
+      // Show confirmation
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Updated to ${DateFormat('MMM dd').format(newDate)}${slots != null && slots.isNotEmpty ? ' at ${_formatHour24(slots.first['startHour'] as int? ?? 9)}-${_formatHour24(slots.first['endHour'] as int? ?? 10)}' : ''}',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } catch (e) {
+      print('Error applying alternative: $e');
+    }
+  }
+
+  // 🆕 Format hour to 12-hour format
+  String _formatHour24(int hour) {
+    if (hour == 0 || hour == 24) return '12:00 AM';
+    if (hour == 12) return '12:00 PM';
+    if (hour < 12) return '$hour:00 AM';
+    return '${hour - 12}:00 PM';
   }
 
   void _showBookingConflictPopup(String message) {

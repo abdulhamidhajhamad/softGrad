@@ -18,7 +18,7 @@ class SplashScreen extends StatelessWidget {
 
               // Logo/Title
               Text(
-                'PlanMyWedding',
+                'Eventry',
                 style: GoogleFonts.cookie(
                   fontSize: 64,
                   fontWeight: FontWeight.w400,

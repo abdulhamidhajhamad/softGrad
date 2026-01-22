@@ -1554,26 +1554,346 @@ class _ServicesDialogState extends State<ServicesDialog> {
     _selected = List.from(widget.selectedServices);
   }
 
-  void _toggleService(String serviceName) {
-    setState(() {
-      final index = _selected.indexWhere((s) => s.name == serviceName);
-      if (index >= 0) {
+  int get _totalBudgetPercent => _selected.fold(0, (sum, s) => sum + s.budgetPercent);
+
+  void _toggleService(String serviceName) async {
+    final index = _selected.indexWhere((s) => s.name == serviceName);
+    if (index >= 0) {
+      // Removing service
+      setState(() {
         _selected.removeAt(index);
         // Recalculate priorities
         for (int i = 0; i < _selected.length; i++) {
           _selected[i] = _selected[i].copyWith(priority: i + 1);
         }
-      } else {
-        _selected.add(SelectedService(
-          name: serviceName,
-          priority: _selected.length + 1,
-        ));
+      });
+    } else {
+      // Adding service - show budget percentage dialog
+      final percent = await _showBudgetPercentDialog(serviceName);
+      if (percent != null) {
+        setState(() {
+          _selected.add(SelectedService(
+            name: serviceName,
+            priority: _selected.length + 1,
+            budgetPercent: percent,
+          ));
+        });
+      }
+    }
+  }
+
+  Future<int?> _showBudgetPercentDialog(String serviceName) async {
+    final service = ServiceCategory.allServices.firstWhere((s) => s.name == serviceName);
+    final TextEditingController controller = TextEditingController();
+    String? errorText;
+    
+    return showDialog<int>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Service icon header
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [service.color.withOpacity(0.2), service.color.withOpacity(0.1)],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(service.icon, color: service.color, size: 32),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Title
+                  Text(
+                    serviceName,
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: kTextPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  
+                  // Description
+                  Text(
+                    'Enter the percentage of your total budget you want to allocate to this service',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: kTextSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  // Current allocation info
+                  if (_selected.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: kPrimaryColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: kPrimaryColor.withOpacity(0.1)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.pie_chart_rounded, color: kPrimaryColor, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Already allocated: $_totalBudgetPercent%',
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: kPrimaryColor,
+                            ),
+                          ),
+                          Text(
+                            ' (${100 - _totalBudgetPercent}% remaining)',
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: kTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_selected.isNotEmpty) const SizedBox(height: 20),
+                  
+                  // Percentage input
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: errorText != null ? Colors.red : kPrimaryColor.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: controller,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            autofocus: true,
+                            style: GoogleFonts.poppins(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: kPrimaryColor,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: '0',
+                              hintStyle: GoogleFonts.poppins(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                color: kTextSecondary.withOpacity(0.3),
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            ),
+                            onChanged: (value) {
+                              setDialogState(() {
+                                if (value.isEmpty) {
+                                  errorText = null;
+                                  return;
+                                }
+                                final parsed = int.tryParse(value);
+                                if (parsed == null) {
+                                  errorText = 'Please enter a valid number';
+                                } else if (parsed < 1 || parsed > 100) {
+                                  errorText = 'Must be between 1 and 100';
+                                } else {
+                                  errorText = null;
+                                }
+                              });
+                            },
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                          decoration: BoxDecoration(
+                            color: kPrimaryColor.withOpacity(0.1),
+                            borderRadius: const BorderRadius.only(
+                              topRight: Radius.circular(14),
+                              bottomRight: Radius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            '%',
+                            style: GoogleFonts.poppins(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: kPrimaryColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  // Error text
+                  if (errorText != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        errorText!,
+                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.red),
+                      ),
+                    ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Quick selection buttons
+                  Row(
+                    children: [10, 20, 30, 50].map((percent) {
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Material(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            child: InkWell(
+                              onTap: () {
+                                controller.text = percent.toString();
+                                setDialogState(() => errorText = null);
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                child: Text(
+                                  '$percent%',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: kTextPrimary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(context, null),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(color: Colors.grey.shade300),
+                            ),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: kTextSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            final value = int.tryParse(controller.text);
+                            if (value == null || value < 1 || value > 100) {
+                              setDialogState(() => errorText = 'Please enter a valid percentage (1-100)');
+                              return;
+                            }
+                            Navigator.pop(context, value);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kPrimaryColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            'Confirm',
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _autoBalancePercentages() {
+    if (_selected.isEmpty) return;
+    
+    final total = _totalBudgetPercent;
+    if (total == 100) return;
+    
+    final difference = 100 - total;
+    final perService = difference ~/ _selected.length;
+    final remainder = difference % _selected.length;
+    
+    setState(() {
+      for (int i = 0; i < _selected.length; i++) {
+        int additionalPercent = perService;
+        if (i < remainder.abs()) {
+          additionalPercent += difference > 0 ? 1 : -1;
+        }
+        _selected[i] = _selected[i].copyWith(
+          budgetPercent: (_selected[i].budgetPercent + additionalPercent).clamp(1, 100),
+        );
       }
     });
   }
 
+  void _handleConfirm() {
+    // Auto-balance if needed
+    if (_totalBudgetPercent != 100 && _selected.isNotEmpty) {
+      _autoBalancePercentages();
+    }
+    widget.onConfirm(_selected);
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final totalPercent = _totalBudgetPercent;
+    final isBalanced = totalPercent == 100;
+    
     return DialogContainer(
       title: 'Select Services',
       icon: Icons.list_alt_rounded,
@@ -1587,17 +1907,53 @@ class _ServicesDialogState extends State<ServicesDialog> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Selected (${_selected.length}) - Drag to reorder priority',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: kTextSecondary,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Selected (${_selected.length}) - Drag to reorder',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: kTextSecondary,
+                        ),
+                      ),
+                      // Budget allocation indicator
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isBalanced ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isBalanced ? Colors.green : Colors.orange,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isBalanced ? Icons.check_circle : Icons.info_outline,
+                              size: 14,
+                              color: isBalanced ? Colors.green : Colors.orange,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$totalPercent%',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isBalanced ? Colors.green : Colors.orange,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   SizedBox(
-                    height: 45,
+                    height: 52,
                     child: ReorderableListView(
                       scrollDirection: Axis.horizontal,
                       buildDefaultDragHandles: false,
@@ -1620,10 +1976,17 @@ class _ServicesDialogState extends State<ServicesDialog> {
                           index: index,
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
                               color: kPrimaryColor,
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: kPrimaryColor.withOpacity(0.3),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -1647,13 +2010,34 @@ class _ServicesDialogState extends State<ServicesDialog> {
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
-                                  service.name,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      service.name,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${service.budgetPercent}%',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(width: 4),
                                 const Icon(Icons.drag_handle, color: Colors.white70, size: 16),
@@ -1674,15 +2058,18 @@ class _ServicesDialogState extends State<ServicesDialog> {
                 crossAxisCount: 3,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: 0.9,
+                childAspectRatio: 0.85,
               ),
               itemCount: ServiceCategory.allServices.length,
               itemBuilder: (context, index) {
                 final service = ServiceCategory.allServices[index];
-                final isSelected = _selected.any((s) => s.name == service.name);
-                final priority = isSelected
-                    ? _selected.firstWhere((s) => s.name == service.name).priority
-                    : null;
+                final selectedService = _selected.cast<SelectedService?>().firstWhere(
+                  (s) => s?.name == service.name,
+                  orElse: () => null,
+                );
+                final isSelected = selectedService != null;
+                final priority = selectedService?.priority;
+                final budgetPercent = selectedService?.budgetPercent;
                 
                 return Material(
                   color: Colors.transparent,
@@ -1716,7 +2103,7 @@ class _ServicesDialogState extends State<ServicesDialog> {
                                     size: 22,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
                                 Text(
                                   service.name,
                                   style: GoogleFonts.poppins(
@@ -1727,16 +2114,37 @@ class _ServicesDialogState extends State<ServicesDialog> {
                                   textAlign: TextAlign.center,
                                   maxLines: 2,
                                 ),
+                                // Show budget percentage badge for selected services
+                                if (isSelected && budgetPercent != null) ...[
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [kPrimaryColor, kPrimaryColor.withOpacity(0.8)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '$budgetPercent%',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
                           if (isSelected && priority != null)
                             Positioned(
-                              top: 8,
-                              right: 8,
+                              top: 6,
+                              right: 6,
                               child: Container(
-                                width: 22,
-                                height: 22,
+                                width: 20,
+                                height: 20,
                                 decoration: const BoxDecoration(
                                   color: kPrimaryColor,
                                   shape: BoxShape.circle,
@@ -1745,7 +2153,7 @@ class _ServicesDialogState extends State<ServicesDialog> {
                                   child: Text(
                                     '$priority',
                                     style: GoogleFonts.poppins(
-                                      fontSize: 11,
+                                      fontSize: 10,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,
                                     ),
@@ -1761,17 +2169,39 @@ class _ServicesDialogState extends State<ServicesDialog> {
               },
             ),
           ),
+          // Info message about auto-balance
+          if (_selected.isNotEmpty && !isBalanced)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.auto_fix_high, color: Colors.orange.shade700, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Budget will be auto-balanced to 100% when you confirm',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: Colors.orange.shade800,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(20),
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _selected.isNotEmpty
-                    ? () {
-                        widget.onConfirm(_selected);
-                        Navigator.pop(context);
-                      }
-                    : null,
+                onPressed: _selected.isNotEmpty ? _handleConfirm : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kPrimaryColor,
                   foregroundColor: Colors.white,
@@ -1782,7 +2212,9 @@ class _ServicesDialogState extends State<ServicesDialog> {
                   ),
                 ),
                 child: Text(
-                  _selected.isEmpty ? 'Select at least one service' : 'Confirm (${_selected.length} selected)',
+                  _selected.isEmpty 
+                      ? 'Select at least one service' 
+                      : 'Confirm (${_selected.length} services)',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

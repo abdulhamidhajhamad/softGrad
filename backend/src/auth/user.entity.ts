@@ -39,8 +39,9 @@ export class User extends Document {
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Package' }], default: [] })
   favoritePackages: Types.ObjectId[];
   
-  // FCM Token for push notifications (not unique - same token can be reused)
-  @Prop({ default: null, unique: true, sparse: true })
+  // FCM Token for push notifications
+  // DO NOT use default: null - sparse index only ignores undefined, not null
+  @Prop({ type: String, sparse: true })
   fcmToken?: string; 
 }
 

@@ -947,34 +947,56 @@ async getAllReviews(filter?:  'all' | 'good' | 'bad') {
       .sort({ createdAt:  -1 })
       .lean();
 
-    // Get all unique provider IDs
+    // Get all unique provider IDs (as strings)
     const providerIds = [...new Set(reviews.map((r: any) => r.serviceId?.providerId).filter(Boolean))];
     
     // Fetch all providers at once - using ServiceProvider model
+    // Convert string IDs to ObjectId for matching
+    const mongoose = require('mongoose');
+    const objectIdProviderIds = providerIds.map(id => {
+      try {
+        return new mongoose.Types.ObjectId(id);
+      } catch {
+        return id;
+      }
+    });
+    
     const ServiceProvider = this.bookingModel.db.model('ServiceProvider');
-    const providers = await ServiceProvider.find({ userId: { $in: providerIds } }).select('userId companyName').lean();
+    const providers = await ServiceProvider.find({ 
+      userId: { $in: objectIdProviderIds } 
+    }).select('userId companyName').lean();
+    
+    // Create map with string keys for comparison
     const providerMap = new Map(providers.map((p: any) => [p.userId?.toString(), p.companyName]));
+    
+    console.log('🔍 Provider IDs:', providerIds);
+    console.log('🏢 Providers found:', providers.length, providers.map((p: any) => ({ userId: p.userId?.toString(), companyName: p.companyName })));
 
     return {
       total: reviews.length,
       goodCount: reviews.filter((r: any) => r.rating >= 4).length,
       badCount: reviews.filter((r: any) => r.rating <= 2).length,
-      reviews: reviews.map((r: any) => ({
-        _id: r._id,
-        userId: r.userId?._id || r.userId,
-        userName: r.userId?.userName || r.userName || 'Anonymous',
-        userImage: r.userId?.imageUrl || '',
-        serviceId: r.serviceId?._id || r.serviceId,
-        serviceName: r.serviceId?.serviceName || 'Unknown Service',
-        serviceImage: r.serviceId?.images?.[0] || '',
-        providerId: r.serviceId?.providerId,
-        providerName: providerMap.get(r.serviceId?.providerId?.toString()) || null,
-        rating: r.rating,
-        comment: r.comment,
-        images: r.images || [],
-        isPositive: r.rating >= 4,
-        createdAt: r.createdAt
-      }))
+      reviews: reviews.map((r: any) => {
+        const provId = r.serviceId?.providerId?.toString();
+        const provName = providerMap.get(provId);
+        console.log(`📝 Review mapping: providerId=${provId}, providerName=${provName}`);
+        return {
+          _id: r._id,
+          userId: r.userId?._id || r.userId,
+          userName: r.userId?.userName || r.userName || 'Anonymous',
+          userImage: r.userId?.imageUrl || '',
+          serviceId: r.serviceId?._id || r.serviceId,
+          serviceName: r.serviceId?.serviceName || 'Unknown Service',
+          serviceImage: r.serviceId?.images?.[0] || '',
+          providerId: provId,
+          providerName: provName || null,
+          rating: r.rating,
+          comment: r.comment,
+          images: r.images || [],
+          isPositive: r.rating >= 4,
+          createdAt: r.createdAt
+        };
+      })
     };
   } catch (error) {
     console.error('❌ Error in getAllReviews:', error);

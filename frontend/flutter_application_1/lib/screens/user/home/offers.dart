@@ -1556,6 +1556,12 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
                   ),
                 ),
                 
+                // ✅ Service Information Section
+                _buildServiceInformationSection(),
+                
+                // ✅ Company Info Section
+                _buildCompanyInfoSection(),
+                
                 // ✅ Description
                 if (offer.description.isNotEmpty)
                   Padding(
@@ -1991,6 +1997,494 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
           ],
         ),
       ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📋 SERVICE INFORMATION SECTION
+  // ══════════════════════════════════════════════════════════════════════════
+  
+  Widget _buildServiceInformationSection() {
+    final offer = widget.offer;
+    final maxCapacity = _serviceData?['maxCapacity'] ?? offer.maxCapacity;
+    final minHours = _serviceData?['minBookingHours'] ?? offer.minBookingHours;
+    final maxHours = _serviceData?['maxBookingHours'] ?? offer.maxBookingHours;
+    final workingDays = (_serviceData?['workingDays'] as List?) ?? offer.workingDays;
+    final availableHours = (_serviceData?['availableHours'] as List?) ?? offer.availableHours;
+    final bookingType = _serviceData?['bookingType']?.toString().toLowerCase() ?? offer.bookingType.toLowerCase();
+    final additionalInfo = _serviceData?['additionalInfo'] as Map<String, dynamic>?;
+    
+    // Check if we have any info to show
+    final hasCapacity = maxCapacity != null && maxCapacity > 0;
+    final hasBookingHours = (minHours != null && minHours > 0) || (maxHours != null && maxHours > 0);
+    final hasWorkingHours = availableHours != null && availableHours.isNotEmpty;
+    final hasWorkingDays = workingDays != null && workingDays.isNotEmpty;
+    
+    // Filter additional info
+    final customInfo = <String, dynamic>{};
+    if (additionalInfo != null) {
+      additionalInfo.forEach((key, value) {
+        if (key != 'description' && value != null && value.toString().isNotEmpty) {
+          customInfo[key] = value;
+        }
+      });
+    }
+    
+    final hasCustomInfo = customInfo.isNotEmpty;
+    
+    // If no info at all, don't show the section
+    if (!hasCapacity && !hasBookingHours && !hasWorkingHours && !hasWorkingDays && !hasCustomInfo) {
+      return const SizedBox.shrink();
+    }
+
+    // Format working hours
+    String? workingHoursStr;
+    if (availableHours != null && availableHours.isNotEmpty) {
+      final hours = availableHours.map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0).toList()..sort();
+      if (hours.isNotEmpty) {
+        final startHour = hours.first;
+        final endHour = hours.last;
+        workingHoursStr = '${_formatHour(startHour)} - ${_formatHour(endHour + 1)}';
+      }
+    }
+
+    // Format working days
+    String? workingDaysStr;
+    if (workingDays != null && workingDays.isNotEmpty) {
+      if (workingDays.length == 7) {
+        workingDaysStr = 'Every Day';
+      } else {
+        final dayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        final sortedDays = workingDays.map((d) => d.toString().toLowerCase()).toList()
+          ..sort((a, b) => dayOrder.indexOf(a).compareTo(dayOrder.indexOf(b)));
+        
+        bool isConsecutive = true;
+        for (int i = 1; i < sortedDays.length; i++) {
+          if (dayOrder.indexOf(sortedDays[i]) - dayOrder.indexOf(sortedDays[i-1]) != 1) {
+            isConsecutive = false;
+            break;
+          }
+        }
+        
+        if (isConsecutive && sortedDays.length > 2) {
+          workingDaysStr = '${_capitalizeDay(sortedDays.first)} - ${_capitalizeDay(sortedDays.last)}';
+        } else {
+          workingDaysStr = sortedDays.map((d) => _capitalizeDay(d)).join(', ');
+        }
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [kPrimaryBlue.withOpacity(0.15), kPrimaryBlue.withOpacity(0.05)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.info_outline_rounded, color: kPrimaryBlue, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Service Information',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: kTextDark,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // Info Chips
+            if (hasCapacity || hasBookingHours) ...[
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  // Max Capacity
+                  if (hasCapacity)
+                    _buildInfoChip(
+                      icon: Icons.groups_rounded,
+                      label: '$maxCapacity Guests Max',
+                      color: const Color(0xFFF59E0B),
+                    ),
+                  
+                  // Booking Type
+                  _buildInfoChip(
+                    icon: _getBookingIcon(bookingType),
+                    label: _getBookingLabel(bookingType),
+                    color: const Color(0xFF6366F1),
+                  ),
+                  
+                  // Min Booking
+                  if (minHours != null && minHours > 0)
+                    _buildInfoChip(
+                      icon: Icons.timer_outlined,
+                      label: 'Min $minHours ${minHours == 1 ? 'Hour' : 'Hours'}',
+                      color: const Color(0xFF8B5CF6),
+                    ),
+                  
+                  // Max Booking
+                  if (maxHours != null && maxHours > 0)
+                    _buildInfoChip(
+                      icon: Icons.timelapse_rounded,
+                      label: 'Max $maxHours Hours',
+                      color: const Color(0xFFEC4899),
+                    ),
+                ],
+              ),
+            ],
+            
+            // Additional Info
+            if (hasCustomInfo) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.playlist_add_check_rounded, size: 18, color: kTextMuted),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Additional Details',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF475569),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    ...customInfo.entries.map((entry) => _buildAdditionalInfoRow(entry.key, entry.value.toString())),
+                  ],
+                ),
+              ),
+            ],
+            
+            // Working Hours & Days
+            if (hasWorkingHours || hasWorkingDays) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF0891B2).withOpacity(0.08),
+                      const Color(0xFF06B6D4).withOpacity(0.04),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF0891B2).withOpacity(0.2)),
+                ),
+                child: Column(
+                  children: [
+                    if (workingHoursStr != null)
+                      _buildScheduleRow(
+                        icon: Icons.access_time_rounded,
+                        title: 'Working Hours',
+                        value: workingHoursStr,
+                        iconColor: const Color(0xFF0891B2),
+                      ),
+                    
+                    if (workingHoursStr != null && workingDaysStr != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Divider(height: 1, color: const Color(0xFF0891B2).withOpacity(0.15)),
+                      ),
+                    
+                    if (workingDaysStr != null)
+                      _buildScheduleRow(
+                        icon: Icons.calendar_month_rounded,
+                        title: 'Available Days',
+                        value: workingDaysStr,
+                        iconColor: const Color(0xFF0891B2),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🏢 COMPANY INFO SECTION
+  // ══════════════════════════════════════════════════════════════════════════
+  
+  Widget _buildCompanyInfoSection() {
+    final offer = widget.offer;
+    final companyName = _serviceData?['companyInfo']?['name']?.toString().trim() ?? 
+                        _serviceData?['companyName']?.toString().trim() ??
+                        offer.company;
+    final city = _serviceData?['city']?.toString().trim() ?? offer.city;
+    final email = _serviceData?['companyInfo']?['email']?.toString().trim() ?? '';
+    final phone = _serviceData?['companyInfo']?['phone']?.toString().trim() ?? '';
+    
+    // Check if we have any data
+    final hasName = companyName.isNotEmpty && companyName != 'Unknown' && companyName != 'N/A';
+    final hasCity = city.isNotEmpty && city != 'Unknown' && city != 'N/A';
+    final hasEmail = email.isNotEmpty && email != 'N/A';
+    final hasPhone = phone.isNotEmpty && phone != 'N/A';
+    
+    if (!hasName && !hasCity && !hasEmail && !hasPhone) {
+      return const SizedBox.shrink();
+    }
+    
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Company Info',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w900,
+                color: kTextDark,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            if (hasName) ...[
+              _CompanyInfoRow(icon: Icons.business_rounded, text: companyName),
+              if (hasCity || hasEmail || hasPhone) const SizedBox(height: 8),
+            ],
+            
+            if (hasCity) ...[
+              _CompanyInfoRow(icon: Icons.location_on_rounded, text: city),
+              if (hasEmail || hasPhone) const SizedBox(height: 8),
+            ],
+            
+            if (hasEmail) ...[
+              _CompanyInfoRow(icon: Icons.email_rounded, text: email),
+              if (hasPhone) const SizedBox(height: 8),
+            ],
+            
+            if (hasPhone)
+              _CompanyInfoRow(icon: Icons.phone_rounded, text: phone),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔧 HELPER WIDGETS & METHODS
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  Widget _buildInfoChip({required IconData icon, required String label, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color.withOpacity(0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildAdditionalInfoRow(String key, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            margin: const EdgeInsets.only(top: 7, right: 12),
+            decoration: BoxDecoration(
+              color: kPrimaryBlue.withOpacity(0.6),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$key: ',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF334155),
+                    ),
+                  ),
+                  TextSpan(
+                    text: value,
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: kTextMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildScheduleRow({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color iconColor,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 20, color: iconColor),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: kTextMuted,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+  
+  String _formatHour(int hour) {
+    if (hour == 0 || hour == 24) return '12:00 AM';
+    if (hour == 12) return '12:00 PM';
+    if (hour < 12) return '$hour:00 AM';
+    return '${hour - 12}:00 PM';
+  }
+  
+  String _capitalizeDay(String day) {
+    if (day.isEmpty) return day;
+    return day[0].toUpperCase() + day.substring(1);
+  }
+  
+  IconData _getBookingIcon(String bookingType) {
+    switch (bookingType) {
+      case 'hourly': return Icons.schedule_rounded;
+      case 'daily': return Icons.calendar_today_rounded;
+      case 'capacity': return Icons.groups_rounded;
+      case 'display': return Icons.visibility_rounded;
+      default: return Icons.event_rounded;
+    }
+  }
+  
+  String _getBookingLabel(String bookingType) {
+    switch (bookingType) {
+      case 'hourly': return 'Hourly Booking';
+      case 'daily': return 'Daily Booking';
+      case 'capacity': return 'Per Person';
+      case 'display': return 'Display Only';
+      default: return 'Standard Booking';
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🏢 Company Info Row Widget
+// ═══════════════════════════════════════════════════════════════════════════
+class _CompanyInfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  
+  const _CompanyInfoRow({required this.icon, required this.text});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: kTextMuted),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: kTextDark,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

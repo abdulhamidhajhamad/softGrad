@@ -471,35 +471,39 @@ class _FavoritesPageState extends State<FavoritesPage> with SingleTickerProvider
   }
 
   void _openOfferDetails(Map<String, dynamic> offer) {
+    // Parse numeric values safely (API may return strings)
+    final originalPrice = _parseDouble(offer['originalPrice'], _parseDouble(offer['price']));
+    final discountedPrice = _parseDouble(offer['discountedPrice'], originalPrice);
+    
     final offerService = OfferService.fromJson({
       'id': offer['_id']?.toString() ?? offer['id']?.toString() ?? '',
       'name': offer['serviceName']?.toString() ?? offer['name']?.toString() ?? 'Unknown',
-      'company': offer['companyName'],
-      'providerId': offer['providerId'],
-      'category': offer['category'],
-      'description': offer['description'],
-      'bookingType': offer['bookingType'],
-      'payType': offer['payType'],
+      'company': offer['companyName']?.toString(),
+      'providerId': offer['providerId']?.toString(),
+      'category': offer['category']?.toString(),
+      'description': offer['description']?.toString(),
+      'bookingType': offer['bookingType']?.toString(),
+      'payType': offer['payType']?.toString(),
       'hasFixedLocation': offer['hasFixedLocation'],
-      'originalPrice': offer['originalPrice'] ?? offer['price'],
-      'discountedPrice': offer['discountedPrice'] ?? offer['price'],
-      'discountPercentage': offer['discountPercentage'] ?? 0,
+      'originalPrice': originalPrice,
+      'discountedPrice': discountedPrice,
+      'discountPercentage': _parseInt(offer['discountPercentage']),
       'offerStartDate': offer['offerStartDate'],
       'offerEndDate': offer['offerEndDate'],
-      'offerDescription': offer['offerDescription'],
+      'offerDescription': offer['offerDescription']?.toString(),
       'imageUrl': _getImageUrl(offer),
       'images': offer['images'],
-      'latitude': offer['latitude'],
-      'longitude': offer['longitude'],
-      'city': offer['city'],
-      'rating': offer['rating'],
-      'totalReviews': offer['totalReviews'],
+      'latitude': _parseDouble(offer['latitude']),
+      'longitude': _parseDouble(offer['longitude']),
+      'city': offer['city']?.toString(),
+      'rating': _parseDouble(offer['rating']),
+      'totalReviews': _parseInt(offer['totalReviews']),
       'workingDays': offer['workingDays'],
       'availableHours': offer['availableHours'],
-      'minBookingHours': offer['minBookingHours'],
-      'maxBookingHours': offer['maxBookingHours'],
-      'maxCapacity': offer['maxCapacity'],
-      'cleanupTimeMinutes': offer['cleanupTimeMinutes'],
+      'minBookingHours': _parseInt(offer['minBookingHours']),
+      'maxBookingHours': _parseInt(offer['maxBookingHours']),
+      'maxCapacity': _parseInt(offer['maxCapacity']),
+      'cleanupTimeMinutes': _parseInt(offer['cleanupTimeMinutes']),
     });
 
     Navigator.push(

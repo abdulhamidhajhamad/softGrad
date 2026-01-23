@@ -2212,9 +2212,10 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
   Widget _buildClientLocationField() {
     // قائمة المدن
     const cities = [
-      'Jerusalem', 'Ramallah', 'Nablus', 'Hebron', 'Bethlehem',
+      'Nablus', 'Ramallah', 'Jerusalem', 'Hebron', 'Bethlehem',
       'Jenin', 'Tulkarm', 'Qalqilya', 'Jericho', 'Salfit',
       'Tubas', 'Gaza', 'Khan Yunis', 'Rafah', 'Deir al-Balah',
+      'Al-Bireh', 'Other',
     ];
 
     return Container(

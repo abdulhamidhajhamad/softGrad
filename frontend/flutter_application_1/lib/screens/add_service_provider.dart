@@ -85,13 +85,20 @@ const List<Map<String, dynamic>> kServiceCategories = [
 const List<String> kCities = [
   'Nablus',
   'Ramallah',
+  'Jerusalem',
+  'Hebron',
+  'Bethlehem',
   'Jenin',
   'Tulkarm',
   'Qalqilya',
-  'Hebron',
-  'Bethlehem',
   'Jericho',
-  'Jerusalem',
+  'Salfit',
+  'Tubas',
+  'Gaza',
+  'Khan Yunis',
+  'Rafah',
+  'Deir al-Balah',
+  'Al-Bireh',
   'Other',
 ];
 

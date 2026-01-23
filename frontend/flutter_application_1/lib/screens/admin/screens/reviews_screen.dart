@@ -459,20 +459,26 @@ class _ReviewWrapperCard extends StatelessWidget {
               Positioned(
                 bottom: 12,
                 right: 12,
-                child: IconButton(
-                  tooltip: 'Delete review',
-                  onPressed: onDelete,
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.shade100),
-                    ),
-                    child: Icon(
-                      LucideIcons.trash2,
-                      size: 18,
-                      color: Colors.red.shade600,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onDelete,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Tooltip(
+                      message: 'Delete review',
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red.shade100),
+                        ),
+                        child: Icon(
+                          LucideIcons.trash2,
+                          size: 18,
+                          color: Colors.red.shade600,
+                        ),
+                      ),
                     ),
                   ),
                 ),

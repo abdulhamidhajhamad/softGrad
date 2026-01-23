@@ -947,6 +947,14 @@ async getAllReviews(filter?:  'all' | 'good' | 'bad') {
       .sort({ createdAt:  -1 })
       .lean();
 
+    // Get all unique provider IDs
+    const providerIds = [...new Set(reviews.map((r: any) => r.serviceId?.providerId).filter(Boolean))];
+    
+    // Fetch all providers at once - using ServiceProvider model
+    const ServiceProvider = this.bookingModel.db.model('ServiceProvider');
+    const providers = await ServiceProvider.find({ userId: { $in: providerIds } }).select('userId companyName').lean();
+    const providerMap = new Map(providers.map((p: any) => [p.userId?.toString(), p.companyName]));
+
     return {
       total: reviews.length,
       goodCount: reviews.filter((r: any) => r.rating >= 4).length,
@@ -960,6 +968,7 @@ async getAllReviews(filter?:  'all' | 'good' | 'bad') {
         serviceName: r.serviceId?.serviceName || 'Unknown Service',
         serviceImage: r.serviceId?.images?.[0] || '',
         providerId: r.serviceId?.providerId,
+        providerName: providerMap.get(r.serviceId?.providerId?.toString()) || null,
         rating: r.rating,
         comment: r.comment,
         images: r.images || [],
@@ -968,6 +977,7 @@ async getAllReviews(filter?:  'all' | 'good' | 'bad') {
       }))
     };
   } catch (error) {
+    console.error('❌ Error in getAllReviews:', error);
     throw new BadRequestException('Failed to fetch reviews');
   }
 }

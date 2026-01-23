@@ -78,21 +78,22 @@ class ServiceCategory {
 /// Cities in Palestine
 class CityData {
   static const List<String> palestinianCities = [
+    'Nablus',
     'Ramallah',
     'Jerusalem',
-    'Nablus',
     'Hebron',
     'Bethlehem',
     'Jenin',
     'Tulkarm',
     'Qalqilya',
     'Jericho',
-    'Gaza',
-    'Rafah',
-    'Khan Yunis',
-    'Deir al-Balah',
     'Salfit',
     'Tubas',
+    'Gaza',
+    'Khan Yunis',
+    'Rafah',
+    'Deir al-Balah',
+    'Al-Bireh',
   ];
 }
 

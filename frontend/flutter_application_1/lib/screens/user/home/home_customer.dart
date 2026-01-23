@@ -27,6 +27,7 @@ import 'package:flutter_application_1/screens/user/web/web_responsive_wrapper.da
 import 'package:flutter_application_1/screens/user/web/web_shell.dart';
 
 import '../profile/favorites.dart';
+import 'package:flutter_application_1/services/user_service/favorites_service.dart';
 import 'package:flutter_application_1/screens/Ai_Screen/ai_screen_layout.dart';
 import '../payment/cart.dart';
 import '../profile/profile.dart';
@@ -729,7 +730,7 @@ class _HomeTabState extends State<_HomeTab> {
 
                   const SizedBox(height: 22),
 
-                  // ✅ Quick Actions (Horizontal Scroll)
+                  // ✅ Quick Actions (Centered Grid)
                   Text(
                     'Quick Actions',
                     style: GoogleFonts.poppins(
@@ -738,39 +739,35 @@ class _HomeTabState extends State<_HomeTab> {
                       color: const Color(0xFF0B1220),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 100,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      children: [
-                        _QuickActionChip(
-                          icon: Icons.storefront_rounded,
-                          label: 'Services',
-                          color: kNavBlue,
-                          onTap: widget.onOpenVendors,
-                        ),
-                        _QuickActionChip(
-                          icon: Icons.inventory_2_rounded,
-                          label: 'Packages',
-                          color: const Color(0xFFF57C00),
-                          onTap: widget.onOpenPackages,
-                        ),
-                        _QuickActionChip(
-                          icon: Icons.local_offer_rounded,
-                          label: 'Offers',
-                          color: const Color(0xFF8B5CF6),
-                          onTap: widget.onOpenOffers,
-                        ),
-                        _QuickActionChip(
-                          icon: Icons.description_rounded,
-                          label: 'Templates',
-                          color: const Color(0xFF059669),
-                          onTap: widget.onOpenTemplates,
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _QuickActionChip(
+                        icon: Icons.storefront_rounded,
+                        label: 'Services',
+                        color: kNavBlue,
+                        onTap: widget.onOpenVendors,
+                      ),
+                      _QuickActionChip(
+                        icon: Icons.inventory_2_rounded,
+                        label: 'Packages',
+                        color: const Color(0xFFF57C00),
+                        onTap: widget.onOpenPackages,
+                      ),
+                      _QuickActionChip(
+                        icon: Icons.local_offer_rounded,
+                        label: 'Offers',
+                        color: const Color(0xFF8B5CF6),
+                        onTap: widget.onOpenOffers,
+                      ),
+                      _QuickActionChip(
+                        icon: Icons.description_rounded,
+                        label: 'Templates',
+                        color: const Color(0xFF059669),
+                        onTap: widget.onOpenTemplates,
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 22),
@@ -1107,7 +1104,7 @@ class _TopSearchBar extends StatelessWidget {
   }
 }
 
-/// ✅ NEW: Quick Action Chip for horizontal scroll actions
+/// ✅ Quick Action Chip - Responsive & Centered
 class _QuickActionChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1123,8 +1120,13 @@ class _QuickActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    // حساب العرض بناءً على حجم الشاشة - 4 عناصر مع مسافات
+    final itemWidth = (screenWidth - 32 - 36) / 4; // 32 padding + 36 gaps (12*3)
+    final clampedWidth = itemWidth.clamp(70.0, 90.0);
+    
     return Padding(
-      padding: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
@@ -1132,7 +1134,8 @@ class _QuickActionChip extends StatelessWidget {
           onTap();
         },
         child: Container(
-          width: 80,
+          width: clampedWidth,
+          height: 95,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
@@ -1149,13 +1152,13 @@ class _QuickActionChip extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: color, size: 24),
+                child: Icon(icon, color: color, size: 22),
               ),
               const SizedBox(height: 8),
               Text(
@@ -1163,7 +1166,7 @@ class _QuickActionChip extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF0B1220),
                 ),
@@ -2170,7 +2173,18 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
     );
 
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      final decoded = json.decode(response.body);
+      // Handle case where API returns a List instead of Map
+      if (decoded is List) {
+        if (decoded.isNotEmpty && decoded[0] is Map<String, dynamic>) {
+          return decoded[0] as Map<String, dynamic>;
+        }
+        throw Exception('Invalid service data format');
+      }
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      throw Exception('Unexpected response format');
     } else {
       throw Exception('Failed to load service');
     }
@@ -2325,6 +2339,19 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
             color: const Color(0xFF0B1220),
           ),
         ),
+        actions: [
+          // ✅ Favorite Button in AppBar
+          _FavoriteButton(
+            serviceId: s.id,
+            serviceName: s.name,
+            category: s.category,
+            company: s.company,
+            price: s.price,
+            rating: _serviceData?['rating']?.toDouble() ?? 0.0,
+            imageUrl: s.imageUrl,
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       bottomNavigationBar: SafeArea(
         top: false,
@@ -3787,6 +3814,167 @@ class _HomeServicesMapSectionState extends State<HomeServicesMapSection> {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ✅ Modern Favorite Button Widget for Services
+class _FavoriteButton extends StatefulWidget {
+  final String serviceId;
+  final String serviceName;
+  final String category;
+  final String company;
+  final double price;
+  final double rating;
+  final String? imageUrl;
+
+  const _FavoriteButton({
+    required this.serviceId,
+    required this.serviceName,
+    required this.category,
+    required this.company,
+    required this.price,
+    required this.rating,
+    this.imageUrl,
+  });
+
+  @override
+  State<_FavoriteButton> createState() => _FavoriteButtonState();
+}
+
+class _FavoriteButtonState extends State<_FavoriteButton> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  bool _isFavorite = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _checkFavoriteStatus();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkFavoriteStatus() async {
+    await FavoritesService.instance.init();
+    if (mounted) {
+      setState(() {
+        _isFavorite = FavoritesService.instance.isServiceFavorite(widget.serviceId);
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_isLoading) return;
+    
+    // Animate
+    _controller.forward().then((_) => _controller.reverse());
+
+    setState(() {
+      _isLoading = true;
+      _isFavorite = !_isFavorite; // Optimistic update
+    });
+
+    final success = await FavoritesService.instance.toggleServiceFavorite(widget.serviceId);
+    
+    if (!success && mounted) {
+      // Revert on failure
+      setState(() {
+        _isFavorite = !_isFavorite;
+      });
+    }
+    
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+
+    // Show snackbar
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _isFavorite 
+                    ? 'Added to your favorites!' 
+                    : 'Removed from favorites',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: _isFavorite ? const Color(0xFF10B981) : const Color(0xFF64748B),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+        action: SnackBarAction(
+          label: 'VIEW',
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FavoritesPage()),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: _isFavorite 
+              ? const Color(0xFFFF4B6E).withOpacity(0.1) 
+              : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: IconButton(
+          onPressed: _toggleFavorite,
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (child, animation) => ScaleTransition(
+              scale: animation,
+              child: child,
+            ),
+            child: Icon(
+              _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              key: ValueKey(_isFavorite),
+              color: _isFavorite ? const Color(0xFFFF4B6E) : const Color(0xFF64748B),
+              size: 22,
+            ),
+          ),
+          tooltip: _isFavorite ? 'Remove from favorites' : 'Add to favorites',
         ),
       ),
     );

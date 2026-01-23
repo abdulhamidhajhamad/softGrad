@@ -591,18 +591,42 @@ async toggleFavoritePackage(userId: string, packageId: string): Promise<Types.Ob
   return user.favoritePackages;
 }
 
-async getUserFavorites(userId: string): Promise<{ favoriteServices: any[]; favoritePackages: any[] }> {
+async toggleFavoriteOffer(userId: string, offerId: string): Promise<Types.ObjectId[]> {
+  const user = await this.userModel.findById(userId);
+  if (!user) throw new NotFoundException('User not found');
+
+  const oId = new Types.ObjectId(offerId);
+  
+  // Initialize favoriteOffers if undefined
+  if (!user.favoriteOffers) {
+    user.favoriteOffers = [];
+  }
+  
+  const index = user.favoriteOffers.findIndex(id => id.toString() === oId.toString());
+
+  if (index > -1) {
+    user.favoriteOffers.splice(index, 1);
+  } else {
+    user.favoriteOffers.push(oId);
+  }
+
+  await user.save();
+  return user.favoriteOffers;
+}
+
+async getUserFavorites(userId: string): Promise<{ favoriteServices: any[]; favoritePackages: any[]; favoriteOffers: any[] }> {
   const user = await this.userModel.findById(userId)
-    .select('favoriteServices favoritePackages -_id')
+    .select('favoriteServices favoritePackages favoriteOffers -_id')
     .exec();
 
   if (!user) {
-    throw new NotFoundException('User not found'); //
+    throw new NotFoundException('User not found');
   }
 
   return {
     favoriteServices: user.favoriteServices || [],
-    favoritePackages: user.favoritePackages || []
+    favoritePackages: user.favoritePackages || [],
+    favoriteOffers: user.favoriteOffers || []
   };
 }
 }

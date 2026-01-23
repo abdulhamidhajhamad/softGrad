@@ -5,6 +5,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 
 import '../payment/cart.dart';
+import '../profile/favorites.dart';
+import 'package:flutter_application_1/services/user_service/favorites_service.dart';
 import 'package:flutter_application_1/services/package_service/package_service.dart';
 import 'package:flutter_application_1/services/package_service/add_to_cart_packages.dart';
 import 'package:flutter_application_1/widgets/package_booking_modal.dart';
@@ -700,11 +702,18 @@ class _PackageCardState extends State<_PackageCard> {
                   Positioned(
                     right: 12,
                     top: 12,
-                    child: _Pill(
-                      text: offText,
-                      icon: Icons.local_offer_rounded,
-                      bg: kBrandBlue,
-                      fg: Colors.white,
+                    child: Row(
+                      children: [
+                        // ✅ Favorite Button
+                        _PackageFavoriteButton(package: p),
+                        const SizedBox(width: 8),
+                        _Pill(
+                          text: offText,
+                          icon: Icons.local_offer_rounded,
+                          bg: kBrandBlue,
+                          fg: Colors.white,
+                        ),
+                      ],
                     ),
                   ),
                   Positioned(
@@ -1062,6 +1071,152 @@ class _ErrorState extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ✅ Package Favorite Button Widget
+class _PackageFavoriteButton extends StatefulWidget {
+  final PackageModel package;
+
+  const _PackageFavoriteButton({required this.package});
+
+  @override
+  State<_PackageFavoriteButton> createState() => _PackageFavoriteButtonState();
+}
+
+class _PackageFavoriteButtonState extends State<_PackageFavoriteButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  bool _isFavorite = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _checkFavoriteStatus();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkFavoriteStatus() async {
+    await FavoritesService.instance.init();
+    if (mounted) {
+      setState(() {
+        _isFavorite = FavoritesService.instance.isPackageFavorite(widget.package.id);
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    // Animate
+    _controller.forward().then((_) => _controller.reverse());
+
+    setState(() {
+      _isFavorite = !_isFavorite; // Optimistic update
+    });
+
+    final success = await FavoritesService.instance.togglePackageFavorite(widget.package.id);
+    
+    if (!success && mounted) {
+      // Revert on failure
+      setState(() {
+        _isFavorite = !_isFavorite;
+      });
+    }
+
+    // Show snackbar
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _isFavorite
+                    ? 'Package added to favorites!'
+                    : 'Package removed from favorites',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: _isFavorite ? const Color(0xFF10B981) : const Color(0xFF64748B),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+        action: SnackBarAction(
+          label: 'VIEW',
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FavoritesPage()),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: GestureDetector(
+        onTap: _toggleFavorite,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: _isFavorite
+                ? const Color(0xFFFF4B6E)
+                : Colors.white.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (child, animation) => ScaleTransition(
+              scale: animation,
+              child: child,
+            ),
+            child: Icon(
+              _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              key: ValueKey(_isFavorite),
+              color: _isFavorite ? Colors.white : const Color(0xFFFF4B6E),
+              size: 18,
+            ),
+          ),
         ),
       ),
     );

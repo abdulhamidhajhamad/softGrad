@@ -38,6 +38,9 @@ export class User extends Document {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Package' }], default: [] })
   favoritePackages: Types.ObjectId[];
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Service' }], default: [] })
+  favoriteOffers: Types.ObjectId[]; // Offers are services with discounts
   
   // FCM Token for push notifications
   // DO NOT use default: null - sparse index only ignores undefined, not null

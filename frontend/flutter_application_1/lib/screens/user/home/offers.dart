@@ -11,6 +11,8 @@ import 'package:flutter_application_1/services/service_locator.dart';
 import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 import 'package:flutter_application_1/screens/user/payment/cart.dart' show CartStore, CartItem, CartPage;
 import 'package:flutter_application_1/screens/user/chat/chat_customer_home_page.dart';
+import 'package:flutter_application_1/screens/user/profile/favorites.dart';
+import 'package:flutter_application_1/services/user_service/favorites_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -1385,6 +1387,11 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
             color: kTextDark,
           ),
         ),
+        actions: [
+          // ✅ Favorite Button
+          _OfferFavoriteButton(offer: offer),
+          const SizedBox(width: 8),
+        ],
       ),
       bottomNavigationBar: _buildBottomBar(),
       body: _isLoading
@@ -1982,6 +1989,149 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// ✅ Offer Favorite Button Widget
+// =============================================================================
+class _OfferFavoriteButton extends StatefulWidget {
+  final OfferService offer;
+
+  const _OfferFavoriteButton({required this.offer});
+
+  @override
+  State<_OfferFavoriteButton> createState() => _OfferFavoriteButtonState();
+}
+
+class _OfferFavoriteButtonState extends State<_OfferFavoriteButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  late Animation<double> _scaleAnim;
+  bool _isFav = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _scaleAnim = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
+    );
+    _checkFavorite();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  void _checkFavorite() async {
+    await FavoritesService.instance.init();
+    if (mounted) {
+      setState(() {
+        _isFav = FavoritesService.instance.isOfferFavorite(widget.offer.id);
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_isLoading) return;
+    
+    HapticFeedback.lightImpact();
+    _animController.forward().then((_) => _animController.reverse());
+
+    setState(() {
+      _isLoading = true;
+      _isFav = !_isFav; // Optimistic update
+    });
+
+    final success = await FavoritesService.instance.toggleOfferFavorite(widget.offer.id);
+    
+    if (!success && mounted) {
+      // Revert on failure
+      setState(() {
+        _isFav = !_isFav;
+      });
+    }
+    
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+
+    // Show snackbar
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: _isFav ? kAccentPurple : const Color(0xFF64748B),
+          duration: const Duration(seconds: 2),
+          content: Row(
+            children: [
+              Icon(
+                _isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _isFav ? 'Added to Favorites!' : 'Removed from Favorites',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          action: SnackBarAction(
+            label: 'VIEW',
+            textColor: Colors.white,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const FavoritesPage()),
+              );
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnim,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _toggleFavorite,
+          borderRadius: BorderRadius.circular(50),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: _isFav
+                  ? kAccentPurple.withOpacity(0.12)
+                  : Colors.black.withOpacity(0.04),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              color: _isFav ? kAccentPurple : const Color(0xFF64748B),
+              size: 24,
+            ),
+          ),
         ),
       ),
     );

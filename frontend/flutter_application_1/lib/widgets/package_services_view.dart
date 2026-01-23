@@ -8,6 +8,10 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_application_1/services/package_service/package_service.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/screens/user/chat/chat_inside_search.dart';
+import 'package:flutter_application_1/screens/user/packages/packages.dart';
+import 'package:flutter_application_1/screens/user/payment/cart.dart';
+import 'package:flutter_application_1/widgets/package_booking_modal.dart';
+import 'package:flutter_application_1/services/package_service/add_to_cart_packages.dart';
 
 const Color kBrandBlue = Color.fromARGB(215, 20, 20, 215);
 const Color kBg = Color(0xFFF6F7FB);
@@ -19,10 +23,17 @@ const Color kDanger = Color(0xFFEF4444);
 const Color kSuccess = Color(0xFF10B981);
 
 /// 📦 Package Services View Page (What's Inside)
-class PackageServicesViewPage extends StatelessWidget {
+class PackageServicesViewPage extends StatefulWidget {
   final PackageModel package;
 
   const PackageServicesViewPage({super.key, required this.package});
+
+  @override
+  State<PackageServicesViewPage> createState() => _PackageServicesViewPageState();
+}
+
+class _PackageServicesViewPageState extends State<PackageServicesViewPage> {
+  bool _isAddingToCart = false;
 
   String _money(double v) => '₪${v.toStringAsFixed(0)}';
 
@@ -32,14 +43,74 @@ class PackageServicesViewPage extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => _PackageServiceDetailsPage(
           service: service,
-          packageName: package.packageName,
+          packageName: widget.package.packageName,
         ),
       ),
     );
   }
 
+  Future<void> _handleAddToCart() async {
+    final package = widget.package;
+    
+    // 1. Show booking modal to collect service details
+    final bookings = await showPackageBookingModal(
+      context: context,
+      package: package,
+    );
+
+    if (bookings == null || bookings.isEmpty) {
+      // User cancelled
+      return;
+    }
+
+    setState(() => _isAddingToCart = true);
+
+    try {
+      // 2. Call API to add package to cart
+      final dto = AddPackageToCartDto(
+        packageId: package.id,
+        serviceBookings: bookings,
+      );
+
+      final cartResponse = await PackageCartService.addPackageToCart(dto);
+
+      // 3. Update cart store
+      CartStore.instance.updateFromBackend(cartResponse.items);
+
+      setState(() => _isAddingToCart = false);
+
+      // 4. Show success
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Package added to cart ✅', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            backgroundColor: kSuccess,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isAddingToCart = false);
+      
+      if (mounted) {
+        final errorMsg = e.toString().replaceAll('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            backgroundColor: kDanger,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final package = widget.package;
+    
     return Scaffold(
       backgroundColor: kBg,
       appBar: AppBar(
@@ -58,6 +129,50 @@ class PackageServicesViewPage extends StatelessWidget {
           ),
         ),
         centerTitle: true,
+      ),
+      // ✅ Bottom Add to Cart button
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kBrandBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                disabledBackgroundColor: Colors.grey.withOpacity(0.6),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: _isAddingToCart ? null : _handleAddToCart,
+              icon: _isAddingToCart 
+                  ? const SizedBox(
+                      width: 18, 
+                      height: 18, 
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2, 
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.add_shopping_cart_rounded, size: 20),
+              label: Text(
+                _isAddingToCart ? 'Adding...' : 'Add Package to Cart',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),

@@ -20,6 +20,7 @@ import { PromotionModule } from './promotion/promotion.module';
 import { ReviewModule } from './review/review.module';
 import { AiSearchModule } from './ai-search/ai-search.module';
 import { ComplianceProviderModule } from './complianceProvider/compliance-provider.module'; // ✅ COMPLIANCE
+import { HealthModule } from './health/health.module'; // ✅ HEALTH & KEEP-ALIVE
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 @Module({
@@ -83,6 +84,7 @@ import { join } from 'path';
     PromotionModule,
     AiSearchModule,
     ComplianceProviderModule, // ✅ COMPLIANCE MODULE
+    HealthModule, // ✅ HEALTH CHECK & KEEP-ALIVE
   ],
   controllers: [],
   providers: [],

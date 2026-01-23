@@ -253,7 +253,7 @@ class _MyAppState extends State<MyApp> {
     }
     
     return MaterialApp(
-      title: 'PlanMyWedding',
+      title: 'Eventry',
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey, // ✅ مهم جداً
       theme: ThemeData(

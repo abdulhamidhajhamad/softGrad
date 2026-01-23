@@ -70,7 +70,7 @@ class _ChooseRoleScreenState extends State<ChooseRoleScreen> {
         const SizedBox(height: 8),
 
         Text(
-          "Select how you want to use Event Planner",
+          "Select how you want to use Eventry",
           style: GoogleFonts.poppins(
             fontSize: 14.5,
             color: Colors.grey.shade600,

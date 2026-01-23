@@ -12,7 +12,7 @@ class AppStrings {
   // 📱 App Info
   // ═══════════════════════════════════════════════════════════════════════════
   
-  static const String appName = 'PlanMyWedding';
+  static const String appName = 'Eventry';
   static const String appTagline = 'Plan Your Perfect Wedding';
 
   // ═══════════════════════════════════════════════════════════════════════════

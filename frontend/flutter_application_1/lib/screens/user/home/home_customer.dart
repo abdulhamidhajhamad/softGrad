@@ -548,7 +548,7 @@ class _HomeTabState extends State<_HomeTab> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'EventPlanner',
+                  'Eventry',
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
@@ -1565,7 +1565,7 @@ class _HomePackageCarouselState extends State<HomePackageCarousel> {
     super.initState();
     _controller = PageController(viewportFraction: 0.88);
 
-    _timer = Timer.periodic(const Duration(seconds: 6), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!mounted || widget.packages.isEmpty) return;
       final next = (_page + 1) % widget.packages.length;
       _controller.animateToPage(
@@ -1845,7 +1845,7 @@ class _PackageHeroCard extends StatelessWidget {
   }
 }
 
-class HomeTrendingRail extends StatelessWidget {
+class HomeTrendingRail extends StatefulWidget {
   final List<HomeTrendingService> services;
   final ValueChanged<HomeTrendingService> onOpen;
 
@@ -1856,19 +1856,72 @@ class HomeTrendingRail extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<HomeTrendingRail> createState() => _HomeTrendingRailState();
+}
+
+class _HomeTrendingRailState extends State<HomeTrendingRail> {
+  late final ScrollController _scrollController;
+  Timer? _autoScrollTimer;
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _startAutoScroll();
+  }
+
+  @override
+  void dispose() {
+    _autoScrollTimer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _startAutoScroll() {
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || widget.services.isEmpty) return;
+      
+      _currentIndex = (_currentIndex + 1) % widget.services.length;
+      
+      // Calculate scroll position (card width ~320 + spacing 14)
+      final cardWidth = 320.0 + 14.0;
+      final targetOffset = _currentIndex * cardWidth;
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      
+      // If reached end, go back to start
+      if (targetOffset > maxScroll) {
+        _currentIndex = 0;
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        _scrollController.animateTo(
+          targetOffset,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (services.isEmpty) return const SizedBox.shrink();
+    if (widget.services.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(
       height: 178,
       child: ListView.separated(
+        controller: _scrollController,
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: services.length,
+        itemCount: widget.services.length,
         separatorBuilder: (_, __) => const SizedBox(width: 14),
         itemBuilder: (context, i) {
-          final s = services[i];
-          return _TrendingCard(service: s, onTap: () => onOpen(s));
+          final s = widget.services[i];
+          return _TrendingCard(service: s, onTap: () => widget.onOpen(s));
         },
       ),
     );

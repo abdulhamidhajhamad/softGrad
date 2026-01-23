@@ -65,7 +65,7 @@ class AiService {
         'budgetPercent': s.budgetPercent,  // 🆕 Include budget percentage
       }).toList();
 
-      // Prepare request body
+      // Prepare request body (only fields accepted by backend DTO)
       final requestBody = {
         'city': formData.city,
         'guestCount': formData.guestCount,
@@ -76,8 +76,6 @@ class AiService {
         'startTime': startTimeStr,
         'endTime': endTimeStr,
         'userTags': userTags,
-        'venueType': formData.venueType,
-        'packagePreference': formData.packagePreference == PackagePreference.withOptions ? 'withOptions' : 'withinBudget',
         'servicePriorities': servicePriorities,  // 🆕 Send service priorities with budgets
         'budgetFlexibility': formData.variationPercentage,  // 🆕 Budget flexibility
         if (formData.notes.isNotEmpty) 'additionalNotes': formData.notes,

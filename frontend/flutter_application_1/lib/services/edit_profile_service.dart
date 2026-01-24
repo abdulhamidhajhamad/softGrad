@@ -1,7 +1,9 @@
 // lib/services/edit_profile_service.dart
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_application_1/services/auth_service.dart';
+import 'package:http_parser/http_parser.dart';
 
 class EditProfileService {
   static final String baseUrl = AuthService.baseUrl;
@@ -168,41 +170,47 @@ class EditProfileService {
 
       print('📡 Updating provider details...');
 
-final Map<String, dynamic> body = {};
+      // ✅ رفع الشعار أولاً إذا موجود
+      String? uploadedLogoUrl;
+      if (logoPath != null && logoPath.isNotEmpty) {
+        uploadedLogoUrl = await _uploadLogo(logoPath, token);
+      }
 
-// âœ… Ø§Ø³Ù… Ø§Ù„Ø´Ø±ÙƒØ©
-if (companyName != null && companyName.isNotEmpty) {
-  body['companyName'] = companyName;
-}
+      final Map<String, dynamic> body = {};
 
-// âœ… Ø§Ù„ÙˆØµÙ
-if (description != null && description.isNotEmpty) {
-  body['description'] = description;
-}
+      // ✅ اسم الشركة
+      if (companyName != null && companyName.isNotEmpty) {
+        body['companyName'] = companyName;
+      }
 
-// âœ… details - ÙÙ‚Ø· Ø¥Ø°Ø§ ÙƒØ§Ù† ÙÙŠ ØªØ¹Ø¯ÙŠÙ„
-if (email != null || phone != null) {
-  final Map<String, dynamic> details = {};
-  if (email != null && email.isNotEmpty) {
-    details['email'] = email;
-  }
-  if (phone != null && phone.isNotEmpty) {
-    details['phone'] = phone;
-  }
-  if (details.isNotEmpty) {
-    body['details'] = details;
-  }
-}
+      // ✅ الوصف
+      if (description != null && description.isNotEmpty) {
+        body['description'] = description;
+      }
 
-// âœ… location - ÙÙ‚Ø· Ø¥Ø°Ø§ ÙƒØ§Ù† ÙÙŠ ØªØ¹Ø¯ÙŠÙ„
-if (city != null && city.isNotEmpty) {
-  body['location'] = {'city': city};
-}
+      // ✅ details - فقط إذا كان في تعديل
+      if (email != null || phone != null) {
+        final Map<String, dynamic> details = {};
+        if (email != null && email.isNotEmpty) {
+          details['email'] = email;
+        }
+        if (phone != null && phone.isNotEmpty) {
+          details['phone'] = phone;
+        }
+        if (details.isNotEmpty) {
+          body['details'] = details;
+        }
+      }
 
-// âœ… Ø§Ù„Ø´Ø¹Ø§Ø±
-if (logoPath != null && logoPath.isNotEmpty) {
-  body['image'] = logoPath;
-}
+      // ✅ location - فقط إذا كان في تعديل
+      if (city != null && city.isNotEmpty) {
+        body['location'] = {'city': city};
+      }
+
+      // ✅ الشعار المرفوع
+      if (uploadedLogoUrl != null) {
+        body['logoUrl'] = uploadedLogoUrl;
+      }
 
       print('📤 Update body: $body');
 
@@ -229,6 +237,64 @@ if (logoPath != null && logoPath.isNotEmpty) {
     } catch (e) {
       print('❌ Error updating provider details: $e');
       rethrow;
+    }
+  }
+
+  // ====================== UPLOAD LOGO =========================
+  
+  /// رفع شعار الشركة إلى السيرفر
+  static Future<String?> _uploadLogo(String filePath, String token) async {
+    try {
+      print('📤 Uploading logo: $filePath');
+      
+      final file = File(filePath);
+      if (!await file.exists()) {
+        print('❌ Logo file does not exist');
+        return null;
+      }
+
+      // تحديد نوع الملف
+      String mimeType = 'image/jpeg';
+      final extension = filePath.toLowerCase().split('.').last;
+      if (extension == 'png') {
+        mimeType = 'image/png';
+      } else if (extension == 'gif') {
+        mimeType = 'image/gif';
+      } else if (extension == 'webp') {
+        mimeType = 'image/webp';
+      }
+
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/providers/upload-logo'),
+      );
+
+      request.headers['Authorization'] = 'Bearer $token';
+
+      request.files.add(await http.MultipartFile.fromPath(
+        'logo',
+        filePath,
+        contentType: MediaType.parse(mimeType),
+      ));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('📥 Upload response status: ${response.statusCode}');
+      print('📥 Upload response body: ${response.body}');
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final logoUrl = data['logoUrl'] as String?;
+        print('✅ Logo uploaded successfully: $logoUrl');
+        return logoUrl;
+      } else {
+        print('❌ Failed to upload logo: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Error uploading logo: $e');
+      return null;
     }
   }
 }

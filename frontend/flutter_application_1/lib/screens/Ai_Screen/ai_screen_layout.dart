@@ -1178,7 +1178,9 @@ class _AiScreenLayoutState extends State<AiScreenLayout> with TickerProviderStat
     final bool isNoResults = cleanMessage.toLowerCase().contains('no ') && 
         (cleanMessage.toLowerCase().contains('found') || 
          cleanMessage.toLowerCase().contains('matching') ||
-         cleanMessage.toLowerCase().contains('available'));
+         cleanMessage.toLowerCase().contains('available') ||
+         cleanMessage.toLowerCase().contains('sorry') ||
+         cleanMessage.toLowerCase().contains('criteria'));
 
     showDialog(
       context: context,

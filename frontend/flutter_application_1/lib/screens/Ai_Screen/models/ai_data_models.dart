@@ -355,6 +355,12 @@ class ServiceItem {
       }
     }
 
+    // ✅ FIX: Use calculatedPrice or displayPrice if available (from backend calculation)
+    // This is the actual price considering hours/guests
+    final calculatedPrice = _safeToDouble(json['calculatedPrice'], 0);
+    final displayPrice = _safeToDouble(json['displayPrice'], 0);
+    final finalPrice = displayPrice > 0 ? displayPrice : (calculatedPrice > 0 ? calculatedPrice : servicePrice);
+
     // ✅ Handle bookingType as String (not Map)
     String? bookingType;
     final bookingTypeData = json['bookingType'];
@@ -369,7 +375,8 @@ class ServiceItem {
       id: serviceId,
       category: category,
       name: serviceName,
-      price: servicePrice,
+      // ✅ FIX: Use calculated/display price for correct total display
+      price: finalPrice,
       priceType: priceType ?? json['payType'] as String?,
       providerName: json['providerName'] as String? ?? json['companyName'] as String? ?? 'Provider',
       providerId: json['providerId']?.toString(),

@@ -57,4 +57,5 @@ export interface AiSearchFilters {
     eventDate?: string; // 🆕 للتحقق من التوفر
     startTime?: string; // 🆕 وقت البداية
     endTime?: string; // 🆕 وقت النهاية
+    eventType?: string; // 🆕 NEW: For bestFor matching
 }

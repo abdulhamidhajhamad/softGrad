@@ -40,6 +40,8 @@ class _AiPackageCardState extends State<AiPackageCard> {
   bool _isProcessing = false;
   int _currentServiceIndex = 0;
   List<ServiceItem> _pendingServices = [];
+  bool _serviceAddedSuccessfully = false; // ✅ Track if service was added
+  int _addedServicesCount = 0; // ✅ Track how many services were added
 
   void _toggleExpanded() {
     setState(() => _isExpanded = !_isExpanded);
@@ -521,6 +523,7 @@ class _AiPackageCardState extends State<AiPackageCard> {
       _isProcessing = true;
       _pendingServices = services;
       _currentServiceIndex = 0;
+      _addedServicesCount = 0;
     });
 
     // Process services one by one
@@ -528,16 +531,20 @@ class _AiPackageCardState extends State<AiPackageCard> {
   }
 
   Future<void> _processNextService() async {
+    // ✅ Check if all services processed
     if (_currentServiceIndex >= _pendingServices.length) {
-      // All services processed
       setState(() => _isProcessing = false);
-      _showSuccessSnackbar('Package added to cart!');
+      
+      // Show final success message
+      if (_addedServicesCount > 0) {
+        _showSuccessSnackbar('$_addedServicesCount service${_addedServicesCount > 1 ? 's' : ''} added to cart!');
+      }
       return;
     }
 
     final service = _pendingServices[_currentServiceIndex];
     
-    // Check if already in cart
+    // Check if already in cart - skip silently
     if (CartStore.instance.contains(service.id)) {
       _currentServiceIndex++;
       await _processNextService();
@@ -559,7 +566,7 @@ class _AiPackageCardState extends State<AiPackageCard> {
       final serviceData = json.decode(response.body) as Map<String, dynamic>;
       final bookingType = serviceData['bookingType']?.toString() ?? 'daily';
 
-      // Skip display-only services
+      // Skip display-only services silently
       if (bookingType.toLowerCase() == 'display') {
         _currentServiceIndex++;
         await _processNextService();
@@ -569,64 +576,123 @@ class _AiPackageCardState extends State<AiPackageCard> {
       // Show booking modal
       if (!mounted) return;
       
+      // ✅ Reset flag before showing modal
+      _serviceAddedSuccessfully = false;
+      
+      // ✅ AI packages: Don't pass packageName - book as individual services
       await showBookingModal(
         context: context,
         serviceId: service.id,
         serviceName: service.name,
         bookingTypeString: bookingType,
         serviceData: serviceData,
-        packageName: widget.package.name,
-        onSuccess: () async {
-          _currentServiceIndex++;
-          await _processNextService();
+        onSuccess: () {
+          // ✅ Mark as successfully added
+          _serviceAddedSuccessfully = true;
+          _addedServicesCount++;
         },
       );
 
-      // If user cancelled, stop processing
-      if (_currentServiceIndex < _pendingServices.length) {
-        // User cancelled - ask if they want to continue
-        if (mounted) {
-          final continueAdding = await _showContinueDialog(service.name);
-          if (continueAdding == true) {
-            _currentServiceIndex++;
-            await _processNextService();
-          } else {
-            setState(() => _isProcessing = false);
+      // ✅ After modal closes, check if it was successful
+      if (!mounted) return;
+      
+      if (_serviceAddedSuccessfully) {
+        // Service was added successfully - move to next
+        _currentServiceIndex++;
+        await _processNextService();
+      } else {
+        // User closed modal without adding (cancelled)
+        // Ask if they want to skip this service and continue
+        final shouldContinue = await _showSkipDialog(service.name);
+        if (shouldContinue == true) {
+          _currentServiceIndex++;
+          await _processNextService();
+        } else {
+          // User wants to stop
+          setState(() => _isProcessing = false);
+          if (_addedServicesCount > 0) {
+            _showSuccessSnackbar('$_addedServicesCount service${_addedServicesCount > 1 ? 's' : ''} added to cart!');
           }
         }
       }
     } catch (e) {
-      print('❌ Error processing service: $e');
+      print('❌ Error processing service ${service.name}: $e');
+      // Skip failed service and continue
       _currentServiceIndex++;
       await _processNextService();
     }
   }
 
-  Future<bool?> _showContinueDialog(String serviceName) async {
+  Future<bool?> _showSkipDialog(String serviceName) async {
     return showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Skip Service?',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+        title: Row(
+          children: [
+            Icon(Icons.skip_next_rounded, color: kPrimary, size: 24),
+            const SizedBox(width: 10),
+            Text(
+              'Skip Service?',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w700, fontSize: 18),
+            ),
+          ],
         ),
-        content: Text(
-          'You didn\'t complete booking for "$serviceName". Continue with remaining services?',
-          style: GoogleFonts.poppins(color: kMuted),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You didn\'t book "$serviceName".',
+              style: GoogleFonts.poppins(color: kText, fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Do you want to skip it and continue with the remaining services?',
+              style: GoogleFonts.poppins(color: kMuted, fontSize: 13),
+            ),
+            if (_currentServiceIndex < _pendingServices.length - 1) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: kBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: kMuted, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${_pendingServices.length - _currentServiceIndex - 1} more service(s) remaining',
+                      style: GoogleFonts.poppins(color: kMuted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Stop', style: GoogleFonts.poppins(color: kMuted)),
+            child: Text(
+              'Stop Here',
+              style: GoogleFonts.poppins(color: kMuted, fontWeight: FontWeight.w600),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: kPrimary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             ),
-            child: Text('Continue', style: GoogleFonts.poppins(color: Colors.white)),
+            child: Text(
+              'Skip & Continue',
+              style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),

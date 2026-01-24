@@ -543,7 +543,7 @@ class _PaymentPageState extends State<PaymentPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            "Demo screen: connected to Stripe Test Mode.",
+            "",
             style: GoogleFonts.poppins(
               color: Colors.grey.shade600,
               fontWeight: FontWeight.w600,

@@ -1285,7 +1285,7 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
     }
   }
 
-  void _openBookingModal() async {
+ void _openBookingModal() async {
     final bookingType = _serviceData?['bookingType']?.toString().toLowerCase() 
         ?? widget.offer.bookingType.toLowerCase();
     
@@ -1340,13 +1340,23 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
       'hasFixedLocation': widget.offer.hasFixedLocation,
     };
 
-    // ✅ IMPORTANT: Override price with discounted price for cart calculation
+    // ✅ CRITICAL FIX: Override ALL price fields with discounted price
+    serviceData['price'] = widget.offer.discountedPrice;
+    serviceData['priceOptions'] = {
+      'perDay': widget.offer.discountedPrice,
+      'perHour': widget.offer.discountedPrice,
+      'perPerson': widget.offer.discountedPrice,
+      'perEvent': widget.offer.discountedPrice,
+      'basePrice': widget.offer.discountedPrice,
+      'fullVenue': widget.offer.discountedPrice,
+    };
     serviceData['allPrices'] = {
       'perDay': widget.offer.discountedPrice,
       'perHour': widget.offer.discountedPrice,
       'perPerson': widget.offer.discountedPrice,
       'perEvent': widget.offer.discountedPrice,
       'displayPrice': widget.offer.discountedPrice,
+      'basePrice': widget.offer.discountedPrice,
     };
 
     await showBookingModal(

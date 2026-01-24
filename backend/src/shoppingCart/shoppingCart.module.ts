@@ -15,6 +15,7 @@ import { Booking, BookingSchema } from 'src/booking/booking.entity';
       { name: Cart.name, schema: CartSchema },
       { name: Service.name, schema: ServiceSchema },
       { name: Booking.name, schema: BookingSchema },
+      
     ]),
          PackageModule,],
   controllers: [CartController],

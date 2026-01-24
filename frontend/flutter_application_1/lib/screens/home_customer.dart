@@ -1209,7 +1209,7 @@ class _PackageHeroCard extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      "\$${pkg.price.toStringAsFixed(0)}",
+                      "₪${pkg.price.toStringAsFixed(0)}",
                       style: GoogleFonts.poppins(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
@@ -1218,7 +1218,7 @@ class _PackageHeroCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      "\$${pkg.originalPrice.toStringAsFixed(0)}",
+                      "₪${pkg.originalPrice.toStringAsFixed(0)}",
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -1418,7 +1418,7 @@ class _TrendingCard extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          "\$${service.price.toStringAsFixed(0)}",
+                          "₪${service.price.toStringAsFixed(0)}",
                           style: GoogleFonts.poppins(
                             fontSize: 14.5,
                             fontWeight: FontWeight.w900,

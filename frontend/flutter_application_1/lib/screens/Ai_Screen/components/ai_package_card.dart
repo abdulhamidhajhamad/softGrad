@@ -9,6 +9,7 @@ import '../../../services/auth_service.dart';
 import '../../../widgets/booking_details_modal.dart';
 import '../../../services/payment_service/cart_service.dart';
 import '../../user/payment/cart.dart';
+import 'ai_service_details_screen.dart'; // ✅ For service details navigation
 
 // ✅ Clean Modern Color Palette (matching project)
 const Color kPrimary = Color.fromARGB(215, 20, 20, 215);
@@ -358,96 +359,128 @@ class _AiPackageCardState extends State<AiPackageCard> {
   }
 
   Widget _buildServiceItem(ServiceItem service) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: kBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kBorder),
-      ),
-      child: Row(
-        children: [
-          // ✅ Category Icon
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: kCard,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: kBorder),
+    return GestureDetector(
+      onTap: () => _openServiceDetails(service),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: kBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: kBorder),
+        ),
+        child: Row(
+          children: [
+            // ✅ Category Icon
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: kCard,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: kBorder),
+              ),
+              child: Icon(
+                _getCategoryIcon(service.category),
+                color: kPrimary,
+                size: 18,
+              ),
             ),
-            child: Icon(
-              _getCategoryIcon(service.category),
-              color: kPrimary,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 12),
-          
-          // ✅ Service Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  service.name,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: kText,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Text(
-                      service.category,
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: kMuted,
-                      ),
+            const SizedBox(width: 12),
+            
+            // ✅ Service Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    service.name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: kText,
                     ),
-                    if (service.providerName != null) ...[
-                      Text(' • ', style: TextStyle(color: kMuted)),
-                      Expanded(
-                        child: Text(
-                          service.providerName!,
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: kMuted,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Text(
+                        service.category,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: kMuted,
                         ),
                       ),
+                      if (service.providerName != null) ...[
+                        Text(' • ', style: TextStyle(color: kMuted)),
+                        Expanded(
+                          child: Text(
+                            service.providerName!,
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: kMuted,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            
+            // ✅ Price + Arrow
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: kPrimary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '₪${service.price.toStringAsFixed(0)}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: kPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: kMuted.withOpacity(0.5),
                 ),
               ],
             ),
-          ),
-          
-          // ✅ Price
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: kPrimary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '₪${service.price.toStringAsFixed(0)}',
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: kPrimary,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ✅ Navigate to Service Details Screen
+  void _openServiceDetails(ServiceItem service) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AiServiceDetailsScreen(
+          serviceId: service.id,
+          serviceName: service.name,
+          imageUrl: service.imageUrl,
+          providerName: service.providerName,
+          category: service.category,
+          price: service.price,
+          payType: service.priceType,
+        ),
       ),
     );
   }
@@ -535,9 +568,9 @@ class _AiPackageCardState extends State<AiPackageCard> {
     if (_currentServiceIndex >= _pendingServices.length) {
       setState(() => _isProcessing = false);
       
-      // Show final success message
+      // ✅ Show single final success message for all services
       if (_addedServicesCount > 0) {
-        _showSuccessSnackbar('$_addedServicesCount service${_addedServicesCount > 1 ? 's' : ''} added to cart!');
+        _showFinalSuccessDialog();
       }
       return;
     }
@@ -580,12 +613,14 @@ class _AiPackageCardState extends State<AiPackageCard> {
       _serviceAddedSuccessfully = false;
       
       // ✅ AI packages: Don't pass packageName - book as individual services
+      // ✅ suppressSuccessDialog: true - don't show dialog for each service
       await showBookingModal(
         context: context,
         serviceId: service.id,
         serviceName: service.name,
         bookingTypeString: bookingType,
         serviceData: serviceData,
+        suppressSuccessDialog: true, // ✅ Don't show dialog for each service
         onSuccess: () {
           // ✅ Mark as successfully added
           _serviceAddedSuccessfully = true;
@@ -610,8 +645,9 @@ class _AiPackageCardState extends State<AiPackageCard> {
         } else {
           // User wants to stop
           setState(() => _isProcessing = false);
+          // ✅ Show single final success dialog
           if (_addedServicesCount > 0) {
-            _showSuccessSnackbar('$_addedServicesCount service${_addedServicesCount > 1 ? 's' : ''} added to cart!');
+            _showFinalSuccessDialog();
           }
         }
       }
@@ -695,6 +731,109 @@ class _AiPackageCardState extends State<AiPackageCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ✅ Show single final success dialog after all services are added
+  void _showFinalSuccessDialog() {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Success Icon
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kSuccess.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_circle_rounded,
+                color: kSuccess,
+                size: 56,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Title
+            Text(
+              'All Services Added!',
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: kText,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            
+            // Message
+            Text(
+              '$_addedServicesCount ${_addedServicesCount == 1 ? 'service has' : 'services have'} been successfully added to your cart.',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: kMuted,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            
+            // View Cart Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage()));
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                child: Text(
+                  'View Cart',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            
+            // Continue Shopping Button
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: Text(
+                  'Continue Shopping',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: kMuted,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

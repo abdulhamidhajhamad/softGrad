@@ -1619,7 +1619,7 @@ class _AddOtherServiceState extends State<AddOtherService> {
                   ),
                 ),
                 Text(
-                  "\$${_finalPrice!.toStringAsFixed(2)} ${_selectedPricingType.label}",
+                  "${_finalPrice!.toStringAsFixed(2)} ${_selectedPricingType.label}",
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -1775,7 +1775,7 @@ class _AddOtherServiceState extends State<AddOtherService> {
           _buildWebInfoPill(LucideIcons.calendarDays, _daysSummary()),
           if (_finalPrice != null) ...[
             const SizedBox(height: 10),
-            _buildWebInfoPill(LucideIcons.coins, "\$${_finalPrice!.toStringAsFixed(2)}"),
+            _buildWebInfoPill(LucideIcons.coins, "${_finalPrice!.toStringAsFixed(2)}"),
           ],
         ],
       ),
@@ -2409,7 +2409,7 @@ class _AddOtherServiceState extends State<AddOtherService> {
                           style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600),
                         ),
                         Text(
-                          "\$${_finalPrice!.toStringAsFixed(2)} ${_selectedPricingType.label}",
+                          "${_finalPrice!.toStringAsFixed(2)} ${_selectedPricingType.label}",
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,

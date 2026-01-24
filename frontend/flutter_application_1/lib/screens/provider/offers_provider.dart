@@ -699,7 +699,7 @@ class _OffersProviderScreenState extends State<OffersProviderScreen>
                           ),
                           const Spacer(),
                           Text(
-                            "\$${originalPrice.toStringAsFixed(0)}",
+                            "${originalPrice.toStringAsFixed(0)}",
                             style: GoogleFonts.poppins(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -996,7 +996,7 @@ class _OffersProviderScreenState extends State<OffersProviderScreen>
                           ),
                           const Spacer(),
                           Text(
-                            "\$${originalPrice.toStringAsFixed(0)}",
+                            "${originalPrice.toStringAsFixed(0)}",
                             style: GoogleFonts.poppins(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -1391,7 +1391,7 @@ class _ActiveOfferCard extends StatelessWidget {
                       Row(
                         children: [
                           Text(
-                            "\$${discountedPrice.toStringAsFixed(0)}",
+                            "${discountedPrice.toStringAsFixed(0)}",
                             style: GoogleFonts.poppins(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -1400,7 +1400,7 @@ class _ActiveOfferCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            "\$${originalPrice.toStringAsFixed(0)}",
+                            "${originalPrice.toStringAsFixed(0)}",
                             style: GoogleFonts.poppins(
                               fontSize: 13,
                               color: Colors.grey,
@@ -1512,7 +1512,7 @@ class _AvailableServiceCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  "\$${price.toStringAsFixed(0)}",
+                  "${price.toStringAsFixed(0)}",
                   style: GoogleFonts.poppins(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,

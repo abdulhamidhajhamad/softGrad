@@ -37,6 +37,7 @@ Future<void> showBookingModal({
   required Map<String, dynamic> serviceData, // Full service data from API
   required VoidCallback onSuccess,
   String? packageName, // ✅ NEW: Optional package name for AI packages
+  bool suppressSuccessDialog = false, // ✅ NEW: Don't show dialog when adding from AI package
 }) async {
   // Parse booking type
   BookingType bookingType = BookingType.daily;
@@ -70,6 +71,7 @@ Future<void> showBookingModal({
       serviceData: serviceData,
       onSuccess: onSuccess,
       packageName: packageName,
+      suppressSuccessDialog: suppressSuccessDialog,
     ),
   );
 }
@@ -84,6 +86,7 @@ class _BookingDetailsModal extends StatefulWidget {
   final Map<String, dynamic> serviceData;
   final VoidCallback onSuccess;
   final String? packageName; // ✅ NEW
+  final bool suppressSuccessDialog; // ✅ NEW
 
   const _BookingDetailsModal({
     required this.serviceId,
@@ -92,6 +95,7 @@ class _BookingDetailsModal extends StatefulWidget {
     required this.serviceData,
     required this.onSuccess,
     this.packageName,
+    this.suppressSuccessDialog = false,
   });
 
   @override
@@ -553,7 +557,10 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
         
         setState(() => _isLoading = false);
         Navigator.pop(context);
-        _showSuccessDialog();
+        // ✅ Only show dialog if not suppressed (for AI package batch adding)
+        if (!widget.suppressSuccessDialog) {
+          _showSuccessDialog();
+        }
         widget.onSuccess();
       }
 

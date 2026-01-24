@@ -1247,7 +1247,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
             label: 'Price',
             hint: 'Enter price',
             keyboardType: TextInputType.number,
-            prefix: '\$ ',
+            prefix: '₪ ',
           ),
           if (_payType != null)
             Padding(

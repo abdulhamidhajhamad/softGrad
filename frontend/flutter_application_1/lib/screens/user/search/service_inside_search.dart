@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
+import 'package:url_launcher/url_launcher.dart'; // ✅ For opening URLs
 
 import '../payment/cart.dart';
 import '../chat/chat_customer_home_page.dart'; // ✅ Real chat
@@ -1234,8 +1235,11 @@ class _ServiceInsideSearchScreenState extends State<ServiceInsideSearchScreen> {
     );
   }
 
-  // Additional Info Row Widget
+  // Additional Info Row Widget - ✅ Now supports clickable URLs
   Widget _buildAdditionalInfoRow(String key, String value) {
+    // Check if value is a URL
+    final isUrl = _isValidUrl(value);
+    
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -1251,32 +1255,186 @@ class _ServiceInsideSearchScreenState extends State<ServiceInsideSearchScreen> {
             ),
           ),
           Expanded(
-            child: RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: '$key: ',
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF334155),
-                    ),
+            child: isUrl 
+              ? _buildClickableUrlRow(key, value)
+              : RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '$key: ',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF334155),
+                        ),
+                      ),
+                      TextSpan(
+                        text: value,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: kMuted,
+                        ),
+                      ),
+                    ],
                   ),
-                  TextSpan(
-                    text: value,
-                    style: GoogleFonts.poppins(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: kMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                ),
           ),
         ],
       ),
     );
+  }
+
+  // ✅ Check if string is a valid URL
+  bool _isValidUrl(String text) {
+    final urlPattern = RegExp(
+      r'^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$',
+      caseSensitive: false,
+    );
+    return urlPattern.hasMatch(text.trim());
+  }
+
+  // ✅ Build clickable URL row
+  Widget _buildClickableUrlRow(String key, String url) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$key:',
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF334155),
+          ),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () => _launchUrl(url),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: kPrimary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: kPrimary.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _getUrlIcon(url),
+                  size: 16,
+                  color: kPrimary,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _getDisplayUrl(url),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: kPrimary,
+                      decoration: TextDecoration.underline,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.open_in_new_rounded,
+                  size: 14,
+                  color: kPrimary.withOpacity(0.7),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ✅ Get appropriate icon for URL type
+  IconData _getUrlIcon(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('facebook.com') || lower.contains('fb.com')) {
+      return Icons.facebook_rounded;
+    } else if (lower.contains('instagram.com')) {
+      return Icons.camera_alt_rounded;
+    } else if (lower.contains('twitter.com') || lower.contains('x.com')) {
+      return Icons.alternate_email_rounded;
+    } else if (lower.contains('youtube.com') || lower.contains('youtu.be')) {
+      return Icons.play_circle_rounded;
+    } else if (lower.contains('tiktok.com')) {
+      return Icons.music_note_rounded;
+    } else if (lower.contains('linkedin.com')) {
+      return Icons.work_rounded;
+    } else if (lower.contains('whatsapp.com') || lower.contains('wa.me')) {
+      return Icons.chat_rounded;
+    } else {
+      return Icons.link_rounded;
+    }
+  }
+
+  // ✅ Get display-friendly URL
+  String _getDisplayUrl(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('facebook.com') || lower.contains('fb.com')) {
+      return 'Facebook Page';
+    } else if (lower.contains('instagram.com')) {
+      return 'Instagram Profile';
+    } else if (lower.contains('twitter.com') || lower.contains('x.com')) {
+      return 'Twitter/X Profile';
+    } else if (lower.contains('youtube.com') || lower.contains('youtu.be')) {
+      return 'YouTube Channel';
+    } else if (lower.contains('tiktok.com')) {
+      return 'TikTok Profile';
+    } else if (lower.contains('linkedin.com')) {
+      return 'LinkedIn Profile';
+    } else if (lower.contains('whatsapp.com') || lower.contains('wa.me')) {
+      return 'WhatsApp Contact';
+    }
+    // Return shortened URL for websites
+    try {
+      final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
+      return uri.host.replaceFirst('www.', '');
+    } catch (_) {
+      return url.length > 30 ? '${url.substring(0, 30)}...' : url;
+    }
+  }
+
+  // ✅ Launch URL in browser
+  Future<void> _launchUrl(String url) async {
+    String finalUrl = url.trim();
+    
+    // Add https:// if missing
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+      finalUrl = 'https://$finalUrl';
+    }
+    
+    try {
+      final uri = Uri.parse(finalUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not open: $url'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid URL: $url'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // Schedule Row Widget (for working hours & days)

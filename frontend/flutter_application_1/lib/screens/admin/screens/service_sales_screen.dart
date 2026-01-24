@@ -245,7 +245,7 @@ class _ServiceSalesScreenState extends State<ServiceSalesScreen> {
                   Expanded(
                     child: _MetricCard(
                       label: 'Revenue',
-                      value: '\$${(service.totalSales / 1000).toStringAsFixed(1)}k',
+                      value: '₪${(service.totalSales / 1000).toStringAsFixed(1)}k',
                       icon: LucideIcons.dollarSign,
                       color: kSuccessColor,
                     ),
@@ -456,7 +456,7 @@ class _ServiceCard extends StatelessWidget {
                     ),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${service.totalSales.toStringAsFixed(0)}',
+                    '₪${service.totalSales.toStringAsFixed(0)}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       color: kSuccessColor,

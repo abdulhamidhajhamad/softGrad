@@ -1189,7 +1189,7 @@ class BookingDetailsProvider extends StatelessWidget {
     final price = booking['price'];
     String formattedPrice = 'N/A';
     if (price != null) {
-      formattedPrice = '\$${price.toStringAsFixed(2)}';
+      formattedPrice = '₪${price.toStringAsFixed(2)}';
     }
 
     return Container(

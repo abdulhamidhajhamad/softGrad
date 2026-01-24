@@ -13,8 +13,10 @@ import 'package:latlong2/latlong.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/booking_details_modal.dart';
 import '../../../services/payment_service/cart_service.dart';
+import '../../../services/user_service/review_service.dart';
 import '../../user/chat/chat_inside_search.dart';
 import '../../user/payment/cart.dart';
+import '../../user/home/home_customer.dart'; // For ServiceReviewsCustomerPage
 
 const Color kPrimary = Color.fromARGB(215, 20, 20, 215);
 const Color kBg = Color(0xFFF6F7FB);
@@ -61,11 +63,17 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
   late PageController _mediaPageController;
   Timer? _autoSlideTimer;
 
+  // ✅ Reviews State
+  List<dynamic> _reviews = [];
+  double _averageRating = 0.0;
+  int _totalReviews = 0;
+
   @override
   void initState() {
     super.initState();
     _mediaPageController = PageController();
     _loadServiceDetails();
+    _loadReviews(); // ✅ Load reviews
   }
   
   @override
@@ -177,6 +185,26 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
       return json.decode(response.body);
     } else {
       throw Exception('Failed to load service details');
+    }
+  }
+
+  // ✅ Load Reviews for this service
+  Future<void> _loadReviews() async {
+    try {
+      final result = await ReviewService.getServiceReviews(
+        serviceId: widget.serviceId,
+        limit: 10,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _reviews = result['reviews'] ?? [];
+          _averageRating = (result['averageRating'] ?? 0).toDouble();
+          _totalReviews = result['totalReviews'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading reviews: $e');
     }
   }
 
@@ -311,6 +339,9 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
                 // Map Section (if has location)
                 if (_hasLocation())
                   _buildMapSection(),
+
+                // ✅ Customer Reviews Section
+                _buildCustomerReviewsSection(),
 
                 const SizedBox(height: 100), // Space for bottom bar
               ],
@@ -1188,6 +1219,249 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
       'dress': Icons.checkroom_rounded,
     };
     return icons[category.toLowerCase()] ?? Icons.category_rounded;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ⭐ CUSTOMER REVIEWS SECTION
+  // ═══════════════════════════════════════════════════════════════════
+  Widget _buildCustomerReviewsSection() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Customer Reviews',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: kText,
+                        ),
+                      ),
+                      if (_totalReviews > 0)
+                        Text(
+                          '${_averageRating.toStringAsFixed(1)} ⭐ • $_totalReviews ${_totalReviews == 1 ? 'review' : 'reviews'}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: kMuted,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // View All Button
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ServiceReviewsCustomerPage(
+                          serviceId: widget.serviceId,
+                          serviceName: _getServiceName(),
+                        ),
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    backgroundColor: kPrimary.withOpacity(0.1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View All',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          color: kPrimary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_rounded, size: 16, color: kPrimary),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Reviews List or Empty State
+            if (_reviews.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F9FC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black.withOpacity(0.04)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.rate_review_outlined, color: Color(0xFF64748B), size: 24),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'No reviews yet. Be the first to share your experience!',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: kMuted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ..._reviews.take(2).map((review) => _buildReviewCard(review)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewCard(dynamic review) {
+    final userName = review.userName ?? 'Anonymous';
+    final rating = (review.rating ?? 0).toDouble();
+    final comment = review.comment ?? '';
+    final date = review.reviewDate ?? DateTime.now();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // User Avatar
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [kPrimary.withOpacity(0.8), kPrimary],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w700,
+                        color: kText,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      _formatReviewDate(date),
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: kMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Rating Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(
+                      rating.toStringAsFixed(1),
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w800,
+                        color: kText,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (comment.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              comment,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: kMuted,
+                height: 1.5,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatReviewDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} weeks ago';
+    if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} months ago';
+    return '${(diff.inDays / 365).floor()} years ago';
   }
 }
 

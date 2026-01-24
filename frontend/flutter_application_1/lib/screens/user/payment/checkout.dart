@@ -40,9 +40,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   double get _subTotal => widget.cartData.totalAmount;
-  double get _serviceFee => (_subTotal * 0.03);
   double get _finalAmount {
-    double total = _subTotal + _serviceFee;
+    double total = _subTotal;
     if (_discount != null) {
       total -= _discount!;
     }
@@ -496,7 +495,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
                 const SizedBox(height: 10),
                 _LineItem(title: "Subtotal", value: _money(_subTotal)),
-                _LineItem(title: "Service fee", value: _money(_serviceFee)),
                 if (_discount != null && _discount! > 0)
                   _LineItem(
                     title: "Discount",

@@ -9,7 +9,7 @@ const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
 const Color kTextColor = Colors.black;
 const Color kBackgroundColor = Colors.white;
 
-enum PaymentMethod { card, cash, paypal }
+enum PaymentMethod { card }
 
 class PaymentResult {
   final bool success;
@@ -26,10 +26,6 @@ class PaymentResult {
     switch (method) {
       case PaymentMethod.card:
         return "Card";
-      case PaymentMethod.cash:
-        return "Cash";
-      case PaymentMethod.paypal:
-        return "PayPal";
     }
   }
 }
@@ -300,10 +296,6 @@ class _PaymentPageState extends State<PaymentPage> {
     switch (m) {
       case PaymentMethod.card:
         return "Card";
-      case PaymentMethod.cash:
-        return "Cash";
-      case PaymentMethod.paypal:
-        return "PayPal";
     }
   }
 
@@ -448,38 +440,22 @@ class _PaymentPageState extends State<PaymentPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Choose Method",
+                  "Payment Method",
                   style: GoogleFonts.poppins(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 10),
                 _MethodTile(
                   icon: Icons.credit_card_rounded,
                   title: "Card",
-                  subtitle: "Visa / MasterCard (demo)",
-                  selected: _method == PaymentMethod.card,
-                  onTap: () => setState(() => _method = PaymentMethod.card),
-                ),
-                _MethodTile(
-                  icon: Icons.payments_rounded,
-                  title: "Cash",
-                  subtitle: "Pay in person",
-                  selected: _method == PaymentMethod.cash,
-                  onTap: () => setState(() => _method = PaymentMethod.cash),
-                ),
-                _MethodTile(
-                  icon: Icons.account_balance_wallet_rounded,
-                  title: "PayPal",
-                  subtitle: "Redirect style (demo)",
-                  selected: _method == PaymentMethod.paypal,
-                  onTap: () => setState(() => _method = PaymentMethod.paypal),
+                  subtitle: "Visa / MasterCard",
+                  selected: true,
+                  onTap: () {},
                 ),
               ],
             ),
           ),
           const SizedBox(height: 12),
-          if (_method == PaymentMethod.card) _cardForm(),
-          if (_method == PaymentMethod.cash) _cashInfo(),
-          if (_method == PaymentMethod.paypal) _paypalInfo(),
+          _cardForm(),
           const SizedBox(height: 14),
           SizedBox(
             height: 52,
@@ -578,64 +554,6 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
-  Widget _cashInfo() {
-    return _Card(
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: kPrimaryColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.payments_rounded, color: kPrimaryColor),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              "You will pay in person. Provider will confirm payment upon arrival.",
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w700,
-                color: Colors.grey.shade800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _paypalInfo() {
-    return _Card(
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: kPrimaryColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.account_balance_wallet_rounded,
-              color: kPrimaryColor,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              "Demo PayPal flow: in real app you would open a web redirect and confirm callback.",
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w700,
-                color: Colors.grey.shade800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ---------------- UI Widgets ----------------

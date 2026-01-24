@@ -48,7 +48,7 @@ class _ServiceRevenueTileState extends State<ServiceRevenueTile> {
   Widget build(BuildContext context) {
     return _OverviewTile(
       label: 'Service Revenue',
-      value: _isLoading ? '...' : '\$${_revenue.toStringAsFixed(0)}',
+      value: _isLoading ? '...' : '₪${_revenue.toStringAsFixed(0)}',
       icon: LucideIcons.dollarSign,
       color: Colors.green,
       bgColor: Colors.green[50]!,

@@ -19,6 +19,10 @@ export class PackageBuilderService {
 
     async buildPackages(blueprint: AiSearchBlueprint): Promise<AggregatedPackage[]> {
         const aggregatedPackages: AggregatedPackage[] = [];
+        
+        // ✅ NEW: Track used services per category to avoid duplicates across packages
+        // Map: category -> Set of service IDs used in previous packages
+        const usedServicesPerCategory: Map<string, Set<string>> = new Map();
 
         for (const pkgBlueprint of blueprint.packages) {
             this.logger.log(`Building package: ${pkgBlueprint.packageName} with target price: ${pkgBlueprint.targetPrice}`);
@@ -68,17 +72,41 @@ export class PackageBuilderService {
                         );
 
                         if (availableServices.length > 0) {
+                            // ✅ NEW: Get services already used in this category for other packages
+                            const usedInCategory = usedServicesPerCategory.get(requiredService.categoryName) || new Set();
+                            
+                            // ✅ NEW: Filter out already used services
+                            const unusedServices = availableServices.filter(service => {
+                                const serviceId = (service as any)._id?.toString() || (service as any).id;
+                                return !usedInCategory.has(serviceId);
+                            });
+
+                            this.logger.log(
+                                `Category ${requiredService.categoryName}: ${availableServices.length} available, ` +
+                                `${unusedServices.length} unused (${usedInCategory.size} already used in other packages)`
+                            );
+
+                            // ✅ NEW: Use unused services if available, otherwise fall back to all available
+                            const candidateServices = unusedServices.length > 0 ? unusedServices : availableServices;
+                            
                             const bestService = this.selectBestService(
-                                availableServices, 
+                                candidateServices, 
                                 requiredService.aiTags,
                                 maxBudgetForService,
                                 blueprint.guestCount
                             );
                             
                             if (bestService) {
+                                const serviceId = (bestService as any)._id?.toString() || (bestService as any).id;
                                 const servicePrice = this.calculateServicePrice(bestService, blueprint.guestCount);
                                 aggregated.services.push(bestService);
                                 totalServiceCost += servicePrice;
+
+                                // ✅ NEW: Mark this service as used for this category
+                                if (!usedServicesPerCategory.has(requiredService.categoryName)) {
+                                    usedServicesPerCategory.set(requiredService.categoryName, new Set());
+                                }
+                                usedServicesPerCategory.get(requiredService.categoryName)!.add(serviceId);
 
                                 // ✅ FIX: استخدام averageRating بدلاً من rating
                                 const rating = (bestService as any).averageRating || 0;
@@ -115,7 +143,34 @@ export class PackageBuilderService {
             );
         }
 
-        return aggregatedPackages;
+        // ✅ NEW: Remove packages that have identical services to previous ones
+        const uniquePackages = this.removeDuplicatePackages(aggregatedPackages);
+        this.logger.log(`Final: ${uniquePackages.length} unique packages out of ${aggregatedPackages.length}`);
+        
+        return uniquePackages;
+    }
+
+    // ✅ NEW: Remove packages with identical service sets
+    private removeDuplicatePackages(packages: AggregatedPackage[]): AggregatedPackage[] {
+        const seen = new Set<string>();
+        const unique: AggregatedPackage[] = [];
+
+        for (const pkg of packages) {
+            // Create a unique key from service IDs
+            const serviceIds = pkg.services
+                .map(s => (s as any)._id?.toString() || (s as any).id)
+                .sort()
+                .join(',');
+            
+            if (!seen.has(serviceIds)) {
+                seen.add(serviceIds);
+                unique.push(pkg);
+            } else {
+                this.logger.log(`Removing duplicate package: ${pkg.packageName} (same services as another package)`);
+            }
+        }
+
+        return unique;
     }
 
     private async filterAvailableServices(

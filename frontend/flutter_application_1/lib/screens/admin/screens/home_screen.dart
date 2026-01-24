@@ -74,6 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
   double _totalRevenue = 0.0;
   int _canceledBookings = 0;
   List<Map<String, dynamic>> _financialData = [];
+  String _financialPeriod = '6months';
+  String _financialPeriodLabel = 'Last 6 Months';
   List<ProviderSales> _topSales = [];
   List<DiscountCode> _codes = [];
   List<User> _users = [];
@@ -161,10 +163,21 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _fetchDashboardSummary() async {
     try {
       final summary = await AdminService.getDashboardSummary();
+      print('📊 Dashboard Summary: $summary');
+      
       if (mounted) {
+        // Handle cancelledBookings - can be int or object with count
+        int cancelledCount = 0;
+        final cancelled = summary['cancelledBookings'] ?? summary['canceledBookings'];
+        if (cancelled is int) {
+          cancelledCount = cancelled;
+        } else if (cancelled is Map) {
+          cancelledCount = cancelled['count'] ?? 0;
+        }
+        
         setState(() {
           _totalRevenue = (summary['totalRevenue'] ?? 0).toDouble();
-          _canceledBookings = summary['canceledBookings'] ?? 0;
+          _canceledBookings = cancelledCount;
           _isLoadingDashboard = false;
         });
       }
@@ -174,12 +187,21 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _fetchFinancialGrowth() async {
+  Future<void> _fetchFinancialGrowth({String? period}) async {
     try {
-      final growth = await AdminService.getFinancialGrowth();
+      setState(() => _isLoadingFinancial = true);
+      
+      final selectedPeriod = period ?? _financialPeriod;
+      final result = await AdminService.getFinancialGrowth(period: selectedPeriod);
+      
+      print('📈 Financial Growth Data: ${result['data']}');
+      print('📈 Financial Growth Period: ${result['period']}');
+      
       if (mounted) {
         setState(() {
-          _financialData = growth;
+          _financialData = List<Map<String, dynamic>>.from(result['data'] ?? []);
+          _financialPeriod = selectedPeriod;
+          _financialPeriodLabel = result['period'] ?? 'Last 6 Months';
           _isLoadingFinancial = false;
         });
       }
@@ -306,7 +328,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Expanded(
                   child: _buildWebStatCard(
                     title: 'Total Revenue',
-                    value: _isLoadingDashboard ? '...' : '\$${(_totalRevenue / 1000).toStringAsFixed(1)}k',
+                    value: _isLoadingDashboard ? '...' : '₪${(_totalRevenue / 1000).toStringAsFixed(1)}k',
                     icon: LucideIcons.dollarSign,
                     iconBgColor: kPrimaryColor,
                     trend: '+12.5%',
@@ -616,27 +638,53 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: kBackgroundColor,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Text(
-                  'Last 7 Months',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade600,
+              // Period Selector Button
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => _showPeriodSelector(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: kBackgroundColor,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _financialPeriodLabel,
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(LucideIcons.chevronDown, size: 16, color: Colors.grey.shade600),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 24),
+          // Month Labels
+          if (_financialData.isNotEmpty && !_isLoadingFinancial)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: _financialData.map((d) => Text(
+                  d['monthName'] ?? '',
+                  style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
+                )).toList(),
+              ),
+            ),
           SizedBox(
-            height: 220,
+            height: 200,
             child: _isLoadingFinancial
                 ? Center(child: CircularProgressIndicator(color: kPrimaryColor))
                 : _financialData.isEmpty
@@ -671,7 +719,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               spots: _financialData.asMap().entries.map((e) {
                                 return FlSpot(
                                   e.key.toDouble(),
-                                  ((e.value['value'] ?? 0) / 10000).toDouble(),
+                                  ((e.value['revenue'] ?? e.value['value'] ?? 0) / 1000).toDouble(),
                                 );
                               }).toList(),
                               isCurved: true,
@@ -704,7 +752,124 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
           ),
+          // Revenue Summary Row
+          if (_financialData.isNotEmpty && !_isLoadingFinancial) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: kBackgroundColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildMiniSummary('Total Revenue', '₪${(_financialData.fold<double>(0, (sum, e) => sum + (e['revenue'] ?? 0).toDouble()) / 1000).toStringAsFixed(1)}k', kPrimaryColor),
+                  Container(width: 1, height: 30, color: Colors.grey.shade300),
+                  _buildMiniSummary('Bookings', '${_financialData.fold<int>(0, (sum, e) => sum + (e['bookingsCount'] ?? 0) as int)}', Colors.green),
+                  Container(width: 1, height: 30, color: Colors.grey.shade300),
+                  _buildMiniSummary('Avg/Month', '₪${(_financialData.isNotEmpty ? _financialData.fold<double>(0, (sum, e) => sum + (e['revenue'] ?? 0).toDouble()) / _financialData.length / 1000 : 0).toStringAsFixed(1)}k', Colors.orange),
+                ],
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildMiniSummary(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(value, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+        Text(label, style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey.shade600)),
+      ],
+    );
+  }
+
+  void _showPeriodSelector(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                'Select Period',
+                style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildPeriodOption(context, 'Last Month', '1month', LucideIcons.calendar),
+            _buildPeriodOption(context, 'Last 3 Months', '3months', LucideIcons.calendarDays),
+            _buildPeriodOption(context, 'Last 6 Months', '6months', LucideIcons.calendarRange),
+            _buildPeriodOption(context, 'Last Year', '1year', LucideIcons.calendarClock),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPeriodOption(BuildContext context, String label, String value, IconData icon) {
+    final isSelected = _financialPeriod == value;
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context);
+        _fetchFinancialGrowth(period: value);
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? kPrimaryColor.withOpacity(0.1) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? kPrimaryColor : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isSelected ? kPrimaryColor : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 20, color: isSelected ? Colors.white : Colors.grey.shade600),
+            ),
+            const SizedBox(width: 16),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                color: isSelected ? kPrimaryColor : kTextColor,
+              ),
+            ),
+            const Spacer(),
+            if (isSelected)
+              Icon(LucideIcons.checkCircle2, color: kPrimaryColor, size: 22),
+          ],
+        ),
       ),
     );
   }
@@ -820,7 +985,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                   ),
                                   Text(
-                                    '\$${(e.value.sales / 1000).toStringAsFixed(1)}k',
+                                    '₪${(e.value.sales / 1000).toStringAsFixed(1)}k',
                                     style: GoogleFonts.poppins(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
@@ -1090,7 +1255,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Expanded(child: _buildStatCard(
                   title: 'Total Revenue',
-                  value: _isLoadingDashboard ? '...' : '\$${(_totalRevenue / 1000).toStringAsFixed(1)}k',
+                  value: _isLoadingDashboard ? '...' : '₪${(_totalRevenue / 1000).toStringAsFixed(1)}k',
                   icon: LucideIcons.dollarSign,
                   color: kPrimaryColor,
                   trend: '+12.5%',
@@ -1586,7 +1751,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               _isLoadingDashboard 
                   ? 'Loading...' 
-                  : '\$${(_totalRevenue / 1000).toStringAsFixed(1)}k',
+                  : '₪${(_totalRevenue / 1000).toStringAsFixed(1)}k',
               style: GoogleFonts.poppins(
                   color: Colors.white,
                   fontSize: 24,
@@ -1693,22 +1858,44 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: kTextColor,
                       fontSize: 14)),
               const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                    color: kBackgroundColor,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.grey.shade200)),
-                child: Text('Last 7 Months',
-                    style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        color: Colors.grey[700],
-                        fontWeight: FontWeight.w700)),
+              GestureDetector(
+                onTap: () => _showPeriodSelector(context),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                      color: kBackgroundColor,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.grey.shade200)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_financialPeriodLabel,
+                          style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 4),
+                      Icon(LucideIcons.chevronDown, size: 14, color: Colors.grey[600]),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 10),
+          // Month Labels
+          if (_financialData.isNotEmpty && !_isLoadingFinancial)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: _financialData.map((d) => Text(
+                  d['monthName'] ?? '',
+                  style: GoogleFonts.poppins(fontSize: 9, color: Colors.grey.shade500, fontWeight: FontWeight.w600),
+                )).toList(),
+              ),
+            ),
           Expanded(
             child: _isLoadingFinancial
                 ? Center(
@@ -1731,7 +1918,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               spots: _financialData.asMap().entries.map((e) {
                                 return FlSpot(
                                   e.key.toDouble(),
-                                  ((e.value['value'] ?? 0) / 10000).toDouble(),
+                                  ((e.value['revenue'] ?? e.value['value'] ?? 0) / 1000).toDouble(),
                                 );
                               }).toList(),
                               isCurved: true,
@@ -2271,7 +2458,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       fontSize: 12.5)),
                             ),
                             Text(
-                              '\$${p.sales.toStringAsFixed(0)}',
+                              '₪${p.sales.toStringAsFixed(0)}',
                               style: GoogleFonts.poppins(
                                   fontWeight: FontWeight.w900,
                                   color: kTextColor,

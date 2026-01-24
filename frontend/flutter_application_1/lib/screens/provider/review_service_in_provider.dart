@@ -60,10 +60,14 @@ class _ServiceReviewsProviderPageState extends State<ServiceReviewsProviderPage>
     try {
       setState(() => _isLoading = true);
       
+      print('🔍 Loading reviews for serviceId: ${widget.serviceId}');
+      
       final result = await ReviewService.getServiceReviews(
         serviceId: widget.serviceId,
-        limit: 100, // Get all reviews
+        limit: 50, // Max allowed by API
       );
+      
+      print('📥 Reviews result: totalReviews=${result['totalReviews']}, reviews.length=${(result['reviews'] as List?)?.length ?? 0}');
       
       if (mounted) {
         setState(() {
@@ -74,7 +78,7 @@ class _ServiceReviewsProviderPageState extends State<ServiceReviewsProviderPage>
         });
       }
     } catch (e) {
-      print('Error loading reviews: $e');
+      print('❌ Error loading reviews: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -86,22 +90,22 @@ class _ServiceReviewsProviderPageState extends State<ServiceReviewsProviderPage>
     
     // Apply filter
     if (_filterOption == 'positive') {
-      filtered = filtered.where((r) => (r.rating ?? 0) >= 4).toList();
+      filtered = filtered.where((r) => r.rating >= 4).toList();
     } else if (_filterOption == 'negative') {
-      filtered = filtered.where((r) => (r.rating ?? 0) < 4).toList();
+      filtered = filtered.where((r) => r.rating < 4).toList();
     }
     
     // Apply sort
     filtered.sort((a, b) {
       switch (_sortOption) {
         case 'oldest':
-          return (a.createdAt ?? DateTime.now()).compareTo(b.createdAt ?? DateTime.now());
+          return a.reviewDate.compareTo(b.reviewDate);
         case 'highest':
-          return (b.rating ?? 0).compareTo(a.rating ?? 0);
+          return b.rating.compareTo(a.rating);
         case 'lowest':
-          return (a.rating ?? 0).compareTo(b.rating ?? 0);
+          return a.rating.compareTo(b.rating);
         default: // newest
-          return (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now());
+          return b.reviewDate.compareTo(a.reviewDate);
       }
     });
     
@@ -128,8 +132,8 @@ class _ServiceReviewsProviderPageState extends State<ServiceReviewsProviderPage>
   // ══════════════════════════════════════════════════════════════════════════
   Widget _buildWebLayout(bool isDesktop) {
     final filtered = _filteredReviews;
-    final positiveCount = _reviews.where((r) => (r.rating ?? 0) >= 4).length;
-    final negativeCount = _reviews.where((r) => (r.rating ?? 0) < 4).length;
+    final positiveCount = _reviews.where((r) => r.rating >= 4).length;
+    final negativeCount = _reviews.where((r) => r.rating < 4).length;
 
     return Scaffold(
       backgroundColor: kBackgroundColor,
@@ -389,8 +393,8 @@ class _ServiceReviewsProviderPageState extends State<ServiceReviewsProviderPage>
   // ══════════════════════════════════════════════════════════════════════════
   Widget _buildMobileLayout() {
     final filtered = _filteredReviews;
-    final positiveCount = _reviews.where((r) => (r.rating ?? 0) >= 4).length;
-    final negativeCount = _reviews.where((r) => (r.rating ?? 0) < 4).length;
+    final positiveCount = _reviews.where((r) => r.rating >= 4).length;
+    final negativeCount = _reviews.where((r) => r.rating < 4).length;
 
     return Scaffold(
       backgroundColor: kBackgroundColor,
@@ -751,12 +755,12 @@ class _ServiceReviewsProviderPageState extends State<ServiceReviewsProviderPage>
   }
 
   Widget _buildReviewCard(dynamic review) {
-    final userName = review.userName ?? 'Anonymous';
-    final rating = (review.rating ?? 0).toDouble();
+    final userName = review.userName;
+    final rating = review.rating.toDouble();
     final comment = review.comment ?? '';
-    final date = review.createdAt ?? DateTime.now();
-    final userId = review.userId?.toString() ?? '';
-    final reviewId = review.id?.toString() ?? '';
+    final date = review.reviewDate;
+    final userId = review.userId;
+    final reviewId = review.id;
     final isPositive = rating >= 4;
     final hasReplied = _repliedReviewIds.contains(reviewId);
 

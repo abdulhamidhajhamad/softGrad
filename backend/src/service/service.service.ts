@@ -353,11 +353,34 @@ constructor(
       if (filters.bookingType) {
         query.bookingType = filters.bookingType; 
       }
-      if (filters.aiTags && Array.isArray(filters.aiTags) && filters.aiTags.length > 0) { 
-        query['aiAnalysis.tags'] = { $in: filters.aiTags };
-      }
+      
+      // ✅ FIXED: aiTags filter is now OPTIONAL - only filter if services actually have tags
+      // Don't require aiTags match, instead we'll sort by relevance later
+      // This ensures we get results even if services don't have AI analysis tags
+      
+      this.logger.log(`🔍 AI Search Query: ${JSON.stringify(query)}`);
       
       let services = await this.serviceModel.find(query).exec();
+      
+      this.logger.log(`📦 Found ${services.length} services matching base criteria`);
+      
+      // ✅ NEW: If aiTags provided, sort by relevance (services with matching tags first)
+      if (filters.aiTags && Array.isArray(filters.aiTags) && filters.aiTags.length > 0 && services.length > 0) {
+        services = services.sort((a, b) => {
+          const aTags = a.aiAnalysis?.tags || [];
+          const bTags = b.aiAnalysis?.tags || [];
+          
+          const aMatches = filters.aiTags.filter((tag: string) => 
+            aTags.some((t: string) => t.toLowerCase().includes(tag.toLowerCase()))
+          ).length;
+          
+          const bMatches = filters.aiTags.filter((tag: string) => 
+            bTags.some((t: string) => t.toLowerCase().includes(tag.toLowerCase()))
+          ).length;
+          
+          return bMatches - aMatches; // Higher matches first
+        });
+      }
       
       // معالجة فلترة الموقع بناءً على المسافة
       if (filters.location && filters.location.lat && filters.location.lng && filters.location.radius) {

@@ -1353,9 +1353,12 @@ class _AiScreenLayoutState extends State<AiScreenLayout> with TickerProviderStat
                     ),
                     itemCount: _generatedPackages.length,
                     itemBuilder: (context, index) {
+                      // ✅ Pass isStrictBudget to hide level labels when budget is strict
+                      final isStrictBudget = _packageFormData.packagePreference == PackagePreference.withinBudget;
                       return AiPackageCard(
                         package: _generatedPackages[index],
                         onAddToCart: () => _handleAddToCart(_generatedPackages[index]),
+                        isStrictBudget: isStrictBudget,
                       );
                     },
                   ),

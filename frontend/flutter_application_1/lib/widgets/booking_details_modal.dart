@@ -36,6 +36,7 @@ Future<void> showBookingModal({
   required String bookingTypeString, // 'hourly', 'daily', 'capacity', 'mixed'
   required Map<String, dynamic> serviceData, // Full service data from API
   required VoidCallback onSuccess,
+  String? packageName, // ✅ NEW: Optional package name for AI packages
 }) async {
   // Parse booking type
   BookingType bookingType = BookingType.daily;
@@ -68,6 +69,7 @@ Future<void> showBookingModal({
       bookingType: bookingType,
       serviceData: serviceData,
       onSuccess: onSuccess,
+      packageName: packageName,
     ),
   );
 }
@@ -81,6 +83,7 @@ class _BookingDetailsModal extends StatefulWidget {
   final BookingType bookingType;
   final Map<String, dynamic> serviceData;
   final VoidCallback onSuccess;
+  final String? packageName; // ✅ NEW
 
   const _BookingDetailsModal({
     required this.serviceId,
@@ -88,6 +91,7 @@ class _BookingDetailsModal extends StatefulWidget {
     required this.bookingType,
     required this.serviceData,
     required this.onSuccess,
+    this.packageName,
   });
 
   @override
@@ -188,9 +192,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     );
 
     if (picked != null) {
-      // Validate working days
+      // Validate working days (only if list is not empty)
       final dayName = _getDayName(picked);
-      if (_workingDays != null && !_workingDays!.contains(dayName)) {
+      if (_workingDays != null && _workingDays!.isNotEmpty && !_workingDays!.contains(dayName)) {
         _showErrorDialog('Service is not available on ${_capitalize(dayName)}s');
         return;
       }
@@ -225,8 +229,8 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     );
 
     if (picked != null) {
-      // Validate available hours
-      if (_availableHours != null && !_availableHours!.contains(picked.hour)) {
+      // Validate available hours (only if list is not empty)
+      if (_availableHours != null && _availableHours!.isNotEmpty && !_availableHours!.contains(picked.hour)) {
         _showErrorDialog('Service is not operational at ${picked.hour}:00');
         return;
       }
@@ -506,6 +510,11 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
       final description = _bookingDescriptionController.text.trim();
       if (description.isNotEmpty) {
         bookingDetails['bookingDescription'] = description;
+      }
+
+      // ✅ NEW: إضافة اسم الباقة إذا موجود (للـ AI packages)
+      if (widget.packageName != null && widget.packageName!.isNotEmpty) {
+        bookingDetails['packageName'] = widget.packageName;
       }
 
       // Call API

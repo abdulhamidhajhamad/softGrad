@@ -297,8 +297,8 @@ async getTotalRevenue() {
 
 @Get('stats/financial-growth')
 @HttpCode(HttpStatus.OK)
-async getFinancialGrowth() {
-  return await this. adminService.getFinancialGrowth();
+async getFinancialGrowth(@Query('period') period?: string) {
+  return await this.adminService.getFinancialGrowth(period);
 }
 
 @Get('stats/service-sales')

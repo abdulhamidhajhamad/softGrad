@@ -97,11 +97,13 @@ class ReviewService {
     int limit = 10,
   }) async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/reviews/service/$serviceId?page=$page&limit=$limit'),
-      );
+      final url = '$baseUrl/reviews/service/$serviceId?page=$page&limit=$limit';
+      print('🔗 Fetching reviews from: $url');
+      
+      final response = await http.get(Uri.parse(url));
 
       print('📥 Service Reviews Response: ${response.statusCode}');
+      print('📥 Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -114,6 +116,7 @@ class ReviewService {
           'totalReviews': data['totalReviews'] ?? 0,
         };
       } else {
+        print('❌ Error response: ${response.body}');
         throw Exception('Failed to fetch service reviews');
       }
     } catch (e) {

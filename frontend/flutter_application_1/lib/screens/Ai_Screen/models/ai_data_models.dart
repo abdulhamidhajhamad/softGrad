@@ -306,7 +306,7 @@ class ServiceItem {
   final int? reviewCount;
   final String? imageUrl;
   final String? description;
-  final Map<String, dynamic>? bookingType;
+  final String? bookingType;  // ✅ Changed from Map to String (hourly, daily, capacity, etc.)
 
   ServiceItem({
     required this.id,
@@ -355,6 +355,16 @@ class ServiceItem {
       }
     }
 
+    // ✅ Handle bookingType as String (not Map)
+    String? bookingType;
+    final bookingTypeData = json['bookingType'];
+    if (bookingTypeData is String) {
+      bookingType = bookingTypeData;
+    } else if (bookingTypeData is Map) {
+      // Legacy support if it's a Map
+      bookingType = bookingTypeData['type'] as String? ?? 'hourly';
+    }
+
     return ServiceItem(
       id: serviceId,
       category: category,
@@ -369,7 +379,7 @@ class ServiceItem {
       reviewCount: json['totalReviews'] as int? ?? json['reviewCount'] as int?,
       imageUrl: json['imageUrl'] ?? json['image'] ?? (json['images'] is List && (json['images'] as List).isNotEmpty ? json['images'][0] : null),
       description: json['description'] as String?,
-      bookingType: json['bookingType'] as Map<String, dynamic>?,
+      bookingType: bookingType,
     );
   }
 }

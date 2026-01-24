@@ -2060,7 +2060,7 @@ class _TrendingCard extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          "\$${service.price.toStringAsFixed(0)}",
+                          "₪${service.price.toStringAsFixed(0)}",
                           style: GoogleFonts.poppins(
                             fontSize: 14.5,
                             fontWeight: FontWeight.w900,

@@ -61,18 +61,24 @@ class AdminService {
     }
   }
 
-  /// Get financial growth (last 7 months)
-  static Future<List<Map<String, dynamic>>> getFinancialGrowth() async {
+  /// Get financial growth (with period option)
+  static Future<Map<String, dynamic>> getFinancialGrowth({String period = '6months'}) async {
     try {
       final headers = await _getAuthHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/admin/stats/financial-growth'),
+        Uri.parse('$baseUrl/admin/stats/financial-growth?period=$period'),
         headers: headers,
       );
 
+      print('📈 Financial Growth Response: ${response.statusCode}');
+      print('📈 Financial Growth Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return List<Map<String, dynamic>>.from(data['data'] ?? []);
+        return {
+          'period': data['period'] ?? 'Last 6 Months',
+          'data': List<Map<String, dynamic>>.from(data['data'] ?? []),
+        };
       } else {
         throw Exception('Failed to fetch financial growth');
       }

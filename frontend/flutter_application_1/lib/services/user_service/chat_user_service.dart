@@ -315,7 +315,7 @@ class ChatUserService {
           // ✅ تحديد العنوان حسب نوع المستخدم
           String title;
           if (isSupport) {
-            title = 'eventPlanner Support';
+            title = 'Eventry Support';
           } else if (isVendor) {
             // للـ vendor نستخدم companyName
             title = otherParticipant?['companyName']?.toString() ?? 

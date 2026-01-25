@@ -72,7 +72,7 @@ class MessagesRepository {
         final role = otherParticipant['role']?.toString() ?? 'user';
         String displayName;
         if (role == 'admin') {
-          displayName = 'eventPlanner Support';
+          displayName = 'Eventry Support';
         } else {
           displayName = otherParticipant['userName']?.toString() ?? 'User';
         }

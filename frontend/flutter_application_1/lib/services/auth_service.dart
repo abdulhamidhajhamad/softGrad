@@ -12,13 +12,7 @@ class AuthService {
   
   // Base URL configuration
   static String getBaseUrl() {
-    if (kIsWeb) {
-      return 'http://localhost:3000';
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:3000';
-    } else {
-      return 'http://localhost:3000';
-    }
+    return 'https://softgrad.onrender.com';
   }
 
   static final String baseUrl = getBaseUrl();

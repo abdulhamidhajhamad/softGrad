@@ -6,13 +6,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, Tar
 class ForgotPasswordService {
   // Base URL configuration (matches auth_service.dart)
   static String getBaseUrl() {
-    if (kIsWeb) {
-      return 'http://localhost:3000';
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:3000';
-    } else {
-      return 'http://localhost:3000';
-    }
+    return 'https://softgrad.onrender.com';
   }
 
   static final String baseUrl = getBaseUrl();

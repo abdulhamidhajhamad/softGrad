@@ -14,7 +14,7 @@ class ChatProviderService {
   factory ChatProviderService() => _instance;
   ChatProviderService._internal();
 
-static const String _baseUrl = 'http://10.0.2.2:3000';  
+static const String _baseUrl = 'https://softgrad.onrender.com';
   IO.Socket? _socket;
   static final ValueNotifier<int> unreadGlobalCount = ValueNotifier<int>(0);
   String? currentUserId;

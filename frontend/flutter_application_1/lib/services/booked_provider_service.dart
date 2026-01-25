@@ -8,8 +8,7 @@ import 'package:flutter_application_1/services/auth_service.dart';
 /// 🔔 Service for handling vendor bookings with real-time updates
 class BookedProviderService {
   static String get baseUrl => AuthService.baseUrl; // ✅ Dynamic URL
-  // static const String baseUrl = 'http://localhost:3000'; // للـ iOS Simulator
-  // static const String baseUrl = 'http://YOUR_IP:3000'; // للـ Real Device
+
 
   // ✅ ValueNotifier للإشعار بوجود حجوزات غير مُشاهدة
   static final ValueNotifier<int> unseenCountNotifier = ValueNotifier<int>(0);

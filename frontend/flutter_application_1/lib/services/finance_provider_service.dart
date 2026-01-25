@@ -171,7 +171,7 @@ class FinanceData {
 /// 💰 Finance Provider Service
 class FinanceProviderService {
   static String get baseUrl => AuthService.baseUrl; // ✅ Dynamic URL
-  // static const String baseUrl = 'http://localhost:3000'; // للـ iOS Simulator
+
 
   /// 📊 جلب الإحصائيات المالية الشاملة للـ Provider
   static Future<FinanceData> fetchFinanceStats() async {

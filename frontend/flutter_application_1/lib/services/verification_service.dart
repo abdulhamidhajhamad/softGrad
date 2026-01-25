@@ -5,16 +5,7 @@ import 'package:flutter/foundation.dart'
 
 class VerificationService {
   static String getBaseUrl() {
-    if (kIsWeb) {
-      // Web (Chrome)
-      return 'http://localhost:3000';
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
-      // Android Emulator
-      return 'http://10.0.2.2:3000';
-    } else {
-      // iOS / Desktop / غيره
-      return 'http://localhost:3000';
-    }
+    return 'https://softgrad.onrender.com';
   }
 
   static final String baseUrl = getBaseUrl();

@@ -14,22 +14,7 @@ class ServiceService {
 
   static String getBaseUrl() {
     if (_envBaseUrl.trim().isNotEmpty) return _envBaseUrl.trim();
-
-    const bool isProduction = bool.fromEnvironment('dart.vm.product');
-    
-    if (isProduction) {
-      return 'https://your-production-api.com';
-    }
-
-    if (kIsWeb) {
-      return 'http://localhost:3000';
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:3000';
-    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return 'http://localhost:3000';
-    } else {
-      return 'http://localhost:3000';
-    }
+    return 'https://softgrad.onrender.com';
   }
 
   static final String baseUrl = getBaseUrl();

@@ -16,14 +16,9 @@ class ApiEndpoints {
   // ═══════════════════════════════════════════════════════════════════════════
   
   /// Get the appropriate base URL based on platform
+  /// Get the appropriate base URL based on platform
   static String getBaseUrl() {
-    if (kIsWeb) {
-      return 'http://localhost:3000';
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:3000'; // Android emulator localhost
-    } else {
-      return 'http://localhost:3000'; // iOS simulator / Desktop
-    }
+    return 'https://softgrad.onrender.com';
   }
 
   /// Base URL for all API calls

@@ -1,7 +1,18 @@
 # compiled output
 /dist
-/node_modules
 /build
+dist/
+build/
+
+# Compiled JavaScript files
+*.js
+*.js.map
+
+# إلا الملفات المهمة
+!*.config.js
+!jest.config.js
+!.eslintrc.js
+
 
 # Logs
 logs

@@ -58,6 +58,7 @@ class _MyAppState extends State<MyApp> {
   late AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSubscription;
   
+  
   // ✅ متغيرات لتحديد الصفحة الأولى
   String? _initialRoute;
   Map<String, dynamic>? _initialRouteArgs;

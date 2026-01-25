@@ -1,16 +1,14 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart'; // ل RenderRepaintBoundary
+import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
-// تأكدي من إضافة حزمة pdf في pubspec.yaml
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
+
+import '../utils/download_helper.dart';
 
 class TemplateEditorPage extends StatefulWidget {
   final String templateName; // Classic / Minimal / ...
@@ -73,41 +71,8 @@ class _TemplateEditorPageState extends State<TemplateEditorPage> {
     return byteData!.buffer.asUint8List();
   }
 
-  Future<String> _saveTemp(Uint8List bytes) async {
-    final dir = await getTemporaryDirectory();
-    final path =
-        '${dir.path}/invite_${DateTime.now().millisecondsSinceEpoch}.png';
-    final file = File(path);
-    await file.writeAsBytes(bytes, flush: true);
-    return path;
-  }
-
-  // Share (كما كان)
-  Future<void> _share() async {
-    final bytes = await _exportPngBytes();
-    final path = await _saveTemp(bytes);
-    await Share.shareXFiles([XFile(path)], text: 'Wedding invitation');
-  }
-
-  // حفظ PNG في ملف دائم
-  Future<void> _saveAsPngToDevice() async {
-    final bytes = await _exportPngBytes();
-    final dir = await getApplicationDocumentsDirectory();
-    final path =
-        '${dir.path}/invite_${DateTime.now().millisecondsSinceEpoch}.png';
-    final file = File(path);
-    await file.writeAsBytes(bytes, flush: true);
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Saved PNG to:\n$path')),
-    );
-  }
-
-  // إنشاء وحفظ PDF من نفس الصورة
-  Future<void> _saveAsPdfToDevice() async {
-    final pngBytes = await _exportPngBytes();
-
+  /// Generate PDF bytes from PNG
+  Future<Uint8List> _generatePdfBytes(Uint8List pngBytes) async {
     final pdf = pw.Document();
     final image = pw.MemoryImage(pngBytes);
 
@@ -120,16 +85,99 @@ class _TemplateEditorPageState extends State<TemplateEditorPage> {
       ),
     );
 
-    final dir = await getApplicationDocumentsDirectory();
-    final path =
-        '${dir.path}/invite_${DateTime.now().millisecondsSinceEpoch}.pdf';
-    final file = File(path);
-    await file.writeAsBytes(await pdf.save(), flush: true);
+    return await pdf.save();
+  }
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Saved PDF to:\n$path')),
-    );
+  // Share invitation
+  Future<void> _share() async {
+    try {
+      final bytes = await _exportPngBytes();
+      final fileName = 'wedding_invitation_${DateTime.now().millisecondsSinceEpoch}.png';
+      
+      await DownloadHelper.shareFile(bytes, fileName, 'Wedding Invitation 💍');
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sharing...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to share: $e')),
+      );
+    }
+  }
+
+  // Save as PNG
+  Future<void> _saveAsPngToDevice() async {
+    try {
+      final bytes = await _exportPngBytes();
+      final fileName = 'wedding_invitation_${DateTime.now().millisecondsSinceEpoch}.png';
+      
+      final result = await DownloadHelper.downloadPng(bytes, fileName);
+      
+      if (!mounted) return;
+      if (result != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(DownloadHelper.isWeb 
+              ? '✅ PNG downloaded successfully!' 
+              : '✅ Saved to: $result'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Failed to save PNG'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  // Save as PDF
+  Future<void> _saveAsPdfToDevice() async {
+    try {
+      final pngBytes = await _exportPngBytes();
+      final pdfBytes = await _generatePdfBytes(pngBytes);
+      final fileName = 'wedding_invitation_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      
+      final result = await DownloadHelper.downloadPdf(pdfBytes, fileName);
+      
+      if (!mounted) return;
+      if (result != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(DownloadHelper.isWeb 
+              ? '✅ PDF downloaded successfully!' 
+              : '✅ Saved to: $result'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Failed to save PDF'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
   }
 
   void _openSaveOptions() {

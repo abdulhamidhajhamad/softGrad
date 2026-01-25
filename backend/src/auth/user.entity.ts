@@ -38,12 +38,17 @@ export class User extends Document {
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'Package' }], default: [] })
   favoritePackages: Types.ObjectId[];
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Service' }], default: [] })
+  favoriteOffers: Types.ObjectId[]; // Offers are services with discounts
   
-  // FCM Token for push notifications (not unique - same token can be reused)
-  @Prop({ default: null })
+  // FCM Token for push notifications
+  // DO NOT use default: null - sparse index only ignores undefined, not null
+  @Prop({ type: String, sparse: true })
   fcmToken?: string; 
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
 
-UserSchema.index({ email: 1 });
+UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ fcmToken: 1 }, { unique: true, sparse: true });

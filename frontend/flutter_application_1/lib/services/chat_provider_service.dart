@@ -14,9 +14,9 @@ class ChatProviderService {
   factory ChatProviderService() => _instance;
   ChatProviderService._internal();
 
-  // ✅ استخدام AuthService.baseUrl بدلاً من URL ثابت
+  // âœ… Ø§Ø³ØªØ®Ø¯Ø§Ù… AuthService.baseUrl Ø¨Ø¯Ù„Ø§Ù‹ Ù…Ù† URL Ø«Ø§Ø¨Øª
   String get _baseUrl => AuthService.baseUrl;
-  static String get _staticBaseUrl => AuthService.baseUrl; // ✅ للـ static methods
+  static String get _staticBaseUrl => AuthService.baseUrl; // âœ… Ù„Ù„Ù€ static methods
   IO.Socket? _socket;
   static final ValueNotifier<int> unreadGlobalCount = ValueNotifier<int>(0);
   String? currentUserId;
@@ -44,19 +44,19 @@ class ChatProviderService {
     }
   }
   
-  /// ✅ تسجيل الاستماع لتحديث عدد الرسائل غير المقروءة
+  /// âœ… ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø§Ø³ØªÙ…Ø§Ø¹ Ù„ØªØ­Ø¯ÙŠØ« Ø¹Ø¯Ø¯ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ ØºÙŠØ± Ø§Ù„Ù…Ù‚Ø±ÙˆØ¡Ø©
   void _registerUnreadCountListener() {
     if (currentUserId != null && _socket != null) {
       final eventName = 'unreadCount_$currentUserId';
-      print('📡 Registering listener for: $eventName');
+      print('ðŸ“¡ Registering listener for: $eventName');
       
       _socket?.on(eventName, (data) {
         final count = data['count'] ?? 0;
         unreadGlobalCount.value = count;
-        print('📊 Real-time unread count received: $count');
+        print('ðŸ“Š Real-time unread count received: $count');
       });
     } else {
-      print('⚠️ Cannot register unread listener: userId=$currentUserId, socket=${_socket != null}');
+      print('âš ï¸ Cannot register unread listener: userId=$currentUserId, socket=${_socket != null}');
     }
   }
 
@@ -64,16 +64,18 @@ class ChatProviderService {
     final token = await AuthService.getToken();
     
     if (token == null) {
-      print('âŒ Cannot init socket: No token');
+      print('Ã¢ÂÅ’ Cannot init socket: No token');
       return;
     }
     
     if (_socket != null && _socket!.connected) {
       print('âœ… Socket already connected');
+      // âœ… ØªØ£ÙƒØ¯ Ù…Ù† ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ù€ listener Ø­ØªÙ‰ Ù„Ùˆ ÙƒØ§Ù† Ù…ØªØµÙ„
+      _registerUnreadCountListener();
       return;
     }
 
-    print('ðŸ”Œ Initializing chat socket to: $_baseUrl');
+    print('Ã°Å¸â€Å’ Initializing chat socket to: $_baseUrl');
 
     _socket = IO.io(
       _baseUrl,
@@ -91,26 +93,26 @@ class ChatProviderService {
     _socket!.connect();
 
     _socket!.onConnect((_) {
-      print('✅ Chat Socket Connected ID: ${_socket!.id}');
+      print('âœ… Chat Socket Connected ID: ${_socket!.id}');
       if (_activeChatId != null) {
         joinChatRoom(_activeChatId!);
       }
       fetchUnreadCount();
       
-      // ✅ تسجيل الاستماع لتحديث عدد الرسائل غير المقروءة
+      // âœ… ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø§Ø³ØªÙ…Ø§Ø¹ Ù„ØªØ­Ø¯ÙŠØ« Ø¹Ø¯Ø¯ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ ØºÙŠØ± Ø§Ù„Ù…Ù‚Ø±ÙˆØ¡Ø©
       _registerUnreadCountListener();
     });
 
     _socket!.onDisconnect((_) {
-      print('âŒ Chat Socket Disconnected');
+      print('Ã¢ÂÅ’ Chat Socket Disconnected');
     });
 
     _socket!.onConnectError((data) {
-      print('âš ï¸ Chat Connection Error: $data');
+      print('Ã¢Å¡ Ã¯Â¸Â Chat Connection Error: $data');
     });
 
     _socket?.on('newMessage', (data) {
-      print('ðŸ“¨ New message received via socket: $data');
+      print('Ã°Å¸â€œÂ¨ New message received via socket: $data');
       
       final messageData = data['message'] ?? data;
       
@@ -132,14 +134,18 @@ class ChatProviderService {
         );
         
         if (_activeChatId == chatID) {
-          print('âœ… Socket: New message for active chat. Calling onNewMessage.');
+          print('Ã¢Å“â€¦ Socket: New message for active chat. Calling onNewMessage.');
           onNewMessage?.call(newMessage);
           
           if (!isMe) {
              markAsRead(chatID); 
           }
         } else {
-          print('â„¹ï¸ Socket: New message for inactive chat: $chatID');
+          print('Info: New message for inactive chat');
+          // Real-time update for unread count  
+          if (!isMe) {
+            unreadGlobalCount.value = unreadGlobalCount.value + 1;
+          }
         }
 
         onMessageStatusUpdate?.call();
@@ -151,21 +157,23 @@ class ChatProviderService {
     _socket?.on('unreadCountUpdated', (data) {
       final count = data['count'] ?? 0;
       unreadGlobalCount.value = count;
-      print('ðŸ“Š Socket: Global unread count updated: $count');
+      print('Ã°Å¸â€œÅ  Socket: Global unread count updated: $count');
     });
     
     _socket?.on('messagesRead', (data) {
-      print('âœ… Messages marked as read');
+      print('Messages marked as read');
       onMessageStatusUpdate?.call();
+      // Update count after reading messages
+      fetchUnreadCount();
     });
   }
   
   void joinChatRoom(String chatId) {
     if (_socket?.connected == true) {
-      print('ðŸšª Joining chat room: $chatId');
+      print('Ã°Å¸Å¡Âª Joining chat room: $chatId');
       _socket?.emit('joinRoom', {'chatId': chatId, 'userId': currentUserId});
     } else {
-      print('âŒ Cannot join room: Socket not connected');
+      print('Ã¢ÂÅ’ Cannot join room: Socket not connected');
     }
   }
 
@@ -183,14 +191,14 @@ class ChatProviderService {
         final data = json.decode(response.body);
         final count = data['count'] ?? 0;
         unreadGlobalCount.value = count;
-        print('ðŸ“Š Unread count fetched: $count');
+        print('Ã°Å¸â€œÅ  Unread count fetched: $count');
       }
     } catch (e) {
-      print('âŒ Error fetching unread count: $e');
+      print('Ã¢ÂÅ’ Error fetching unread count: $e');
     }
   }
 
-  /// ✅ جلب عدد الرسائل غير المقروءة لكل chat
+  /// âœ… Ø¬Ù„Ø¨ Ø¹Ø¯Ø¯ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ ØºÙŠØ± Ø§Ù„Ù…Ù‚Ø±ÙˆØ¡Ø© Ù„ÙƒÙ„ chat
   Future<Map<String, int>> fetchUnreadCountsPerChat() async {
     final token = await AuthService.getToken();
     if (token == null) return {};
@@ -226,54 +234,54 @@ class ChatProviderService {
     final token = await AuthService.getToken();
     if (token == null) return;
     
-    // 1. Ø¥Ø·Ù„Ø§Ù‚ Ø§Ù„Ø­Ø¯Ø« Ø¹Ø¨Ø± Ø§Ù„Ø³ÙˆÙƒÙŠØª
+    // 1. Ã˜Â¥Ã˜Â·Ã™â€žÃ˜Â§Ã™â€š Ã˜Â§Ã™â€žÃ˜Â­Ã˜Â¯Ã˜Â« Ã˜Â¹Ã˜Â¨Ã˜Â± Ã˜Â§Ã™â€žÃ˜Â³Ã™Ë†Ã™Æ’Ã™Å Ã˜Âª
     if (_socket?.connected == true) {
-      print('ðŸ“– Sending markAsRead via Socket');
+      print('Ã°Å¸â€œâ€“ Sending markAsRead via Socket');
       _socket?.emit('markAsRead', {'chatId': chatId, 'userId': currentUserId});
     }
 
     // 2. Fallback to HTTP
     try {
-      print('ðŸ“– Sending markAsRead via HTTP');
+      print('Ã°Å¸â€œâ€“ Sending markAsRead via HTTP');
       final response = await http.patch(
         Uri.parse('$_baseUrl/chat/mark-read/$chatId'),
         headers: {'Authorization': 'Bearer $token'},
       );
       
       if (response.statusCode == 200) {
-        print('âœ… MarkAsRead sent via HTTP successfully');
+        print('Ã¢Å“â€¦ MarkAsRead sent via HTTP successfully');
         onMessageStatusUpdate?.call();
         fetchUnreadCount();
       }
     } catch (e) {
-      print('âŒ Error marking as read via HTTP: $e');
+      print('Ã¢ÂÅ’ Error marking as read via HTTP: $e');
     }
   }
   
   Future<List<Map<String, dynamic>>> fetchUserChats() async {
     final token = await AuthService.getToken();
     if (token == null) {
-      print('âŒ Cannot fetch chats: No token');
+      print('Ã¢ÂÅ’ Cannot fetch chats: No token');
       return [];
     }
     
     try {
-      print('ðŸ“¥ Fetching user chats...');
+      print('Ã°Å¸â€œÂ¥ Fetching user chats...');
       final response = await http.get(
         Uri.parse('$_baseUrl/chat/my-chats'),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 10));
       
-      print('ðŸ“¡ Response status: ${response.statusCode}');
+      print('Ã°Å¸â€œÂ¡ Response status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final List<dynamic> jsonChats = json.decode(response.body);
-        print('âœ… Successfully fetched ${jsonChats.length} chats');
+        print('Ã¢Å“â€¦ Successfully fetched ${jsonChats.length} chats');
         return jsonChats.cast<Map<String, dynamic>>();
       }
       return [];
     } catch (e) {
-      print('âŒ Error fetching user chats: $e');
+      print('Ã¢ÂÅ’ Error fetching user chats: $e');
       return [];
     }
   }
@@ -281,23 +289,23 @@ class ChatProviderService {
   Future<List<ChatMessage>> fetchChatMessages(String chatId) async {
     final token = await AuthService.getToken();
     if (token == null) {
-      print('âŒ Cannot fetch messages: No token');
+      print('Ã¢ÂÅ’ Cannot fetch messages: No token');
       return [];
     }
     
     try {
-      print('ðŸ“¥ Fetching messages for chat: $chatId');
+      print('Ã°Å¸â€œÂ¥ Fetching messages for chat: $chatId');
       final response = await http.get(
         Uri.parse('$_baseUrl/chat/messages/$chatId'),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 10));
       
-      print('ðŸ“¡ Messages response status: ${response.statusCode}');
-      print('ðŸ“¡ Messages response body: ${response.body}');
+      print('Ã°Å¸â€œÂ¡ Messages response status: ${response.statusCode}');
+      print('Ã°Å¸â€œÂ¡ Messages response body: ${response.body}');
       
       if (response.statusCode == 200) {
         final List<dynamic> jsonMessages = json.decode(response.body);
-        print('âœ… Successfully fetched ${jsonMessages.length} messages');
+        print('Ã¢Å“â€¦ Successfully fetched ${jsonMessages.length} messages');
         
         final messages = jsonMessages.map((msgJson) {
           final senderData = msgJson['sender'];
@@ -306,7 +314,7 @@ class ChatProviderService {
             : _cleanId(senderData);
           
           final isReadFromServer = msgJson['isRead'];
-          print('📩 Message: ${msgJson['content']}, isRead from server: $isReadFromServer, senderId: $senderId, currentUserId: $currentUserId');
+          print('ðŸ“© Message: ${msgJson['content']}, isRead from server: $isReadFromServer, senderId: $senderId, currentUserId: $currentUserId');
           
           return ChatMessage(
             id: _cleanId(msgJson['_id']),
@@ -320,11 +328,11 @@ class ChatProviderService {
         return messages;
         
       } else {
-        print('âš ï¸ Failed to fetch messages: ${response.statusCode}');
+        print('Ã¢Å¡ Ã¯Â¸Â Failed to fetch messages: ${response.statusCode}');
         throw Exception('Failed to load messages: ${response.statusCode}');
       }
     } catch (e) {
-      print('âŒ Error fetching messages: $e');
+      print('Ã¢ÂÅ’ Error fetching messages: $e');
       rethrow;
     }
   }
@@ -333,12 +341,12 @@ class ChatProviderService {
     final token = await AuthService.getToken();
     
     if (token == null) {
-      print('âŒ Cannot send message: No token');
+      print('Ã¢ÂÅ’ Cannot send message: No token');
       return;
     }
     
     try {
-      print('ðŸ“¤ Sending message via HTTP');
+      print('Ã°Å¸â€œÂ¤ Sending message via HTTP');
       final response = await http.post(
         Uri.parse('$_baseUrl/chat/send'),
         headers: {
@@ -348,16 +356,16 @@ class ChatProviderService {
         body: json.encode({'chatId': chatId, 'content': content}),
       );
       
-      print('ðŸ“¡ Send message response: ${response.statusCode}');
+      print('Ã°Å¸â€œÂ¡ Send message response: ${response.statusCode}');
       
       if (response.statusCode == 200 || response.statusCode == 201) {
-        print('âœ… Message sent via HTTP successfully');
+        print('Ã¢Å“â€¦ Message sent via HTTP successfully');
         onMessageStatusUpdate?.call();
       } else {
          throw Exception('Failed to send message: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
-      print('âŒ Error sending message: $e');
+      print('Ã¢ÂÅ’ Error sending message: $e');
       rethrow;
     }
   }
@@ -373,7 +381,7 @@ class ChatProviderService {
       );
       
       if (response.statusCode == 200) {
-        print('âœ… Chat deleted successfully');
+        print('Ã¢Å“â€¦ Chat deleted successfully');
         fetchUnreadCount();
         return true;
       }

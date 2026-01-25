@@ -51,11 +51,17 @@ async togglePackageFavorite(@Req() req, @Param('packageId') packageId: string) {
   return { message: 'Favorite packages updated', favorites };
 }
 
-// تعديل بسيط على getUserProfile ليعيد المفضلات أيضاً
+@Post('favorites/offer/:offerId')
+@UseGuards(JwtAuthGuard)
+async toggleOfferFavorite(@Req() req, @Param('offerId') offerId: string) {
+  const favorites = await this.authService.toggleFavoriteOffer(req.user.userId, offerId);
+  return { message: 'Favorite offers updated', favorites };
+}
+
+// Get all user favorites with populated data
 @Get('favorites')
-@UseGuards(JwtAuthGuard) //
+@UseGuards(JwtAuthGuard)
 async getFavorites(@Req() req) {
-  // req.user.userId يأتي من الـ JwtStrategy بعد التحقق من التوكن
   return this.authService.getUserFavorites(req.user.userId);
 }
 

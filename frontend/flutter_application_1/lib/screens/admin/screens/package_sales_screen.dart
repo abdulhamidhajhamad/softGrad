@@ -233,7 +233,7 @@ class _PackageSalesScreenState extends State<PackageSalesScreen> {
                   Expanded(
                     child: _MetricCard(
                       label: 'Revenue',
-                      value: '\$${(package.totalSales / 1000).toStringAsFixed(1)}k',
+                      value: '₪${(package.totalSales / 1000).toStringAsFixed(1)}k',
                       icon: LucideIcons.dollarSign,
                       color: kSuccessColor,
                     ),
@@ -436,7 +436,7 @@ class _PackageCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${package.totalSales.toStringAsFixed(0)}',
+                    '₪${package.totalSales.toStringAsFixed(0)}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       color: kSuccessColor,

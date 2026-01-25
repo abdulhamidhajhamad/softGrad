@@ -208,32 +208,11 @@ class _VendorsListPageState extends State<VendorsListPage> {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       itemBuilder: (context, index) {
                         final vendor = filteredVendors[index];
-                        final String name = vendor['name'] as String;
-                        final String type = vendor['type'] as String;
-
-                        final bool isFav =
-                            FavoritesStore.isVendorFavorite(name);
-
                         return _AnimatedVendorTile(
                           delay: Duration(milliseconds: 30 * (index % 10)),
                           child: _VendorTile(
                             vendor: vendor,
                             brandBlue: brandBlue,
-                            isFavorite: isFav,
-                            onToggleFavorite: () {
-                              setState(() {
-                                if (isFav) {
-                                  FavoritesStore.removeVendorByName(name);
-                                } else {
-                                  FavoritesStore.addVendor(
-                                    FavoriteVendor(
-                                      name: name,
-                                      type: type,
-                                    ),
-                                  );
-                                }
-                              });
-                            },
                           ),
                         );
                       },
@@ -284,19 +263,15 @@ class _AnimatedVendorTile extends StatelessWidget {
   }
 }
 
-/// The existing tile layout and navigation behavior kept as-is + favorite icon.
+/// The existing tile layout and navigation behavior.
 class _VendorTile extends StatelessWidget {
   final Map<String, dynamic> vendor;
   final Color brandBlue;
-  final bool isFavorite;
-  final VoidCallback onToggleFavorite;
 
   const _VendorTile({
     Key? key,
     required this.vendor,
     required this.brandBlue,
-    required this.isFavorite,
-    required this.onToggleFavorite,
   }) : super(key: key);
 
   @override
@@ -357,13 +332,10 @@ class _VendorTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: Icon(
-                    isFavorite ? Icons.favorite : Icons.favorite_border,
-                    color: isFavorite ? brandBlue : Colors.grey,
-                    size: 22,
-                  ),
-                  onPressed: onToggleFavorite,
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.grey.shade400,
+                  size: 24,
                 ),
               ],
             ),

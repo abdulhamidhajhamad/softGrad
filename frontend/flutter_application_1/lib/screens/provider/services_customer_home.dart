@@ -760,8 +760,6 @@ class _VendorsListPageState extends State<VendorsListPage> {
 
                               final services = _servicesForCategory(catName);
                               final bool expanded = _expanded[catName] ?? false;
-                              final bool isFav =
-                                  FavoritesStore.isVendorFavorite(catName);
 
                               return _CategoryCard(
                                 categoryName: catName,
@@ -770,18 +768,6 @@ class _VendorsListPageState extends State<VendorsListPage> {
                                 services: services,
                                 expanded: expanded,
                                 showDescription: showDescription,
-                                isFavorite: isFav,
-                                onToggleFavorite: () {
-                                  setState(() {
-                                    if (isFav) {
-                                      FavoritesStore.removeVendorByName(catName);
-                                    } else {
-                                      FavoritesStore.addVendor(
-                                        FavoriteVendor(name: catName, type: catType),
-                                      );
-                                    }
-                                  });
-                                },
                                 onToggleExpand: services.length <= 4
                                     ? null
                                     : () => setState(
@@ -2879,9 +2865,6 @@ class _CategoryCard extends StatelessWidget {
 
   final bool showDescription;
 
-  final bool isFavorite;
-  final VoidCallback onToggleFavorite;
-
   final VoidCallback? onToggleExpand;
   final VoidCallback? onViewAll;
   final void Function(ServiceItem service) onTapService;
@@ -2893,8 +2876,6 @@ class _CategoryCard extends StatelessWidget {
     required this.services,
     required this.expanded,
     required this.showDescription,
-    required this.isFavorite,
-    required this.onToggleFavorite,
     required this.onToggleExpand,
     required this.onViewAll,
     required this.onTapService,
@@ -2978,15 +2959,6 @@ class _CategoryCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                  IconButton(
-                    onPressed: onToggleFavorite,
-                    icon: Icon(
-                      isFavorite
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      color: isFavorite ? kBlue : kMuted,
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 12),

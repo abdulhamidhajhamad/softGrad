@@ -12,7 +12,7 @@ class AppStrings {
   // 📱 App Info
   // ═══════════════════════════════════════════════════════════════════════════
   
-  static const String appName = 'PlanMyWedding';
+  static const String appName = 'Eventry';
   static const String appTagline = 'Plan Your Perfect Wedding';
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -144,15 +144,21 @@ class AppStrings {
   static const List<String> cities = [
     'Nablus',
     'Ramallah',
+    'Jerusalem',
+    'Hebron',
+    'Bethlehem',
     'Jenin',
     'Tulkarm',
     'Qalqilya',
-    'Hebron',
+    'Jericho',
     'Salfit',
     'Tubas',
-    'Bethlehem',
-    'Jericho',
     'Gaza',
+    'Khan Yunis',
+    'Rafah',
+    'Deir al-Balah',
+    'Al-Bireh',
+    'Other',
   ];
 
   // ═══════════════════════════════════════════════════════════════════════════

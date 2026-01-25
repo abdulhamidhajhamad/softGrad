@@ -130,6 +130,24 @@ export class Service extends Document {
 
   @Prop({ type: Number, default: 0, min: 0 })
   cleanupTimeMinutes?: number;
+  //  NEW: Venue Type (Indoor/Outdoor) for Venues category
+  @Prop({ 
+    type: String, 
+    enum: ['indoor', 'outdoor'], 
+    required: false 
+  })
+  venueType?: string;
+
+  //  NEW: Calculated time slots for hourly bookings
+  @Prop({ 
+    type: [{ 
+      startTime: { type: String }, 
+      endTime: { type: String } 
+    }], 
+    default: [] 
+  })
+  timeSlots?: Array<{ startTime: string; endTime: string }>;
+
 
   // ✅ NEW: Cached Review Statistics
   @Prop({ type: Number, default: 0, min: 0, max: 5 })

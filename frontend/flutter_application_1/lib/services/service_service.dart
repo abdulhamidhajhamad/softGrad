@@ -160,6 +160,16 @@ class ServiceService {
     if (service['workingDays'] != null) {
       normalized['workingDays'] = service['workingDays'];
     }
+    
+    // ✅ NEW: timeSlots & venueType
+    if (service['timeSlots'] != null) {
+      normalized['timeSlots'] = service['timeSlots'];
+    }
+    
+    normalized['venueType'] = (service['venueType'] ?? '').toString();
+    if (normalized['venueType'] == '' && service['additionalInfo'] != null) {
+      normalized['venueType'] = (service['additionalInfo']['venueType'] ?? '').toString();
+    }
 
     // External link
     normalized['externalLink'] = (service['externalLink'] ?? '').toString();
@@ -201,6 +211,7 @@ static Future<Map<String, dynamic>> addService({
   List<String>? workingDays,
   String? venueType,
   bool hasFixedLocation = true, // 🆕 إضافة hasFixedLocation parameter
+  List<Map<String, String>>? timeSlots, // ✅ NEW: Time slots for hourly bookings
 }) async {
   try {
     final token = await AuthService.getToken();
@@ -253,6 +264,7 @@ static Future<Map<String, dynamic>> addService({
       'additionalInfo': additionalInfo,
       'isActive': true,
       'hasFixedLocation': hasFixedLocation, // 🆕
+      'venueType': venueType, //  NEW: Top-level field for proper schema persistence
     };
 
     // 🆕 إضافة الموقع فقط إذا كانت الخدمة لها موقع ثابت
@@ -278,6 +290,10 @@ static Future<Map<String, dynamic>> addService({
     }
     if (workingDays != null && workingDays.isNotEmpty) {
       createServiceDtoForJson['workingDays'] = workingDays;
+    }
+    // ✅ NEW: Add timeSlots if provided
+    if (timeSlots != null && timeSlots.isNotEmpty) {
+      createServiceDtoForJson['timeSlots'] = timeSlots;
     }
 
     request.fields['data'] = jsonEncode(createServiceDtoForJson);
@@ -426,6 +442,18 @@ static Future<Map<String, dynamic>> addService({
     venueType = form['venueType'].toString().toLowerCase();
   }
 
+  // ✅ NEW: Extract timeSlots from form
+  List<Map<String, String>>? timeSlots;
+  if (form['slotsPreview'] is List) {
+    timeSlots = (form['slotsPreview'] as List)
+        .map((slot) => {
+              'startTime': slot['start'].toString(),
+              'endTime': slot['end'].toString(),
+            })
+        .cast<Map<String, String>>()
+        .toList();
+  }
+
   return addService(
     title: title.trim(),
     description: description.trim(),
@@ -447,6 +475,7 @@ static Future<Map<String, dynamic>> addService({
     cleanupTimeMinutes: cleanupTimeMinutes,
     workingDays: workingDays,
     venueType: venueType,
+    timeSlots: timeSlots, //  NEW
     hasFixedLocation: hasFixedLocation, // 🆕
   );
 }

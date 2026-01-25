@@ -714,7 +714,7 @@ class _FinanceProviderScreenState extends State<FinanceProviderScreen> {
               child: _StatCard(
                 icon: Icons.trending_up_rounded,
                 label: "This Month",
-                value: "\$${_formatNumber(summary.currentMonthRevenue)}",
+                value: "₪${_formatNumber(summary.currentMonthRevenue)}",
                 color: kSuccessColor,
               ),
             ),
@@ -726,7 +726,7 @@ class _FinanceProviderScreenState extends State<FinanceProviderScreen> {
           icon: Icons.cancel_outlined,
           label: "Cancelled",
           value: summary.cancelledCount.toString(),
-          subValue: "\$${_formatNumber(summary.cancelledAmount)}",
+          subValue: "₪${_formatNumber(summary.cancelledAmount)}",
           color: kDangerColor,
         ),
       ],
@@ -1007,7 +1007,7 @@ class _MainRevenueCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            "\$${_formatCurrency(totalRevenue)}",
+            "₪${_formatCurrency(totalRevenue)}",
             style: GoogleFonts.poppins(
               color: Colors.white,
               fontSize: 36,
@@ -1207,7 +1207,7 @@ class _SimpleBarChart extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Text(
-                    "\$${_formatShort(item.revenue)}",
+                    "₪${_formatShort(item.revenue)}",
                     style: GoogleFonts.poppins(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -1378,7 +1378,7 @@ class _ServiceSalesItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                "\$${service.revenue.toStringAsFixed(0)}",
+                "₪${service.revenue.toStringAsFixed(0)}",
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -1511,7 +1511,7 @@ class _RecentBookingItem extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                "\$${booking.price.toStringAsFixed(0)}",
+                "₪${booking.price.toStringAsFixed(0)}",
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,

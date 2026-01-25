@@ -16,6 +16,8 @@ interface ServicePriority {
 export class AiSearchService {
   private readonly logger = new Logger(AiSearchService.name);
   private readonly ai: GoogleGenAI;
+  private readonly MAX_RETRIES = 3;  // 🆕 Maximum retry attempts
+  private readonly RETRY_DELAY = 2000; // 🆕 Delay between retries (2 seconds)
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -24,6 +26,11 @@ export class AiSearchService {
       throw new Error('AI Search Service failed to initialize.');
     }
     this.ai = new GoogleGenAI({ apiKey });
+  }
+
+  // 🆕 Helper function to delay execution
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
@@ -133,7 +140,13 @@ ${servicesBudgetText}
          - Return ONLY a valid JSON object matching the AiSearchBlueprint schema.
     `;
 
-    try {
+    // 🆕 Retry logic for network issues
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
+      try {
+        this.logger.log(`🤖 AI Request attempt ${attempt}/${this.MAX_RETRIES}...`);
+        
         const response = await this.ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
@@ -192,11 +205,31 @@ ${servicesBudgetText}
             endTime: endTime,
         };
         
+        this.logger.log(`✅ AI Request successful on attempt ${attempt}`);
         return blueprint;
 
-    } catch (error) {
-        this.logger.error(`AI Search API Error:`, error);
-        throw new Error(`Failed to extract search filters using AI: ${error.message}`);
+      } catch (error) {
+        lastError = error;
+        this.logger.error(`❌ AI Request attempt ${attempt} failed:`, error.message);
+        
+        // Check if it's a network/fetch error and we should retry
+        const isNetworkError = error.message?.includes('fetch') || 
+                               error.message?.includes('network') ||
+                               error.message?.includes('timeout') ||
+                               error.message?.includes('ECONNRESET');
+        
+        if (isNetworkError && attempt < this.MAX_RETRIES) {
+          this.logger.log(`⏳ Waiting ${this.RETRY_DELAY}ms before retry...`);
+          await this.delay(this.RETRY_DELAY);
+        } else if (!isNetworkError) {
+          // Non-network error, don't retry
+          break;
+        }
+      }
     }
+
+    // All retries failed
+    this.logger.error(`AI Search API Error after ${this.MAX_RETRIES} attempts:`, lastError);
+    throw new Error(`Failed to extract search filters using AI: ${lastError?.message || 'Unknown error'}`);
   }
 }

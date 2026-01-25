@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_application_1/services/auth_service.dart';
+import 'package:flutter_application_1/services/booked_provider_service.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -117,6 +118,16 @@ class NotificationProviderService {
           unreadCountNotifier.value = unreadCountNotifier.value + 1;  // ✅ Increment count
           debugPrint('✅ Updated hasUnread badge to TRUE\n');
           
+          // ✅ إذا كان الإشعار من نوع booking، قم بتحديث عداد الحجوزات أيضاً
+          final notificationType = data['type']?.toString().toLowerCase() ?? '';
+          if (notificationType.contains('booking') || 
+              notificationType.contains('confirmed') ||
+              newNotification.title.toLowerCase().contains('booking')) {
+            debugPrint('📅 Booking notification detected - updating booking count');
+            // استيراد وتحديث BookedProviderService
+            _updateBookingCount();
+          }
+          
         } catch (e, stackTrace) {
           debugPrint('❌ Error processing new notification: $e');
           debugPrint('Stack trace: $stackTrace');
@@ -185,6 +196,12 @@ class NotificationProviderService {
       debugPrint('Stack trace: $stackTrace');
       _isConnecting = false;
     }
+  }
+
+  /// دالة مساعدة لتحديث عدد الحجوزات غير المقروءة
+  static void _updateBookingCount() {
+    BookedProviderService.fetchUnseenCount();
+    debugPrint('📦 Booking count updated from notification');
   }
   
   /// دالة لإغلاق اتصال الـ Socket عند مغادرة الصفحة

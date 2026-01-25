@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_application_1/services/service_service.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../map_location_picker.dart' hide kPrimaryColor, kTextColor;
+import 'add_service/booking_common_widgets.dart' show showAddInfoDialog;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🎨 Design Tokens - Modern Purple Theme
@@ -67,6 +68,18 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
   final Set<String> _selectedDays = {};
   TimeOfDay? _fromTime;
   TimeOfDay? _toTime;
+
+  // 🆕 Additional Info (key:value pairs)
+  List<Map<String, String>> _additionalInfo = [];
+  
+  // 🆕 Venue Type (Indoor/Outdoor)
+  String _venueType = 'indoor';
+  
+  // 🆕 Time Slots (calculated from working hours)
+  List<Map<String, String>> _timeSlots = [];
+  
+  // 🆕 Break between bookings (minutes)
+  double _gapMinutes = 0;
 
   // =====================
   // 📋 Options Lists
@@ -204,6 +217,34 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
       _fromTime = TimeOfDay(hour: hours.first, minute: 0);
       _toTime = TimeOfDay(hour: hours.last, minute: 0);
     }
+
+    // 🆕 Additional Info (from additionalInfo map, excluding description)
+    print('📝 Additional Info raw: ${data['additionalInfo']}');
+    if (data['additionalInfo'] is Map) {
+      final info = Map<String, dynamic>.from(data['additionalInfo'] as Map);
+      print('📝 Additional Info parsed: $info');
+      info.forEach((key, value) {
+        if (key != 'description' && value != null && value.toString().isNotEmpty) {
+          _additionalInfo.add({'key': key, 'value': value.toString()});
+          print('📝 Added additionalInfo: $key = $value');
+        }
+      });
+    }
+    print('📝 Final _additionalInfo list: $_additionalInfo');
+
+    // 🆕 Venue Type
+    _venueType = data['venueType']?.toString() ?? 'indoor';
+
+    // 🆕 Time Slots
+    if (data['timeSlots'] is List) {
+      _timeSlots = (data['timeSlots'] as List).map((slot) => {
+        'start': slot['startTime']?.toString() ?? '',
+        'end': slot['endTime']?.toString() ?? '',
+      }).toList();
+    }
+
+    // 🆕 Cleanup/Gap time
+    _gapMinutes = (data['cleanupTimeMinutes'] as num?)?.toDouble() ?? 0;
   }
 
   double? _toDoubleOrNull(dynamic value) {
@@ -325,6 +366,38 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
   }
 
   // =====================
+  // ⏰ Time Slots Builder
+  // =====================
+  List<Map<String, String>> _buildTimeSlots() {
+    if (_fromTime == null || _toTime == null) return [];
+
+    final minHours = int.tryParse(_minHoursCtrl.text.trim()) ?? 1;
+    final gap = _gapMinutes.round();
+    final slots = <Map<String, String>>[];
+
+    int startMinutes = _fromTime!.hour * 60 + _fromTime!.minute;
+    final endMinutes = _toTime!.hour * 60 + _toTime!.minute;
+    final slotDuration = minHours * 60;
+
+    while (startMinutes + slotDuration <= endMinutes) {
+      final slotEnd = startMinutes + slotDuration;
+      final startH = (startMinutes ~/ 60).toString().padLeft(2, '0');
+      final startM = (startMinutes % 60).toString().padLeft(2, '0');
+      final endH = (slotEnd ~/ 60).toString().padLeft(2, '0');
+      final endM = (slotEnd % 60).toString().padLeft(2, '0');
+
+      slots.add({
+        'start': '$startH:$startM',
+        'end': '$endH:$endM',
+      });
+
+      startMinutes = slotEnd + gap;
+    }
+
+    return slots;
+  }
+
+  // =====================
   // 💾 Save Changes
   // =====================
   Future<void> _saveChanges() async {
@@ -346,10 +419,21 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
         'hasFixedLocation': _hasFixedLocation,
       };
 
-      // Description in additionalInfo
-      updateData['additionalInfo'] = {
+      // Description in additionalInfo + custom fields
+      final additionalInfoMap = <String, dynamic>{
         'description': _descCtrl.text.trim(),
       };
+      // Add custom additional info fields
+      print('🔄 Saving _additionalInfo: $_additionalInfo');
+      for (final item in _additionalInfo) {
+        final key = item['key'] ?? item['label'];
+        print('🔄 Processing item: key=$key, value=${item['value']}');
+        if (key?.isNotEmpty == true && item['value']?.isNotEmpty == true) {
+          additionalInfoMap[key!] = item['value'];
+        }
+      }
+      print('🔄 Final additionalInfoMap to save: $additionalInfoMap');
+      updateData['additionalInfo'] = additionalInfoMap;
 
       // Booking Type & Pay Type
       if (_bookingType != null) {
@@ -403,6 +487,17 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
           hours.add(h);
         }
         updateData['availableHours'] = hours;
+      }
+
+      // Venue Type (for Venues category)
+      if (_selectedCategory == 'Venues') {
+        updateData['venueType'] = _venueType;
+      }
+
+      // Time Slots & Cleanup Time
+      if (_bookingType == 'hourly' && _fromTime != null && _toTime != null) {
+        updateData['timeSlots'] = _buildTimeSlots();
+        updateData['cleanupTimeMinutes'] = _gapMinutes.round();
       }
 
       // Keep existing images
@@ -631,6 +726,12 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
                                   ],
                                 ),
                               ),
+                              const SizedBox(height: 24),
+                              _buildWebSection(
+                                icon: LucideIcons.info,
+                                title: 'Additional Info',
+                                child: _buildAdditionalInfoSection(),
+                              ),
                             ],
                           ),
                         ),
@@ -658,18 +759,33 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
                                 child: _buildAvailabilitySection(),
                               ),
                               const SizedBox(height: 20),
-                              if (_bookingType == 'hourly')
+                              if (_bookingType == 'hourly') ...[
                                 _buildWebSection(
                                   icon: LucideIcons.clock,
                                   title: 'Hourly Settings',
                                   child: _buildHourlySettingsSection(),
                                 ),
+                                const SizedBox(height: 20),
+                                _buildWebSection(
+                                  icon: LucideIcons.list,
+                                  title: 'Time Slots',
+                                  child: _buildTimeSlotsSection(),
+                                ),
+                              ],
                               if (_bookingType == 'capacity' || _bookingType == 'mixed')
                                 _buildWebSection(
                                   icon: LucideIcons.users,
                                   title: 'Capacity Settings',
                                   child: _buildCapacitySection(),
                                 ),
+                              if (_selectedCategory == 'Venues') ...[
+                                const SizedBox(height: 20),
+                                _buildWebSection(
+                                  icon: LucideIcons.building,
+                                  title: 'Venue Type',
+                                  child: _buildVenueTypeSection(),
+                                ),
+                              ],
                               const SizedBox(height: 20),
                               _buildWebSection(
                                 icon: LucideIcons.settings,
@@ -756,11 +872,19 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
                     if (_bookingType == 'hourly') ...[
                       _buildHourlySettingsSection(),
                       const SizedBox(height: 20),
+                      _buildTimeSlotsSection(),
+                      const SizedBox(height: 20),
                     ],
                     if (_bookingType == 'capacity' || _bookingType == 'mixed') ...[
                       _buildCapacitySection(),
                       const SizedBox(height: 20),
                     ],
+                    if (_selectedCategory == 'Venues') ...[
+                      _buildVenueTypeSection(),
+                      const SizedBox(height: 20),
+                    ],
+                    _buildAdditionalInfoSection(),
+                    const SizedBox(height: 20),
                     _buildStatusSection(),
                     const SizedBox(height: 100),
                   ],
@@ -1123,7 +1247,7 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
             label: 'Price',
             hint: 'Enter price',
             keyboardType: TextInputType.number,
-            prefix: '\$ ',
+            prefix: '₪ ',
           ),
           if (_payType != null)
             Padding(
@@ -1530,6 +1654,253 @@ class _EditServiceProviderScreenState extends State<EditServiceProviderScreen> {
         label: 'Maximum Capacity',
         hint: 'Enter max number of people',
         keyboardType: TextInputType.number,
+      ),
+    );
+  }
+
+  // =====================
+  // 📝 Additional Info Section
+  // =====================
+  Widget _buildAdditionalInfoSection() {
+    return _buildCard(
+      title: 'Additional Information',
+      icon: Icons.info_outline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Add custom details about your service',
+            style: GoogleFonts.poppins(fontSize: 12, color: kMutedColor),
+          ),
+          const SizedBox(height: 12),
+          ..._additionalInfo.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: kBackgroundColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: kPrimaryLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(LucideIcons.tag, size: 14, color: kPrimaryColor),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item['key'] ?? item['label'] ?? '',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: kTextColor,
+                          ),
+                        ),
+                        Text(
+                          item['value'] ?? '',
+                          style: GoogleFonts.poppins(fontSize: 11, color: kMutedColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(LucideIcons.trash2, size: 16, color: kErrorColor),
+                    onPressed: () {
+                      setState(() {
+                        _additionalInfo.removeAt(index);
+                        _markChanged();
+                      });
+                    },
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(4),
+                  ),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final result = await showAddInfoDialog(context);
+              if (result != null) {
+                setState(() {
+                  _additionalInfo.add(result);
+                  _markChanged();
+                });
+              }
+            },
+            icon: const Icon(LucideIcons.plus, size: 16),
+            label: Text('Add Info', style: GoogleFonts.poppins(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kPrimaryColor,
+              side: BorderSide(color: kPrimaryColor.withOpacity(0.5)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================
+  // 🕒 Time Slots Section
+  // =====================
+  Widget _buildTimeSlotsSection() {
+    final slots = _buildTimeSlots();
+    return _buildCard(
+      title: 'Time Slots Preview',
+      icon: Icons.view_list_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Gap/Cleanup Time Slider
+          Text(
+            'Gap Between Bookings',
+            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kTextColor),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Time for cleanup between slots',
+            style: GoogleFonts.poppins(fontSize: 11, color: kMutedColor),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  value: _gapMinutes,
+                  min: 0,
+                  max: 60,
+                  divisions: 12,
+                  activeColor: kPrimaryColor,
+                  inactiveColor: kPrimaryLight,
+                  onChanged: (val) {
+                    setState(() {
+                      _gapMinutes = val;
+                      _markChanged();
+                    });
+                  },
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: kPrimaryLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${_gapMinutes.round()} min',
+                  style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kPrimaryColor),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Slots Preview
+          Text(
+            'Generated Slots (${slots.length})',
+            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kTextColor),
+          ),
+          const SizedBox(height: 8),
+          if (slots.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.alertCircle, size: 16, color: Colors.amber.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Set working hours and min booking duration to see slots',
+                      style: GoogleFonts.poppins(fontSize: 11, color: Colors.amber.shade800),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: slots.take(8).map((slot) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: kPrimaryLight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: kPrimaryColor.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    '${slot['start']} - ${slot['end']}',
+                    style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w500, color: kPrimaryColor),
+                  ),
+                );
+              }).toList(),
+            ),
+          if (slots.length > 8)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '+${slots.length - 8} more slots',
+                style: GoogleFonts.poppins(fontSize: 11, color: kMutedColor),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // =====================
+  // 🏛️ Venue Type Section
+  // =====================
+  Widget _buildVenueTypeSection() {
+    return _buildCard(
+      title: 'Venue Type',
+      icon: Icons.domain_outlined,
+      child: Column(
+        children: [
+          _buildToggleOption(
+            title: 'Indoor',
+            subtitle: 'Hall, ballroom, or enclosed space',
+            icon: LucideIcons.building,
+            isSelected: _venueType == 'indoor',
+            onTap: () {
+              setState(() {
+                _venueType = 'indoor';
+                _markChanged();
+              });
+            },
+          ),
+          const SizedBox(height: 10),
+          _buildToggleOption(
+            title: 'Outdoor',
+            subtitle: 'Garden, beach, or open-air venue',
+            icon: LucideIcons.trees,
+            isSelected: _venueType == 'outdoor',
+            onTap: () {
+              setState(() {
+                _venueType = 'outdoor';
+                _markChanged();
+              });
+            },
+          ),
+        ],
       ),
     );
   }

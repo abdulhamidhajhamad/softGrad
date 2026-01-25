@@ -6,13 +6,16 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
+import 'package:url_launcher/url_launcher.dart'; // ✅ For opening URLs
 
 import '../payment/cart.dart';
 import '../chat/chat_customer_home_page.dart'; // ✅ Real chat
 import '../../../widgets/booking_details_modal.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/user_service/chat_user_service.dart'; // ✅ Chat service
+import '../../../services/user_service/review_service.dart'; // ✅ Reviews
 import '../../../services/service_locator.dart'; // ✅ For getIt
+import '../home/home_customer.dart'; // ✅ For ServiceReviewsCustomerPage
 
 const Color kPrimary = Color.fromARGB(215, 20, 20, 215);
 const Color kBg = Color(0xFFF6F7FB);
@@ -83,11 +86,17 @@ class _ServiceInsideSearchScreenState extends State<ServiceInsideSearchScreen> {
   late PageController _mediaPageController;
   Timer? _autoSlideTimer;
 
+  // ✅ Reviews State
+  List<dynamic> _reviews = [];
+  double _averageRating = 0.0;
+  int _totalReviews = 0;
+
   @override
   void initState() {
     super.initState();
     _mediaPageController = PageController();
     _loadServiceDetails();
+    _loadReviews(); // ✅ Load reviews
   }
   
   @override
@@ -287,6 +296,26 @@ class _ServiceInsideSearchScreenState extends State<ServiceInsideSearchScreen> {
       return json.decode(response.body);
     } else {
       throw Exception('Failed to load service details');
+    }
+  }
+
+  // ✅ Load Reviews for this service
+  Future<void> _loadReviews() async {
+    try {
+      final result = await ReviewService.getServiceReviews(
+        serviceId: widget.data.id,
+        limit: 10,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _reviews = result['reviews'] ?? [];
+          _averageRating = (result['averageRating'] ?? 0).toDouble();
+          _totalReviews = result['totalReviews'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading reviews: $e');
     }
   }
 
@@ -565,6 +594,9 @@ class _ServiceInsideSearchScreenState extends State<ServiceInsideSearchScreen> {
             const SizedBox(height: 12),
           ],
           
+          // ✅ Service Information Section
+          _buildServiceInformationSection(),
+          
           // ✅ Company Info - only show if has data
           if (_hasAnyCompanyInfo())
             Container(
@@ -589,6 +621,9 @@ class _ServiceInsideSearchScreenState extends State<ServiceInsideSearchScreen> {
                 ],
               ),
             ),
+
+          // ✅ Customer Reviews Section
+          _buildCustomerReviewsSection(),
           
           const SizedBox(height: 100), // Space for bottom bar
         ],
@@ -911,6 +946,581 @@ class _ServiceInsideSearchScreenState extends State<ServiceInsideSearchScreen> {
     );
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📋 SERVICE INFORMATION SECTION - Modern Design
+  // ══════════════════════════════════════════════════════════════════════════
+  
+  Widget _buildServiceInformationSection() {
+    final venueType = _serviceData?['venueType']?.toString();
+    final maxCapacity = _serviceData?['maxCapacity'];
+    final minHours = _serviceData?['minBookingHours'];
+    final maxHours = _serviceData?['maxBookingHours'];
+    final workingDays = _serviceData?['workingDays'] as List?;
+    final availableHours = _serviceData?['availableHours'] as List?;
+    final bookingType = _bookingType ?? 'hourly';
+    final additionalInfo = _serviceData?['additionalInfo'] as Map<String, dynamic>?;
+    
+    // Check if we have any info to show
+    final hasVenueInfo = venueType != null && venueType.isNotEmpty;
+    final hasCapacity = maxCapacity != null && maxCapacity > 0;
+    final hasBookingHours = (minHours != null && minHours > 0) || (maxHours != null && maxHours > 0);
+    final hasWorkingHours = availableHours != null && availableHours.isNotEmpty;
+    final hasWorkingDays = workingDays != null && workingDays.isNotEmpty;
+    
+    // Filter additional info
+    final customInfo = <String, dynamic>{};
+    if (additionalInfo != null) {
+      additionalInfo.forEach((key, value) {
+        if (key != 'description' && value != null && value.toString().isNotEmpty) {
+          customInfo[key] = value;
+        }
+      });
+    }
+    
+    final hasCustomInfo = customInfo.isNotEmpty;
+    
+    // If no info at all, don't show the section
+    if (!hasVenueInfo && !hasCapacity && !hasBookingHours && !hasWorkingHours && !hasWorkingDays && !hasCustomInfo) {
+      return const SizedBox.shrink();
+    }
+
+    // Format working hours (e.g., "9:00 AM - 8:00 PM")
+    String? workingHoursStr;
+    if (availableHours != null && availableHours.isNotEmpty) {
+      final hours = availableHours.map((e) => e as int).toList()..sort();
+      if (hours.isNotEmpty) {
+        final startHour = hours.first;
+        final endHour = hours.last;
+        workingHoursStr = '${_formatHour(startHour)} - ${_formatHour(endHour + 1)}';
+      }
+    }
+
+    // Format working days (e.g., "Sunday - Saturday")
+    String? workingDaysStr;
+    if (workingDays != null && workingDays.isNotEmpty) {
+      if (workingDays.length == 7) {
+        workingDaysStr = 'Every Day';
+      } else {
+        final dayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        final sortedDays = workingDays.map((d) => d.toString().toLowerCase()).toList()
+          ..sort((a, b) => dayOrder.indexOf(a).compareTo(dayOrder.indexOf(b)));
+        
+        // Check if consecutive days
+        bool isConsecutive = true;
+        for (int i = 1; i < sortedDays.length; i++) {
+          if (dayOrder.indexOf(sortedDays[i]) - dayOrder.indexOf(sortedDays[i-1]) != 1) {
+            isConsecutive = false;
+            break;
+          }
+        }
+        
+        if (isConsecutive && sortedDays.length > 2) {
+          workingDaysStr = '${_capitalizeDay(sortedDays.first)} - ${_capitalizeDay(sortedDays.last)}';
+        } else {
+          workingDaysStr = sortedDays.map((d) => _capitalizeDay(d)).join(', ');
+        }
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with icon
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [kPrimary.withOpacity(0.15), kPrimary.withOpacity(0.05)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.info_outline_rounded, color: kPrimary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Service Information',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: kText,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // ═══════════════════════════════════════════
+            // SECTION 1: Basic Service Info (Grid Layout)
+            // ═══════════════════════════════════════════
+            if (hasVenueInfo || hasCapacity || hasBookingHours) ...[
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  // Venue Type
+                  if (hasVenueInfo)
+                    _buildInfoChip(
+                      icon: venueType == 'indoor' ? Icons.home_rounded : Icons.park_rounded,
+                      label: venueType == 'indoor' ? 'Indoor Venue' : 'Outdoor Venue',
+                      color: venueType == 'indoor' ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
+                    ),
+                  
+                  // Max Capacity
+                  if (hasCapacity)
+                    _buildInfoChip(
+                      icon: Icons.groups_rounded,
+                      label: '$maxCapacity Guests Max',
+                      color: const Color(0xFFF59E0B),
+                    ),
+                  
+                  // Booking Type
+                  _buildInfoChip(
+                    icon: _getBookingIcon(bookingType),
+                    label: _getBookingLabel(bookingType),
+                    color: const Color(0xFF6366F1),
+                  ),
+                  
+                  // Min Booking
+                  if (minHours != null && minHours > 0)
+                    _buildInfoChip(
+                      icon: Icons.timer_outlined,
+                      label: 'Min $minHours ${minHours == 1 ? 'Hour' : 'Hours'}',
+                      color: const Color(0xFF8B5CF6),
+                    ),
+                  
+                  // Max Booking
+                  if (maxHours != null && maxHours > 0)
+                    _buildInfoChip(
+                      icon: Icons.timelapse_rounded,
+                      label: 'Max $maxHours Hours',
+                      color: const Color(0xFFEC4899),
+                    ),
+                ],
+              ),
+            ],
+            
+            // ═══════════════════════════════════════════
+            // SECTION 2: Additional Info
+            // ═══════════════════════════════════════════
+            if (hasCustomInfo) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.playlist_add_check_rounded, size: 18, color: kMuted),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Additional Details',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF475569),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    ...customInfo.entries.map((entry) => _buildAdditionalInfoRow(entry.key, entry.value.toString())),
+                  ],
+                ),
+              ),
+            ],
+            
+            // ═══════════════════════════════════════════
+            // SECTION 3: Working Hours & Days
+            // ═══════════════════════════════════════════
+            if (hasWorkingHours || hasWorkingDays) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF0891B2).withOpacity(0.08),
+                      const Color(0xFF06B6D4).withOpacity(0.04),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF0891B2).withOpacity(0.2)),
+                ),
+                child: Column(
+                  children: [
+                    // Working Hours
+                    if (workingHoursStr != null)
+                      _buildScheduleRow(
+                        icon: Icons.access_time_rounded,
+                        title: 'Working Hours',
+                        value: workingHoursStr,
+                        iconColor: const Color(0xFF0891B2),
+                      ),
+                    
+                    if (workingHoursStr != null && workingDaysStr != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Divider(height: 1, color: const Color(0xFF0891B2).withOpacity(0.15)),
+                      ),
+                    
+                    // Working Days
+                    if (workingDaysStr != null)
+                      _buildScheduleRow(
+                        icon: Icons.calendar_month_rounded,
+                        title: 'Available Days',
+                        value: workingDaysStr,
+                        iconColor: const Color(0xFF0891B2),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Modern Info Chip Widget
+  Widget _buildInfoChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color.withOpacity(0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Additional Info Row Widget - ✅ Now supports clickable URLs
+  Widget _buildAdditionalInfoRow(String key, String value) {
+    // Check if value is a URL
+    final isUrl = _isValidUrl(value);
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            margin: const EdgeInsets.only(top: 7, right: 12),
+            decoration: BoxDecoration(
+              color: kPrimary.withOpacity(0.6),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Expanded(
+            child: isUrl 
+              ? _buildClickableUrlRow(key, value)
+              : RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '$key: ',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF334155),
+                        ),
+                      ),
+                      TextSpan(
+                        text: value,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: kMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ Check if string is a valid URL
+  bool _isValidUrl(String text) {
+    final urlPattern = RegExp(
+      r'^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$',
+      caseSensitive: false,
+    );
+    return urlPattern.hasMatch(text.trim());
+  }
+
+  // ✅ Build clickable URL row
+  Widget _buildClickableUrlRow(String key, String url) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$key:',
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF334155),
+          ),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () => _launchUrl(url),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: kPrimary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: kPrimary.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _getUrlIcon(url),
+                  size: 16,
+                  color: kPrimary,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _getDisplayUrl(url),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: kPrimary,
+                      decoration: TextDecoration.underline,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.open_in_new_rounded,
+                  size: 14,
+                  color: kPrimary.withOpacity(0.7),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ✅ Get appropriate icon for URL type
+  IconData _getUrlIcon(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('facebook.com') || lower.contains('fb.com')) {
+      return Icons.facebook_rounded;
+    } else if (lower.contains('instagram.com')) {
+      return Icons.camera_alt_rounded;
+    } else if (lower.contains('twitter.com') || lower.contains('x.com')) {
+      return Icons.alternate_email_rounded;
+    } else if (lower.contains('youtube.com') || lower.contains('youtu.be')) {
+      return Icons.play_circle_rounded;
+    } else if (lower.contains('tiktok.com')) {
+      return Icons.music_note_rounded;
+    } else if (lower.contains('linkedin.com')) {
+      return Icons.work_rounded;
+    } else if (lower.contains('whatsapp.com') || lower.contains('wa.me')) {
+      return Icons.chat_rounded;
+    } else {
+      return Icons.link_rounded;
+    }
+  }
+
+  // ✅ Get display-friendly URL
+  String _getDisplayUrl(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('facebook.com') || lower.contains('fb.com')) {
+      return 'Facebook Page';
+    } else if (lower.contains('instagram.com')) {
+      return 'Instagram Profile';
+    } else if (lower.contains('twitter.com') || lower.contains('x.com')) {
+      return 'Twitter/X Profile';
+    } else if (lower.contains('youtube.com') || lower.contains('youtu.be')) {
+      return 'YouTube Channel';
+    } else if (lower.contains('tiktok.com')) {
+      return 'TikTok Profile';
+    } else if (lower.contains('linkedin.com')) {
+      return 'LinkedIn Profile';
+    } else if (lower.contains('whatsapp.com') || lower.contains('wa.me')) {
+      return 'WhatsApp Contact';
+    }
+    // Return shortened URL for websites
+    try {
+      final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
+      return uri.host.replaceFirst('www.', '');
+    } catch (_) {
+      return url.length > 30 ? '${url.substring(0, 30)}...' : url;
+    }
+  }
+
+  // ✅ Launch URL in browser
+  Future<void> _launchUrl(String url) async {
+    String finalUrl = url.trim();
+    
+    // Add https:// if missing
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+      finalUrl = 'https://$finalUrl';
+    }
+    
+    try {
+      final uri = Uri.parse(finalUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not open: $url'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid URL: $url'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Schedule Row Widget (for working hours & days)
+  Widget _buildScheduleRow({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color iconColor,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 20, color: iconColor),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: kMuted,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: kText,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper: Format hour to AM/PM
+  String _formatHour(int hour) {
+    if (hour == 0 || hour == 24) return '12:00 AM';
+    if (hour == 12) return '12:00 PM';
+    if (hour < 12) return '$hour:00 AM';
+    return '${hour - 12}:00 PM';
+  }
+
+  // Helper: Capitalize day name
+  String _capitalizeDay(String day) {
+    if (day.isEmpty) return day;
+    return day[0].toUpperCase() + day.substring(1);
+  }
+
+  // Helper: Get booking type icon
+  IconData _getBookingIcon(String bookingType) {
+    switch (bookingType.toLowerCase()) {
+      case 'hourly': return Icons.schedule_rounded;
+      case 'daily': return Icons.today_rounded;
+      case 'capacity': return Icons.people_rounded;
+      case 'mixed': return Icons.layers_rounded;
+      case 'display': return Icons.visibility_rounded;
+      default: return Icons.event_rounded;
+    }
+  }
+
+  // Helper: Get booking type label
+  String _getBookingLabel(String bookingType) {
+    switch (bookingType.toLowerCase()) {
+      case 'hourly': return 'Hourly Booking';
+      case 'daily': return 'Daily Booking';
+      case 'capacity': return 'Per Person';
+      case 'mixed': return 'Flexible Booking';
+      case 'display': return 'Display Only';
+      default: return 'Standard Booking';
+    }
+  }
+
   // ✅ Helper: Check if has description
   bool _hasDescription() {
     final desc = _serviceData?['description']?.toString().trim() ?? 
@@ -971,6 +1581,250 @@ class _ServiceInsideSearchScreenState extends State<ServiceInsideSearchScreen> {
     }
     
     return lines;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ⭐ CUSTOMER REVIEWS SECTION
+  // ══════════════════════════════════════════════════════════════════════════
+  
+  Widget _buildCustomerReviewsSection() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, left: 16, right: 16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Customer Reviews',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: kText,
+                        ),
+                      ),
+                      if (_totalReviews > 0)
+                        Text(
+                          '${_averageRating.toStringAsFixed(1)} ⭐ • $_totalReviews ${_totalReviews == 1 ? 'review' : 'reviews'}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: kMuted,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // View All Button
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ServiceReviewsCustomerPage(
+                          serviceId: widget.data.id,
+                          serviceName: widget.data.serviceName,
+                        ),
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    backgroundColor: kPrimary.withOpacity(0.1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View All',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          color: kPrimary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_rounded, size: 16, color: kPrimary),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Reviews List or Empty State
+            if (_reviews.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F9FC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black.withOpacity(0.04)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.rate_review_outlined, color: Color(0xFF64748B), size: 24),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'No reviews yet. Be the first to share your experience!',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: kMuted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ..._reviews.take(2).map((review) => _buildReviewCard(review)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewCard(dynamic review) {
+    final userName = review.userName ?? 'Anonymous';
+    final rating = (review.rating ?? 0).toDouble();
+    final comment = review.comment ?? '';
+    final date = review.reviewDate ?? DateTime.now();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // User Avatar
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [kPrimary.withOpacity(0.8), kPrimary],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w700,
+                        color: kText,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      _formatReviewDate(date),
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: kMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Rating Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(
+                      rating.toStringAsFixed(1),
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w800,
+                        color: kText,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (comment.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              comment,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: kMuted,
+                height: 1.5,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatReviewDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} weeks ago';
+    if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} months ago';
+    return '${(diff.inDays / 365).floor()} years ago';
   }
 }
 

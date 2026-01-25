@@ -786,43 +786,87 @@ async getTotalRevenue() {
 }
 
 /**
- * ✅ Financial Growth (آخر 7 أشهر)
+ * ✅ Financial Growth (مع دعم فترات مختلفة)
  */
-async getFinancialGrowth() {
+async getFinancialGrowth(period?: string) {
   try {
-    const sevenMonthsAgo = new Date();
-    sevenMonthsAgo. setMonth(sevenMonthsAgo.getMonth() - 7);
+    // تحديد الفترة الزمنية
+    let monthsBack = 6; // default
+    let periodLabel = 'Last 6 Months';
+    
+    switch (period) {
+      case '1month':
+        monthsBack = 1;
+        periodLabel = 'Last Month';
+        break;
+      case '3months':
+        monthsBack = 3;
+        periodLabel = 'Last 3 Months';
+        break;
+      case '6months':
+        monthsBack = 6;
+        periodLabel = 'Last 6 Months';
+        break;
+      case '1year':
+        monthsBack = 12;
+        periodLabel = 'Last Year';
+        break;
+      default:
+        monthsBack = 6;
+        periodLabel = 'Last 6 Months';
+    }
 
-    const monthlyData = await this.bookingModel. aggregate([
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - monthsBack);
+    startDate.setDate(1);
+    startDate.setHours(0, 0, 0, 0);
+
+    const monthlyData = await this.bookingModel.aggregate([
       { 
-        $match:  { 
-          status: { $in:  ['confirmed', 'completed'] },
-          createdAt: { $gte: sevenMonthsAgo }
+        $match: { 
+          status: { $in: ['confirmed', 'completed'] },
+          createdAt: { $gte: startDate }
         } 
       },
       {
-        $group:  {
+        $group: {
           _id: { 
             year: { $year: '$createdAt' },
-            month: { $month:  '$createdAt' }
+            month: { $month: '$createdAt' }
           },
-          revenue: { $sum:  '$price' },
-          count: { $sum:  1 }
+          revenue: { $sum: '$price' },
+          count: { $sum: 1 }
         }
       },
-      { $sort: { '_id. year': 1, '_id.month':  1 } }
+      { $sort: { '_id.year': 1, '_id.month': 1 } }
     ]);
 
+    // إنشاء بيانات لكل شهر (حتى لو لم يكن هناك حجوزات)
+    const result: { year: number; month: number; monthName: string; revenue: number; bookingsCount: number }[] = [];
+    const currentDate = new Date();
+    
+    for (let i = monthsBack - 1; i >= 0; i--) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      
+      const found = monthlyData.find(m => m._id.year === year && m._id.month === month);
+      
+      result.push({
+        year,
+        month,
+        monthName: date.toLocaleString('en-US', { month: 'short' }),
+        revenue: found?.revenue || 0,
+        bookingsCount: found?.count || 0
+      });
+    }
+
     return {
-      period: 'Last 7 months',
-      data: monthlyData. map(m => ({
-        year: m._id. year,
-        month: m._id. month,
-        revenue: m.revenue,
-        bookingsCount: m.count
-      }))
+      period: periodLabel,
+      data: result
     };
   } catch (error) {
+    console.error('Error in getFinancialGrowth:', error);
     throw new BadRequestException('Failed to fetch financial growth');
   }
 }
@@ -947,27 +991,59 @@ async getAllReviews(filter?:  'all' | 'good' | 'bad') {
       .sort({ createdAt:  -1 })
       .lean();
 
+    // Get all unique provider IDs (as strings)
+    const providerIds = [...new Set(reviews.map((r: any) => r.serviceId?.providerId).filter(Boolean))];
+    
+    // Fetch all providers at once - using ServiceProvider model
+    // Convert string IDs to ObjectId for matching
+    const mongoose = require('mongoose');
+    const objectIdProviderIds = providerIds.map(id => {
+      try {
+        return new mongoose.Types.ObjectId(id);
+      } catch {
+        return id;
+      }
+    });
+    
+    const ServiceProvider = this.bookingModel.db.model('ServiceProvider');
+    const providers = await ServiceProvider.find({ 
+      userId: { $in: objectIdProviderIds } 
+    }).select('userId companyName').lean();
+    
+    // Create map with string keys for comparison
+    const providerMap = new Map(providers.map((p: any) => [p.userId?.toString(), p.companyName]));
+    
+    console.log('🔍 Provider IDs:', providerIds);
+    console.log('🏢 Providers found:', providers.length, providers.map((p: any) => ({ userId: p.userId?.toString(), companyName: p.companyName })));
+
     return {
       total: reviews.length,
       goodCount: reviews.filter((r: any) => r.rating >= 4).length,
       badCount: reviews.filter((r: any) => r.rating <= 2).length,
-      reviews: reviews.map((r: any) => ({
-        _id: r._id,
-        userId: r.userId?._id || r.userId,
-        userName: r.userId?.userName || r.userName || 'Anonymous',
-        userImage: r.userId?.imageUrl || '',
-        serviceId: r.serviceId?._id || r.serviceId,
-        serviceName: r.serviceId?.serviceName || 'Unknown Service',
-        serviceImage: r.serviceId?.images?.[0] || '',
-        providerId: r.serviceId?.providerId,
-        rating: r.rating,
-        comment: r.comment,
-        images: r.images || [],
-        isPositive: r.rating >= 4,
-        createdAt: r.createdAt
-      }))
+      reviews: reviews.map((r: any) => {
+        const provId = r.serviceId?.providerId?.toString();
+        const provName = providerMap.get(provId);
+        console.log(`📝 Review mapping: providerId=${provId}, providerName=${provName}`);
+        return {
+          _id: r._id,
+          userId: r.userId?._id || r.userId,
+          userName: r.userId?.userName || r.userName || 'Anonymous',
+          userImage: r.userId?.imageUrl || '',
+          serviceId: r.serviceId?._id || r.serviceId,
+          serviceName: r.serviceId?.serviceName || 'Unknown Service',
+          serviceImage: r.serviceId?.images?.[0] || '',
+          providerId: provId,
+          providerName: provName || null,
+          rating: r.rating,
+          comment: r.comment,
+          images: r.images || [],
+          isPositive: r.rating >= 4,
+          createdAt: r.createdAt
+        };
+      })
     };
   } catch (error) {
+    console.error('❌ Error in getAllReviews:', error);
     throw new BadRequestException('Failed to fetch reviews');
   }
 }

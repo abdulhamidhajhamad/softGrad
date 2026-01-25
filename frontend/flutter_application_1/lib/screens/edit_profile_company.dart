@@ -58,16 +58,19 @@ class _EditProfileCompanyState extends State<EditProfileCompany> {
       
       if (mounted) {
         setState(() {
-          // ✅ قراءة البيانات من الـ Response المباشر
+          // ✅ قراءة البيانات - الـ Backend يرجعها flat
           _originalCompanyName = providerData['companyName']?.toString() ?? '';
           _originalDescription = providerData['description']?.toString() ?? '';
-          final details = providerData['details'];
-          _originalEmail = details?['email']?.toString() ?? '';
-          _originalPhone = details?['phone']?.toString() ?? '';
+          
+          // ✅ قراءة phone و email (قد تكون في details أو مباشرة)
+          _originalEmail = providerData['email']?.toString() ?? 
+                           providerData['details']?['email']?.toString() ?? '';
+          _originalPhone = providerData['phone']?.toString() ?? 
+                           providerData['details']?['phone']?.toString() ?? '';
 
-          // âœ… Ù‚Ø±Ø§Ø¡Ø© Ù…Ù† location
-          final location = providerData['location'];
-          _originalCity = location?['city']?.toString() ?? '';
+          // ✅ قراءة city (قد تكون في location أو مباشرة)
+          _originalCity = providerData['city']?.toString() ?? 
+                          providerData['location']?['city']?.toString() ?? '';
           
           // ✅ تعيين القيم للـ Controllers
           _nameCtrl.text = _originalCompanyName;
@@ -76,8 +79,10 @@ class _EditProfileCompanyState extends State<EditProfileCompany> {
           _emailCtrl.text = _originalEmail;
           _phoneCtrl.text = _originalPhone;
           
-          // الشعار
-          final logo = providerData['image'] ?? providerData['logo'];
+          // ✅ الشعار - قد يكون في image أو logoUrl
+          final logo = providerData['image'] ?? 
+                       providerData['logoUrl'] ?? 
+                       providerData['logo'];
           if (logo != null && logo.toString().isNotEmpty) {
             _existingLogoUrl = logo.toString();
           }
@@ -349,9 +354,9 @@ class _EditProfileCompanyState extends State<EditProfileCompany> {
                 children: [
                     TextFormField(
                       controller: _nameCtrl,
-                      enabled: false,
+                      enabled: true, // ✅ تمكين تعديل اسم الشركة
                       decoration: _decor("Name", icon: Icons.business),
-                      style: GoogleFonts.poppins(color: Colors.grey), 
+                      style: GoogleFonts.poppins(color: Colors.black87), 
                       validator: (v) => v!.isEmpty ? "Required" : null,
                     ),
                   const SizedBox(height: 14),

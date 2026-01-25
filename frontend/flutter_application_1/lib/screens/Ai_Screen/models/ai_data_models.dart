@@ -58,41 +58,43 @@ class ServiceCategory {
     required this.color,
   });
 
+  // ✅ Same categories as Provider can add (matching kServiceCategories)
   static const List<ServiceCategory> allServices = [
-    ServiceCategory(name: 'Venue', nameAr: 'قاعة', icon: Icons.apartment_rounded, color: Color(0xFF1414D7)),
-    ServiceCategory(name: 'Photography & Video', nameAr: 'تصوير وفيديو', icon: Icons.camera_alt_rounded, color: Color(0xFFE91E63)),
+    ServiceCategory(name: 'Venues', nameAr: 'قاعات', icon: Icons.apartment_rounded, color: Color(0xFF1414D7)),
+    ServiceCategory(name: 'Photographers', nameAr: 'مصورين', icon: Icons.photo_camera_outlined, color: Color(0xFFE91E63)),
     ServiceCategory(name: 'Catering', nameAr: 'طعام', icon: Icons.restaurant_menu_rounded, color: Color(0xFFFF9800)),
-    ServiceCategory(name: 'Cake', nameAr: 'كيك', icon: Icons.cake_rounded, color: Color(0xFFF44336)),
-    ServiceCategory(name: 'Decoration', nameAr: 'ديكور', icon: Icons.auto_fix_high_rounded, color: Color(0xFF4CAF50)),
-    ServiceCategory(name: 'Flowers', nameAr: 'ورود', icon: Icons.local_florist_rounded, color: Color(0xFFE91E63)),
-    ServiceCategory(name: 'Music & DJ', nameAr: 'موسيقى ودي جي', icon: Icons.music_note_rounded, color: Color(0xFF3F51B5)),
-    ServiceCategory(name: 'Event Planner', nameAr: 'منظم فعاليات', icon: Icons.event_note_rounded, color: Color(0xFF795548)),
-    ServiceCategory(name: 'Makeup & Hair', nameAr: 'مكياج وتصفيف', icon: Icons.face_retouching_natural_rounded, color: Color(0xFFFF4081)),
-    ServiceCategory(name: 'Transportation', nameAr: 'مواصلات', icon: Icons.directions_car_rounded, color: Color(0xFF607D8B)),
-    ServiceCategory(name: 'Invitation Cards', nameAr: 'بطاقات دعوة', icon: Icons.mail_rounded, color: Color(0xFF009688)),
-    ServiceCategory(name: 'Jewelry', nameAr: 'مجوهرات', icon: Icons.diamond_rounded, color: Color(0xFFFFD700)),
-    ServiceCategory(name: 'Other', nameAr: 'أخرى', icon: Icons.more_horiz_rounded, color: Color(0xFF9E9E9E)),
+    ServiceCategory(name: 'Cake', nameAr: 'كيك', icon: Icons.cake_outlined, color: Color(0xFFF44336)),
+    ServiceCategory(name: 'Flower Shops', nameAr: 'محلات ورود', icon: Icons.local_florist_outlined, color: Color(0xFFE91E63)),
+    ServiceCategory(name: 'Decor & Lighting', nameAr: 'ديكور وإضاءة', icon: Icons.lightbulb_outline_rounded, color: Color(0xFF4CAF50)),
+    ServiceCategory(name: 'Music & Entertainment', nameAr: 'موسيقى وترفيه', icon: Icons.music_note_rounded, color: Color(0xFF3F51B5)),
+    ServiceCategory(name: 'Event Planners & Coordinators', nameAr: 'منظمي فعاليات', icon: Icons.event_available_rounded, color: Color(0xFF795548)),
+    ServiceCategory(name: 'Card Printing', nameAr: 'طباعة بطاقات', icon: Icons.mail_outline_rounded, color: Color(0xFF009688)),
+    ServiceCategory(name: 'Jewelry & Accessories', nameAr: 'مجوهرات وإكسسوارات', icon: Icons.diamond_outlined, color: Color(0xFFFFD700)),
+    ServiceCategory(name: 'Car Rental & Transportation', nameAr: 'تأجير سيارات ومواصلات', icon: Icons.directions_car_filled_outlined, color: Color(0xFF607D8B)),
+    ServiceCategory(name: 'Gift & Souvenir', nameAr: 'هدايا وتذكارات', icon: Icons.card_giftcard_outlined, color: Color(0xFF9C27B0)),
+    ServiceCategory(name: 'Other', nameAr: 'أخرى', icon: Icons.add_circle_outline_rounded, color: Color(0xFF9E9E9E)),
   ];
 }
 
 /// Cities in Palestine
 class CityData {
   static const List<String> palestinianCities = [
+    'Nablus',
     'Ramallah',
     'Jerusalem',
-    'Nablus',
     'Hebron',
     'Bethlehem',
     'Jenin',
     'Tulkarm',
     'Qalqilya',
     'Jericho',
-    'Gaza',
-    'Rafah',
-    'Khan Yunis',
-    'Deir al-Balah',
     'Salfit',
     'Tubas',
+    'Gaza',
+    'Khan Yunis',
+    'Rafah',
+    'Deir al-Balah',
+    'Al-Bireh',
   ];
 }
 
@@ -304,7 +306,7 @@ class ServiceItem {
   final int? reviewCount;
   final String? imageUrl;
   final String? description;
-  final Map<String, dynamic>? bookingType;
+  final String? bookingType;  // ✅ Changed from Map to String (hourly, daily, capacity, etc.)
 
   ServiceItem({
     required this.id,
@@ -353,11 +355,28 @@ class ServiceItem {
       }
     }
 
+    // ✅ FIX: Use calculatedPrice or displayPrice if available (from backend calculation)
+    // This is the actual price considering hours/guests
+    final calculatedPrice = _safeToDouble(json['calculatedPrice'], 0);
+    final displayPrice = _safeToDouble(json['displayPrice'], 0);
+    final finalPrice = displayPrice > 0 ? displayPrice : (calculatedPrice > 0 ? calculatedPrice : servicePrice);
+
+    // ✅ Handle bookingType as String (not Map)
+    String? bookingType;
+    final bookingTypeData = json['bookingType'];
+    if (bookingTypeData is String) {
+      bookingType = bookingTypeData;
+    } else if (bookingTypeData is Map) {
+      // Legacy support if it's a Map
+      bookingType = bookingTypeData['type'] as String? ?? 'hourly';
+    }
+
     return ServiceItem(
       id: serviceId,
       category: category,
       name: serviceName,
-      price: servicePrice,
+      // ✅ FIX: Use calculated/display price for correct total display
+      price: finalPrice,
       priceType: priceType ?? json['payType'] as String?,
       providerName: json['providerName'] as String? ?? json['companyName'] as String? ?? 'Provider',
       providerId: json['providerId']?.toString(),
@@ -367,7 +386,7 @@ class ServiceItem {
       reviewCount: json['totalReviews'] as int? ?? json['reviewCount'] as int?,
       imageUrl: json['imageUrl'] ?? json['image'] ?? (json['images'] is List && (json['images'] as List).isNotEmpty ? json['images'][0] : null),
       description: json['description'] as String?,
-      bookingType: json['bookingType'] as Map<String, dynamic>?,
+      bookingType: bookingType,
     );
   }
 }

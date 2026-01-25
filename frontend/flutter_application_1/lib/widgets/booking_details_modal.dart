@@ -36,6 +36,8 @@ Future<void> showBookingModal({
   required String bookingTypeString, // 'hourly', 'daily', 'capacity', 'mixed'
   required Map<String, dynamic> serviceData, // Full service data from API
   required VoidCallback onSuccess,
+  String? packageName, // ✅ NEW: Optional package name for AI packages
+  bool suppressSuccessDialog = false, // ✅ NEW: Don't show dialog when adding from AI package
 }) async {
   // Parse booking type
   BookingType bookingType = BookingType.daily;
@@ -68,6 +70,8 @@ Future<void> showBookingModal({
       bookingType: bookingType,
       serviceData: serviceData,
       onSuccess: onSuccess,
+      packageName: packageName,
+      suppressSuccessDialog: suppressSuccessDialog,
     ),
   );
 }
@@ -81,6 +85,8 @@ class _BookingDetailsModal extends StatefulWidget {
   final BookingType bookingType;
   final Map<String, dynamic> serviceData;
   final VoidCallback onSuccess;
+  final String? packageName; // ✅ NEW
+  final bool suppressSuccessDialog; // ✅ NEW
 
   const _BookingDetailsModal({
     required this.serviceId,
@@ -88,6 +94,8 @@ class _BookingDetailsModal extends StatefulWidget {
     required this.bookingType,
     required this.serviceData,
     required this.onSuccess,
+    this.packageName,
+    this.suppressSuccessDialog = false,
   });
 
   @override
@@ -104,6 +112,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
   int _numberOfPeople = 1;
   bool _isFullVenue = false;
   bool _isLoading = false;
+  
+  // 🆕 حالة توسيع/طي قسم Working Service Info
+
   
   // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
   final _clientAddressController = TextEditingController();
@@ -185,9 +196,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     );
 
     if (picked != null) {
-      // Validate working days
+      // Validate working days (only if list is not empty)
       final dayName = _getDayName(picked);
-      if (_workingDays != null && !_workingDays!.contains(dayName)) {
+      if (_workingDays != null && _workingDays!.isNotEmpty && !_workingDays!.contains(dayName)) {
         _showErrorDialog('Service is not available on ${_capitalize(dayName)}s');
         return;
       }
@@ -222,8 +233,8 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     );
 
     if (picked != null) {
-      // Validate available hours
-      if (_availableHours != null && !_availableHours!.contains(picked.hour)) {
+      // Validate available hours (only if list is not empty)
+      if (_availableHours != null && _availableHours!.isNotEmpty && !_availableHours!.contains(picked.hour)) {
         _showErrorDialog('Service is not operational at ${picked.hour}:00');
         return;
       }
@@ -252,6 +263,19 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     }
 
     final allPrices = widget.serviceData['allPrices'] as Map<String, dynamic>?;
+    final priceOptions = widget.serviceData['priceOptions'] as Map<String, dynamic>?;
+    
+    // Parse price from string or number
+    double fallbackPrice = 0;
+    final rawPrice = widget.serviceData['price'];
+    if (rawPrice != null) {
+      if (rawPrice is num) {
+        fallbackPrice = rawPrice.toDouble();
+      } else if (rawPrice is String) {
+        fallbackPrice = double.tryParse(rawPrice.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+      }
+    }
+    
     double basePrice = 0;
 
     if (widget.bookingType == BookingType.hourly) {
@@ -275,7 +299,10 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
         return;
       }
 
-      basePrice = (allPrices?['perHour'] ?? 0).toDouble();
+      // Try allPrices['perHour'], priceOptions['perHour'], then fallback to main price
+      basePrice = (allPrices?['perHour'] as num?)?.toDouble() 
+                ?? (priceOptions?['perHour'] as num?)?.toDouble() 
+                ?? fallbackPrice;
       final total = basePrice * hours;
 
       setState(() {
@@ -290,7 +317,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     }
 
     if (widget.bookingType == BookingType.capacity) {
-      basePrice = (allPrices?['perPerson'] ?? 0).toDouble();
+      basePrice = (allPrices?['perPerson'] as num?)?.toDouble() 
+                ?? (priceOptions?['perPerson'] as num?)?.toDouble() 
+                ?? fallbackPrice;
       final total = basePrice * _numberOfPeople;
 
       setState(() {
@@ -306,7 +335,10 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
 
     if (widget.bookingType == BookingType.mixed) {
       if (_isFullVenue) {
-        basePrice = (allPrices?['perEvent'] ?? 0).toDouble();
+        basePrice = (allPrices?['perEvent'] as num?)?.toDouble() 
+                  ?? (priceOptions?['fullVenue'] as num?)?.toDouble()
+                  ?? (priceOptions?['perEvent'] as num?)?.toDouble() 
+                  ?? fallbackPrice;
         setState(() {
           _calculatedPrice = basePrice;
           _priceBreakdown = {
@@ -315,7 +347,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
           };
         });
       } else {
-        basePrice = (allPrices?['perPerson'] ?? 0).toDouble();
+        basePrice = (allPrices?['perPerson'] as num?)?.toDouble() 
+                  ?? (priceOptions?['perPerson'] as num?)?.toDouble() 
+                  ?? fallbackPrice;
         final total = basePrice * _numberOfPeople;
         setState(() {
           _calculatedPrice = total;
@@ -330,7 +364,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     }
 
     if (widget.bookingType == BookingType.daily) {
-      basePrice = (allPrices?['perDay'] ?? 0).toDouble();
+      basePrice = (allPrices?['perDay'] as num?)?.toDouble() 
+                ?? (priceOptions?['perDay'] as num?)?.toDouble() 
+                ?? fallbackPrice;
       setState(() {
         _calculatedPrice = basePrice;
         _priceBreakdown = {
@@ -342,7 +378,9 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     }
 
     if (widget.bookingType == BookingType.display) {
-      basePrice = (allPrices?['displayPrice'] ?? 0).toDouble();
+      basePrice = (allPrices?['displayPrice'] as num?)?.toDouble() 
+                ?? (priceOptions?['basePrice'] as num?)?.toDouble() 
+                ?? fallbackPrice;
       setState(() {
         _calculatedPrice = basePrice;
         _priceBreakdown = {
@@ -478,6 +516,11 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
         bookingDetails['bookingDescription'] = description;
       }
 
+      // ✅ NEW: إضافة اسم الباقة إذا موجود (للـ AI packages)
+      if (widget.packageName != null && widget.packageName!.isNotEmpty) {
+        bookingDetails['packageName'] = widget.packageName;
+      }
+
       // Call API
       final result = await AddToCartService.addToCart(
         serviceId: widget.serviceId,
@@ -514,7 +557,10 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
         
         setState(() => _isLoading = false);
         Navigator.pop(context);
-        _showSuccessDialog();
+        // ✅ Only show dialog if not suppressed (for AI package batch adding)
+        if (!widget.suppressSuccessDialog) {
+          _showSuccessDialog();
+        }
         widget.onSuccess();
       }
 
@@ -537,7 +583,8 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
                        message.toLowerCase().contains('booked');
 
     if (isConflict) {
-      _showBookingConflictPopup(message);
+      // 🆕 Fetch alternatives and show smart popup
+      _showSmartConflictPopup(message);
     } else {
       // Regular error dialog
       showDialog(
@@ -570,6 +617,482 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
         ),
       );
     }
+  }
+
+  // 🆕 Smart Conflict Popup with Alternatives
+  void _showSmartConflictPopup(String errorMessage) async {
+    // Show loading first
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: kBlue),
+      ),
+    );
+
+    try {
+      // Fetch alternative slots from API
+      final alternatives = await AddToCartService.getAlternativeSlots(
+        serviceId: widget.serviceId,
+        date: _selectedDate!.toIso8601String(),
+        startHour: _startTime?.hour,
+        endHour: _endTime?.hour,
+        numberOfPeople: _numberOfPeople,
+      );
+
+      if (mounted) Navigator.pop(context); // Close loading
+
+      if (mounted) {
+        _showAlternativesDialog(errorMessage, alternatives);
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Close loading
+      // Fallback to simple conflict popup
+      _showBookingConflictPopup(errorMessage);
+    }
+  }
+
+  // 🆕 Beautiful Alternatives Dialog
+  void _showAlternativesDialog(String errorMessage, Map<String, dynamic> data) {
+    final bookingType = data['bookingType']?.toString() ?? '';
+    final alternatives = data['alternatives'] as List<dynamic>? ?? [];
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        backgroundColor: Colors.white,
+        child: Container(
+          padding: const EdgeInsets.all(0),
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 🔴 Header with gradient
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(28),
+                    topRight: Radius.circular(28),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.event_busy_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Time Slot Unavailable',
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'This slot is already booked',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // 🟢 Alternatives Section
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (alternatives.isEmpty) ...[
+                        // No alternatives found
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No alternatives found in the next 14 days',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: kMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        // 💡 Suggestion header
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.lightbulb_rounded,
+                                color: Color(0xFF10B981),
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Available Alternatives',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: kText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Alternative cards
+                        ...alternatives.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final alt = entry.value as Map<String, dynamic>;
+                          return _buildAlternativeCard(
+                            ctx,
+                            alt,
+                            bookingType,
+                            isFirst: index == 0,
+                          );
+                        }),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              
+              // 🔵 Bottom Actions
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.grey.shade300),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Change Manually',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w700,
+                            color: kMuted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🆕 Alternative Card Widget
+  Widget _buildAlternativeCard(
+    BuildContext dialogContext,
+    Map<String, dynamic> alternative,
+    String bookingType,
+    {bool isFirst = false}
+  ) {
+    final dateStr = alternative['date']?.toString() ?? '';
+    final dayName = alternative['dayName']?.toString() ?? '';
+    final slots = alternative['availableSlots'] as List<dynamic>?;
+    final availableCapacity = alternative['availableCapacity'];
+
+    DateTime? date;
+    try {
+      date = DateTime.parse(dateStr);
+    } catch (_) {}
+
+    final formattedDate = date != null 
+        ? DateFormat('MMM dd, yyyy').format(date)
+        : dateStr;
+
+    final isToday = date != null && 
+        date.year == DateTime.now().year &&
+        date.month == DateTime.now().month &&
+        date.day == DateTime.now().day;
+
+    final isTomorrow = date != null && 
+        date.difference(DateTime.now()).inDays == 0 &&
+        date.day == DateTime.now().add(const Duration(days: 1)).day;
+
+    String dayLabel = dayName;
+    if (isToday) dayLabel = 'Today';
+    if (isTomorrow) dayLabel = 'Tomorrow';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isFirst ? const Color(0xFF10B981).withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFirst ? const Color(0xFF10B981).withOpacity(0.3) : Colors.grey.shade200,
+          width: isFirst ? 2 : 1,
+        ),
+        boxShadow: isFirst ? [
+          BoxShadow(
+            color: const Color(0xFF10B981).withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ] : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            // Apply this alternative
+            _applyAlternative(dialogContext, alternative, bookingType);
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Date row with badge
+                Row(
+                  children: [
+                    if (isFirst)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'RECOMMENDED',
+                          style: GoogleFonts.poppins(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    if (isFirst) const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: kBlue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.calendar_today_rounded,
+                        color: kBlue,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            dayLabel,
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: kText,
+                            ),
+                          ),
+                          Text(
+                            formattedDate,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: kMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 16,
+                      color: isFirst ? const Color(0xFF10B981) : kMuted,
+                    ),
+                  ],
+                ),
+                
+                // Time slots or capacity info
+                if (slots != null && slots.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: slots.take(3).map((slot) {
+                      final start = slot['startHour'] as int? ?? 0;
+                      final end = slot['endHour'] as int? ?? 0;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.access_time_rounded, size: 14, color: kMuted),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${_formatHour24(start)} - ${_formatHour24(end)}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: kText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                
+                if (availableCapacity != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.people_rounded, size: 14, color: kMuted),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$availableCapacity spots available',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: kText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🆕 Apply selected alternative
+  void _applyAlternative(BuildContext dialogContext, Map<String, dynamic> alternative, String bookingType) {
+    Navigator.pop(dialogContext); // Close alternatives dialog
+
+    final dateStr = alternative['date']?.toString() ?? '';
+    final slots = alternative['availableSlots'] as List<dynamic>?;
+
+    try {
+      final newDate = DateTime.parse(dateStr);
+      
+      setState(() {
+        _selectedDate = newDate;
+        
+        // Apply first available time slot if hourly
+        if (slots != null && slots.isNotEmpty && bookingType.toLowerCase() == 'hourly') {
+          final firstSlot = slots.first as Map<String, dynamic>;
+          _startTime = TimeOfDay(hour: firstSlot['startHour'] as int? ?? 9, minute: 0);
+          _endTime = TimeOfDay(hour: firstSlot['endHour'] as int? ?? 10, minute: 0);
+        }
+      });
+
+      _calculatePrice();
+
+      // Show confirmation
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Updated to ${DateFormat('MMM dd').format(newDate)}${slots != null && slots.isNotEmpty ? ' at ${_formatHour24(slots.first['startHour'] as int? ?? 9)}-${_formatHour24(slots.first['endHour'] as int? ?? 10)}' : ''}',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } catch (e) {
+      print('Error applying alternative: $e');
+    }
+  }
+
+  // 🆕 Format hour to 12-hour format
+  String _formatHour24(int hour) {
+    if (hour == 0 || hour == 24) return '12:00 AM';
+    if (hour == 12) return '12:00 PM';
+    if (hour < 12) return '$hour:00 AM';
+    return '${hour - 12}:00 PM';
   }
 
   void _showBookingConflictPopup(String message) {
@@ -728,174 +1251,170 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isWeb = screenWidth > 600; // Check if it's web/tablet
 
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
-        child: DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.75,
-          minChildSize: 0.5,
-          maxChildSize: 0.92,
-          builder: (context, scrollController) {
-            return Container(
-              margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.14),
-                    blurRadius: 30,
-                    offset: const Offset(0, 18),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  // Drag Handle
-                  Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+        child: isWeb 
+            ? _buildWebLayout(screenWidth, screenHeight)
+            : _buildMobileLayout(),
+      ),
+    );
+  }
 
-                  // Header
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Book Service',
-                          style: GoogleFonts.poppins(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: kText,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close_rounded),
-                        tooltip: 'Close',
-                      ),
-                    ],
-                  ),
+  // 📱 Mobile Layout with DraggableScrollableSheet
+  Widget _buildMobileLayout() {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      minChildSize: 0.5,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) {
+        return _buildModalContent(scrollController);
+      },
+    );
+  }
 
-                  Text(
-                    widget.serviceName,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: kMuted,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Scrollable Content
-                  Expanded(
-                    child: ListView(
-                      controller: scrollController,
-                      physics: const BouncingScrollPhysics(),
-                      children: [
-                        // Date Picker
-                        _buildDateField(),
-                        const SizedBox(height: 16),
-
-                        // Type-specific fields
-                        if (widget.bookingType == BookingType.hourly) ...[
-                          _buildTimeFields(),
-                          const SizedBox(height: 16),
-                        ],
-
-                        if (widget.bookingType == BookingType.capacity) ...[
-                          _buildCapacityField(),
-                          const SizedBox(height: 16),
-                        ],
-
-                        if (widget.bookingType == BookingType.mixed) ...[
-                          _buildFullVenueToggle(),
-                          const SizedBox(height: 16),
-                          if (!_isFullVenue) ...[
-                            _buildCapacityField(),
-                            const SizedBox(height: 16),
-                          ],
-                        ],
-
-                        // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
-                        if (!_hasFixedLocation) ...[
-                          _buildClientLocationField(),
-                          const SizedBox(height: 16),
-                        ],
-
-                        // 🆕 وصف الحجز (اختياري - لجميع الخدمات)
-                        _buildBookingDescriptionField(),
-                        const SizedBox(height: 16),
-
-                        // Price Display
-                        if (_calculatedPrice != null && _calculatedPrice! > 0) ...[
-                          _buildPriceDisplay(),
-                          const SizedBox(height: 16),
-                        ],
-
-                        // Info Cards
-                        _buildInfoCard(),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Action Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _submitBooking,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: kText,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.black.withOpacity(0.14),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.add_shopping_cart_rounded, size: 20),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'Add to Cart',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+  // 🖥️ Web Layout - Centered Dialog Style
+  Widget _buildWebLayout(double screenWidth, double screenHeight) {
+    final maxWidth = screenWidth > 800 ? 520.0 : screenWidth * 0.85;
+    final maxHeight = screenHeight * 0.85;
+    
+    return Center(
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
         ),
+        child: _buildModalContent(null),
+      ),
+    );
+  }
+
+  // 🎨 Shared Modal Content
+  Widget _buildModalContent(ScrollController? scrollController) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.14),
+            blurRadius: 30,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Drag Handle
+          Container(
+            width: 44,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Header
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Book Service',
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: kText,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded),
+                tooltip: 'Close',
+              ),
+            ],
+          ),
+
+          Text(
+            widget.serviceName,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: kMuted,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Scrollable Content
+          Expanded(
+            child: ListView(
+              controller: scrollController,
+              physics: const BouncingScrollPhysics(),
+              children: [
+                // Date Picker
+                _buildDateField(),
+                const SizedBox(height: 16),
+
+                // Type-specific fields
+                if (widget.bookingType == BookingType.hourly) ...[
+                  _buildTimeFields(),
+                  const SizedBox(height: 16),
+                ],
+
+                if (widget.bookingType == BookingType.capacity) ...[
+                  _buildCapacityField(),
+                  const SizedBox(height: 16),
+                ],
+
+                if (widget.bookingType == BookingType.mixed) ...[
+                  _buildFullVenueToggle(),
+                  const SizedBox(height: 16),
+                  if (!_isFullVenue) ...[
+                    _buildCapacityField(),
+                    const SizedBox(height: 16),
+                  ],
+                ],
+
+                // 🆕 موقع العميل (للخدمات التي تذهب للعميل)
+                if (!_hasFixedLocation) ...[
+                  _buildClientLocationField(),
+                  const SizedBox(height: 16),
+                ],
+
+                // 🆕 وصف الحجز (اختياري - لجميع الخدمات)
+                _buildBookingDescriptionField(),
+                const SizedBox(height: 16),
+
+                // Price Display (in scroll area for reference)
+                if (_calculatedPrice != null && _calculatedPrice! > 0) ...[
+                  _buildPriceDisplay(),
+                  const SizedBox(height: 16),
+                ],
+
+                // Info Cards
+                _buildInfoCard(),
+                
+                // Extra padding at bottom for web
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 💰 Live Price Display + Action Button (Always visible at bottom)
+          _buildBottomActionBar(),
+        ],
       ),
     );
   }
@@ -1329,13 +1848,390 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     );
   }
 
+  // 💰 Bottom Action Bar with Live Price Display
+  Widget _buildBottomActionBar() {
+    final hasPrice = _calculatedPrice != null && _calculatedPrice! > 0;
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: kBlue.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+        border: Border.all(
+          color: hasPrice ? kBlue.withOpacity(0.15) : Colors.black.withOpacity(0.06),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 💵 Live Price Display (shows when price is calculated)
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: hasPrice
+                ? Column(
+                    children: [
+                      // Price breakdown summary
+                      _buildLivePriceSummary(),
+                      const SizedBox(height: 12),
+                      // Divider with gradient
+                      Container(
+                        height: 1,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.transparent,
+                              kBlue.withOpacity(0.2),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+          
+          // 🛒 Action Row: Total + Add to Cart Button
+          Row(
+            children: [
+              // Total Price Display
+              if (hasPrice) ...[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: kMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            '₪',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: kBlue,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: _calculatedPrice ?? 0),
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, child) {
+                              return Text(
+                                value.toStringAsFixed(0),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  color: kText,
+                                  height: 1,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+              ],
+              
+              // Add to Cart Button
+              Expanded(
+                flex: hasPrice ? 2 : 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        kText,
+                        kText.withBlue(60),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: kText.withOpacity(0.25),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _isLoading ? null : _submitBooking,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                        child: _isLoading
+                            ? const Center(
+                                child: SizedBox(
+                                  height: 22,
+                                  width: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.add_shopping_cart_rounded,
+                                      color: Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Add to Cart',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 📊 Live Price Summary Widget
+  Widget _buildLivePriceSummary() {
+    if (_priceBreakdown == null) return const SizedBox.shrink();
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            kBlue.withOpacity(0.06),
+            kBlue.withOpacity(0.02),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBlue.withOpacity(0.08)),
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: kBlue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              _getPriceIcon(),
+              color: kBlue,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          
+          // Price Details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _getPriceLabel(),
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: kMuted,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _getPriceDescription(),
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: kText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Unit Price Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: kBlue.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              _getUnitPrice(),
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: kBlue,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🎯 Helper methods for price display
+  IconData _getPriceIcon() {
+    switch (widget.bookingType) {
+      case BookingType.hourly:
+        return Icons.schedule_rounded;
+      case BookingType.daily:
+        return Icons.calendar_today_rounded;
+      case BookingType.capacity:
+        return Icons.people_rounded;
+      case BookingType.mixed:
+        return _isFullVenue ? Icons.domain_rounded : Icons.people_rounded;
+      case BookingType.display:
+        return Icons.storefront_rounded;
+    }
+  }
+
+  String _getPriceLabel() {
+    switch (widget.bookingType) {
+      case BookingType.hourly:
+        return 'Hourly Booking';
+      case BookingType.daily:
+        return 'Daily Rate';
+      case BookingType.capacity:
+        return 'Per Person';
+      case BookingType.mixed:
+        return _isFullVenue ? 'Full Venue' : 'Per Person';
+      case BookingType.display:
+        return 'Display Price';
+    }
+  }
+
+  String _getPriceDescription() {
+    if (_priceBreakdown == null) return '';
+    
+    switch (widget.bookingType) {
+      case BookingType.hourly:
+        final hours = _priceBreakdown!['hours'] ?? 0;
+        return '${hours.toStringAsFixed(1)} hours selected';
+      case BookingType.daily:
+        return '1 day selected';
+      case BookingType.capacity:
+        return '$_numberOfPeople ${_numberOfPeople == 1 ? 'person' : 'people'} selected';
+      case BookingType.mixed:
+        if (_isFullVenue) {
+          return 'Entire venue booked';
+        }
+        return '$_numberOfPeople ${_numberOfPeople == 1 ? 'person' : 'people'} selected';
+      case BookingType.display:
+        return 'Fixed price';
+    }
+  }
+
+  String _getUnitPrice() {
+    final allPrices = widget.serviceData['allPrices'] as Map<String, dynamic>?;
+    final priceOptions = widget.serviceData['priceOptions'] as Map<String, dynamic>?;
+    
+    // Parse price from string or number
+    double fallbackPrice = 0;
+    final rawPrice = widget.serviceData['price'];
+    if (rawPrice != null) {
+      if (rawPrice is num) {
+        fallbackPrice = rawPrice.toDouble();
+      } else if (rawPrice is String) {
+        fallbackPrice = double.tryParse(rawPrice.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+      }
+    }
+    
+    switch (widget.bookingType) {
+      case BookingType.hourly:
+        final perHour = (allPrices?['perHour'] as num?)?.toDouble() 
+                      ?? (priceOptions?['perHour'] as num?)?.toDouble() 
+                      ?? fallbackPrice;
+        return '₪${perHour.toStringAsFixed(0)}/hr';
+      case BookingType.daily:
+        final perDay = (allPrices?['perDay'] as num?)?.toDouble() 
+                     ?? (priceOptions?['perDay'] as num?)?.toDouble() 
+                     ?? fallbackPrice;
+        return '₪${perDay.toStringAsFixed(0)}/day';
+      case BookingType.capacity:
+        final perPerson = (allPrices?['perPerson'] as num?)?.toDouble() 
+                        ?? (priceOptions?['perPerson'] as num?)?.toDouble() 
+                        ?? fallbackPrice;
+        return '₪${perPerson.toStringAsFixed(0)}/person';
+      case BookingType.mixed:
+        if (_isFullVenue) {
+          final perEvent = (allPrices?['perEvent'] as num?)?.toDouble() 
+                         ?? (priceOptions?['fullVenue'] as num?)?.toDouble() 
+                         ?? fallbackPrice;
+          return '₪${perEvent.toStringAsFixed(0)}';
+        }
+        final perPerson = (allPrices?['perPerson'] as num?)?.toDouble() 
+                        ?? (priceOptions?['perPerson'] as num?)?.toDouble() 
+                        ?? fallbackPrice;
+        return '₪${perPerson.toStringAsFixed(0)}/person';
+      case BookingType.display:
+        final displayPrice = (allPrices?['displayPrice'] as num?)?.toDouble() 
+                           ?? (priceOptions?['basePrice'] as num?)?.toDouble() 
+                           ?? fallbackPrice;
+        return '₪${displayPrice.toStringAsFixed(0)}';
+    }
+  }
+
   // 🆕 حقل موقع العميل للخدمات التي تذهب للعميل
   Widget _buildClientLocationField() {
     // قائمة المدن
     const cities = [
-      'Jerusalem', 'Ramallah', 'Nablus', 'Hebron', 'Bethlehem',
+      'Nablus', 'Ramallah', 'Jerusalem', 'Hebron', 'Bethlehem',
       'Jenin', 'Tulkarm', 'Qalqilya', 'Jericho', 'Salfit',
       'Tubas', 'Gaza', 'Khan Yunis', 'Rafah', 'Deir al-Balah',
+      'Al-Bireh', 'Other',
     ];
 
     return Container(
@@ -1763,80 +2659,413 @@ class _BookingDetailsModalState extends State<_BookingDetailsModal> {
     );
   }
 
+  // ✅ NEW: جلب timeSlots من الـ API
+  List<Map<String, String>>? get _timeSlots {
+    final slots = widget.serviceData['timeSlots'] as List<dynamic>?;
+    if (slots == null || slots.isEmpty) return null;
+    return slots.map((slot) {
+      return {
+        'startTime': slot['startTime']?.toString() ?? '',
+        'endTime': slot['endTime']?.toString() ?? '',
+      };
+    }).where((slot) => slot['startTime']!.isNotEmpty && slot['endTime']!.isNotEmpty).toList();
+  }
+
   Widget _buildInfoCard() {
-    final info = <String>[];
-
-    if (widget.bookingType == BookingType.hourly) {
-      if (_minBookingHours != null) {
-        info.add('Min. booking: $_minBookingHours hours');
-      }
-      if (_maxBookingHours != null) {
-        info.add('Max. booking: $_maxBookingHours hours');
-      }
+    // Check if there's any info to show
+    final hasBookingInfo = (_minBookingHours != null || _maxBookingHours != null || _maxCapacity != null);
+    final hasWorkingDays = _workingDays != null && _workingDays!.isNotEmpty;
+    final hasTimeSlots = _timeSlots != null && _timeSlots!.isNotEmpty;
+    final hasAvailableHours = _availableHours != null && _availableHours!.isNotEmpty;
+    
+    if (!hasBookingInfo && !hasWorkingDays && !hasTimeSlots && !hasAvailableHours) {
+      return const SizedBox.shrink();
     }
-
-    if (_maxCapacity != null) {
-      info.add('Max capacity: $_maxCapacity people');
-    }
-
-    if (_workingDays != null && _workingDays!.isNotEmpty) {
-      final days = _workingDays!.map((d) => _capitalize(d)).join(', ');
-      info.add('Working days: $days');
-    }
-
-    if (info.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: kBlue.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kBlue.withOpacity(0.16)),
+        color: const Color(0xFFF8FAFC), // Light gray background
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.info_outline_rounded, color: kBlue, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Service Info',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                  color: kText,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          for (final i in info) ...[
-            Row(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showWorkingInfoDialog(context),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
                 Container(
-                  width: 6,
-                  height: 6,
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
+                    color: kBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.info_outline_rounded,
                     color: kBlue,
-                    shape: BoxShape.circle,
+                    size: 22,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 14),
                 Expanded(
-                  child: Text(
-                    i,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: kText,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Working Service Info',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: kText,
+                        ),
+                      ),
+                      Text(
+                        'Tap to view availability & rules',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: kMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black.withOpacity(0.05)),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: kText.withOpacity(0.5),
                   ),
                 ),
               ],
             ),
-            if (i != info.last) const SizedBox(height: 6),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ NEW: Popup Window for Working Info
+  void _showWorkingInfoDialog(BuildContext context) {
+    final hasBookingInfo = (_minBookingHours != null || _maxBookingHours != null || _maxCapacity != null);
+    final hasWorkingDays = _workingDays != null && _workingDays!.isNotEmpty;
+    final hasTimeSlots = _timeSlots != null && _timeSlots!.isNotEmpty;
+    final hasAvailableHours = _availableHours != null && _availableHours!.isNotEmpty;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Service Details',
+                    style: GoogleFonts.poppins(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: kText,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close_rounded, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              
+              // Content
+              Flexible(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Working Days Section
+                      if (hasWorkingDays) ...[
+                        _buildSectionHeader('Working Days', Icons.calendar_month_rounded),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _workingDays!.map((day) => _buildDayChip(day)).toList(),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // Time Slots Section
+                      if (hasTimeSlots) ...[
+                        _buildSectionHeader('Available Time Slots', Icons.schedule_rounded),
+                        const SizedBox(height: 12),
+                        ..._timeSlots!.map((slot) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildTimeSlotCard(slot['startTime']!, slot['endTime']!),
+                        )).toList(),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // Available Hours Section (if no time slots)
+                      if (!hasTimeSlots && hasAvailableHours) ...[
+                        _buildSectionHeader('Available Hours', Icons.access_time_filled_rounded),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _availableHours!.map((hour) => _buildHourChip(hour)).toList(),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+
+                      // Booking Details Section
+                      if (hasBookingInfo) ...[
+                        _buildSectionHeader('Booking Rules', Icons.rule_rounded),
+                        const SizedBox(height: 12),
+                        
+                        if (_minBookingHours != null)
+                          _buildInfoDetailCard(
+                            icon: Icons.timer_outlined,
+                            title: 'Minimum Duration',
+                            value: '$_minBookingHours hours',
+                            color: const Color(0xFF2196F3),
+                          ),
+                        
+                        if (_maxBookingHours != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: _buildInfoDetailCard(
+                              icon: Icons.timer_off_outlined,
+                              title: 'Maximum Duration',
+                              value: '$_maxBookingHours hours',
+                              color: const Color(0xFF9C27B0),
+                            ),
+                          ),
+                        
+                        if (_maxCapacity != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: _buildInfoDetailCard(
+                              icon: Icons.people_outline_rounded,
+                              title: 'Maximum Capacity',
+                              value: '$_maxCapacity people',
+                              color: const Color(0xFF4CAF50),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ Helper Widgets for Info Card
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: kBlue),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: kText,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDayChip(String day) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            kBlue.withOpacity(0.12),
+            kBlue.withOpacity(0.06),
           ],
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kBlue.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle_rounded, size: 12, color: kBlue),
+          const SizedBox(width: 4),
+          Text(
+            _capitalize(day),
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: kBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHourChip(int hour) {
+    final timeStr = hour < 12 
+        ? '${hour == 0 ? 12 : hour}:00 AM'
+        : '${hour == 12 ? 12 : hour - 12}:00 PM';
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: kBlue.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: kBlue.withOpacity(0.15)),
+      ),
+      child: Text(
+        timeStr,
+        style: GoogleFonts.poppins(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: kBlue,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeSlotCard(String startTime, String endTime) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            kBlue.withOpacity(0.06),
+            kBlue.withOpacity(0.02),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBlue.withOpacity(0.12)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: kBlue.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.schedule_rounded,
+              size: 16,
+              color: kBlue,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            startTime,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: kText,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            Icons.arrow_forward_rounded,
+            size: 14,
+            color: kBlue.withOpacity(0.5),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            endTime,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: kText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoDetailCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 14, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: kMuted,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: kText,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

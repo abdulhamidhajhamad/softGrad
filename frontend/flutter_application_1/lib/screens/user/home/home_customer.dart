@@ -5,10 +5,12 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart'; // ✅ For TapGestureRecognizer
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart'; // ✅ For opening URLs
 import 'package:flutter_application_1/screens/user/search/search.dart';
 import 'package:flutter_application_1/services/auth_service.dart';
 import 'package:flutter_application_1/screens/notifications_provider.dart';
@@ -27,6 +29,7 @@ import 'package:flutter_application_1/screens/user/web/web_responsive_wrapper.da
 import 'package:flutter_application_1/screens/user/web/web_shell.dart';
 
 import '../profile/favorites.dart';
+import 'package:flutter_application_1/services/user_service/favorites_service.dart';
 import 'package:flutter_application_1/screens/Ai_Screen/ai_screen_layout.dart';
 import '../payment/cart.dart';
 import '../profile/profile.dart';
@@ -547,7 +550,7 @@ class _HomeTabState extends State<_HomeTab> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'EventPlanner',
+                  'Eventry',
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
@@ -729,7 +732,7 @@ class _HomeTabState extends State<_HomeTab> {
 
                   const SizedBox(height: 22),
 
-                  // ✅ Quick Actions (Horizontal Scroll)
+                  // ✅ Quick Actions (Centered Grid)
                   Text(
                     'Quick Actions',
                     style: GoogleFonts.poppins(
@@ -738,39 +741,35 @@ class _HomeTabState extends State<_HomeTab> {
                       color: const Color(0xFF0B1220),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 100,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      children: [
-                        _QuickActionChip(
-                          icon: Icons.storefront_rounded,
-                          label: 'Services',
-                          color: kNavBlue,
-                          onTap: widget.onOpenVendors,
-                        ),
-                        _QuickActionChip(
-                          icon: Icons.inventory_2_rounded,
-                          label: 'Packages',
-                          color: const Color(0xFFF57C00),
-                          onTap: widget.onOpenPackages,
-                        ),
-                        _QuickActionChip(
-                          icon: Icons.local_offer_rounded,
-                          label: 'Offers',
-                          color: const Color(0xFF8B5CF6),
-                          onTap: widget.onOpenOffers,
-                        ),
-                        _QuickActionChip(
-                          icon: Icons.description_rounded,
-                          label: 'Templates',
-                          color: const Color(0xFF059669),
-                          onTap: widget.onOpenTemplates,
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _QuickActionChip(
+                        icon: Icons.storefront_rounded,
+                        label: 'Services',
+                        color: kNavBlue,
+                        onTap: widget.onOpenVendors,
+                      ),
+                      _QuickActionChip(
+                        icon: Icons.inventory_2_rounded,
+                        label: 'Packages',
+                        color: const Color(0xFFF57C00),
+                        onTap: widget.onOpenPackages,
+                      ),
+                      _QuickActionChip(
+                        icon: Icons.local_offer_rounded,
+                        label: 'Offers',
+                        color: const Color(0xFF8B5CF6),
+                        onTap: widget.onOpenOffers,
+                      ),
+                      _QuickActionChip(
+                        icon: Icons.description_rounded,
+                        label: 'Templates',
+                        color: const Color(0xFF059669),
+                        onTap: widget.onOpenTemplates,
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 22),
@@ -1107,7 +1106,7 @@ class _TopSearchBar extends StatelessWidget {
   }
 }
 
-/// ✅ NEW: Quick Action Chip for horizontal scroll actions
+/// ✅ Quick Action Chip - Responsive & Centered
 class _QuickActionChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1123,8 +1122,13 @@ class _QuickActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    // حساب العرض بناءً على حجم الشاشة - 4 عناصر مع مسافات
+    final itemWidth = (screenWidth - 32 - 36) / 4; // 32 padding + 36 gaps (12*3)
+    final clampedWidth = itemWidth.clamp(70.0, 90.0);
+    
     return Padding(
-      padding: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
@@ -1132,7 +1136,8 @@ class _QuickActionChip extends StatelessWidget {
           onTap();
         },
         child: Container(
-          width: 80,
+          width: clampedWidth,
+          height: 95,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
@@ -1149,13 +1154,13 @@ class _QuickActionChip extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: color, size: 24),
+                child: Icon(icon, color: color, size: 22),
               ),
               const SizedBox(height: 8),
               Text(
@@ -1163,7 +1168,7 @@ class _QuickActionChip extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF0B1220),
                 ),
@@ -1562,7 +1567,7 @@ class _HomePackageCarouselState extends State<HomePackageCarousel> {
     super.initState();
     _controller = PageController(viewportFraction: 0.88);
 
-    _timer = Timer.periodic(const Duration(seconds: 6), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!mounted || widget.packages.isEmpty) return;
       final next = (_page + 1) % widget.packages.length;
       _controller.animateToPage(
@@ -1842,7 +1847,7 @@ class _PackageHeroCard extends StatelessWidget {
   }
 }
 
-class HomeTrendingRail extends StatelessWidget {
+class HomeTrendingRail extends StatefulWidget {
   final List<HomeTrendingService> services;
   final ValueChanged<HomeTrendingService> onOpen;
 
@@ -1853,19 +1858,72 @@ class HomeTrendingRail extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<HomeTrendingRail> createState() => _HomeTrendingRailState();
+}
+
+class _HomeTrendingRailState extends State<HomeTrendingRail> {
+  late final ScrollController _scrollController;
+  Timer? _autoScrollTimer;
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _startAutoScroll();
+  }
+
+  @override
+  void dispose() {
+    _autoScrollTimer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _startAutoScroll() {
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || widget.services.isEmpty) return;
+      
+      _currentIndex = (_currentIndex + 1) % widget.services.length;
+      
+      // Calculate scroll position (card width ~320 + spacing 14)
+      final cardWidth = 320.0 + 14.0;
+      final targetOffset = _currentIndex * cardWidth;
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      
+      // If reached end, go back to start
+      if (targetOffset > maxScroll) {
+        _currentIndex = 0;
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        _scrollController.animateTo(
+          targetOffset,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (services.isEmpty) return const SizedBox.shrink();
+    if (widget.services.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(
       height: 178,
       child: ListView.separated(
+        controller: _scrollController,
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: services.length,
+        itemCount: widget.services.length,
         separatorBuilder: (_, __) => const SizedBox(width: 14),
         itemBuilder: (context, i) {
-          final s = services[i];
-          return _TrendingCard(service: s, onTap: () => onOpen(s));
+          final s = widget.services[i];
+          return _TrendingCard(service: s, onTap: () => widget.onOpen(s));
         },
       ),
     );
@@ -2004,7 +2062,7 @@ class _TrendingCard extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          "\$${service.price.toStringAsFixed(0)}",
+                          "₪${service.price.toStringAsFixed(0)}",
                           style: GoogleFonts.poppins(
                             fontSize: 14.5,
                             fontWeight: FontWeight.w900,
@@ -2064,11 +2122,17 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
   PageController? _mediaPageController;
   Timer? _autoSlideTimer;
 
+  // ✅ Reviews State
+  List<dynamic> _reviews = [];
+  double _averageRating = 0.0;
+  int _totalReviews = 0;
+
   @override
   void initState() {
     super.initState();
     _mediaPageController = PageController();
     _loadServiceDetails();
+    _loadReviews(); // ✅ Load reviews
   }
 
   @override
@@ -2170,9 +2234,40 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
     );
 
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      final decoded = json.decode(response.body);
+      // Handle case where API returns a List instead of Map
+      if (decoded is List) {
+        if (decoded.isNotEmpty && decoded[0] is Map<String, dynamic>) {
+          return decoded[0] as Map<String, dynamic>;
+        }
+        throw Exception('Invalid service data format');
+      }
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      throw Exception('Unexpected response format');
     } else {
       throw Exception('Failed to load service');
+    }
+  }
+
+  // ✅ Load Reviews for this service
+  Future<void> _loadReviews() async {
+    try {
+      final result = await ReviewService.getServiceReviews(
+        serviceId: widget.service.id,
+        limit: 10,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _reviews = result['reviews'] ?? [];
+          _averageRating = (result['averageRating'] ?? 0).toDouble();
+          _totalReviews = result['totalReviews'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading reviews: $e');
     }
   }
 
@@ -2325,6 +2420,19 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
             color: const Color(0xFF0B1220),
           ),
         ),
+        actions: [
+          // ✅ Favorite Button in AppBar
+          _FavoriteButton(
+            serviceId: s.id,
+            serviceName: s.name,
+            category: s.category,
+            company: s.company,
+            price: s.price,
+            rating: _serviceData?['rating']?.toDouble() ?? 0.0,
+            imageUrl: s.imageUrl,
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       bottomNavigationBar: SafeArea(
         top: false,
@@ -2510,6 +2618,9 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                     ),
                   ),
                 
+                // Service Information Section
+                _buildServiceInformationSection(),
+                
                 // Company Info - only show if has any data
                 if (_hasCompanyInfo())
                   Container(
@@ -2600,6 +2711,9 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
                     ),
                   ),
 
+                // ✅ Customer Reviews Section
+                _buildCustomerReviewsSection(),
+
                 const SizedBox(height: 100), // Space for bottom bar
               ],
             ),
@@ -2670,6 +2784,825 @@ class _ServiceDetailsPageState extends State<ServiceDetailsPage> {
     }
     
     return rows;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ⭐ CUSTOMER REVIEWS SECTION
+  // ══════════════════════════════════════════════════════════════════════════
+  
+  Widget _buildCustomerReviewsSection() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Customer Reviews',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF0B1220),
+                        ),
+                      ),
+                      if (_totalReviews > 0)
+                        Text(
+                          '${_averageRating.toStringAsFixed(1)} ⭐ • $_totalReviews ${_totalReviews == 1 ? 'review' : 'reviews'}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // View All Button
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ServiceReviewsCustomerPage(
+                          serviceId: widget.service.id,
+                          serviceName: widget.service.name,
+                        ),
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    backgroundColor: kNavBlue.withOpacity(0.1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View All',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          color: kNavBlue,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_rounded, size: 16, color: kNavBlue),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Reviews List or Empty State
+            if (_reviews.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F9FC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black.withOpacity(0.04)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.rate_review_outlined, color: Color(0xFF64748B), size: 24),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'No reviews yet. Be the first to share your experience!',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ..._reviews.take(2).map((review) => _buildReviewCard(review)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewCard(dynamic review) {
+    final userName = review.userName ?? 'Anonymous';
+    final rating = (review.rating ?? 0).toDouble();
+    final comment = review.comment ?? '';
+    final date = review.reviewDate ?? DateTime.now();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // User Avatar
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [kNavBlue.withOpacity(0.8), kNavBlue],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF0B1220),
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      _formatReviewDate(date),
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Rating Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(
+                      rating.toStringAsFixed(1),
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0B1220),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (comment.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              comment,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF64748B),
+                height: 1.5,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatReviewDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} weeks ago';
+    if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} months ago';
+    return '${(diff.inDays / 365).floor()} years ago';
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📋 SERVICE INFORMATION SECTION - Modern Design
+  // ══════════════════════════════════════════════════════════════════════════
+  
+  Widget _buildServiceInformationSection() {
+    final venueType = _serviceData?['venueType']?.toString();
+    final maxCapacity = _serviceData?['maxCapacity'];
+    final minHours = _serviceData?['minBookingHours'];
+    final maxHours = _serviceData?['maxBookingHours'];
+    final workingDays = _serviceData?['workingDays'] as List?;
+    final availableHours = _serviceData?['availableHours'] as List?;
+    final bookingType = _bookingType ?? 'hourly';
+    final additionalInfo = _serviceData?['additionalInfo'] as Map<String, dynamic>?;
+    
+    // Check if we have any info to show
+    final hasVenueInfo = venueType != null && venueType.isNotEmpty;
+    final hasCapacity = maxCapacity != null && maxCapacity > 0;
+    final hasBookingHours = (minHours != null && minHours > 0) || (maxHours != null && maxHours > 0);
+    final hasWorkingHours = availableHours != null && availableHours.isNotEmpty;
+    final hasWorkingDays = workingDays != null && workingDays.isNotEmpty;
+    
+    // Filter additional info
+    final customInfo = <String, dynamic>{};
+    if (additionalInfo != null) {
+      additionalInfo.forEach((key, value) {
+        if (key != 'description' && value != null && value.toString().isNotEmpty) {
+          customInfo[key] = value;
+        }
+      });
+    }
+    
+    final hasCustomInfo = customInfo.isNotEmpty;
+    
+    // If no info at all, don't show the section
+    if (!hasVenueInfo && !hasCapacity && !hasBookingHours && !hasWorkingHours && !hasWorkingDays && !hasCustomInfo) {
+      return const SizedBox.shrink();
+    }
+
+    // Format working hours (e.g., "9:00 AM - 8:00 PM")
+    String? workingHoursStr;
+    if (availableHours != null && availableHours.isNotEmpty) {
+      final hours = availableHours.map((e) => e as int).toList()..sort();
+      if (hours.isNotEmpty) {
+        final startHour = hours.first;
+        final endHour = hours.last;
+        workingHoursStr = '${_formatHour(startHour)} - ${_formatHour(endHour + 1)}';
+      }
+    }
+
+    // Format working days (e.g., "Sunday - Saturday")
+    String? workingDaysStr;
+    if (workingDays != null && workingDays.isNotEmpty) {
+      if (workingDays.length == 7) {
+        workingDaysStr = 'Every Day';
+      } else {
+        final dayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        final sortedDays = workingDays.map((d) => d.toString().toLowerCase()).toList()
+          ..sort((a, b) => dayOrder.indexOf(a).compareTo(dayOrder.indexOf(b)));
+        
+        // Check if consecutive days
+        bool isConsecutive = true;
+        for (int i = 1; i < sortedDays.length; i++) {
+          if (dayOrder.indexOf(sortedDays[i]) - dayOrder.indexOf(sortedDays[i-1]) != 1) {
+            isConsecutive = false;
+            break;
+          }
+        }
+        
+        if (isConsecutive && sortedDays.length > 2) {
+          workingDaysStr = '${_capitalizeDay(sortedDays.first)} - ${_capitalizeDay(sortedDays.last)}';
+        } else {
+          workingDaysStr = sortedDays.map((d) => _capitalizeDay(d)).join(', ');
+        }
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with icon
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [kNavBlue.withOpacity(0.15), kNavBlue.withOpacity(0.05)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.info_outline_rounded, color: kNavBlue, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Service Information',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF0B1220),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // ═══════════════════════════════════════════
+            // SECTION 1: Basic Service Info (Grid Layout)
+            // ═══════════════════════════════════════════
+            if (hasVenueInfo || hasCapacity || hasBookingHours) ...[
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  // Venue Type
+                  if (hasVenueInfo)
+                    _buildInfoChip(
+                      icon: venueType == 'indoor' ? Icons.home_rounded : Icons.park_rounded,
+                      label: venueType == 'indoor' ? 'Indoor Venue' : 'Outdoor Venue',
+                      color: venueType == 'indoor' ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
+                    ),
+                  
+                  // Max Capacity
+                  if (hasCapacity)
+                    _buildInfoChip(
+                      icon: Icons.groups_rounded,
+                      label: '$maxCapacity Guests Max',
+                      color: const Color(0xFFF59E0B),
+                    ),
+                  
+                  // Booking Type
+                  _buildInfoChip(
+                    icon: _getBookingIcon(bookingType),
+                    label: _getBookingLabel(bookingType),
+                    color: const Color(0xFF6366F1),
+                  ),
+                  
+                  // Min Booking
+                  if (minHours != null && minHours > 0)
+                    _buildInfoChip(
+                      icon: Icons.timer_outlined,
+                      label: 'Min $minHours ${minHours == 1 ? 'Hour' : 'Hours'}',
+                      color: const Color(0xFF8B5CF6),
+                    ),
+                  
+                  // Max Booking
+                  if (maxHours != null && maxHours > 0)
+                    _buildInfoChip(
+                      icon: Icons.timelapse_rounded,
+                      label: 'Max $maxHours Hours',
+                      color: const Color(0xFFEC4899),
+                    ),
+                ],
+              ),
+            ],
+            
+            // ═══════════════════════════════════════════
+            // SECTION 2: Additional Info
+            // ═══════════════════════════════════════════
+            if (hasCustomInfo) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.playlist_add_check_rounded, size: 18, color: const Color(0xFF64748B)),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Additional Details',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF475569),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    ...customInfo.entries.map((entry) => _buildAdditionalInfoRow(entry.key, entry.value.toString())),
+                  ],
+                ),
+              ),
+            ],
+            
+            // ═══════════════════════════════════════════
+            // SECTION 3: Working Hours & Days
+            // ═══════════════════════════════════════════
+            if (hasWorkingHours || hasWorkingDays) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF0891B2).withOpacity(0.08),
+                      const Color(0xFF06B6D4).withOpacity(0.04),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF0891B2).withOpacity(0.2)),
+                ),
+                child: Column(
+                  children: [
+                    // Working Hours
+                    if (workingHoursStr != null)
+                      _buildScheduleRow(
+                        icon: Icons.access_time_rounded,
+                        title: 'Working Hours',
+                        value: workingHoursStr,
+                        iconColor: const Color(0xFF0891B2),
+                      ),
+                    
+                    if (workingHoursStr != null && workingDaysStr != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Divider(height: 1, color: const Color(0xFF0891B2).withOpacity(0.15)),
+                      ),
+                    
+                    // Working Days
+                    if (workingDaysStr != null)
+                      _buildScheduleRow(
+                        icon: Icons.calendar_month_rounded,
+                        title: 'Available Days',
+                        value: workingDaysStr,
+                        iconColor: const Color(0xFF0891B2),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Modern Info Chip Widget
+  Widget _buildInfoChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color.withOpacity(0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Additional Info Row Widget - ✅ Now supports clickable URLs
+  Widget _buildAdditionalInfoRow(String key, String value) {
+    // Check if value is a URL
+    final isUrl = _isValidUrl(value);
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            margin: const EdgeInsets.only(top: 7, right: 12),
+            decoration: BoxDecoration(
+              color: kNavBlue.withOpacity(0.6),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Expanded(
+            child: isUrl 
+              ? _buildClickableUrlRow(key, value)
+              : RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '$key: ',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF334155),
+                        ),
+                      ),
+                      TextSpan(
+                        text: value,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ Check if string is a valid URL
+  bool _isValidUrl(String text) {
+    final urlPattern = RegExp(
+      r'^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$',
+      caseSensitive: false,
+    );
+    return urlPattern.hasMatch(text.trim());
+  }
+
+  // ✅ Build clickable URL row
+  Widget _buildClickableUrlRow(String key, String url) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$key:',
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF334155),
+          ),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () => _launchUrl(url),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: kNavBlue.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: kNavBlue.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _getUrlIcon(url),
+                  size: 16,
+                  color: kNavBlue,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _getDisplayUrl(url),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: kNavBlue,
+                      decoration: TextDecoration.underline,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.open_in_new_rounded,
+                  size: 14,
+                  color: kNavBlue.withOpacity(0.7),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ✅ Get appropriate icon for URL type
+  IconData _getUrlIcon(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('facebook.com') || lower.contains('fb.com')) {
+      return Icons.facebook_rounded;
+    } else if (lower.contains('instagram.com')) {
+      return Icons.camera_alt_rounded;
+    } else if (lower.contains('twitter.com') || lower.contains('x.com')) {
+      return Icons.alternate_email_rounded;
+    } else if (lower.contains('youtube.com') || lower.contains('youtu.be')) {
+      return Icons.play_circle_rounded;
+    } else if (lower.contains('tiktok.com')) {
+      return Icons.music_note_rounded;
+    } else if (lower.contains('linkedin.com')) {
+      return Icons.work_rounded;
+    } else if (lower.contains('whatsapp.com') || lower.contains('wa.me')) {
+      return Icons.chat_rounded;
+    } else {
+      return Icons.link_rounded;
+    }
+  }
+
+  // ✅ Get display-friendly URL
+  String _getDisplayUrl(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('facebook.com') || lower.contains('fb.com')) {
+      return 'Facebook Page';
+    } else if (lower.contains('instagram.com')) {
+      return 'Instagram Profile';
+    } else if (lower.contains('twitter.com') || lower.contains('x.com')) {
+      return 'Twitter/X Profile';
+    } else if (lower.contains('youtube.com') || lower.contains('youtu.be')) {
+      return 'YouTube Channel';
+    } else if (lower.contains('tiktok.com')) {
+      return 'TikTok Profile';
+    } else if (lower.contains('linkedin.com')) {
+      return 'LinkedIn Profile';
+    } else if (lower.contains('whatsapp.com') || lower.contains('wa.me')) {
+      return 'WhatsApp Contact';
+    }
+    // Return shortened URL for websites
+    try {
+      final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
+      return uri.host.replaceFirst('www.', '');
+    } catch (_) {
+      return url.length > 30 ? '${url.substring(0, 30)}...' : url;
+    }
+  }
+
+  // ✅ Launch URL in browser
+  Future<void> _launchUrl(String url) async {
+    String finalUrl = url.trim();
+    
+    // Add https:// if missing
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+      finalUrl = 'https://$finalUrl';
+    }
+    
+    try {
+      final uri = Uri.parse(finalUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not open: $url'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid URL: $url'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Schedule Row Widget (for working hours & days)
+  Widget _buildScheduleRow({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color iconColor,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 20, color: iconColor),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper: Format hour to AM/PM
+  String _formatHour(int hour) {
+    if (hour == 0 || hour == 24) return '12:00 AM';
+    if (hour == 12) return '12:00 PM';
+    if (hour < 12) return '$hour:00 AM';
+    return '${hour - 12}:00 PM';
+  }
+
+  // Helper: Capitalize day name
+  String _capitalizeDay(String day) {
+    if (day.isEmpty) return day;
+    return day[0].toUpperCase() + day.substring(1);
+  }
+
+  // Helper: Get booking type icon
+  IconData _getBookingIcon(String bookingType) {
+    switch (bookingType.toLowerCase()) {
+      case 'hourly': return Icons.schedule_rounded;
+      case 'daily': return Icons.today_rounded;
+      case 'capacity': return Icons.people_rounded;
+      case 'mixed': return Icons.layers_rounded;
+      case 'display': return Icons.visibility_rounded;
+      default: return Icons.event_rounded;
+    }
+  }
+
+  // Helper: Get booking type label
+  String _getBookingLabel(String bookingType) {
+    switch (bookingType.toLowerCase()) {
+      case 'hourly': return 'Hourly Booking';
+      case 'daily': return 'Daily Booking';
+      case 'capacity': return 'Per Person';
+      case 'mixed': return 'Flexible Booking';
+      case 'display': return 'Display Only';
+      default: return 'Standard Booking';
+    }
   }
 
   Widget _buildPriceSection() {
@@ -3369,5 +4302,685 @@ class _HomeServicesMapSectionState extends State<HomeServicesMapSection> {
         ),
       ),
     );
+  }
+}
+
+/// ✅ Modern Favorite Button Widget for Services
+class _FavoriteButton extends StatefulWidget {
+  final String serviceId;
+  final String serviceName;
+  final String category;
+  final String company;
+  final double price;
+  final double rating;
+  final String? imageUrl;
+
+  const _FavoriteButton({
+    required this.serviceId,
+    required this.serviceName,
+    required this.category,
+    required this.company,
+    required this.price,
+    required this.rating,
+    this.imageUrl,
+  });
+
+  @override
+  State<_FavoriteButton> createState() => _FavoriteButtonState();
+}
+
+class _FavoriteButtonState extends State<_FavoriteButton> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  bool _isFavorite = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+    _checkFavoriteStatus();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkFavoriteStatus() async {
+    await FavoritesService.instance.init();
+    if (mounted) {
+      setState(() {
+        _isFavorite = FavoritesService.instance.isServiceFavorite(widget.serviceId);
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_isLoading) return;
+    
+    // Animate
+    _controller.forward().then((_) => _controller.reverse());
+
+    setState(() {
+      _isLoading = true;
+      _isFavorite = !_isFavorite; // Optimistic update
+    });
+
+    final success = await FavoritesService.instance.toggleServiceFavorite(widget.serviceId);
+    
+    if (!success && mounted) {
+      // Revert on failure
+      setState(() {
+        _isFavorite = !_isFavorite;
+      });
+    }
+    
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+
+    // Show snackbar
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _isFavorite 
+                    ? 'Added to your favorites!' 
+                    : 'Removed from favorites',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: _isFavorite ? const Color(0xFF10B981) : const Color(0xFF64748B),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+        action: SnackBarAction(
+          label: 'VIEW',
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FavoritesPage()),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: _isFavorite 
+              ? const Color(0xFFFF4B6E).withOpacity(0.1) 
+              : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: IconButton(
+          onPressed: _toggleFavorite,
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (child, animation) => ScaleTransition(
+              scale: animation,
+              child: child,
+            ),
+            child: Icon(
+              _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              key: ValueKey(_isFavorite),
+              color: _isFavorite ? const Color(0xFFFF4B6E) : const Color(0xFF64748B),
+              size: 22,
+            ),
+          ),
+          tooltip: _isFavorite ? 'Remove from favorites' : 'Add to favorites',
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 📝 SERVICE REVIEWS PAGE FOR CUSTOMER
+// ══════════════════════════════════════════════════════════════════════════════
+
+class ServiceReviewsCustomerPage extends StatefulWidget {
+  final String serviceId;
+  final String serviceName;
+
+  const ServiceReviewsCustomerPage({
+    super.key,
+    required this.serviceId,
+    required this.serviceName,
+  });
+
+  @override
+  State<ServiceReviewsCustomerPage> createState() => _ServiceReviewsCustomerPageState();
+}
+
+class _ServiceReviewsCustomerPageState extends State<ServiceReviewsCustomerPage> {
+  bool _isLoading = true;
+  List<dynamic> _reviews = [];
+  double _averageRating = 0.0;
+  int _totalReviews = 0;
+  String _filterOption = 'all'; // all, positive, negative
+  String _sortOption = 'newest'; // newest, oldest, highest, lowest
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReviews();
+  }
+
+  Future<void> _loadReviews() async {
+    try {
+      setState(() => _isLoading = true);
+      
+      final result = await ReviewService.getServiceReviews(
+        serviceId: widget.serviceId,
+        limit: 50,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _reviews = result['reviews'] ?? [];
+          _averageRating = (result['averageRating'] ?? 0).toDouble();
+          _totalReviews = result['totalReviews'] ?? 0;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading reviews: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  List<dynamic> get _filteredReviews {
+    List<dynamic> filtered = List.from(_reviews);
+    
+    // Apply filter
+    if (_filterOption == 'positive') {
+      filtered = filtered.where((r) => r.rating >= 4).toList();
+    } else if (_filterOption == 'negative') {
+      filtered = filtered.where((r) => r.rating < 4).toList();
+    }
+    
+    // Apply sort
+    filtered.sort((a, b) {
+      switch (_sortOption) {
+        case 'oldest':
+          return (a.reviewDate ?? DateTime.now()).compareTo(b.reviewDate ?? DateTime.now());
+        case 'highest':
+          return (b.rating ?? 0).compareTo(a.rating ?? 0);
+        case 'lowest':
+          return (a.rating ?? 0).compareTo(b.rating ?? 0);
+        default: // newest
+          return (b.reviewDate ?? DateTime.now()).compareTo(a.reviewDate ?? DateTime.now());
+      }
+    });
+    
+    return filtered;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kPageBg,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0.6,
+        iconTheme: const IconThemeData(color: Color(0xFF0B1220)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Reviews',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF0B1220),
+                fontSize: 18,
+              ),
+            ),
+            Text(
+              widget.serviceName,
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF64748B),
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: kNavBlue))
+          : RefreshIndicator(
+              onRefresh: _loadReviews,
+              color: kNavBlue,
+              child: CustomScrollView(
+                slivers: [
+                  // Stats Header
+                  SliverToBoxAdapter(
+                    child: _buildStatsHeader(),
+                  ),
+                  
+                  // Filter & Sort Bar
+                  SliverToBoxAdapter(
+                    child: _buildFilterBar(),
+                  ),
+                  
+                  // Reviews List
+                  if (_filteredReviews.isEmpty)
+                    SliverFillRemaining(
+                      child: _buildEmptyState(),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.all(16),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => _buildReviewCard(_filteredReviews[index]),
+                          childCount: _filteredReviews.length,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildStatsHeader() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Average Rating
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  _averageRating.toStringAsFixed(1),
+                  style: GoogleFonts.poppins(
+                    fontSize: 48,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF0B1220),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    final filled = index < _averageRating.floor();
+                    final partial = index == _averageRating.floor() && 
+                                   _averageRating - _averageRating.floor() > 0;
+                    return Icon(
+                      filled ? Icons.star_rounded : 
+                      partial ? Icons.star_half_rounded : 
+                      Icons.star_outline_rounded,
+                      color: Colors.amber,
+                      size: 24,
+                    );
+                  }),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$_totalReviews ${_totalReviews == 1 ? 'review' : 'reviews'}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          Container(
+            width: 1,
+            height: 100,
+            color: Colors.black.withOpacity(0.08),
+          ),
+          
+          // Rating Distribution
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: Column(
+                children: [5, 4, 3, 2, 1].map((star) {
+                  final count = _reviews.where((r) => r.rating == star).length;
+                  final percentage = _totalReviews > 0 ? count / _totalReviews : 0.0;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Text(
+                          '$star',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.star_rounded, size: 12, color: Colors.amber),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: percentage,
+                              backgroundColor: const Color(0xFFE2E8F0),
+                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
+                              minHeight: 6,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$count',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+      ),
+      child: Row(
+        children: [
+          // Filter Chips
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildFilterChip('All', 'all'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Positive', 'positive'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Negative', 'negative'),
+                ],
+              ),
+            ),
+          ),
+          
+          // Sort Dropdown
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F9FC),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _sortOption,
+                isDense: true,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF0B1220),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'newest', child: Text('Newest')),
+                  DropdownMenuItem(value: 'oldest', child: Text('Oldest')),
+                  DropdownMenuItem(value: 'highest', child: Text('Highest')),
+                  DropdownMenuItem(value: 'lowest', child: Text('Lowest')),
+                ],
+                onChanged: (value) {
+                  if (value != null) setState(() => _sortOption = value);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, String value) {
+    final isSelected = _filterOption == value;
+    return GestureDetector(
+      onTap: () => setState(() => _filterOption = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? kNavBlue : const Color(0xFFF8F9FC),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: isSelected ? Colors.white : const Color(0xFF64748B),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.rate_review_outlined,
+            size: 64,
+            color: const Color(0xFF64748B).withOpacity(0.5),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _filterOption == 'all' 
+                ? 'No reviews yet' 
+                : 'No ${_filterOption} reviews',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _filterOption == 'all'
+                ? 'Be the first to share your experience!'
+                : 'Try changing the filter',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: const Color(0xFF94A3B8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewCard(dynamic review) {
+    final userName = review.userName ?? 'Anonymous';
+    final rating = (review.rating ?? 0).toDouble();
+    final comment = review.comment ?? '';
+    final date = review.reviewDate ?? DateTime.now();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // User Avatar
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [kNavBlue.withOpacity(0.8), kNavBlue],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(
+                  child: Text(
+                    userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      fontSize: 20,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF0B1220),
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      _formatReviewDate(date),
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Rating Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(
+                      rating.toStringAsFixed(1),
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0B1220),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (comment.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FC),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                comment,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF475569),
+                  height: 1.6,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatReviewDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} weeks ago';
+    if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} months ago';
+    return '${(diff.inDays / 365).floor()} years ago';
   }
 }

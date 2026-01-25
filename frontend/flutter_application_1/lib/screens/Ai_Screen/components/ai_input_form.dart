@@ -123,7 +123,7 @@ class _AiInputFormState extends State<AiInputForm> with SingleTickerProviderStat
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'AI Event Planner',
+                  'Eventry AI',
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,

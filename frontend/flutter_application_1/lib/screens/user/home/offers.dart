@@ -5,12 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart'; // ✅ For opening URLs
 import 'package:flutter_application_1/services/user_service/offers_service.dart';
 import 'package:flutter_application_1/services/user_service/chat_user_service.dart';
 import 'package:flutter_application_1/services/service_locator.dart';
 import 'package:flutter_application_1/widgets/booking_details_modal.dart';
 import 'package:flutter_application_1/screens/user/payment/cart.dart' show CartStore, CartItem, CartPage;
 import 'package:flutter_application_1/screens/user/chat/chat_customer_home_page.dart';
+import 'package:flutter_application_1/screens/user/profile/favorites.dart';
+import 'package:flutter_application_1/services/user_service/favorites_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -1282,7 +1285,7 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
     }
   }
 
-  void _openBookingModal() async {
+ void _openBookingModal() async {
     final bookingType = _serviceData?['bookingType']?.toString().toLowerCase() 
         ?? widget.offer.bookingType.toLowerCase();
     
@@ -1337,13 +1340,23 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
       'hasFixedLocation': widget.offer.hasFixedLocation,
     };
 
-    // ✅ IMPORTANT: Override price with discounted price for cart calculation
+    // ✅ CRITICAL FIX: Override ALL price fields with discounted price
+    serviceData['price'] = widget.offer.discountedPrice;
+    serviceData['priceOptions'] = {
+      'perDay': widget.offer.discountedPrice,
+      'perHour': widget.offer.discountedPrice,
+      'perPerson': widget.offer.discountedPrice,
+      'perEvent': widget.offer.discountedPrice,
+      'basePrice': widget.offer.discountedPrice,
+      'fullVenue': widget.offer.discountedPrice,
+    };
     serviceData['allPrices'] = {
       'perDay': widget.offer.discountedPrice,
       'perHour': widget.offer.discountedPrice,
       'perPerson': widget.offer.discountedPrice,
       'perEvent': widget.offer.discountedPrice,
       'displayPrice': widget.offer.discountedPrice,
+      'basePrice': widget.offer.discountedPrice,
     };
 
     await showBookingModal(
@@ -1385,6 +1398,11 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
             color: kTextDark,
           ),
         ),
+        actions: [
+          // ✅ Favorite Button
+          _OfferFavoriteButton(offer: offer),
+          const SizedBox(width: 8),
+        ],
       ),
       bottomNavigationBar: _buildBottomBar(),
       body: _isLoading
@@ -1548,6 +1566,12 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
                     ],
                   ),
                 ),
+                
+                // ✅ Service Information Section
+                _buildServiceInformationSection(),
+                
+                // ✅ Company Info Section
+                _buildCompanyInfoSection(),
                 
                 // ✅ Description
                 if (offer.description.isNotEmpty)
@@ -1982,6 +2006,794 @@ class _OfferDetailsPageState extends State<OfferDetailsPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📋 SERVICE INFORMATION SECTION
+  // ══════════════════════════════════════════════════════════════════════════
+  
+  Widget _buildServiceInformationSection() {
+    final offer = widget.offer;
+    final maxCapacity = _serviceData?['maxCapacity'] ?? offer.maxCapacity;
+    final minHours = _serviceData?['minBookingHours'] ?? offer.minBookingHours;
+    final maxHours = _serviceData?['maxBookingHours'] ?? offer.maxBookingHours;
+    final workingDays = (_serviceData?['workingDays'] as List?) ?? offer.workingDays;
+    final availableHours = (_serviceData?['availableHours'] as List?) ?? offer.availableHours;
+    final bookingType = _serviceData?['bookingType']?.toString().toLowerCase() ?? offer.bookingType.toLowerCase();
+    final additionalInfo = _serviceData?['additionalInfo'] as Map<String, dynamic>?;
+    
+    // Check if we have any info to show
+    final hasCapacity = maxCapacity != null && maxCapacity > 0;
+    final hasBookingHours = (minHours != null && minHours > 0) || (maxHours != null && maxHours > 0);
+    final hasWorkingHours = availableHours != null && availableHours.isNotEmpty;
+    final hasWorkingDays = workingDays != null && workingDays.isNotEmpty;
+    
+    // Filter additional info
+    final customInfo = <String, dynamic>{};
+    if (additionalInfo != null) {
+      additionalInfo.forEach((key, value) {
+        if (key != 'description' && value != null && value.toString().isNotEmpty) {
+          customInfo[key] = value;
+        }
+      });
+    }
+    
+    final hasCustomInfo = customInfo.isNotEmpty;
+    
+    // If no info at all, don't show the section
+    if (!hasCapacity && !hasBookingHours && !hasWorkingHours && !hasWorkingDays && !hasCustomInfo) {
+      return const SizedBox.shrink();
+    }
+
+    // Format working hours
+    String? workingHoursStr;
+    if (availableHours != null && availableHours.isNotEmpty) {
+      final hours = availableHours.map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0).toList()..sort();
+      if (hours.isNotEmpty) {
+        final startHour = hours.first;
+        final endHour = hours.last;
+        workingHoursStr = '${_formatHour(startHour)} - ${_formatHour(endHour + 1)}';
+      }
+    }
+
+    // Format working days
+    String? workingDaysStr;
+    if (workingDays != null && workingDays.isNotEmpty) {
+      if (workingDays.length == 7) {
+        workingDaysStr = 'Every Day';
+      } else {
+        final dayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        final sortedDays = workingDays.map((d) => d.toString().toLowerCase()).toList()
+          ..sort((a, b) => dayOrder.indexOf(a).compareTo(dayOrder.indexOf(b)));
+        
+        bool isConsecutive = true;
+        for (int i = 1; i < sortedDays.length; i++) {
+          if (dayOrder.indexOf(sortedDays[i]) - dayOrder.indexOf(sortedDays[i-1]) != 1) {
+            isConsecutive = false;
+            break;
+          }
+        }
+        
+        if (isConsecutive && sortedDays.length > 2) {
+          workingDaysStr = '${_capitalizeDay(sortedDays.first)} - ${_capitalizeDay(sortedDays.last)}';
+        } else {
+          workingDaysStr = sortedDays.map((d) => _capitalizeDay(d)).join(', ');
+        }
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [kPrimaryBlue.withOpacity(0.15), kPrimaryBlue.withOpacity(0.05)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.info_outline_rounded, color: kPrimaryBlue, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Service Information',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: kTextDark,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // Info Chips
+            if (hasCapacity || hasBookingHours) ...[
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  // Max Capacity
+                  if (hasCapacity)
+                    _buildInfoChip(
+                      icon: Icons.groups_rounded,
+                      label: '$maxCapacity Guests Max',
+                      color: const Color(0xFFF59E0B),
+                    ),
+                  
+                  // Booking Type
+                  _buildInfoChip(
+                    icon: _getBookingIcon(bookingType),
+                    label: _getBookingLabel(bookingType),
+                    color: const Color(0xFF6366F1),
+                  ),
+                  
+                  // Min Booking
+                  if (minHours != null && minHours > 0)
+                    _buildInfoChip(
+                      icon: Icons.timer_outlined,
+                      label: 'Min $minHours ${minHours == 1 ? 'Hour' : 'Hours'}',
+                      color: const Color(0xFF8B5CF6),
+                    ),
+                  
+                  // Max Booking
+                  if (maxHours != null && maxHours > 0)
+                    _buildInfoChip(
+                      icon: Icons.timelapse_rounded,
+                      label: 'Max $maxHours Hours',
+                      color: const Color(0xFFEC4899),
+                    ),
+                ],
+              ),
+            ],
+            
+            // Additional Info
+            if (hasCustomInfo) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.playlist_add_check_rounded, size: 18, color: kTextMuted),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Additional Details',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF475569),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    ...customInfo.entries.map((entry) => _buildAdditionalInfoRow(entry.key, entry.value.toString())),
+                  ],
+                ),
+              ),
+            ],
+            
+            // Working Hours & Days
+            if (hasWorkingHours || hasWorkingDays) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF0891B2).withOpacity(0.08),
+                      const Color(0xFF06B6D4).withOpacity(0.04),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF0891B2).withOpacity(0.2)),
+                ),
+                child: Column(
+                  children: [
+                    if (workingHoursStr != null)
+                      _buildScheduleRow(
+                        icon: Icons.access_time_rounded,
+                        title: 'Working Hours',
+                        value: workingHoursStr,
+                        iconColor: const Color(0xFF0891B2),
+                      ),
+                    
+                    if (workingHoursStr != null && workingDaysStr != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Divider(height: 1, color: const Color(0xFF0891B2).withOpacity(0.15)),
+                      ),
+                    
+                    if (workingDaysStr != null)
+                      _buildScheduleRow(
+                        icon: Icons.calendar_month_rounded,
+                        title: 'Available Days',
+                        value: workingDaysStr,
+                        iconColor: const Color(0xFF0891B2),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🏢 COMPANY INFO SECTION
+  // ══════════════════════════════════════════════════════════════════════════
+  
+  Widget _buildCompanyInfoSection() {
+    final offer = widget.offer;
+    final companyName = _serviceData?['companyInfo']?['name']?.toString().trim() ?? 
+                        _serviceData?['companyName']?.toString().trim() ??
+                        offer.company;
+    final city = _serviceData?['city']?.toString().trim() ?? offer.city;
+    final email = _serviceData?['companyInfo']?['email']?.toString().trim() ?? '';
+    final phone = _serviceData?['companyInfo']?['phone']?.toString().trim() ?? '';
+    
+    // Check if we have any data
+    final hasName = companyName.isNotEmpty && companyName != 'Unknown' && companyName != 'N/A';
+    final hasCity = city.isNotEmpty && city != 'Unknown' && city != 'N/A';
+    final hasEmail = email.isNotEmpty && email != 'N/A';
+    final hasPhone = phone.isNotEmpty && phone != 'N/A';
+    
+    if (!hasName && !hasCity && !hasEmail && !hasPhone) {
+      return const SizedBox.shrink();
+    }
+    
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Company Info',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w900,
+                color: kTextDark,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            if (hasName) ...[
+              _CompanyInfoRow(icon: Icons.business_rounded, text: companyName),
+              if (hasCity || hasEmail || hasPhone) const SizedBox(height: 8),
+            ],
+            
+            if (hasCity) ...[
+              _CompanyInfoRow(icon: Icons.location_on_rounded, text: city),
+              if (hasEmail || hasPhone) const SizedBox(height: 8),
+            ],
+            
+            if (hasEmail) ...[
+              _CompanyInfoRow(icon: Icons.email_rounded, text: email),
+              if (hasPhone) const SizedBox(height: 8),
+            ],
+            
+            if (hasPhone)
+              _CompanyInfoRow(icon: Icons.phone_rounded, text: phone),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🔧 HELPER WIDGETS & METHODS
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  Widget _buildInfoChip({required IconData icon, required String label, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color.withOpacity(0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildAdditionalInfoRow(String key, String value) {
+    // Check if value is a URL
+    final isUrl = _isValidUrl(value);
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            margin: const EdgeInsets.only(top: 7, right: 12),
+            decoration: BoxDecoration(
+              color: kPrimaryBlue.withOpacity(0.6),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Expanded(
+            child: isUrl 
+              ? _buildClickableUrlRow(key, value)
+              : RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '$key: ',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF334155),
+                        ),
+                      ),
+                      TextSpan(
+                        text: value,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: kTextMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ Check if string is a valid URL
+  bool _isValidUrl(String text) {
+    final urlPattern = RegExp(
+      r'^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$',
+      caseSensitive: false,
+    );
+    return urlPattern.hasMatch(text.trim());
+  }
+
+  // ✅ Build clickable URL row
+  Widget _buildClickableUrlRow(String key, String url) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$key:',
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF334155),
+          ),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () => _launchUrl(url),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: kPrimaryBlue.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: kPrimaryBlue.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _getUrlIcon(url),
+                  size: 16,
+                  color: kPrimaryBlue,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _getDisplayUrl(url),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: kPrimaryBlue,
+                      decoration: TextDecoration.underline,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.open_in_new_rounded,
+                  size: 14,
+                  color: kPrimaryBlue.withOpacity(0.7),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ✅ Get appropriate icon for URL type
+  IconData _getUrlIcon(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('facebook.com') || lower.contains('fb.com')) {
+      return Icons.facebook_rounded;
+    } else if (lower.contains('instagram.com')) {
+      return Icons.camera_alt_rounded;
+    } else if (lower.contains('twitter.com') || lower.contains('x.com')) {
+      return Icons.alternate_email_rounded;
+    } else if (lower.contains('youtube.com') || lower.contains('youtu.be')) {
+      return Icons.play_circle_rounded;
+    } else if (lower.contains('tiktok.com')) {
+      return Icons.music_note_rounded;
+    } else if (lower.contains('linkedin.com')) {
+      return Icons.work_rounded;
+    } else if (lower.contains('whatsapp.com') || lower.contains('wa.me')) {
+      return Icons.chat_rounded;
+    } else {
+      return Icons.link_rounded;
+    }
+  }
+
+  // ✅ Get display-friendly URL
+  String _getDisplayUrl(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('facebook.com') || lower.contains('fb.com')) {
+      return 'Facebook Page';
+    } else if (lower.contains('instagram.com')) {
+      return 'Instagram Profile';
+    } else if (lower.contains('twitter.com') || lower.contains('x.com')) {
+      return 'Twitter/X Profile';
+    } else if (lower.contains('youtube.com') || lower.contains('youtu.be')) {
+      return 'YouTube Channel';
+    } else if (lower.contains('tiktok.com')) {
+      return 'TikTok Profile';
+    } else if (lower.contains('linkedin.com')) {
+      return 'LinkedIn Profile';
+    } else if (lower.contains('whatsapp.com') || lower.contains('wa.me')) {
+      return 'WhatsApp Contact';
+    }
+    // Return shortened URL for websites
+    try {
+      final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
+      return uri.host.replaceFirst('www.', '');
+    } catch (_) {
+      return url.length > 30 ? '${url.substring(0, 30)}...' : url;
+    }
+  }
+
+  // ✅ Launch URL in browser
+  Future<void> _launchUrl(String url) async {
+    String finalUrl = url.trim();
+    
+    // Add https:// if missing
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+      finalUrl = 'https://$finalUrl';
+    }
+    
+    try {
+      final uri = Uri.parse(finalUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not open: $url'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid URL: $url'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  
+  Widget _buildScheduleRow({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color iconColor,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 20, color: iconColor),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: kTextMuted,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+  
+  String _formatHour(int hour) {
+    if (hour == 0 || hour == 24) return '12:00 AM';
+    if (hour == 12) return '12:00 PM';
+    if (hour < 12) return '$hour:00 AM';
+    return '${hour - 12}:00 PM';
+  }
+  
+  String _capitalizeDay(String day) {
+    if (day.isEmpty) return day;
+    return day[0].toUpperCase() + day.substring(1);
+  }
+  
+  IconData _getBookingIcon(String bookingType) {
+    switch (bookingType) {
+      case 'hourly': return Icons.schedule_rounded;
+      case 'daily': return Icons.calendar_today_rounded;
+      case 'capacity': return Icons.groups_rounded;
+      case 'display': return Icons.visibility_rounded;
+      default: return Icons.event_rounded;
+    }
+  }
+  
+  String _getBookingLabel(String bookingType) {
+    switch (bookingType) {
+      case 'hourly': return 'Hourly Booking';
+      case 'daily': return 'Daily Booking';
+      case 'capacity': return 'Per Person';
+      case 'display': return 'Display Only';
+      default: return 'Standard Booking';
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🏢 Company Info Row Widget
+// ═══════════════════════════════════════════════════════════════════════════
+class _CompanyInfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  
+  const _CompanyInfoRow({required this.icon, required this.text});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: kTextMuted),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: kTextDark,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// ✅ Offer Favorite Button Widget
+// =============================================================================
+class _OfferFavoriteButton extends StatefulWidget {
+  final OfferService offer;
+
+  const _OfferFavoriteButton({required this.offer});
+
+  @override
+  State<_OfferFavoriteButton> createState() => _OfferFavoriteButtonState();
+}
+
+class _OfferFavoriteButtonState extends State<_OfferFavoriteButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  late Animation<double> _scaleAnim;
+  bool _isFav = false;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _scaleAnim = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
+    );
+    _checkFavorite();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  void _checkFavorite() async {
+    await FavoritesService.instance.init();
+    if (mounted) {
+      setState(() {
+        _isFav = FavoritesService.instance.isOfferFavorite(widget.offer.id);
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_isLoading) return;
+    
+    HapticFeedback.lightImpact();
+    _animController.forward().then((_) => _animController.reverse());
+
+    setState(() {
+      _isLoading = true;
+      _isFav = !_isFav; // Optimistic update
+    });
+
+    final success = await FavoritesService.instance.toggleOfferFavorite(widget.offer.id);
+    
+    if (!success && mounted) {
+      // Revert on failure
+      setState(() {
+        _isFav = !_isFav;
+      });
+    }
+    
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+
+    // Show snackbar
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: _isFav ? kAccentPurple : const Color(0xFF64748B),
+          duration: const Duration(seconds: 2),
+          content: Row(
+            children: [
+              Icon(
+                _isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _isFav ? 'Added to Favorites!' : 'Removed from Favorites',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          action: SnackBarAction(
+            label: 'VIEW',
+            textColor: Colors.white,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const FavoritesPage()),
+              );
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnim,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _toggleFavorite,
+          borderRadius: BorderRadius.circular(50),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: _isFav
+                  ? kAccentPurple.withOpacity(0.12)
+                  : Colors.black.withOpacity(0.04),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              color: _isFav ? kAccentPurple : const Color(0xFF64748B),
+              size: 24,
+            ),
+          ),
         ),
       ),
     );

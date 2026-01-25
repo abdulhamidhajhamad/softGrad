@@ -42,36 +42,36 @@ class Review {
     String? providerId;
     String? providerName;
     
-    // Try from service
+    // ✅ First check direct fields from API response
+    providerId = json['providerId']?.toString();
+    providerName = json['providerName']?.toString();
+    
+    // Try from service if not found
     if (json['service'] is Map) {
       final service = json['service'];
       if (service['provider'] is Map) {
-        providerId = service['provider']['_id']?.toString() ?? service['provider']['id']?.toString();
-        providerName = service['provider']['companyName'] ?? service['provider']['userName'];
+        providerId ??= service['provider']['_id']?.toString() ?? service['provider']['id']?.toString();
+        providerName ??= service['provider']['companyName'] ?? service['provider']['userName'];
       } else if (service['providerId'] != null) {
-        providerId = service['providerId'].toString();
+        providerId ??= service['providerId'].toString();
       }
       providerName ??= service['providerName'];
     }
     
-    // Try from package
-    if (providerId == null && json['package'] is Map) {
+    // Try from package if not found
+    if (json['package'] is Map) {
       final package = json['package'];
       if (package['provider'] is Map) {
-        providerId = package['provider']['_id']?.toString() ?? package['provider']['id']?.toString();
-        providerName = package['provider']['companyName'] ?? package['provider']['userName'];
+        providerId ??= package['provider']['_id']?.toString() ?? package['provider']['id']?.toString();
+        providerName ??= package['provider']['companyName'] ?? package['provider']['userName'];
       } else if (package['providerId'] != null) {
-        providerId = package['providerId'].toString();
+        providerId ??= package['providerId'].toString();
       }
       providerName ??= package['providerName'];
     }
     
-    // Direct fields
-    providerId ??= json['providerId']?.toString();
-    providerName ??= json['providerName']?.toString();
-    
     // Debug logging
-    print('📝 Review parsed: userId=$userId, providerId=$providerId, userName=${json['userName']}');
+    print('📝 Review parsed: userId=$userId, providerId=$providerId, providerName=$providerName');
     
     return Review(
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',

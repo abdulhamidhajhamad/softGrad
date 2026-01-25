@@ -86,7 +86,11 @@ constructor(
         ...createServiceDto,
         images: imageUrls,
         reviews: [],
-        rating: createServiceDto.rating || 0
+        rating: createServiceDto.rating || 0,
+        //  Extract venueType from additionalInfo if present
+        venueType: createServiceDto.venueType || createServiceDto.additionalInfo?.venueType,
+        //  Persist timeSlots if provided
+        timeSlots: createServiceDto.timeSlots || []
       };
 
       const newService = new this.serviceModel(newServiceData);
@@ -334,10 +338,18 @@ constructor(
         query['location.city'] = { $regex: filters.city, $options: 'i' };
       }
 
-      // ✅ فلترة السعر - بسيطة الآن لأن price أصبح number واحد
-      if (filters.priceRange) {
-        const { min, max } = filters.priceRange;
-        query['price'] = { $gte: min, $lte: max };
+      // ✅ FIX: Don't filter by price here for per-person or per-hour services
+      // The actual price filtering will happen in package-builder after calculating real prices
+      // This is because per-person services (like Catering) have low base prices (e.g., 50 ILS)
+      // but the actual price depends on guest count (e.g., 50 * 100 = 5000 ILS)
+      // Same for per-hour services - base price is per hour, actual depends on event duration
+      // We'll do a very wide price filter to get all services, then filter in package-builder
+      if (filters.priceRange && !filters.skipPriceFilter) {
+        // Only apply loose price filter to catch obvious outliers
+        // For per-person: if looking for 9000 total budget and service is 50/person
+        // We need to get services with price between 1 and max*10 (very loose)
+        const { max } = filters.priceRange;
+        query['price'] = { $gte: 1, $lte: max * 10 }; // Very loose filter
       }
 
       if (filters.category) {
@@ -349,11 +361,69 @@ constructor(
       if (filters.bookingType) {
         query.bookingType = filters.bookingType; 
       }
-      if (filters.aiTags && Array.isArray(filters.aiTags) && filters.aiTags.length > 0) { 
-        query['aiAnalysis.tags'] = { $in: filters.aiTags };
-      }
+      
+      // ✅ FIXED: aiTags filter is now OPTIONAL - only filter if services actually have tags
+      // Don't require aiTags match, instead we'll sort by relevance later
+      // This ensures we get results even if services don't have AI analysis tags
+      
+      this.logger.log(`🔍 AI Search Query: ${JSON.stringify(query)}`);
       
       let services = await this.serviceModel.find(query).exec();
+      
+      this.logger.log(`📦 Found ${services.length} services matching base criteria`);
+      
+      // ✅ NEW: Sort by AI relevance (aiTags + bestFor combined)
+      if (services.length > 0 && (filters.aiTags?.length > 0 || filters.eventType)) {
+        services = services.sort((a, b) => {
+          let aScore = 0;
+          let bScore = 0;
+          
+          // ✅ 1. Score by aiTags matching
+          if (filters.aiTags && Array.isArray(filters.aiTags) && filters.aiTags.length > 0) {
+            const aTags = a.aiAnalysis?.tags || [];
+            const bTags = b.aiAnalysis?.tags || [];
+            
+            const aTagMatches = filters.aiTags.filter((tag: string) => 
+              aTags.some((t: string) => t.toLowerCase().includes(tag.toLowerCase()))
+            ).length;
+            
+            const bTagMatches = filters.aiTags.filter((tag: string) => 
+              bTags.some((t: string) => t.toLowerCase().includes(tag.toLowerCase()))
+            ).length;
+            
+            aScore += aTagMatches * 10; // 10 points per tag match
+            bScore += bTagMatches * 10;
+          }
+          
+          // ✅ 2. Score by bestFor matching (HIGH PRIORITY)
+          if (filters.eventType) {
+            const eventTypeLower = filters.eventType.toLowerCase();
+            const aBestFor = a.aiAnalysis?.bestFor || [];
+            const bBestFor = b.aiAnalysis?.bestFor || [];
+            
+            const aBestForMatch = aBestFor.some((bf: string) => 
+              bf.toLowerCase().includes(eventTypeLower) || 
+              eventTypeLower.includes(bf.toLowerCase())
+            );
+            const bBestForMatch = bBestFor.some((bf: string) => 
+              bf.toLowerCase().includes(eventTypeLower) || 
+              eventTypeLower.includes(bf.toLowerCase())
+            );
+            
+            if (aBestForMatch) aScore += 30; // Strong bonus for bestFor match
+            if (bBestForMatch) bScore += 30;
+          }
+          
+          // ✅ 3. Also consider AI score and average rating
+          aScore += (a.aiAnalysis?.score || 0) * 5;
+          bScore += (b.aiAnalysis?.score || 0) * 5;
+          
+          aScore += (a.averageRating || 0) * 3;
+          bScore += (b.averageRating || 0) * 3;
+          
+          return bScore - aScore; // Higher score first
+        });
+      }
       
       // معالجة فلترة الموقع بناءً على المسافة
       if (filters.location && filters.location.lat && filters.location.lng && filters.location.radius) {

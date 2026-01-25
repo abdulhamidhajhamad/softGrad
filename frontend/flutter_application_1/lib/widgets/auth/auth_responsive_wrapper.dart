@@ -157,7 +157,7 @@ class _LeftBrandingPanel extends StatelessWidget {
                     ),
                     const SizedBox(width: 14),
                     Text(
-                      'Event Planner',
+                      'Eventry',
                       style: GoogleFonts.poppins(
                         fontSize: 28,
                         fontWeight: FontWeight.w700,
@@ -176,7 +176,7 @@ class _LeftBrandingPanel extends StatelessWidget {
                 
                 // ✅ Footer
                 Text(
-                  '© 2026 Event Planner. All rights reserved.',
+                  '© 2026 Eventry. All rights reserved.',
                   style: GoogleFonts.poppins(
                     fontSize: 13,
                     color: Colors.white.withOpacity(0.6),

@@ -154,9 +154,6 @@ class _TemplatesPageState extends State<TemplatesPage> {
                 itemBuilder: (ctx, i) {
                   final t = visibleItems[i];
 
-                  // use global FavoritesStore instead of local Set
-                  final bool isFav = FavoritesStore.isTemplateFavorite(t.asset);
-
                   return Material(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
@@ -192,64 +189,30 @@ class _TemplatesPageState extends State<TemplatesPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // top row: favorite + tag
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  IconButton(
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    icon: Icon(
-                                      isFav
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                      size: 20,
-                                      color: isFav
-                                          ? _brandColor
-                                          : Colors.grey.shade500,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        if (isFav) {
-                                          FavoritesStore.removeTemplateByAsset(
-                                              t.asset);
-                                        } else {
-                                          FavoritesStore.addTemplate(
-                                            FavoriteTemplate(
-                                              asset: t.asset,
-                                              name: t.name,
-                                              category: t.category,
-                                            ),
-                                          );
-                                        }
-                                      });
-                                    },
+                              // Category tag
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color.fromARGB(
-                                          186, 0, 0, 0), // نفس ما عندك
-                                      borderRadius: BorderRadius.circular(50),
-                                      border: Border.all(color: _brandColor),
-                                    ),
-                                    child: Text(
-                                      t.category,
-                                      style: GoogleFonts.poppins(
-                                        color: const Color.fromARGB(
-                                            255, 255, 255, 255),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                  decoration: BoxDecoration(
+                                    color: const Color.fromARGB(186, 0, 0, 0),
+                                    borderRadius: BorderRadius.circular(50),
+                                    border: Border.all(color: _brandColor),
+                                  ),
+                                  child: Text(
+                                    t.category,
+                                    style: GoogleFonts.poppins(
+                                      color: const Color.fromARGB(255, 255, 255, 255),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 6),
 
                               // template name
                               Text(

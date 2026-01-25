@@ -20,6 +20,7 @@ import { PromotionModule } from './promotion/promotion.module';
 import { ReviewModule } from './review/review.module';
 import { AiSearchModule } from './ai-search/ai-search.module';
 import { ComplianceProviderModule } from './complianceProvider/compliance-provider.module'; // ✅ COMPLIANCE
+import { HealthModule } from './health/health.module'; // ✅ HEALTH & KEEP-ALIVE
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 @Module({
@@ -38,7 +39,20 @@ import { join } from 'path';
       useFactory: async (configService: ConfigService) => ({
         uri:
           configService.get<string>('MONGO_URI') ||
-          'mongodb+srv://abdulhamid:0592370454@weddingplanner.yq50n6g.mongodb.net/?appName=WeddingPlanner',
+          'mongodb+srv://fordep:0592370454@weddingplanner.ledafad.mongodb.net/?appName=weddingplanner',
+        connectionFactory: (connection) => {
+          connection.on('connected', () => {
+            console.log('✅ MongoDB connected successfully to Atlas!');
+            console.log(`📦 Database: ${connection.name}`);
+          });
+          connection.on('error', (err) => {
+            console.error('❌ MongoDB connection error:', err.message);
+          });
+          connection.on('disconnected', () => {
+            console.log('⚠️ MongoDB disconnected');
+          });
+          return connection;
+        },
       }),
       inject: [ConfigService],
     }),
@@ -70,6 +84,7 @@ import { join } from 'path';
     PromotionModule,
     AiSearchModule,
     ComplianceProviderModule, // ✅ COMPLIANCE MODULE
+    HealthModule, // ✅ HEALTH CHECK & KEEP-ALIVE
   ],
   controllers: [],
   providers: [],

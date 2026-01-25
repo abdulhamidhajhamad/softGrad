@@ -1056,7 +1056,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Text(
-                                    '\$${price.toStringAsFixed(0)}',
+                                    '₪${price.toStringAsFixed(0)}',
                                     style: GoogleFonts.poppins(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,

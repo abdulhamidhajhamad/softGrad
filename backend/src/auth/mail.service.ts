@@ -251,7 +251,7 @@ export class MailService {
       </div>
       
       <div class="content">
-        <div class="greeting">Welcome to PlanMyWedding! 🎉</div>
+        <div class="greeting">Welcome to Eventry! 🎉</div>
         
         <div class="message">
           Thank you for signing up! We're excited to have you on board. 
@@ -288,16 +288,16 @@ export class MailService {
       
       <div class="footer">
         <div class="footer-text">
-          This email was sent by PlanMyWedding<br>
-          © ${new Date().getFullYear()} PlanMyWedding. All rights reserved.
+          This email was sent by Eventry<br>
+          © ${new Date().getFullYear()} Eventry. All rights reserved.
         </div>
       </div>
     `;
 
     const mailOptions = {
-      from: `"Event Planner Support" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
+      from: `"Eventry Support" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
       to: email,
-      subject: '✨ Verify Your Email Address - PlanMyWedding',
+      subject: '✨ Verify Your Email Address - Eventry',
       html: this.getEmailTemplate('Email Verification', content),
     };
 
@@ -329,7 +329,7 @@ export class MailService {
         <div class="greeting">Password Reset Request</div>
         
         <div class="message">
-          We received a request to reset your password for your PlanMyWedding account.
+          We received a request to reset your password for your Eventry account.
           If you made this request, click the button below to create a new password:
         </div>
         
@@ -372,8 +372,8 @@ export class MailService {
       
       <div class="footer">
         <div class="footer-text">
-          This email was sent by PlanMyWedding<br>
-          © ${new Date().getFullYear()} PlanMyWedding. All rights reserved.
+          This email was sent by Eventry<br>
+          © ${new Date().getFullYear()} Eventry. All rights reserved.
         </div>
         <div style="margin-top: 15px;">
           <a href="#" class="footer-links">Privacy Policy</a>
@@ -384,9 +384,9 @@ export class MailService {
     `;
 
     const mailOptions = {
-      from: `"Event Planner Support" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
+      from: `"Eventry Support" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
       to: email,
-      subject: '🔐 Password Reset Request - PlanMyWedding',
+      subject: '🔐 Password Reset Request - Eventry',
       html: this.getEmailTemplate('Password Reset', content),
     };
 
@@ -410,14 +410,14 @@ export class MailService {
       
       <div class="footer">
         <div class="footer-text">
-          This email was sent by PlanMyWedding<br>
-          © ${new Date().getFullYear()} PlanMyWedding. All rights reserved.
+          This email was sent by Eventry<br>
+          © ${new Date().getFullYear()} Eventry. All rights reserved.
         </div>
       </div>
     `;
 
     const mailOptions = {
-      from: `"Event Planner Support" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
+      from: `"Eventry Support" <${process.env.MAIL_FROM || 'noreply@example.com'}>`,
       to: to,
       subject: subject,
       html: this.getEmailTemplate(subject, content),

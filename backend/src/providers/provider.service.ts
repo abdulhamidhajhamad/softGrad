@@ -165,16 +165,16 @@ async findProviderDetails(userId: string): Promise<any> {
 
   // 2. استخراج البيانات المطلوبة: companyName, description, city, phone, email, image
   return {
-    companyName: company.companyName, // من حقول الشركة الأساسية
-    description: company.description, // من حقول الشركة الأساسية
-    city: company.location?.city, // من حقل location
-    
-    // استخراج من حقل details (حسب طلبك الأخير)
+    companyName: company.companyName,
+    description: company.description,
+    city: company.location?.city,
     phone: company.details?.phone, 
     email: company.details?.email, 
-    
-    // حقل image: بما أنه غير موجود في الـ entity الحالية، سنرجعه كـ null
-    image: company.details?.image || null, // يمكنك استخدام حقل آخر إذا تمت إضافته لاحقًا بشكل مستقل.
+    image: company.logoUrl || company.details?.image || null,
+    logoUrl: company.logoUrl || null,
+    // ✅ أيضاً نرجع البيانات بالـ structure القديم للتوافق
+    location: company.location,
+    details: company.details,
   };
 }
 

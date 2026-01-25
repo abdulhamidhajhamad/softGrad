@@ -1,5 +1,5 @@
 // cart.controller.ts
-import { Controller, Post, Get, Delete, Body, UseGuards, Request, HttpCode, HttpStatus, Patch } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, UseGuards, Request, HttpCode, HttpStatus, Patch, Param } from '@nestjs/common';
 import { CartService } from './shoppingCart.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AddToCartDto, RemoveFromCartDto, UpdateCartItemDto } from './shoppingCart.dto';
@@ -38,9 +38,19 @@ export class CartController {
   async clearCart(@Request() req) {
     await this.cartService.clearCart(req.user.userId);
   }
-  @Post('add-package')
-async addPackageToCart(@Request() req, @Body() dto: AddPackageToCartDto) {
-  return this.cartService.addPackageToCart(req.user.userId, dto);
-}
 
+  @Post('add-package')
+  async addPackageToCart(@Request() req, @Body() dto: AddPackageToCartDto) {
+    return this.cartService.addPackageToCart(req.user.userId, dto);
+  }
+
+  // 🆕 Get alternative available slots when booking is not available
+  @Post('check-alternatives/:serviceId')
+  @HttpCode(HttpStatus.OK)
+  async getAlternativeSlots(
+    @Param('serviceId') serviceId: string,
+    @Body() body: { date: string; startHour?: number; endHour?: number; numberOfPeople?: number }
+  ) {
+    return this.cartService.getAlternativeAvailability(serviceId, body);
+  }
 }

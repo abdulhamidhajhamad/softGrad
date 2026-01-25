@@ -7,9 +7,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart'; // ✅ For opening URLs
 
 import '../../../services/auth_service.dart';
+import '../../../widgets/booking_details_modal.dart';
+import '../../../services/payment_service/cart_service.dart';
+import '../../../services/user_service/review_service.dart';
 import '../../user/chat/chat_inside_search.dart';
+import '../../user/payment/cart.dart';
+import '../../user/home/home_customer.dart'; // For ServiceReviewsCustomerPage
 
 const Color kPrimary = Color.fromARGB(215, 20, 20, 215);
 const Color kBg = Color(0xFFF6F7FB);
@@ -18,8 +26,7 @@ const Color kMuted = Color(0xFF6B7280);
 const Color kDanger = Color(0xFFEF4444);
 
 /// Service details screen opened from AI search results
-/// This screen only shows "Chat with Owner" button (no Add to Cart)
-/// Add to Cart is handled from the AI service card directly
+/// Now with full features like Home: Service Info, Company Info, Add to Cart
 class AiServiceDetailsScreen extends StatefulWidget {
   final String serviceId;
   final String? serviceName;
@@ -51,17 +58,23 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
   Map<String, dynamic>? _serviceData;
   String? _bookingType;
   
-  // ✅ Media Slider State
+  // Media Slider State
   List<String> _mediaUrls = [];
   int _currentMediaIndex = 0;
   late PageController _mediaPageController;
   Timer? _autoSlideTimer;
+
+  // ✅ Reviews State
+  List<dynamic> _reviews = [];
+  double _averageRating = 0.0;
+  int _totalReviews = 0;
 
   @override
   void initState() {
     super.initState();
     _mediaPageController = PageController();
     _loadServiceDetails();
+    _loadReviews(); // ✅ Load reviews
   }
   
   @override
@@ -71,7 +84,6 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
     super.dispose();
   }
   
-  // ✅ Start auto-slide timer
   void _startAutoSlide() {
     _autoSlideTimer?.cancel();
     if (_mediaUrls.length <= 1) return;
@@ -91,13 +103,11 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
     });
   }
   
-  // ✅ Reset auto-slide timer on user interaction
   void _resetAutoSlide() {
     _autoSlideTimer?.cancel();
     _startAutoSlide();
   }
   
-  // ✅ Check if URL is a video
   bool _isVideoUrl(String url) {
     final lower = url.toLowerCase();
     return lower.endsWith('.mp4') || 
@@ -107,7 +117,6 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
            lower.contains('video');
   }
   
-  // ✅ Open fullscreen gallery
   void _openFullScreenGallery(int initialIndex) {
     Navigator.push(
       context,
@@ -119,10 +128,299 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
       ),
     );
   }
-  
-  // ✅ Build media slider widget
+
+  Future<void> _loadServiceDetails() async {
+    try {
+      final serviceDetails = await _fetchServiceDetails(widget.serviceId);
+      setState(() {
+        _serviceData = serviceDetails;
+        _bookingType = serviceDetails['bookingType']?.toString() ?? 'daily';
+        
+        // Extract media URLs
+        _mediaUrls = [];
+        if (serviceDetails['images'] != null && serviceDetails['images'] is List) {
+          for (var img in serviceDetails['images']) {
+            if (img != null && img.toString().isNotEmpty) {
+              _mediaUrls.add(img.toString());
+            }
+          }
+        }
+        if (_mediaUrls.isEmpty && widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
+          _mediaUrls.add(widget.imageUrl!);
+        }
+        
+        _isLoading = false;
+      });
+      
+      _startAutoSlide();
+    } catch (e) {
+      print('Error loading service details: $e');
+      setState(() {
+        _isLoading = false;
+        _bookingType = 'daily';
+        _serviceData = {
+          'serviceName': widget.serviceName ?? 'Service',
+          'imageUrl': widget.imageUrl ?? '',
+          'companyName': widget.providerName ?? 'Unknown',
+          'category': widget.category ?? 'Other',
+          'city': widget.city ?? '',
+          'price': widget.price ?? 0,
+          'bookingType': widget.payType ?? 'daily',
+        };
+        
+        if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
+          _mediaUrls = [widget.imageUrl!];
+        }
+      });
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchServiceDetails(String serviceId) async {
+    final baseUrl = AuthService.baseUrl;
+    final response = await http.get(
+      Uri.parse('$baseUrl/services/$serviceId'),
+      headers: {'Content-Type': 'application/json'},
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to load service details');
+    }
+  }
+
+  // ✅ Load Reviews for this service
+  Future<void> _loadReviews() async {
+    try {
+      final result = await ReviewService.getServiceReviews(
+        serviceId: widget.serviceId,
+        limit: 10,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _reviews = result['reviews'] ?? [];
+          _averageRating = (result['averageRating'] ?? 0).toDouble();
+          _totalReviews = result['totalReviews'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading reviews: $e');
+    }
+  }
+
+  double _toDouble(dynamic value, [double fallback = 0]) {
+    if (value == null) return fallback;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? fallback;
+    return fallback;
+  }
+
+  String _money(double v) => '₪${v.toStringAsFixed(0)}';
+
+  // ═══════════════════════════════════════════════════════════════════
+  // CHAT WITH OWNER
+  // ═══════════════════════════════════════════════════════════════════
+  void _openChat(BuildContext context) {
+    final companyName = _serviceData?['companyName']?.toString() ?? widget.providerName ?? 'Provider';
+    final email = _serviceData?['companyInfo']?['email']?.toString() ?? 'N/A';
+    final phone = _serviceData?['companyInfo']?['phone']?.toString() ?? 'N/A';
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatInsideSearchScreen(
+          providerName: companyName,
+          providerEmail: email,
+          providerPhone: phone,
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ADD TO CART
+  // ═══════════════════════════════════════════════════════════════════
+  void _handleAddToCart() async {
+    if (_serviceData == null) return;
+    
+    final bookingType = _bookingType?.toLowerCase() ?? 'daily';
+    
+    // Skip display-only services
+    if (bookingType == 'display') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'This is a display-only service and cannot be booked',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Show booking modal
+    await showBookingModal(
+      context: context,
+      serviceId: widget.serviceId,
+      serviceName: _getServiceName(),
+      bookingTypeString: bookingType,
+      serviceData: _serviceData!,
+      onSuccess: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  'Added to cart!',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF22C55E),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            action: SnackBarAction(
+              label: 'View Cart',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage()));
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0.6,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: kText),
+        title: Text(
+          'Service Details',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: kPrimary))
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Media Slider
+                _buildMediaSlider(),
+                
+                const SizedBox(height: 16),
+                
+                // Service Info Card
+                _buildServiceInfoCard(),
+                
+                const SizedBox(height: 12),
+                
+                // Description
+                if (_hasDescription())
+                  _buildDescriptionCard(),
+                
+                // Service Information Section (NEW!)
+                _buildServiceInformationSection(),
+                
+                // Company Info
+                if (_hasAnyCompanyInfo())
+                  _buildCompanyInfoCard(),
+                
+                // Map Section (if has location)
+                if (_hasLocation())
+                  _buildMapSection(),
+
+                // ✅ Customer Reviews Section
+                _buildCustomerReviewsSection(),
+
+                const SizedBox(height: 100), // Space for bottom bar
+              ],
+            ),
+
+      // BOTTOM: Two Buttons - Chat + Add to Cart
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
+          ),
+          child: Row(
+            children: [
+              // Chat Button
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _openChat(context),
+                  icon: Icon(Icons.chat_bubble_rounded, color: kPrimary),
+                  label: Text(
+                    'Chat with Owner',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: kText),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.black.withOpacity(0.14)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Add to Cart Button
+              Expanded(
+                child: ValueListenableBuilder<List<CartItem>>(
+                  valueListenable: CartStore.instance.itemsListenable,
+                  builder: (_, items, ___) {
+                    final inCart = items.any((item) => item.id == widget.serviceId);
+                    final isDisplayOnly = _bookingType?.toLowerCase() == 'display';
+
+                    return ElevatedButton.icon(
+                      onPressed: (inCart || isDisplayOnly) ? null : _handleAddToCart,
+                      icon: Icon(
+                        inCart ? Icons.check_circle_rounded : 
+                        isDisplayOnly ? Icons.visibility_rounded : 
+                        Icons.add_shopping_cart_rounded,
+                        size: 20,
+                      ),
+                      label: Text(
+                        inCart ? 'In Cart' : 
+                        isDisplayOnly ? 'Display Only' : 
+                        'Add to Cart',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: inCart ? Colors.green : kPrimary,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: inCart ? Colors.green.withOpacity(0.7) : Colors.grey.shade400,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // MEDIA SLIDER
+  // ═══════════════════════════════════════════════════════════════════
   Widget _buildMediaSlider() {
-    // If no media, show placeholder
     if (_mediaUrls.isEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(22),
@@ -142,7 +440,6 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
       borderRadius: BorderRadius.circular(22),
       child: Stack(
         children: [
-          // Media PageView
           SizedBox(
             height: 220,
             child: PageView.builder(
@@ -195,13 +492,7 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -210,28 +501,21 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
                     const SizedBox(width: 4),
                     Text(
                       _getRating().toStringAsFixed(1),
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        color: kText,
-                      ),
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w800, fontSize: 13, color: kText),
                     ),
                   ],
                 ),
               ),
             ),
           
-          // Media counter badge
+          // Media counter
           if (_mediaUrls.length > 1)
             Positioned(
               top: 12,
               left: 12,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(20),
-                ),
+                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -239,18 +523,14 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
                     const SizedBox(width: 4),
                     Text(
                       '${_currentMediaIndex + 1}/${_mediaUrls.length}',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                        color: Colors.white,
-                      ),
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.white),
                     ),
                   ],
                 ),
               ),
             ),
           
-          // Dot indicators
+          // Dots
           if (_mediaUrls.length > 1)
             Positioned(
               bottom: 12,
@@ -268,12 +548,6 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
                     decoration: BoxDecoration(
                       color: isActive ? kPrimary : Colors.white.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(4),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 4,
-                        ),
-                      ],
                     ),
                   );
                 }),
@@ -284,325 +558,67 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
     );
   }
 
-  Future<void> _loadServiceDetails() async {
-    try {
-      final serviceDetails = await _fetchServiceDetails(widget.serviceId);
-      setState(() {
-        _serviceData = serviceDetails;
-        _bookingType = serviceDetails['bookingType']?.toString() ?? 'daily';
-        
-        // ✅ Extract media URLs from images array
-        _mediaUrls = [];
-        if (serviceDetails['images'] != null && serviceDetails['images'] is List) {
-          for (var img in serviceDetails['images']) {
-            if (img != null && img.toString().isNotEmpty) {
-              _mediaUrls.add(img.toString());
-            }
-          }
-        }
-        // Fallback to single image
-        if (_mediaUrls.isEmpty && widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
-          _mediaUrls.add(widget.imageUrl!);
-        }
-        
-        _isLoading = false;
-      });
-      
-      // Start auto-slide
-      _startAutoSlide();
-    } catch (e) {
-      print('❌ Error loading service details: $e');
-      setState(() {
-        _isLoading = false;
-        _bookingType = 'daily';
-        // Use fallback data from widget
-        _serviceData = {
-          'serviceName': widget.serviceName ?? 'Service',
-          'imageUrl': widget.imageUrl ?? '',
-          'companyName': widget.providerName ?? 'Unknown',
-          'category': widget.category ?? 'Other',
-          'city': widget.city ?? '',
-          'price': widget.price ?? 0,
-          'bookingType': widget.payType ?? 'daily',
-        };
-        
-        // Fallback image
-        if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
-          _mediaUrls = [widget.imageUrl!];
-        }
-      });
-    }
-  }
-
-  Future<Map<String, dynamic>> _fetchServiceDetails(String serviceId) async {
-    final baseUrl = AuthService.baseUrl;
-    final response = await http.get(
-      Uri.parse('$baseUrl/services/$serviceId'),
-      headers: {'Content-Type': 'application/json'},
-    );
-
-    if (response.statusCode == 200) {
-      return json.decode(response.body);
-    } else {
-      throw Exception('Failed to load service details');
-    }
-  }
-
-  /// Safely convert any value to double
-  double _toDouble(dynamic value, [double fallback = 0]) {
-    if (value == null) return fallback;
-    if (value is num) return value.toDouble();
-    if (value is String) {
-      return double.tryParse(value) ?? fallback;
-    }
-    return fallback;
-  }
-
-  String _money(double v) => '₪${v.toStringAsFixed(0)}';
-
-  void _openChat(BuildContext context) {
-    final companyName = _serviceData?['companyName']?.toString() ?? widget.providerName ?? 'Provider';
-    final email = _serviceData?['companyInfo']?['email']?.toString() ?? 'N/A';
-    final phone = _serviceData?['companyInfo']?['phone']?.toString() ?? 'N/A';
-    
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ChatInsideSearchScreen(
-          providerName: companyName,
-          providerEmail: email,
-          providerPhone: phone,
-        ),
+  // ═══════════════════════════════════════════════════════════════════
+  // SERVICE INFO CARD
+  // ═══════════════════════════════════════════════════════════════════
+  Widget _buildServiceInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final heroTag = 'ai_service_${widget.serviceId}';
-
-    return Scaffold(
-      backgroundColor: kBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0.6,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: kText),
-        title: Text(
-          'Service Details',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText),
-        ),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: kPrimary))
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // Media Slider
-                _buildMediaSlider(),
-                
-                const SizedBox(height: 16),
-                
-                // Service Info Card
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: Colors.black.withOpacity(0.06)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          // Category Pill
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: kPrimary.withOpacity(0.10),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              _getCategory(),
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
-                                color: kPrimary,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          // Rating
-                          if (_getRating() > 0) ...[
-                            Row(
-                              children: [
-                                const Icon(Icons.star_rounded, size: 18, color: Colors.amber),
-                                const SizedBox(width: 4),
-                                Text(
-                                  _getRating().toStringAsFixed(1),
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w900,
-                                    color: kText,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Service Name
-                      Text(
-                        _getServiceName(),
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          color: kText,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      // Company Name
-                      Text(
-                        _getCompanyName(),
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w700,
-                          color: kMuted,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Price Section
-                      _buildPriceSection(),
-                    ],
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: kPrimary.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(999),
                 ),
-                
-                const SizedBox(height: 12),
-                
-                // Description - only show if has content
-                if (_hasDescription()) ...[
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: Colors.black.withOpacity(0.06)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Description',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w900,
-                            color: kText,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _getDescription(),
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                            color: kMuted,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                
-                // Company Info - only show if has data
-                if (_hasAnyCompanyInfo())
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: Colors.black.withOpacity(0.06)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Company Info',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w900,
-                            color: kText,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ..._buildCompanyInfoLines(),
-                      ],
-                    ),
-                  ),
-                
-                // Note about booking
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.amber.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.amber.shade700, size: 22),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'To add this service to your cart, go back and use the "Add to Cart" button on the service card.',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.amber.shade800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                child: Text(
+                  _getCategory(),
+                  style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w900, color: kPrimary),
                 ),
-                
-                const SizedBox(height: 100), // Space for bottom bar
-              ],
-            ),
-
-      // BOTTOM: Chat with Owner Button Only
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
-          ),
-          child: ElevatedButton.icon(
-            onPressed: () => _openChat(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kPrimary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 0,
-            ),
-            icon: const Icon(Icons.chat_bubble_rounded, size: 20),
-            label: Text(
-              'Chat with Owner',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
               ),
-            ),
+              const Spacer(),
+              if (_getRating() > 0)
+                Row(
+                  children: [
+                    const Icon(Icons.star_rounded, size: 18, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(
+                      _getRating().toStringAsFixed(1),
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText),
+                    ),
+                  ],
+                ),
+            ],
           ),
-        ),
+          const SizedBox(height: 12),
+          Text(
+            _getServiceName(),
+            style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w900, color: kText),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _getCompanyName(),
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: kMuted),
+          ),
+          const SizedBox(height: 16),
+          _buildPriceSection(),
+        ],
       ),
     );
   }
 
-  // Build Price Section
+  // ═══════════════════════════════════════════════════════════════════
+  // PRICE SECTION
+  // ═══════════════════════════════════════════════════════════════════
   Widget _buildPriceSection() {
     final allPrices = _serviceData?['allPrices'] as Map<String, dynamic>?;
     final bookingType = _bookingType?.toLowerCase() ?? widget.payType?.toLowerCase() ?? 'daily';
@@ -689,18 +705,11 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
               children: [
                 Text(
                   _money(displayPrice),
-                  style: GoogleFonts.poppins(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    color: kPrimary,
-                  ),
+                  style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w900, color: kPrimary),
                 ),
                 Text(
                   priceLabel,
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w700,
-                    color: kMuted,
-                  ),
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: kMuted),
                 ),
               ],
             ),
@@ -710,25 +719,548 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
     );
   }
 
-  // Helper methods
-  String _getImageUrl() {
-    return _serviceData?['imageUrl']?.toString() ?? 
-           _serviceData?['images']?[0]?.toString() ?? 
-           widget.imageUrl ?? '';
+  // ═══════════════════════════════════════════════════════════════════
+  // DESCRIPTION CARD
+  // ═══════════════════════════════════════════════════════════════════
+  Widget _buildDescriptionCard() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Description', style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText)),
+            const SizedBox(height: 8),
+            Text(
+              _getDescription(),
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: kMuted, height: 1.5),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
-  String _getServiceName() {
-    return _serviceData?['serviceName']?.toString() ?? widget.serviceName ?? 'Service';
+  // ═══════════════════════════════════════════════════════════════════
+  // SERVICE INFORMATION SECTION (NEW - Like Home!)
+  // ═══════════════════════════════════════════════════════════════════
+  Widget _buildServiceInformationSection() {
+    final venueType = _serviceData?['venueType']?.toString();
+    final maxCapacity = _serviceData?['maxCapacity'];
+    final minHours = _serviceData?['minBookingHours'];
+    final maxHours = _serviceData?['maxBookingHours'];
+    final workingDays = _serviceData?['workingDays'] as List?;
+    final availableHours = _serviceData?['availableHours'] as List?;
+    final bookingType = _bookingType ?? 'hourly';
+    final additionalInfo = _serviceData?['additionalInfo'] as Map<String, dynamic>?;
+    
+    final hasVenueInfo = venueType != null && venueType.isNotEmpty;
+    final hasCapacity = maxCapacity != null && maxCapacity > 0;
+    final hasBookingHours = (minHours != null && minHours > 0) || (maxHours != null && maxHours > 0);
+    final hasWorkingHours = availableHours != null && availableHours.isNotEmpty;
+    final hasWorkingDays = workingDays != null && workingDays.isNotEmpty;
+    
+    final customInfo = <String, dynamic>{};
+    if (additionalInfo != null) {
+      additionalInfo.forEach((key, value) {
+        if (key != 'description' && value != null && value.toString().isNotEmpty) {
+          customInfo[key] = value;
+        }
+      });
+    }
+    
+    final hasCustomInfo = customInfo.isNotEmpty;
+    
+    if (!hasVenueInfo && !hasCapacity && !hasBookingHours && !hasWorkingHours && !hasWorkingDays && !hasCustomInfo) {
+      return const SizedBox.shrink();
+    }
+
+    String? workingHoursStr;
+    if (availableHours != null && availableHours.isNotEmpty) {
+      final hours = availableHours.map((e) => e as int).toList()..sort();
+      if (hours.isNotEmpty) {
+        workingHoursStr = '${_formatHour(hours.first)} - ${_formatHour(hours.last + 1)}';
+      }
+    }
+
+    String? workingDaysStr;
+    if (workingDays != null && workingDays.isNotEmpty) {
+      if (workingDays.length == 7) {
+        workingDaysStr = 'Every Day';
+      } else {
+        final dayOrder = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        final sortedDays = workingDays.map((d) => d.toString().toLowerCase()).toList()
+          ..sort((a, b) => dayOrder.indexOf(a).compareTo(dayOrder.indexOf(b)));
+        
+        if (sortedDays.length > 2) {
+          workingDaysStr = '${_capitalizeDay(sortedDays.first)} - ${_capitalizeDay(sortedDays.last)}';
+        } else {
+          workingDaysStr = sortedDays.map((d) => _capitalizeDay(d)).join(', ');
+        }
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [kPrimary.withOpacity(0.15), kPrimary.withOpacity(0.05)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.info_outline_rounded, color: kPrimary, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Service Information',
+                  style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w900, color: kText),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // Info Chips
+            if (hasVenueInfo || hasCapacity || hasBookingHours)
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  if (hasVenueInfo)
+                    _buildInfoChip(
+                      icon: venueType == 'indoor' ? Icons.home_rounded : Icons.park_rounded,
+                      label: venueType == 'indoor' ? 'Indoor Venue' : 'Outdoor Venue',
+                      color: venueType == 'indoor' ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
+                    ),
+                  if (hasCapacity)
+                    _buildInfoChip(
+                      icon: Icons.groups_rounded,
+                      label: '$maxCapacity Guests Max',
+                      color: const Color(0xFFF59E0B),
+                    ),
+                  _buildInfoChip(
+                    icon: _getBookingIcon(bookingType),
+                    label: _getBookingLabel(bookingType),
+                    color: const Color(0xFF6366F1),
+                  ),
+                  if (minHours != null && minHours > 0)
+                    _buildInfoChip(
+                      icon: Icons.timer_outlined,
+                      label: 'Min $minHours ${minHours == 1 ? 'Hour' : 'Hours'}',
+                      color: const Color(0xFF8B5CF6),
+                    ),
+                  if (maxHours != null && maxHours > 0)
+                    _buildInfoChip(
+                      icon: Icons.timelapse_rounded,
+                      label: 'Max $maxHours Hours',
+                      color: const Color(0xFFEC4899),
+                    ),
+                ],
+              ),
+            
+            // Additional Info
+            if (hasCustomInfo) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.playlist_add_check_rounded, size: 18, color: kMuted),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Additional Details',
+                          style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w800, color: const Color(0xFF475569)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    ...customInfo.entries.map((entry) => _buildAdditionalInfoRow(entry.key, entry.value.toString())),
+                  ],
+                ),
+              ),
+            ],
+            
+            // Working Hours & Days
+            if (hasWorkingHours || hasWorkingDays) ...[
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [const Color(0xFF0891B2).withOpacity(0.08), const Color(0xFF06B6D4).withOpacity(0.04)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF0891B2).withOpacity(0.2)),
+                ),
+                child: Column(
+                  children: [
+                    if (workingHoursStr != null)
+                      _buildScheduleRow(
+                        icon: Icons.access_time_rounded,
+                        title: 'Working Hours',
+                        value: workingHoursStr,
+                      ),
+                    if (workingHoursStr != null && workingDaysStr != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Divider(height: 1, color: const Color(0xFF0891B2).withOpacity(0.15)),
+                      ),
+                    if (workingDaysStr != null)
+                      _buildScheduleRow(
+                        icon: Icons.calendar_month_rounded,
+                        title: 'Available Days',
+                        value: workingDaysStr,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
-  String _getCompanyName() {
-    return _serviceData?['companyName']?.toString() ?? widget.providerName ?? 'Unknown';
+  Widget _buildInfoChip({required IconData icon, required String label, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(label, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: color.withOpacity(0.9))),
+        ],
+      ),
+    );
   }
 
-  String _getCategory() {
-    return _serviceData?['category']?.toString() ?? widget.category ?? 'Other';
+  Widget _buildAdditionalInfoRow(String key, String value) {
+    // Check if value is a URL
+    final isUrl = _isValidUrl(value);
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 6, height: 6,
+            margin: const EdgeInsets.only(top: 7, right: 12),
+            decoration: BoxDecoration(color: kPrimary.withOpacity(0.6), shape: BoxShape.circle),
+          ),
+          Expanded(
+            child: isUrl 
+              ? _buildClickableUrlRow(key, value)
+              : RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(text: '$key: ', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF334155))),
+                      TextSpan(text: value, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: kMuted)),
+                    ],
+                  ),
+                ),
+          ),
+        ],
+      ),
+    );
   }
 
+  // ✅ Check if string is a valid URL
+  bool _isValidUrl(String text) {
+    final urlPattern = RegExp(
+      r'^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$',
+      caseSensitive: false,
+    );
+    return urlPattern.hasMatch(text.trim());
+  }
+
+  // ✅ Build clickable URL row
+  Widget _buildClickableUrlRow(String key, String url) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$key:',
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF334155),
+          ),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () => _launchUrl(url),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: kPrimary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: kPrimary.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _getUrlIcon(url),
+                  size: 16,
+                  color: kPrimary,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    _getDisplayUrl(url),
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: kPrimary,
+                      decoration: TextDecoration.underline,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.open_in_new_rounded,
+                  size: 14,
+                  color: kPrimary.withOpacity(0.7),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ✅ Get appropriate icon for URL type
+  IconData _getUrlIcon(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('facebook.com') || lower.contains('fb.com')) {
+      return Icons.facebook_rounded;
+    } else if (lower.contains('instagram.com')) {
+      return Icons.camera_alt_rounded;
+    } else if (lower.contains('twitter.com') || lower.contains('x.com')) {
+      return Icons.alternate_email_rounded;
+    } else if (lower.contains('youtube.com') || lower.contains('youtu.be')) {
+      return Icons.play_circle_rounded;
+    } else if (lower.contains('tiktok.com')) {
+      return Icons.music_note_rounded;
+    } else if (lower.contains('linkedin.com')) {
+      return Icons.work_rounded;
+    } else if (lower.contains('whatsapp.com') || lower.contains('wa.me')) {
+      return Icons.chat_rounded;
+    } else {
+      return Icons.link_rounded;
+    }
+  }
+
+  // ✅ Get display-friendly URL
+  String _getDisplayUrl(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('facebook.com') || lower.contains('fb.com')) {
+      return 'Facebook Page';
+    } else if (lower.contains('instagram.com')) {
+      return 'Instagram Profile';
+    } else if (lower.contains('twitter.com') || lower.contains('x.com')) {
+      return 'Twitter/X Profile';
+    } else if (lower.contains('youtube.com') || lower.contains('youtu.be')) {
+      return 'YouTube Channel';
+    } else if (lower.contains('tiktok.com')) {
+      return 'TikTok Profile';
+    } else if (lower.contains('linkedin.com')) {
+      return 'LinkedIn Profile';
+    } else if (lower.contains('whatsapp.com') || lower.contains('wa.me')) {
+      return 'WhatsApp Contact';
+    }
+    // Return shortened URL for websites
+    try {
+      final uri = Uri.parse(url.startsWith('http') ? url : 'https://$url');
+      return uri.host.replaceFirst('www.', '');
+    } catch (_) {
+      return url.length > 30 ? '${url.substring(0, 30)}...' : url;
+    }
+  }
+
+  // ✅ Launch URL in browser
+  Future<void> _launchUrl(String url) async {
+    String finalUrl = url.trim();
+    
+    // Add https:// if missing
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+      finalUrl = 'https://$finalUrl';
+    }
+    
+    try {
+      final uri = Uri.parse(finalUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not open: $url'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid URL: $url'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildScheduleRow({required IconData icon, required String title, required String value}) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: const Color(0xFF0891B2).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, size: 18, color: const Color(0xFF0891B2)),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kMuted)),
+              const SizedBox(height: 2),
+              Text(value, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w800, color: kText)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // COMPANY INFO CARD
+  // ═══════════════════════════════════════════════════════════════════
+  Widget _buildCompanyInfoCard() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Company Info', style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText)),
+            const SizedBox(height: 12),
+            ..._buildCompanyInfoLines(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // MAP SECTION
+  // ═══════════════════════════════════════════════════════════════════
+  Widget _buildMapSection() {
+    final lat = _toDouble(_serviceData?['latitude'] ?? _serviceData?['location']?['coordinates']?['latitude']);
+    final lng = _toDouble(_serviceData?['longitude'] ?? _serviceData?['location']?['coordinates']?['longitude']);
+    
+    if (lat == 0 || lng == 0) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.black.withOpacity(0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Location', style: GoogleFonts.poppins(fontWeight: FontWeight.w900, color: kText)),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              height: 200,
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: LatLng(lat, lng),
+                  initialZoom: 15.0,
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.flutter_application_1',
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: LatLng(lat, lng),
+                        width: 40,
+                        height: 40,
+                        child: const Icon(Icons.location_pin, size: 40, color: Colors.red),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // HELPER METHODS
+  // ═══════════════════════════════════════════════════════════════════
+  String _getServiceName() => _serviceData?['serviceName']?.toString() ?? widget.serviceName ?? 'Service';
+  String _getCompanyName() => _serviceData?['companyName']?.toString() ?? widget.providerName ?? 'Unknown';
+  String _getCategory() => _serviceData?['category']?.toString() ?? widget.category ?? 'Other';
+  
   double _getRating() {
     return _toDouble(_serviceData?['rating']) > 0 
         ? _toDouble(_serviceData?['rating']) 
@@ -741,9 +1273,7 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
   }
 
   String _getDescription() {
-    final apiDesc = _serviceData?['description']?.toString().trim() ?? '';
-    if (apiDesc.isNotEmpty) return apiDesc;
-    return 'No description yet.';
+    return _serviceData?['description']?.toString().trim() ?? 'No description yet.';
   }
 
   bool _hasAnyCompanyInfo() {
@@ -752,34 +1282,38 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
     final phone = _serviceData?['companyInfo']?['phone']?.toString().trim() ?? '';
     final city = _serviceData?['city']?.toString().trim() ?? widget.city ?? '';
     
-    return (companyName.isNotEmpty && companyName != 'Unknown' && companyName != 'N/A') ||
-           (city.isNotEmpty && city != 'N/A') ||
-           (email.isNotEmpty && email != 'N/A') ||
-           (phone.isNotEmpty && phone != 'N/A');
+    return (companyName.isNotEmpty && companyName != 'Unknown') ||
+           city.isNotEmpty || email.isNotEmpty || phone.isNotEmpty;
+  }
+
+  bool _hasLocation() {
+    final lat = _toDouble(_serviceData?['latitude'] ?? _serviceData?['location']?['coordinates']?['latitude']);
+    final lng = _toDouble(_serviceData?['longitude'] ?? _serviceData?['location']?['coordinates']?['longitude']);
+    return lat != 0 && lng != 0;
   }
 
   List<Widget> _buildCompanyInfoLines() {
     final lines = <Widget>[];
     
     final companyName = _getCompanyName();
-    if (companyName.isNotEmpty && companyName != 'Unknown' && companyName != 'N/A') {
+    if (companyName.isNotEmpty && companyName != 'Unknown') {
       lines.add(_InfoRow(icon: Icons.business_rounded, text: companyName));
     }
     
     final city = _serviceData?['city']?.toString().trim() ?? widget.city ?? '';
-    if (city.isNotEmpty && city != 'N/A') {
+    if (city.isNotEmpty) {
       if (lines.isNotEmpty) lines.add(const SizedBox(height: 8));
       lines.add(_InfoRow(icon: Icons.location_on_rounded, text: city));
     }
     
     final email = _serviceData?['companyInfo']?['email']?.toString().trim() ?? '';
-    if (email.isNotEmpty && email != 'N/A') {
+    if (email.isNotEmpty) {
       if (lines.isNotEmpty) lines.add(const SizedBox(height: 8));
       lines.add(_InfoRow(icon: Icons.email_rounded, text: email));
     }
     
     final phone = _serviceData?['companyInfo']?['phone']?.toString().trim() ?? '';
-    if (phone.isNotEmpty && phone != 'N/A') {
+    if (phone.isNotEmpty) {
       if (lines.isNotEmpty) lines.add(const SizedBox(height: 8));
       lines.add(_InfoRow(icon: Icons.phone_rounded, text: phone));
     }
@@ -787,31 +1321,311 @@ class _AiServiceDetailsScreenState extends State<AiServiceDetailsScreen> {
     return lines;
   }
 
+  String _formatHour(int hour) {
+    if (hour == 0 || hour == 24) return '12:00 AM';
+    if (hour == 12) return '12:00 PM';
+    if (hour < 12) return '$hour:00 AM';
+    return '${hour - 12}:00 PM';
+  }
+
+  String _capitalizeDay(String day) {
+    if (day.isEmpty) return day;
+    return day[0].toUpperCase() + day.substring(1);
+  }
+
+  IconData _getBookingIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'hourly': return Icons.schedule_rounded;
+      case 'daily': return Icons.calendar_today_rounded;
+      case 'capacity': return Icons.groups_rounded;
+      case 'mixed': return Icons.event_rounded;
+      case 'display': return Icons.visibility_rounded;
+      default: return Icons.payments_rounded;
+    }
+  }
+
+  String _getBookingLabel(String type) {
+    switch (type.toLowerCase()) {
+      case 'hourly': return 'Hourly Booking';
+      case 'daily': return 'Daily Booking';
+      case 'capacity': return 'Per Person';
+      case 'mixed': return 'Per Event';
+      case 'display': return 'Display Only';
+      default: return 'Booking Available';
+    }
+  }
+
   IconData _getServiceIcon(String category) {
-    final Map<String, IconData> categoryIcons = {
+    final icons = {
       'venues': Icons.apartment_rounded,
       'venue': Icons.apartment_rounded,
       'catering': Icons.restaurant_rounded,
       'photography': Icons.camera_alt_rounded,
+      'photographers': Icons.camera_alt_rounded,
       'music': Icons.music_note_rounded,
       'dj': Icons.headphones_rounded,
       'decoration': Icons.celebration_rounded,
+      'decor': Icons.celebration_rounded,
       'flowers': Icons.local_florist_rounded,
       'makeup': Icons.face_rounded,
       'hair': Icons.content_cut_rounded,
       'transportation': Icons.directions_car_rounded,
+      'car': Icons.directions_car_rounded,
       'cake': Icons.cake_rounded,
       'invitation': Icons.mail_rounded,
       'jewelry': Icons.diamond_rounded,
       'dress': Icons.checkroom_rounded,
-      'other': Icons.category_rounded,
     };
+    return icons[category.toLowerCase()] ?? Icons.category_rounded;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ⭐ CUSTOMER REVIEWS SECTION
+  // ═══════════════════════════════════════════════════════════════════
+  Widget _buildCustomerReviewsSection() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.black.withOpacity(0.06)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Customer Reviews',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: kText,
+                        ),
+                      ),
+                      if (_totalReviews > 0)
+                        Text(
+                          '${_averageRating.toStringAsFixed(1)} ⭐ • $_totalReviews ${_totalReviews == 1 ? 'review' : 'reviews'}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: kMuted,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // View All Button
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ServiceReviewsCustomerPage(
+                          serviceId: widget.serviceId,
+                          serviceName: _getServiceName(),
+                        ),
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    backgroundColor: kPrimary.withOpacity(0.1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View All',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          color: kPrimary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_rounded, size: 16, color: kPrimary),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Reviews List or Empty State
+            if (_reviews.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F9FC),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black.withOpacity(0.04)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.rate_review_outlined, color: Color(0xFF64748B), size: 24),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'No reviews yet. Be the first to share your experience!',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: kMuted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ..._reviews.take(2).map((review) => _buildReviewCard(review)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewCard(dynamic review) {
+    final userName = review.userName ?? 'Anonymous';
+    final rating = (review.rating ?? 0).toDouble();
+    final comment = review.comment ?? '';
+    final date = review.reviewDate ?? DateTime.now();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withOpacity(0.04)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // User Avatar
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [kPrimary.withOpacity(0.8), kPrimary],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w700,
+                        color: kText,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      _formatReviewDate(date),
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: kMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Rating Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+                    const SizedBox(width: 4),
+                    Text(
+                      rating.toStringAsFixed(1),
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w800,
+                        color: kText,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (comment.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              comment,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: kMuted,
+                height: 1.5,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatReviewDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
     
-    return categoryIcons[category.toLowerCase()] ?? Icons.category_rounded;
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()} weeks ago';
+    if (diff.inDays < 365) return '${(diff.inDays / 30).floor()} months ago';
+    return '${(diff.inDays / 365).floor()} years ago';
   }
 }
 
-// Info Row Widget
+// ═══════════════════════════════════════════════════════════════════
+// INFO ROW WIDGET
+// ═══════════════════════════════════════════════════════════════════
 class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -824,20 +1638,16 @@ class _InfoRow extends StatelessWidget {
         Icon(icon, size: 18, color: kPrimary),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            text,
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: kText,
-            ),
-          ),
+          child: Text(text, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: kText)),
         ),
       ],
     );
   }
 }
 
-// ============ Video Thumbnail Widget ============
+// ═══════════════════════════════════════════════════════════════════
+// VIDEO THUMBNAIL WIDGET
+// ═══════════════════════════════════════════════════════════════════
 class _AiVideoThumbnail extends StatefulWidget {
   final String url;
   const _AiVideoThumbnail({required this.url});
@@ -860,9 +1670,7 @@ class _AiVideoThumbnailState extends State<_AiVideoThumbnail> {
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
     try {
       await _controller!.initialize();
-      if (mounted) {
-        setState(() => _initialized = true);
-      }
+      if (mounted) setState(() => _initialized = true);
     } catch (e) {
       debugPrint('Video init error: $e');
     }
@@ -891,23 +1699,13 @@ class _AiVideoThumbnailState extends State<_AiVideoThumbnail> {
         else
           Container(
             color: Colors.black87,
-            child: const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            ),
+            child: const Center(child: CircularProgressIndicator(color: Colors.white)),
           ),
-        // Video play icon overlay
         Center(
           child: Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.play_arrow_rounded,
-              color: Colors.white,
-              size: 40,
-            ),
+            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+            child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 40),
           ),
         ),
       ],
@@ -915,15 +1713,14 @@ class _AiVideoThumbnailState extends State<_AiVideoThumbnail> {
   }
 }
 
-// ============ Full Screen Gallery ============
+// ═══════════════════════════════════════════════════════════════════
+// FULL SCREEN GALLERY
+// ═══════════════════════════════════════════════════════════════════
 class _AiFullScreenGallery extends StatefulWidget {
   final List<String> mediaUrls;
   final int initialIndex;
 
-  const _AiFullScreenGallery({
-    required this.mediaUrls,
-    required this.initialIndex,
-  });
+  const _AiFullScreenGallery({required this.mediaUrls, required this.initialIndex});
 
   @override
   State<_AiFullScreenGallery> createState() => _AiFullScreenGalleryState();
@@ -945,11 +1742,7 @@ class _AiFullScreenGalleryState extends State<_AiFullScreenGallery> {
 
   bool _isVideoUrl(String url) {
     final lower = url.toLowerCase();
-    return lower.endsWith('.mp4') || 
-           lower.endsWith('.mov') || 
-           lower.endsWith('.avi') || 
-           lower.endsWith('.webm') ||
-           lower.contains('video');
+    return lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.webm') || lower.contains('video');
   }
 
   Future<void> _initVideoIfNeeded() async {
@@ -989,10 +1782,7 @@ class _AiFullScreenGalleryState extends State<_AiFullScreenGallery> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          '${_currentIndex + 1} / ${widget.mediaUrls.length}',
-          style: GoogleFonts.poppins(color: Colors.white),
-        ),
+        title: Text('${_currentIndex + 1} / ${widget.mediaUrls.length}', style: GoogleFonts.poppins(color: Colors.white)),
       ),
       body: PageView.builder(
         controller: _pageController,
@@ -1024,15 +1814,8 @@ class _AiFullScreenGalleryState extends State<_AiFullScreenGallery> {
                           if (!_isVideoPlaying)
                             Container(
                               padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.play_arrow_rounded,
-                                color: Colors.white,
-                                size: 50,
-                              ),
+                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 50),
                             ),
                         ],
                       )
@@ -1046,14 +1829,8 @@ class _AiFullScreenGalleryState extends State<_AiFullScreenGallery> {
               child: CachedNetworkImage(
                 imageUrl: url,
                 fit: BoxFit.contain,
-                placeholder: (_, __) => const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                ),
-                errorWidget: (_, __, ___) => const Icon(
-                  Icons.broken_image_rounded,
-                  color: Colors.white54,
-                  size: 64,
-                ),
+                placeholder: (_, __) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                errorWidget: (_, __, ___) => const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 64),
               ),
             ),
           );

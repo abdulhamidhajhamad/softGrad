@@ -146,6 +146,16 @@ export class CreateServiceDto {
   @IsOptional()
   @IsBoolean()
   hasFixedLocation?: boolean;
+
+  //  NEW: Venue Type
+  @IsOptional()
+  @IsString()
+  venueType?: string;
+
+  //  NEW: Time slots
+  @IsOptional()
+  @IsArray()
+  timeSlots?: Array<{ startTime: string; endTime: string }>;
 }
 
 export class UpdateServiceDto {
@@ -243,6 +253,16 @@ export class UpdateServiceDto {
   @IsOptional()
   @IsBoolean()
   hasFixedLocation?: boolean;
+
+  //  NEW: Venue Type
+  @IsOptional()
+  @IsString()
+  venueType?: string;
+
+  //  NEW: Time slots
+  @IsOptional()
+  @IsArray()
+  timeSlots?: Array<{ startTime: string; endTime: string }>;
 }
 //  NEW: Offer DTO for creating/updating service offers
 export class CreateOfferDto {

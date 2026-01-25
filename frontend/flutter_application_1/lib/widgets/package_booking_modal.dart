@@ -19,13 +19,21 @@ const Color kSuccess = Color(0xFF10B981);
 const List<String> kCities = [
   'Nablus',
   'Ramallah',
+  'Jerusalem',
+  'Hebron',
+  'Bethlehem',
   'Jenin',
   'Tulkarm',
   'Qalqilya',
-  'Hebron',
+  'Jericho',
   'Salfit',
   'Tubas',
-  'Bethlehem',
+  'Gaza',
+  'Khan Yunis',
+  'Rafah',
+  'Deir al-Balah',
+  'Al-Bireh',
+  'Other',
 ];
 
 /// 📦 Show Package Booking Modal

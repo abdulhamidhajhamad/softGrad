@@ -1,58 +1,31 @@
 // lib/screens/reviews_provider.dart
+// Modern Reviews Hub - Shows services and navigates to service-specific reviews
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/chat_provider_service.dart';
-import 'chat_screen.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
-/// Core colors – keep consistent with the rest of the app
-const Color kPrimaryColor = Color.fromARGB(215, 20, 20, 215);
-const Color kTextColor = Colors.black;
-const Color kBackgroundColor = Colors.white;
+import 'package:flutter_application_1/services/service_service.dart';
+import 'package:flutter_application_1/services/user_service/review_service.dart';
+import 'provider/review_service_in_provider.dart';
 
-/// Review model
-class ProviderReview {
-  final String id;
-  final String customerId; // ID of the customer who wrote the review
-  final String customerName;
-  final String? serviceName;
-  final int rating; // 1–5 فقط
-  final String comment;
-  final DateTime createdAt;
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎨 Design Tokens - Modern Purple Theme
+// ═══════════════════════════════════════════════════════════════════════════
+const Color kPrimaryColor = Color(0xFF6C63FF);
+const Color kPrimaryLight = Color(0xFFE8E6FF);
+const Color kBackgroundColor = Color(0xFFF8F9FC);
+const Color kCardColor = Colors.white;
+const Color kTextPrimary = Color(0xFF1A1D29);
+const Color kTextSecondary = Color(0xFF6B7280);
+const Color kSuccessColor = Color(0xFF10B981);
+const Color kWarningColor = Color(0xFFF59E0B);
+const Color kErrorColor = Color(0xFFEF4444);
 
-  ProviderReview({
-    required this.id,
-    required this.customerId,
-    required this.customerName,
-    this.serviceName,
-    required this.rating,
-    required this.comment,
-    required this.createdAt,
-  });
-}
-
-/// Sorting options
-enum ReviewSortOption {
-  newest,
-  oldest,
-  highestRating,
-  lowestRating,
-}
-
-/// Repository / data source – connect this to your backend / API later
-class ReviewsRepository {
-  static Future<List<ProviderReview>> fetchReviewsForProvider(
-    String providerId,
-  ) async {
-    await Future.delayed(const Duration(milliseconds: 400));
-    // TODO: Replace with real implementation:
-    //  - Call your REST API or Firestore here
-    //  - Map response to List<ProviderReview>
-    return [];
-  }
-}
-
-/// Main screen
+// ═══════════════════════════════════════════════════════════════════════════
+// 📱 Main Reviews Hub Screen
+// ═══════════════════════════════════════════════════════════════════════════
 class ReviewsProviderScreen extends StatefulWidget {
   final String? providerId;
 
@@ -64,941 +37,788 @@ class ReviewsProviderScreen extends StatefulWidget {
 
 class _ReviewsProviderScreenState extends State<ReviewsProviderScreen> {
   bool _isLoading = true;
+  List<Map<String, dynamic>> _services = [];
+  Map<String, _ServiceReviewStats> _reviewStats = {};
   String? _errorMessage;
 
-  List<ProviderReview> _reviews = [];
-
-  ReviewSortOption _sortOption = ReviewSortOption.newest;
-  int? _minRatingFilter; // null = all, 3/4/5 => filter
+  // Overall stats
+  int _totalReviews = 0;
+  double _overallRating = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _loadReviews();
+    _loadData();
   }
 
-  Future<void> _loadReviews() async {
+  Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final data = await ReviewsRepository.fetchReviewsForProvider(
-        widget.providerId ?? 'provider-id',
-      );
-      setState(() {
-        _reviews = data;
-      });
+      // Load provider's services
+      final services = await ServiceService.fetchMyServices();
+      _services = List<Map<String, dynamic>>.from(services);
+
+      // Load review stats for each service
+      int totalReviews = 0;
+      double totalRating = 0;
+      int servicesWithRating = 0;
+
+      for (var service in _services) {
+        final serviceId = service['_id']?.toString() ?? service['id']?.toString() ?? '';
+        if (serviceId.isNotEmpty) {
+          try {
+            final result = await ReviewService.getServiceReviews(
+              serviceId: serviceId,
+              limit: 1, // Just need stats
+            );
+            
+            final avgRating = (result['averageRating'] ?? 0).toDouble();
+            final reviewCount = (result['totalReviews'] ?? 0) as int;
+            
+            _reviewStats[serviceId] = _ServiceReviewStats(
+              averageRating: avgRating,
+              totalReviews: reviewCount,
+            );
+            
+            totalReviews += reviewCount;
+            if (avgRating > 0) {
+              totalRating += avgRating;
+              servicesWithRating++;
+            }
+          } catch (e) {
+            _reviewStats[serviceId] = _ServiceReviewStats(
+              averageRating: 0,
+              totalReviews: 0,
+            );
+          }
+        }
+      }
+
+      _totalReviews = totalReviews;
+      _overallRating = servicesWithRating > 0 ? totalRating / servicesWithRating : 0;
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to load reviews.';
-      });
-    } finally {
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _errorMessage = e.toString();
         });
       }
     }
   }
 
-  // ====== derived values ======
-
-  List<ProviderReview> get _visibleReviews {
-    List<ProviderReview> list = List<ProviderReview>.from(_reviews);
-
-    // Filter by minimum rating
-    if (_minRatingFilter != null) {
-      list = list.where((r) => r.rating >= _minRatingFilter!).toList();
-    }
-
-    // Sort
-    list.sort((a, b) {
-      switch (_sortOption) {
-        case ReviewSortOption.newest:
-          return b.createdAt.compareTo(a.createdAt);
-        case ReviewSortOption.oldest:
-          return a.createdAt.compareTo(b.createdAt);
-        case ReviewSortOption.highestRating:
-          final cmp = b.rating.compareTo(a.rating);
-          if (cmp != 0) return cmp;
-          return b.createdAt.compareTo(a.createdAt);
-        case ReviewSortOption.lowestRating:
-          final cmp = a.rating.compareTo(b.rating);
-          if (cmp != 0) return cmp;
-          return a.createdAt.compareTo(b.createdAt);
-      }
-    });
-
-    return list;
-  }
-
-  double get _averageRating {
-    if (_reviews.isEmpty) return 0;
-    final sum = _reviews.fold<double>(0, (acc, r) => acc + r.rating);
-    return sum / _reviews.length;
-  }
-
-  int get _reviewsCount => _reviews.length;
-
-  // ====== helpers ======
-
-  void _setSortOption(ReviewSortOption option) {
-    setState(() {
-      _sortOption = option;
-    });
-  }
-
-  void _setRatingFilter(int? minRating) {
-    setState(() {
-      _minRatingFilter = minRating;
-    });
-  }
-
-  String _sortLabel(ReviewSortOption option) {
-    switch (option) {
-      case ReviewSortOption.newest:
-        return "Newest";
-      case ReviewSortOption.oldest:
-        return "Oldest";
-      case ReviewSortOption.highestRating:
-        return "Highest rating";
-      case ReviewSortOption.lowestRating:
-        return "Lowest rating";
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final visible = _visibleReviews;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 1100;
+        final isTablet = constraints.maxWidth >= 768 && constraints.maxWidth < 1100;
 
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: kBackgroundColor,
-        appBar: AppBar(
-          backgroundColor: kBackgroundColor,
-          elevation: 0,
-          centerTitle: true,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new, color: kTextColor),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: Text(
-            'Reviews',
-            style: GoogleFonts.poppins(
-              color: kTextColor,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
+        if (isDesktop || isTablet) {
+          return _buildWebLayout(isDesktop);
+        }
+        return _buildMobileLayout();
+      },
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🌐 WEB LAYOUT
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWebLayout(bool isDesktop) {
+    return Scaffold(
+      backgroundColor: kBackgroundColor,
+      body: Column(
+        children: [
+          // Modern Top Bar
+          Container(
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.arrowLeft, size: 18, color: kTextSecondary),
+                          const SizedBox(width: 8),
+                          Text('Back', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextSecondary)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.star_rounded, size: 20, color: Colors.amber),
+                ),
+                const SizedBox(width: 14),
+                Text('Reviews Hub', style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                const Spacer(),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: _loadData,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: kPrimaryLight,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(LucideIcons.refreshCw, size: 16, color: kPrimaryColor),
+                          const SizedBox(width: 8),
+                          Text('Refresh', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: kPrimaryColor)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        body: _isLoading
-            ? const _LoadingState()
-            : _errorMessage != null
-                ? _ErrorState(onRetry: _loadReviews)
-                : _reviews.isEmpty
-                    ? const _EmptyState()
-                    : Column(
-                        children: [
-                          _SummaryHeader(
-                            averageRating: _averageRating,
-                            totalReviews: _reviewsCount,
-                          ),
-                          _FiltersBar(
-                            currentSort: _sortOption,
-                            sortLabel: _sortLabel,
-                            onSortChanged: _setSortOption,
-                            minRatingFilter: _minRatingFilter,
-                            onRatingFilterChanged: _setRatingFilter,
-                          ),
-                          Expanded(
-                            child: RefreshIndicator(
-                              onRefresh: _loadReviews,
-                              child: ListView.separated(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
+          // Content
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: kPrimaryColor))
+                : _errorMessage != null
+                    ? _buildErrorState()
+                    : _services.isEmpty
+                        ? _buildNoServicesState()
+                        : SingleChildScrollView(
+                            padding: EdgeInsets.symmetric(horizontal: isDesktop ? 48 : 24, vertical: 32),
+                            child: Center(
+                              child: Container(
+                                constraints: BoxConstraints(maxWidth: isDesktop ? 1200 : double.infinity),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Overall Stats Row
+                                    _buildWebOverallStats(),
+                                    const SizedBox(height: 32),
+                                    // Services Section Header
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(10)),
+                                          child: const Icon(LucideIcons.layoutGrid, size: 18, color: kPrimaryColor),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text('Your Services', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                                        const Spacer(),
+                                        Text('${_services.length} services', style: GoogleFonts.poppins(fontSize: 14, color: kTextSecondary)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 20),
+                                    // Services Grid
+                                    GridView.builder(
+                                      shrinkWrap: true,
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: isDesktop ? 3 : 2,
+                                        crossAxisSpacing: 20,
+                                        mainAxisSpacing: 20,
+                                        childAspectRatio: 1.1,
+                                      ),
+                                      itemCount: _services.length,
+                                      itemBuilder: (context, index) => _buildWebServiceCard(_services[index]),
+                                    ),
+                                  ],
                                 ),
-                                itemCount: visible.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 10),
-                                itemBuilder: (context, index) {
-                                  final review = visible[index];
-                                  return _ReviewCard(review: review);
-                                },
                               ),
                             ),
                           ),
-                        ],
-                      ),
+          ),
+        ],
       ),
     );
   }
-}
 
-/// Top summary: average rating + total
-class _SummaryHeader extends StatelessWidget {
-  final double averageRating;
-  final int totalReviews;
-
-  const _SummaryHeader({
-    Key? key,
-    required this.averageRating,
-    required this.totalReviews,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final rounded = averageRating.toStringAsFixed(1);
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F4FF),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
+  Widget _buildWebOverallStats() {
+    return Row(
+      children: [
+        // Overall Rating Card
+        Expanded(
+          flex: 2,
+          child: Container(
+            padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: kPrimaryColor.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.star_rounded,
-              color: kPrimaryColor,
-              size: 30,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$rounded / 5',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: kTextColor,
-                ),
+              gradient: LinearGradient(
+                colors: [Colors.amber.shade600, Colors.amber.shade500],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  _StarRow(rating: averageRating, size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    '$totalReviews reviews',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Sort + filter bar
-class _FiltersBar extends StatelessWidget {
-  final ReviewSortOption currentSort;
-  final String Function(ReviewSortOption) sortLabel;
-  final ValueChanged<ReviewSortOption> onSortChanged;
-
-  final int? minRatingFilter;
-  final ValueChanged<int?> onRatingFilterChanged;
-
-  const _FiltersBar({
-    Key? key,
-    required this.currentSort,
-    required this.sortLabel,
-    required this.onSortChanged,
-    required this.minRatingFilter,
-    required this.onRatingFilterChanged,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 16.0).copyWith(bottom: 8.0),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F5F5),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<ReviewSortOption>(
-                      value: currentSort,
-                      isDense: true,
-                      icon: const Icon(Icons.expand_more_rounded),
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        color: kTextColor,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.3), blurRadius: 24, offset: const Offset(0, 8))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      onChanged: (value) {
-                        if (value != null) onSortChanged(value);
-                      },
-                      items: ReviewSortOption.values.map((option) {
-                        return DropdownMenuItem(
-                          value: option,
-                          child: Text(sortLabel(option)),
-                        );
-                      }).toList(),
+                      child: const Icon(Icons.star_rounded, size: 22, color: Colors.white),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Text('Overall Rating', style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70)),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Filter:',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-              const SizedBox(width: 4),
-              _RatingFilterChip(
-                label: 'All',
-                selected: minRatingFilter == null,
-                onTap: () => onRatingFilterChanged(null),
-              ),
-              _RatingFilterChip(
-                label: '3+',
-                selected: minRatingFilter == 3,
-                onTap: () => onRatingFilterChanged(3),
-              ),
-              _RatingFilterChip(
-                label: '4+',
-                selected: minRatingFilter == 4,
-                onTap: () => onRatingFilterChanged(4),
-              ),
-              _RatingFilterChip(
-                label: '5★',
-                selected: minRatingFilter == 5,
-                onTap: () => onRatingFilterChanged(5),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RatingFilterChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _RatingFilterChip({
-    Key? key,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color:
-                selected ? kPrimaryColor.withOpacity(0.12) : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected ? kPrimaryColor : Colors.grey.shade400,
-            ),
-          ),
-          child: Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: selected ? kPrimaryColor : Colors.grey.shade800,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Single review card
-class _ReviewCard extends StatefulWidget {
-  final ProviderReview review;
-
-  const _ReviewCard({Key? key, required this.review}) : super(key: key);
-
-  @override
-  State<_ReviewCard> createState() => _ReviewCardState();
-}
-
-class _ReviewCardState extends State<_ReviewCard> {
-  bool _hasReplied = false;
-  bool _isSending = false;
-  String? _chatId; // Store chat ID after first reply
-
-  String _formatDate(DateTime time) {
-    final day = time.day.toString().padLeft(2, '0');
-    final month = time.month.toString().padLeft(2, '0');
-    final year = time.year.toString();
-    return '$day/$month/$year';
-  }
-
-  void _showReplyDialog() {
-    final TextEditingController messageController = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.reply_rounded, color: kPrimaryColor, size: 24),
-            const SizedBox(width: 8),
-            Text(
-              'Reply to ${widget.review.customerName}',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Show the original review
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _StarRow(rating: widget.review.rating.toDouble(), size: 14),
-                      const SizedBox(width: 6),
-                      Text(
-                        widget.review.rating.toString(),
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
-                        ),
+                const SizedBox(height: 20),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _overallRating > 0 ? _overallRating.toStringAsFixed(1) : '—',
+                      style: GoogleFonts.poppins(fontSize: 48, fontWeight: FontWeight.w800, color: Colors.white),
+                    ),
+                    if (_overallRating > 0) ...[
+                      const SizedBox(width: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text('/ 5', style: GoogleFonts.poppins(fontSize: 20, color: Colors.white70)),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    widget.review.comment,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.grey.shade700,
-                      fontStyle: FontStyle.italic,
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: List.generate(5, (i) => Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(
+                      Icons.star_rounded,
+                      size: 24,
+                      color: i < _overallRating.round() ? Colors.white : Colors.white.withOpacity(0.3),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Your message:',
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: kTextColor,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: messageController,
-              maxLines: 4,
-              decoration: InputDecoration(
-                hintText: 'Write your reply to the customer...',
-                hintStyle: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: Colors.grey.shade500,
+                  )),
                 ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: kPrimaryColor, width: 1.5),
-                ),
-                contentPadding: const EdgeInsets.all(12),
-              ),
-              style: GoogleFonts.poppins(fontSize: 13),
+              ],
             ),
-          ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.poppins(
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+        const SizedBox(width: 24),
+        // Total Reviews Card
+        Expanded(
+          child: _buildWebStatCard(
+            'Total Reviews',
+            _totalReviews.toString(),
+            LucideIcons.messageSquare,
+            kPrimaryColor,
+            subtitle: 'across all services',
           ),
-          ElevatedButton(
-            onPressed: () async {
-              final message = messageController.text.trim();
-              if (message.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Please write a message',
-                      style: GoogleFonts.poppins(),
-                    ),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
-                return;
-              }
-              
-              Navigator.of(dialogContext).pop();
-              await _sendReply(message);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kPrimaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            ),
-            child: Text(
-              'Send',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
-            ),
+        ),
+        const SizedBox(width: 20),
+        // Services Card
+        Expanded(
+          child: _buildWebStatCard(
+            'Active Services',
+            _services.where((s) => s['isActive'] == true).length.toString(),
+            LucideIcons.briefcase,
+            kSuccessColor,
+            subtitle: 'with reviews enabled',
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Future<void> _sendReply(String message) async {
-    setState(() => _isSending = true);
-    
-    try {
-      final result = await ChatProviderService.startChatWithUser(
-        widget.review.customerId,
-        message,
-      );
-      
-      if (result['success'] == true) {
-        final chatId = result['chatId']?.toString();
-        setState(() {
-          _hasReplied = true;
-          _isSending = false;
-          _chatId = chatId;
-        });
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Message sent to ${widget.review.customerName}',
-                style: GoogleFonts.poppins(),
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        setState(() => _isSending = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                result['error'] ?? 'Failed to send message',
-                style: GoogleFonts.poppins(),
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      setState(() => _isSending = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error sending message: $e',
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final review = widget.review;
-    final dateText = _formatDate(review.createdAt);
-    final initials = review.customerName.isNotEmpty
-        ? review.customerName.trim()[0].toUpperCase()
-        : '?';
-
+  Widget _buildWebStatCard(String label, String value, IconData icon, Color color, {String? subtitle}) {
     return Container(
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Avatar + name + date
-          Row(
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 24, color: color),
+          ),
+          const SizedBox(height: 16),
+          Text(value, style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w700, color: kTextPrimary)),
+          Text(label, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: kTextSecondary)),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(subtitle, style: GoogleFonts.poppins(fontSize: 12, color: kTextSecondary)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebServiceCard(Map<String, dynamic> service) {
+    final serviceId = service['_id']?.toString() ?? service['id']?.toString() ?? '';
+    final serviceName = service['serviceName']?.toString() ?? service['name']?.toString() ?? 'Service';
+    final category = service['category']?.toString() ?? '';
+    final imageUrl = (service['images'] as List?)?.firstOrNull?.toString();
+    final stats = _reviewStats[serviceId] ?? _ServiceReviewStats(averageRating: 0, totalReviews: 0);
+    final isActive = service['isActive'] == true;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => _openServiceReviews(serviceId, serviceName),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: kPrimaryColor.withOpacity(0.12),
-                child: Text(
-                  initials,
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w600,
-                    color: kPrimaryColor,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              // Image
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                child: Stack(
                   children: [
-                    Text(
-                      review.customerName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: kTextColor,
+                    SizedBox(
+                      height: 100,
+                      width: double.infinity,
+                      child: imageUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl: imageUrl,
+                              fit: BoxFit.cover,
+                              placeholder: (_, __) => Container(color: kBackgroundColor),
+                              errorWidget: (_, __, ___) => Container(
+                                color: kPrimaryLight,
+                                child: const Icon(LucideIcons.image, color: kPrimaryColor, size: 32),
+                              ),
+                            )
+                          : Container(
+                              color: kPrimaryLight,
+                              child: const Icon(LucideIcons.image, color: kPrimaryColor, size: 32),
+                            ),
+                    ),
+                    // Rating Badge
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: stats.averageRating > 0 ? Colors.amber : Colors.grey.shade600,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star_rounded, size: 14, color: Colors.white),
+                            const SizedBox(width: 4),
+                            Text(
+                              stats.averageRating > 0 ? stats.averageRating.toStringAsFixed(1) : 'New',
+                              style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        _StarRow(rating: review.rating.toDouble(), size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          review.rating.toString(),
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: Colors.grey.shade700,
+                    // Status Badge
+                    if (!isActive)
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: kErrorColor,
+                            borderRadius: BorderRadius.circular(8),
                           ),
+                          child: Text('Hidden', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white)),
                         ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                dateText,
-                style: GoogleFonts.poppins(
-                  fontSize: 11,
-                  color: Colors.grey.shade600,
+              // Info
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        serviceName,
+                        style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: kTextPrimary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (category.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(category, style: GoogleFonts.poppins(fontSize: 12, color: kTextSecondary)),
+                      ],
+                      const Spacer(),
+                      Row(
+                        children: [
+                          Icon(LucideIcons.messageSquare, size: 14, color: kTextSecondary),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${stats.totalReviews} ${stats.totalReviews == 1 ? 'review' : 'reviews'}',
+                            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kTextSecondary),
+                          ),
+                          const Spacer(),
+                          Icon(LucideIcons.chevronRight, size: 18, color: kPrimaryColor),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          // Review comment with overflow protection
-          Text(
-            review.comment,
-            maxLines: 5,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: Colors.grey.shade800,
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Reply button
-          Align(
-            alignment: Alignment.centerRight,
-            child: _isSending
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: kPrimaryColor,
-                    ),
-                  )
-                : _hasReplied
-                    ? ElevatedButton.icon(
-                        onPressed: () {
-                          if (_chatId != null) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ChatScreen(
-                                  conversationId: _chatId!,
-                                  customerName: widget.review.customerName,
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                        label: Text(
-                          'Open Chat',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          elevation: 0,
-                        ),
-                      )
-                    : ElevatedButton.icon(
-                        onPressed: _showReplyDialog,
-                        icon: const Icon(Icons.reply_rounded, size: 18),
-                        label: Text(
-                          'Reply to Customer',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: kPrimaryColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          elevation: 0,
-                        ),
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Simple star row widget (يقبل double لكنه يرسم حسب القيمة)
-class _StarRow extends StatelessWidget {
-  final double rating; // 0–5
-  final double size;
-
-  const _StarRow({Key? key, required this.rating, this.size = 18})
-      : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final fullStars = rating.floor();
-    final hasHalf = (rating - fullStars) >= 0.5;
-    final total = 5;
-
-    List<Widget> stars = [];
-    for (int i = 0; i < total; i++) {
-      IconData icon;
-      if (i < fullStars) {
-        icon = Icons.star_rounded;
-      } else if (i == fullStars && hasHalf) {
-        icon = Icons.star_half_rounded;
-      } else {
-        icon = Icons.star_border_rounded;
-      }
-      stars.add(Icon(
-        icon,
-        size: size,
-        color: kPrimaryColor,
-      ));
-    }
-
-    return Row(children: stars);
-  }
-}
-
-/// Loading state
-class _LoadingState extends StatelessWidget {
-  const _LoadingState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(
-            strokeWidth: 2.5,
-            color: kPrimaryColor,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Loading reviews...',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: Colors.grey.shade700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Empty state
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.reviews_outlined,
-              size: 64,
-              color: kPrimaryColor,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No reviews yet',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: kTextColor,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'When customers start rating your services,\nyou will see their feedback here.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: Colors.grey.shade700,
-              ),
-            ),
-          ],
         ),
       ),
     );
   }
-}
 
-/// Error state
-class _ErrorState extends StatelessWidget {
-  final VoidCallback onRetry;
+  // ══════════════════════════════════════════════════════════════════════════
+  // 📱 MOBILE LAYOUT
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildMobileLayout() {
+    return Scaffold(
+      backgroundColor: kBackgroundColor,
+      body: CustomScrollView(
+        slivers: [
+          // Modern App Bar
+          SliverAppBar(
+            expandedHeight: 180,
+            pinned: true,
+            backgroundColor: Colors.white,
+            elevation: 0.5,
+            leading: Container(
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: kBackgroundColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                icon: const Icon(LucideIcons.arrowLeft, color: kTextPrimary, size: 20),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            actions: [
+              Container(
+                margin: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: kBackgroundColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(LucideIcons.refreshCw, color: kPrimaryColor, size: 20),
+                  onPressed: _loadData,
+                ),
+              ),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.white, kBackgroundColor],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Row(
+                          children: [
+                            // Rating Circle
+                            Container(
+                              width: 70,
+                              height: 70,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.amber.shade600, Colors.amber.shade500],
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    _overallRating > 0 ? _overallRating.toStringAsFixed(1) : '—',
+                                    style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
+                                  ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: List.generate(5, (i) => Icon(
+                                      Icons.star_rounded,
+                                      size: 10,
+                                      color: i < _overallRating.round() ? Colors.white : Colors.white.withOpacity(0.4),
+                                    )),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            // Title & Stats
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Reviews Hub', style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w800, color: kTextPrimary)),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '$_totalReviews total reviews • ${_services.length} services',
+                                    style: GoogleFonts.poppins(fontSize: 13, color: kTextSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Content
+          if (_isLoading)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator(color: kPrimaryColor)),
+            )
+          else if (_errorMessage != null)
+            SliverFillRemaining(child: _buildErrorState())
+          else if (_services.isEmpty)
+            SliverFillRemaining(child: _buildNoServicesState())
+          else
+            SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _buildMobileServiceCard(_services[index]),
+                  childCount: _services.length,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
-  const _ErrorState({Key? key, required this.onRetry}) : super(key: key);
+  Widget _buildMobileServiceCard(Map<String, dynamic> service) {
+    final serviceId = service['_id']?.toString() ?? service['id']?.toString() ?? '';
+    final serviceName = service['serviceName']?.toString() ?? service['name']?.toString() ?? 'Service';
+    final category = service['category']?.toString() ?? '';
+    final imageUrl = (service['images'] as List?)?.firstOrNull?.toString();
+    final stats = _reviewStats[serviceId] ?? _ServiceReviewStats(averageRating: 0, totalReviews: 0);
+    final isActive = service['isActive'] == true;
 
-  @override
-  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 4))],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openServiceReviews(serviceId, serviceName),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                // Image
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    children: [
+                      SizedBox(
+                        width: 80,
+                        height: 80,
+                        child: imageUrl != null
+                            ? CachedNetworkImage(
+                                imageUrl: imageUrl,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => Container(color: kBackgroundColor),
+                                errorWidget: (_, __, ___) => Container(
+                                  color: kPrimaryLight,
+                                  child: const Icon(LucideIcons.image, color: kPrimaryColor, size: 24),
+                                ),
+                              )
+                            : Container(
+                                color: kPrimaryLight,
+                                child: const Icon(LucideIcons.image, color: kPrimaryColor, size: 24),
+                              ),
+                      ),
+                      if (!isActive)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Center(
+                              child: Text('Hidden', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white)),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        serviceName,
+                        style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: kTextPrimary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (category.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(category, style: GoogleFonts.poppins(fontSize: 12, color: kTextSecondary)),
+                      ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          // Rating
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: stats.averageRating > 0 ? Colors.amber.withOpacity(0.15) : kBackgroundColor,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.star_rounded, size: 14, color: stats.averageRating > 0 ? Colors.amber : kTextSecondary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  stats.averageRating > 0 ? stats.averageRating.toStringAsFixed(1) : 'New',
+                                  style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, color: stats.averageRating > 0 ? Colors.amber.shade700 : kTextSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Reviews count
+                          Icon(LucideIcons.messageSquare, size: 14, color: kTextSecondary),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${stats.totalReviews}',
+                            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: kTextSecondary),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Arrow
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: kPrimaryLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(LucideIcons.chevronRight, size: 20, color: kPrimaryColor),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🔧 Helper Methods
+  // ══════════════════════════════════════════════════════════════════════════
+  void _openServiceReviews(String serviceId, String serviceName) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ServiceReviewsProviderPage(
+          serviceId: serviceId,
+          serviceName: serviceName,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 52,
-              color: Colors.redAccent,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Something went wrong',
-              style: GoogleFonts.poppins(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: kTextColor,
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: kErrorColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
               ),
+              child: const Icon(LucideIcons.alertCircle, size: 48, color: kErrorColor),
             ),
+            const SizedBox(height: 20),
+            Text('Something went wrong', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: kTextPrimary)),
             const SizedBox(height: 8),
             Text(
-              'We couldn’t load your reviews.\nPlease try again.',
+              'We couldn\'t load your reviews.\nPlease try again.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: Colors.grey.shade700,
-              ),
+              style: GoogleFonts.poppins(fontSize: 14, color: kTextSecondary),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: onRetry,
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(LucideIcons.refreshCw, size: 18),
+              label: Text('Try Again', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: kPrimaryColor,
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              child: Text(
-                'Retry',
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ],
@@ -1006,4 +826,46 @@ class _ErrorState extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildNoServicesState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: kPrimaryLight,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: const Icon(LucideIcons.briefcase, size: 56, color: kPrimaryColor),
+            ),
+            const SizedBox(height: 24),
+            Text('No Services Yet', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: kTextPrimary)),
+            const SizedBox(height: 10),
+            Text(
+              'Create your first service to start\nreceiving customer reviews.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 14, color: kTextSecondary, height: 1.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 📊 Helper Classes
+// ═══════════════════════════════════════════════════════════════════════════
+class _ServiceReviewStats {
+  final double averageRating;
+  final int totalReviews;
+
+  _ServiceReviewStats({
+    required this.averageRating,
+    required this.totalReviews,
+  });
 }

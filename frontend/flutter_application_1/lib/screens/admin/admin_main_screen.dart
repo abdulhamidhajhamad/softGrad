@@ -217,7 +217,7 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
                   const SizedBox(width: 14),
                   Expanded(
                     child: Text(
-                      'Event Planner',
+                      'Eventry',
                       style: GoogleFonts.poppins(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,

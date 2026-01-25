@@ -38,7 +38,7 @@ export class AiSearchController {
 
         if (!aggregatedPackages || aggregatedPackages.length === 0) {
             throw new HttpException(
-                'Could not build any packages matching your criteria.',
+                "We're sorry, there are no services matching your specific criteria at the moment.",
                 HttpStatus.NOT_FOUND
             );
         }
@@ -63,11 +63,12 @@ export class AiSearchController {
             dto.startTime,
             dto.endTime,
             dto.budgetFlexibility,
+            dto.eventType,  // ✅ NEW: Pass event type for bestFor matching
         );
 
         if (!services || services.length === 0) {
             throw new HttpException(
-                `No ${dto.category} services found matching your criteria in ${dto.city}.`,
+                "We're sorry, there are no services matching your specific criteria at the moment.",
                 HttpStatus.NOT_FOUND
             );
         }

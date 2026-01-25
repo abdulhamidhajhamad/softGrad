@@ -27,10 +27,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final List<String> _cities = const [
     'Nablus',
     'Ramallah',
+    'Jerusalem',
     'Hebron',
+    'Bethlehem',
     'Jenin',
     'Tulkarm',
     'Qalqilya',
+    'Jericho',
+    'Salfit',
+    'Tubas',
+    'Gaza',
+    'Khan Yunis',
+    'Rafah',
+    'Deir al-Balah',
+    'Al-Bireh',
     'Other',
   ];
 

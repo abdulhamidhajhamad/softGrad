@@ -17,8 +17,42 @@ export class PackageBuilderService {
         @InjectModel(Booking.name) private bookingModel: Model<Booking>,
     ) {}
 
+    /**
+     * ✅ NEW: Calculate hours between start and end time
+     * حساب عدد الساعات بين وقت البداية والنهاية
+     */
+    private calculateHours(startTime?: string, endTime?: string): number {
+        if (!startTime || !endTime) {
+            return 1; // Default to 1 hour if times not provided
+        }
+        
+        try {
+            const [startHour, startMin] = startTime.split(':').map(Number);
+            const [endHour, endMin] = endTime.split(':').map(Number);
+            
+            const startMinutes = startHour * 60 + (startMin || 0);
+            const endMinutes = endHour * 60 + (endMin || 0);
+            
+            const diffMinutes = endMinutes - startMinutes;
+            const hours = Math.ceil(diffMinutes / 60);
+            
+            return hours > 0 ? hours : 1; // Minimum 1 hour
+        } catch (error) {
+            this.logger.warn(`Error calculating hours: ${error.message}, defaulting to 1`);
+            return 1;
+        }
+    }
+
     async buildPackages(blueprint: AiSearchBlueprint): Promise<AggregatedPackage[]> {
         const aggregatedPackages: AggregatedPackage[] = [];
+        
+        // ✅ Calculate actual hours from event times
+        const eventHours = this.calculateHours(blueprint.startTime, blueprint.endTime);
+        this.logger.log(`📅 Event duration: ${eventHours} hours (${blueprint.startTime} - ${blueprint.endTime})`);
+        
+        // ✅ NEW: Track used services per category to avoid duplicates across packages
+        // Map: category -> Set of service IDs used in previous packages
+        const usedServicesPerCategory: Map<string, Set<string>> = new Map();
 
         for (const pkgBlueprint of blueprint.packages) {
             this.logger.log(`Building package: ${pkgBlueprint.packageName} with target price: ${pkgBlueprint.targetPrice}`);
@@ -39,10 +73,16 @@ export class PackageBuilderService {
 
             for (const requiredService of requiredServices) {
                 const maxBudgetForService = pkgBlueprint.targetPrice * requiredService.budgetWeight;
+                // ✅ BALANCED: Search within reasonable range but allow flexibility
                 const priceRange = { 
-                    min: 0, 
-                    max: maxBudgetForService * 1.3
+                    min: 1,                               // Find all services
+                    max: maxBudgetForService * 3          // Allow up to 3x allocated budget for high-cost services
                 };
+                
+                this.logger.log(
+                    `Category ${requiredService.categoryName}: Budget allocation ${maxBudgetForService.toFixed(0)}, ` +
+                    `Search max: ${priceRange.max.toFixed(0)}`
+                );
                 
                 const filters: AiSearchFilters = {
                     city: blueprint.city,
@@ -53,6 +93,7 @@ export class PackageBuilderService {
                     eventDate: blueprint.eventDate,
                     startTime: blueprint.startTime,
                     endTime: blueprint.endTime,
+                    eventType: blueprint.eventCategory, // ✅ NEW: Pass event type for bestFor sorting
                 };
 
                 try {
@@ -68,23 +109,58 @@ export class PackageBuilderService {
                         );
 
                         if (availableServices.length > 0) {
+                            // ✅ NEW: Get services already used in this category for other packages
+                            const usedInCategory = usedServicesPerCategory.get(requiredService.categoryName) || new Set();
+                            
+                            // ✅ NEW: Filter out already used services
+                            const unusedServices = availableServices.filter(service => {
+                                const serviceId = (service as any)._id?.toString() || (service as any).id;
+                                return !usedInCategory.has(serviceId);
+                            });
+
+                            this.logger.log(
+                                `Category ${requiredService.categoryName}: ${availableServices.length} available, ` +
+                                `${unusedServices.length} unused (${usedInCategory.size} already used in other packages)`
+                            );
+
+                            // ✅ NEW: Use unused services if available, otherwise fall back to all available
+                            const candidateServices = unusedServices.length > 0 ? unusedServices : availableServices;
+                            
                             const bestService = this.selectBestService(
-                                availableServices, 
+                                candidateServices, 
                                 requiredService.aiTags,
                                 maxBudgetForService,
-                                blueprint.guestCount
+                                blueprint.guestCount,
+                                blueprint.eventCategory,  // ✅ NEW: Pass event type for bestFor matching
+                                eventHours  // ✅ FIX: Pass actual event hours for price calculation
                             );
                             
                             if (bestService) {
-                                const servicePrice = this.calculateServicePrice(bestService, blueprint.guestCount);
-                                aggregated.services.push(bestService);
+                                const serviceId = (bestService as any)._id?.toString() || (bestService as any).id;
+                                // ✅ FIX: Pass eventHours for accurate price calculation
+                                const servicePrice = this.calculateServicePrice(bestService, blueprint.guestCount, eventHours);
+                                
+                                // ✅ FIX: Create enriched service with calculatedPrice for frontend display
+                                const enrichedService = {
+                                    ...((bestService as any).toObject ? (bestService as any).toObject() : bestService),
+                                    calculatedPrice: servicePrice,
+                                    // ✅ Override price with calculated price so frontend displays correct amount
+                                    displayPrice: servicePrice,
+                                };
+                                aggregated.services.push(enrichedService);
                                 totalServiceCost += servicePrice;
+
+                                // ✅ NEW: Mark this service as used for this category
+                                if (!usedServicesPerCategory.has(requiredService.categoryName)) {
+                                    usedServicesPerCategory.set(requiredService.categoryName, new Set());
+                                }
+                                usedServicesPerCategory.get(requiredService.categoryName)!.add(serviceId);
 
                                 // ✅ FIX: استخدام averageRating بدلاً من rating
                                 const rating = (bestService as any).averageRating || 0;
                                 this.logger.log(
                                     `Added ${requiredService.categoryName}: ${bestService.serviceName} ` +
-                                    `(Price: ${servicePrice}, Rating: ${rating})`
+                                    `(Calculated Price: ${servicePrice}, Rating: ${rating})`
                                 );
                             }
                         } else {
@@ -107,15 +183,66 @@ export class PackageBuilderService {
             }
 
             aggregated.finalPrice = totalServiceCost;
-            aggregatedPackages.push(aggregated);
             
-            this.logger.log(
-                `Package ${pkgBlueprint.packageName} complete. ` +
-                `Target: ${pkgBlueprint.targetPrice}, Final: ${totalServiceCost}`
-            );
+            // ✅ BALANCED: Accept packages within reasonable range
+            // Allow 30%-200% of target to accommodate different service combinations
+            const maxAllowedPrice = pkgBlueprint.targetPrice * 2.0;   // Allow 100% over for high-cost events
+            const minAllowedPrice = pkgBlueprint.targetPrice * 0.30;  // At least 30% of target
+            
+            // ✅ Package must have at least 2 services to be useful
+            const minRequiredServices = Math.min(2, pkgBlueprint.requiredServices.length);
+            
+            if (aggregated.services.length >= minRequiredServices && 
+                totalServiceCost <= maxAllowedPrice &&
+                totalServiceCost >= minAllowedPrice) {
+                aggregatedPackages.push(aggregated);
+                this.logger.log(
+                    `✅ Package ${pkgBlueprint.packageName} ACCEPTED. ` +
+                    `Target: ${pkgBlueprint.targetPrice}, Final: ${totalServiceCost} ` +
+                    `(Services: ${aggregated.services.length}/${pkgBlueprint.requiredServices.length}, ` +
+                    `Range: ${minAllowedPrice.toFixed(0)}-${maxAllowedPrice.toFixed(0)})`
+                );
+            } else if (aggregated.services.length < minRequiredServices) {
+                this.logger.warn(
+                    `❌ Package ${pkgBlueprint.packageName} REJECTED: Only ${aggregated.services.length} services ` +
+                    `(need at least ${minRequiredServices})`
+                );
+            } else {
+                this.logger.warn(
+                    `❌ Package ${pkgBlueprint.packageName} REJECTED: Price ${totalServiceCost} ` +
+                    `outside allowed range ${minAllowedPrice.toFixed(0)}-${maxAllowedPrice.toFixed(0)}`
+                );
+            }
         }
 
-        return aggregatedPackages;
+        // ✅ NEW: Remove packages that have identical services to previous ones
+        const uniquePackages = this.removeDuplicatePackages(aggregatedPackages);
+        this.logger.log(`Final: ${uniquePackages.length} unique packages out of ${aggregatedPackages.length}`);
+        
+        return uniquePackages;
+    }
+
+    // ✅ NEW: Remove packages with identical service sets
+    private removeDuplicatePackages(packages: AggregatedPackage[]): AggregatedPackage[] {
+        const seen = new Set<string>();
+        const unique: AggregatedPackage[] = [];
+
+        for (const pkg of packages) {
+            // Create a unique key from service IDs
+            const serviceIds = pkg.services
+                .map(s => (s as any)._id?.toString() || (s as any).id)
+                .sort()
+                .join(',');
+            
+            if (!seen.has(serviceIds)) {
+                seen.add(serviceIds);
+                unique.push(pkg);
+            } else {
+                this.logger.log(`Removing duplicate package: ${pkg.packageName} (same services as another package)`);
+            }
+        }
+
+        return unique;
     }
 
     private async filterAvailableServices(
@@ -334,18 +461,30 @@ export class PackageBuilderService {
         services: Service[], 
         targetTags: string[],
         maxBudget: number,
-        guestCount: number
+        guestCount: number,
+        eventType?: string,  // 🆕 Pass event type for bestFor matching
+        hours: number = 1    // ✅ FIX: Pass hours for price calculation
     ): Service | null {
         if (services.length === 0) return null;
+        
+        // ✅ NEW: Allow up to 200% of allocated budget for a single service
+        // The total package budget will be checked at the end
+        const hardMaxBudget = maxBudget * 2.0;
 
         const scoredServices = services.map(service => {
             let score = 0;
+            // ✅ FIX: Pass hours to calculateServicePrice
+            const servicePrice = this.calculateServicePrice(service, guestCount, hours);
 
-            // ✅ استخدام averageRating بدلاً من rating
-            const rating = (service as any).averageRating || 0;
-            score += rating * 30;
+            // ✅ SOFT BUDGET CHECK: Only reject if way over budget (200%)
+            if (servicePrice > hardMaxBudget) {
+                this.logger.log(
+                    `Service ${service.serviceName} rejected: price ${servicePrice} > hard max ${hardMaxBudget.toFixed(0)} (200% of allocated)`
+                );
+                return { service, score: -1000, price: servicePrice }; // Very low score to exclude
+            }
 
-            // ✅ FIX: aiAnalysis موجود على مستوى الـ service مباشرة مش داخل additionalInfo
+            // ✅ 1. AI Tags matching (MEDIUM PRIORITY - 30 points max)
             const serviceTags = (service as any).aiAnalysis?.tags || [];
             const tagMatches = targetTags.filter(tag => 
                 serviceTags.some((sTag: string) => 
@@ -353,21 +492,83 @@ export class PackageBuilderService {
                     tag.toLowerCase().includes(sTag.toLowerCase())
                 )
             ).length;
-            score += tagMatches * 20;
+            score += tagMatches * 10; // 10 points per tag match (up to ~30 points)
 
-            const servicePrice = this.calculateServicePrice(service, guestCount);
-            const budgetDiff = Math.abs(maxBudget - servicePrice);
-            const budgetScore = Math.max(0, 50 - (budgetDiff / maxBudget) * 50);
-            score += budgetScore;
+            // ✅ 2. BestFor matching (HIGH PRIORITY - 35 points max)
+            const bestFor = (service as any).aiAnalysis?.bestFor || [];
+            if (eventType && bestFor.length > 0) {
+                const eventTypeLower = eventType.toLowerCase();
+                const bestForMatches = bestFor.filter((bf: string) =>
+                    bf.toLowerCase().includes(eventTypeLower) ||
+                    eventTypeLower.includes(bf.toLowerCase())
+                ).length;
+                score += bestForMatches * 35; // Strong bonus for bestFor match
+                
+                if (bestForMatches > 0) {
+                    this.logger.log(
+                        `Service ${service.serviceName} bestFor match: ${bestFor.join(', ')} for event ${eventType}`
+                    );
+                }
+            }
 
-            return { service, score };
+            // ✅ 3. Rating score (MEDIUM PRIORITY - 15 points max)
+            const rating = (service as any).averageRating || 0;
+            score += rating * 3; // 3 * 5 = 15 max points for 5-star rating
+
+            // ✅ 4. Budget proximity score (HIGHEST PRIORITY - 40 points max)
+            // Services closest to allocated budget (100%) get highest score
+            // Services over budget get progressively lower scores
+            const budgetUsage = servicePrice / maxBudget;
+            
+            if (budgetUsage >= 0.85 && budgetUsage <= 1.15) {
+                // 85-115% of budget = OPTIMAL
+                score += 40;
+                this.logger.log(`Service ${service.serviceName}: OPTIMAL ${(budgetUsage*100).toFixed(0)}% of budget - +40 points`);
+            } else if (budgetUsage > 1.15 && budgetUsage <= 1.5) {
+                // 115-150% of budget = Slightly over but acceptable
+                score += 30;
+                this.logger.log(`Service ${service.serviceName}: OVER BUDGET ${(budgetUsage*100).toFixed(0)}% - +30 points`);
+            } else if (budgetUsage > 1.5 && budgetUsage <= 2.0) {
+                // 150-200% of budget = Over budget but might be only option
+                score += 15;
+                this.logger.log(`Service ${service.serviceName}: WAY OVER ${(budgetUsage*100).toFixed(0)}% - +15 points`);
+            } else if (budgetUsage >= 0.5 && budgetUsage < 0.85) {
+                // 50-85% of budget = Under budget
+                score += 25;
+            } else if (budgetUsage >= 0.3 && budgetUsage < 0.5) {
+                // 30-50% of budget = Too cheap
+                score += 10;
+            } else {
+                // <30% = Very cheap, minimal score
+                score += 5;
+            }
+
+            return { service, score, price: servicePrice };
         });
 
-        scoredServices.sort((a, b) => b.score - a.score);
-        return scoredServices[0].service;
+        // ✅ Filter out services with negative scores (over budget)
+        const validServices = scoredServices.filter(s => s.score >= 0);
+        
+        if (validServices.length === 0) {
+            this.logger.warn(`No services within budget ${maxBudget}`);
+            return null;
+        }
+
+        validServices.sort((a, b) => b.score - a.score);
+        
+        const selected = validServices[0];
+        this.logger.log(
+            `Selected ${selected.service.serviceName} with score ${selected.score}, price ${selected.price}`
+        );
+        
+        return selected.service;
     }
 
-    private calculateServicePrice(service: Service, guestCount: number): number {
+    /**
+     * ✅ FIX: Calculate service price based on payType and actual hours/guests
+     * حساب السعر بناءً على نوع الدفع (بالساعة، بالشخص، باليوم، بالحدث)
+     */
+    private calculateServicePrice(service: Service, guestCount: number, hours: number = 1): number {
         if (typeof service.price === 'object' && service.price !== null) {
             const pricing = service.price as any;
             
@@ -380,7 +581,8 @@ export class PackageBuilderService {
             }
             
             if (pricing.perHour) {
-                return pricing.perHour * 4;
+                // ✅ FIX: Use actual hours instead of hardcoded 4
+                return pricing.perHour * hours;
             }
             
             if (pricing.perDay) {
@@ -391,6 +593,10 @@ export class PackageBuilderService {
         if (typeof service.price === 'number') {
             if (service.payType === 'per person') {
                 return service.price * guestCount;
+            }
+            // ✅ FIX: Handle per hour payType
+            if (service.payType === 'per hour') {
+                return service.price * hours;
             }
             return service.price;
         }
@@ -412,6 +618,7 @@ export class PackageBuilderService {
         startTime?: string,
         endTime?: string,
         budgetFlexibility?: number,
+        eventType?: string,  // 🆕 NEW: For bestFor matching
     ): Promise<any[]> {
         this.logger.log(`========== SINGLE SERVICE SEARCH ==========`);
         this.logger.log(`Category: ${category}, City: ${city}`);
@@ -419,21 +626,30 @@ export class PackageBuilderService {
         this.logger.log(`Budget: ${budgetMin} - ${budgetMax} (flexibility: ${budgetFlexibility}%)`);
         this.logger.log(`Event Date: ${eventDate}`);
         this.logger.log(`Time: ${startTime} - ${endTime}`);
+        this.logger.log(`Event Type: ${eventType}`);
 
-        // Apply budget flexibility
-        const flexibility = budgetFlexibility || 5;
+        // ✅ FIX: Calculate actual event hours
+        const eventHours = this.calculateHours(startTime, endTime);
+        this.logger.log(`📅 Event duration: ${eventHours} hours`);
+
+        // ✅ FIX: Apply budget flexibility only if specified, otherwise STRICT
+        const flexibility = budgetFlexibility || 0; // Default to 0 (strict) if not specified
         const adjustedBudgetMin = budgetMin * (1 - flexibility/100);
         const adjustedBudgetMax = budgetMax * (1 + flexibility/100);
 
+        this.logger.log(`Adjusted Budget Range: ${adjustedBudgetMin} - ${adjustedBudgetMax}`);
+
+        // ✅ Search with a wider price range initially (will filter after calculating per-person prices)
         const filters: AiSearchFilters = {
             city: city,
             category: category,
-            priceRange: { min: adjustedBudgetMin, max: adjustedBudgetMax },
-            aiTags: [], // No specific tags for single search
+            priceRange: { min: 0, max: adjustedBudgetMax * 2 }, // Wider range to catch per-person services
+            aiTags: [],
             guestCount: guestCount,
             eventDate: eventDate,
             startTime: startTime,
             endTime: endTime,
+            eventType: eventType, // ✅ NEW: Pass event type for bestFor sorting
         };
 
         try {
@@ -458,10 +674,10 @@ export class PackageBuilderService {
                 return [];
             }
 
-            // Sort by rating and return enriched data
+            // ✅ FIX: Calculate actual price with hours and STRICTLY filter by budget
             const enrichedServices = availableServices.map(service => {
-                const price = this.calculateServicePrice(service, guestCount);
-                // Get the correct provider/company name
+                // ✅ Pass eventHours to calculateServicePrice
+                const calculatedPrice = this.calculateServicePrice(service, guestCount, eventHours);
                 const providerName = (service as any).companyName || 
                                      (service as any).providerName || 
                                      'Provider';
@@ -473,7 +689,7 @@ export class PackageBuilderService {
                     providerId: (service as any).providerId?.toString(),
                     price: service.price,
                     payType: service.payType,
-                    calculatedPrice: price,
+                    calculatedPrice: calculatedPrice,
                     averageRating: (service as any).averageRating || 0,
                     reviewCount: (service as any).totalReviews || (service as any).reviewCount || 0,
                     description: service.description,
@@ -482,7 +698,6 @@ export class PackageBuilderService {
                     bookingType: service.bookingType,
                     aiAnalysis: (service as any).aiAnalysis,
                     isAvailable: true,
-                    // Additional info for booking
                     additionalInfo: service.additionalInfo,
                     maxCapacity: (service as any).maxCapacity,
                     minBookingHours: (service as any).minBookingHours,
@@ -490,11 +705,56 @@ export class PackageBuilderService {
                 };
             });
 
-            // Sort by rating (highest first)
-            enrichedServices.sort((a, b) => b.averageRating - a.averageRating);
+            // ✅ STRICT BUDGET FILTER: Only include services within the adjusted budget range
+            const budgetFilteredServices = enrichedServices.filter(service => {
+                const withinBudget = service.calculatedPrice >= adjustedBudgetMin && 
+                                     service.calculatedPrice <= adjustedBudgetMax;
+                if (!withinBudget) {
+                    this.logger.log(
+                        `Service ${service.serviceName} filtered out: price ${service.calculatedPrice} ` +
+                        `not in range ${adjustedBudgetMin}-${adjustedBudgetMax}`
+                    );
+                }
+                return withinBudget;
+            });
 
-            this.logger.log(`Found ${enrichedServices.length} available services for ${category}`);
-            return enrichedServices;
+            this.logger.log(
+                `Budget filter: ${enrichedServices.length} services -> ${budgetFilteredServices.length} within budget`
+            );
+
+            // ✅ Sort by: 1) bestFor match, 2) aiTags match, 3) rating
+            budgetFilteredServices.sort((a, b) => {
+                let aScore = 0;
+                let bScore = 0;
+
+                // bestFor matching (high priority)
+                if (eventType) {
+                    const eventTypeLower = eventType.toLowerCase();
+                    const aBestFor = a.aiAnalysis?.bestFor || [];
+                    const bBestFor = b.aiAnalysis?.bestFor || [];
+                    
+                    const aBestForMatch = aBestFor.some((bf: string) => 
+                        bf.toLowerCase().includes(eventTypeLower) || 
+                        eventTypeLower.includes(bf.toLowerCase())
+                    );
+                    const bBestForMatch = bBestFor.some((bf: string) => 
+                        bf.toLowerCase().includes(eventTypeLower) || 
+                        eventTypeLower.includes(bf.toLowerCase())
+                    );
+                    
+                    if (aBestForMatch) aScore += 30;
+                    if (bBestForMatch) bScore += 30;
+                }
+
+                // Rating
+                aScore += (a.averageRating || 0) * 5;
+                bScore += (b.averageRating || 0) * 5;
+
+                return bScore - aScore;
+            });
+
+            this.logger.log(`Found ${budgetFilteredServices.length} available services for ${category} within budget`);
+            return budgetFilteredServices;
 
         } catch (error) {
             this.logger.error(`Error searching for ${category}: ${error.message}`);

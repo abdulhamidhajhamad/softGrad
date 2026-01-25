@@ -69,3 +69,9 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 backend/config/*.json
 # تجاهل ملفات البيئة
 .env
+
+# Flutter web build output
+backend/public/*.js
+backend/public/canvaskit/
+backend/public/flutter_service_worker.js
+!backend/public/assets/
